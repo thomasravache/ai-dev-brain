@@ -14,7 +14,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.09.3"
+SDD_TOOL_VERSION = "2026.09.4"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -479,6 +479,11 @@ class Project:
         if provider == "none":
             return ""
         return next((e for e in doc.list("external") if e.startswith(provider + ":")), "")
+
+    def scope_exempt(self):
+        """Paths never out of scope: configured exemptions plus root docs and changelog updated at G7."""
+        docs = self.cfg_list("root_docs", []) + [self.cfg("changelog", "CHANGELOG.md")]
+        return self.cfg_list("scope_exempt", DEFAULT_SCOPE_EXEMPT) + [d for d in docs if d]
 
     def max_parallel(self) -> int:
         try:
@@ -1408,7 +1413,7 @@ def verify_spec(project: Project, spec_id: str, base):
     _, log, _ = run_git(root, "log", "--reverse", "--no-merges", "--format=%H%x1f%s%x1f%b%x1e", f"{merge_base}..HEAD")
 
     test_paths = project.cfg_list("test_paths", DEFAULT_TEST_PATHS)
-    exempt = project.cfg_list("scope_exempt", DEFAULT_SCOPE_EXEMPT)
+    exempt = project.scope_exempt()
     commits = []
     for chunk in log.split("\x1e"):
         if not chunk.strip():
@@ -2063,7 +2068,12 @@ def cmd_pr_check(project: Project, title, body, body_file, base):
         body = Path(body_file).read_text(encoding="utf-8")
     body = body if body is not None else os.environ.get("PR_BODY", "")
     results = []
-    refs = sorted(set(SPEC_REF_RE.findall(title + "\n" + body)))
+    # Only declared specs count (title, "Refs:" line, sdd marker); narrative mentions in the body don't.
+    declared = set(SPEC_REF_RE.findall(title))
+    for line in body.splitlines():
+        if re.match(r"^\s*(refs\s*:|<!--\s*sdd:)", line, re.I):
+            declared |= set(SPEC_REF_RE.findall(line))
+    refs = sorted(declared) if declared else sorted(set(SPEC_REF_RE.findall(body)))
     m = CONVENTIONAL_RE.match(title)
     if not m or m.group(1).lower() not in COMMIT_TYPES:
         results.append(("WARN", "PR", f"título fora do Conventional Commits (<tipo>(escopo)?: descrição; tipos: {', '.join(COMMIT_TYPES)})"))
@@ -2102,7 +2112,7 @@ def cmd_pr_check(project: Project, title, body, body_file, base):
         code, merge_base, _ = run_git(project.root, "merge-base", base_ref, "HEAD")
         if code == 0:
             changed = [f for f in run_git(project.root, "diff", "--name-only", merge_base.strip(), "HEAD")[1].splitlines() if f]
-            allowed = [p for d in docs for p in d.list("touches")] + project.cfg_list("scope_exempt", DEFAULT_SCOPE_EXEMPT)
+            allowed = [p for d in docs for p in d.list("touches")] + project.scope_exempt()
             outside = [f for f in changed if not matches_any(f, allowed)]
             if outside:
                 results.append(("FAIL", "G4", "arquivos do PR fora do `touches` das specs citadas: " + ", ".join(outside[:10])
