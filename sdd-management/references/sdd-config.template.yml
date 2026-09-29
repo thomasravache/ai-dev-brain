@@ -1,0 +1,63 @@
+# Configuração SDD do projeto — copiada para docs/specs/sdd-config.yml no primeiro DISCOVER.
+# Lida pelos agentes (comandos dos gates) e por spec_graph.py (base_branch, max_parallel, test_paths,
+# scope_exempt, dependency_manifests). Comandos rodam na raiz do repositório: valide cada um executando-o.
+# Deixe "" quando ainda não existir — e registre o gate como N/A apontando a spec que vai criá-lo.
+
+base_branch: main
+max_parallel: 3
+
+# --- Build e testes (G2, G5) ---
+# Exemplos: "dotnet build" | "npm run build" | "./gradlew build" | "go build ./..."
+build: ""
+# Suíte completa. Exemplos: "dotnet test" | "npm test" | "pytest" | "go test ./..."
+test: ""
+test_integration: ""
+# E2E da jornada do usuário. Exemplos: "npx playwright test" | "npx cypress run" | "maestro test flows/"
+test_e2e: ""
+# Subconjunto rápido rodado após cada deploy (G6).
+smoke_test: ""
+lint: ""
+# G2 — cobertura das linhas alteradas (ex: diff-cover, coverlet + reportgenerator). Opcional.
+coverage: ""
+coverage_min_changed_lines: 80
+# Opcional: mutation testing em código de domínio crítico (Stryker, PIT, mutmut).
+mutation: ""
+
+# --- Arquitetura e segurança (G3, G5) ---
+# Exemplos: "dotnet test --filter Category=Architecture" | "npx depcruise src" | "lint-imports"
+arch_test: ""
+# Auditoria de dependências + segredos. Exemplos: "npm audit --audit-level=high" | "dotnet list package --vulnerable" | "gitleaks detect"
+security_scan: ""
+
+# --- CI/CD e ambientes (G5, G6) ---
+# Como conferir o pipeline da branch/PR. Exemplo: "gh pr checks --watch"
+ci: ""
+# Como o deploy acontece (preferencialmente pelo pipeline). Exemplos: "merge em main → pipeline" | "gh workflow run deploy.yml -f env=staging"
+deploy_staging: ""
+deploy_production: ""
+staging_url: ""
+production_url: ""
+
+# --- Rastreabilidade e escopo (G1, G4) ---
+# Commits test(...) só podem tocar aqui.
+test_paths:
+  - "tests/**"
+  - "**/*.Tests/**"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "e2e/**"
+# Nunca contam como fora de escopo.
+scope_exempt:
+  - "docs/specs/**"
+  - "docs/adr/**"
+# Mudança nesses arquivos sem ADR na spec gera alerta no G4 (lib/framework nova precisa de ADR).
+# Omitido = padrão da skill (package.json, *.csproj, pyproject.toml, go.mod, pom.xml, ...).
+dependency_manifests: []
+
+# --- Documentação (G7) ---
+root_docs:
+  - CLAUDE.md
+  - README.md
+changelog: CHANGELOG.md
+# Itens extras de Definição de Pronto do projeto, anexados a cada spec no PLAN.
+dod_extra: []
