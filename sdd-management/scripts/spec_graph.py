@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import heapq
 import json
+import os
 import re
 import subprocess
 import sys
@@ -13,8 +14,11 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
+SDD_TOOL_VERSION = "2026.09.3"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
+ASSETS_DIR = SKILL_DIR / "assets"
+VENDORED_TOOL = "tools/sdd/spec_graph.py"
 
 SPEC_ID_RE = re.compile(r"^SPEC-\d{4,}$")
 ADR_ID_RE = re.compile(r"^ADR-\d{4,}$")
@@ -43,7 +47,7 @@ TYPES_BY_TIER = {
     "epic": {"feature", "migration", "foundation"},
 }
 SIZES = ("S", "M", "L")
-ADR_STATUSES = ("proposed", "accepted", "superseded", "rejected")
+ADR_STATUSES = ("proposed", "accepted", "rejected", "deprecated", "superseded")
 ADR_ORIGINS = ("decision", "as-is")
 GATE_ROWS = ("G0", "G1", "G2", "G3", "G4", "G5", "H2", "G6", "G7")
 DELIVERY_SUBSECTIONS = ("O que foi entregue", "Como foi feito", "Verificação", "Definição de Pronto", "Deploy", "Pendências")
@@ -52,6 +56,19 @@ IMPEDIMENT_COLUMNS = ("ID", "Aberto em", "Fase/Gate", "Tipo", "Descrição", "Te
 IMP_ID_RE = re.compile(r"^IMP-(\d{2,})$")
 ADR_REF_RE = re.compile(r"\bADR-\d{4,}\b")
 CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
+EXTERNAL_RE = re.compile(r"^([a-z][a-z0-9-]*):(\S+)$")
+COMMIT_TYPES = ("build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test")
+CONVENTIONAL_BY_TYPE = {"feature": "feat", "fix": "fix", "refactor": "refactor", "migration": "refactor", "foundation": "build"}
+CHANGELOG_BY_TYPE = {"feature": "Added", "fix": "Fixed", "refactor": "Changed", "migration": "Changed", "foundation": "Added"}
+PR_TITLE_DEFAULT = "{conv}: {title} [{id}]"
+PR_TITLE_FIELDS = {"conv", "type", "title", "id", "scope"}
+MERGE_GATES = ("G0", "G1", "G2", "G3", "G4")
+PHASES = ("DISCOVER", "SPEC (G0)", "APPROVAL (H1)", "PLAN (waves)", "EXECUTE (G1–G4)",
+          "INTEGRATE (G5 + H2)", "DEPLOY (G6)", "CLOSE (G7)")
+H1_QUESTION = ("Os contratos e os cenários de teste estão adequados e seguem o padrão atual? "
+               "Digite 'Aprovado' para prosseguir ou solicite ajustes.")
+H2_QUESTION = ("Onda N integrada: build, testes (unitários, integração, contrato, E2E), arquitetura e CI passando (G5). "
+               "Deseja revisar antes de prosseguir? Digite 'Aprovado' para seguir ou solicite ajustes.")
 GATE_STATUSES = ("N/A", "FAIL", "PENDING", "PASS")
 LEGACY_DIRS = ("proposed", "approved", "implemented", "deprecated")
 RED_TYPES = {"test"}
@@ -138,22 +155,39 @@ def parse_scalar(value: str):
 
 
 def parse_yaml_subset(text: str) -> dict:
-    """Flat `key: value`, inline `[a, b]` lists and `- item` block lists."""
-    data, key = {}, None
-    for raw in text.splitlines():
-        if not raw.strip() or raw.lstrip().startswith("#"):
+    """YAML subset: `key: value`, inline `[a, b]`, `- item` block lists and indented nested mappings."""
+    rows = [(len(raw) - len(raw.lstrip(" ")), raw.strip()) for raw in text.splitlines()
+            if raw.strip() and not raw.lstrip().startswith("#")]
+    if not rows:
+        return {}
+    value, _ = _parse_block(rows, 0, rows[0][0])
+    return value if isinstance(value, dict) else {}
+
+
+def _parse_block(rows, i: int, indent: int):
+    if rows[i][1].startswith("- ") or rows[i][1] == "-":
+        items = []
+        while i < len(rows) and rows[i][0] == indent and rows[i][1].startswith("-"):
+            items.append(parse_scalar(rows[i][1][1:]))
+            i += 1
+        return items, i
+    data = {}
+    while i < len(rows) and rows[i][0] >= indent:
+        if rows[i][0] > indent:
+            i += 1
             continue
-        item = re.match(r"^\s*-\s+(.*)$", raw)
-        if item and key is not None:
-            if not isinstance(data.get(key), list):
-                data[key] = []
-            data[key].append(parse_scalar(item.group(1)))
+        pair = re.match(r"^([A-Za-z_][\w-]*)\s*:(?:\s+(.*))?$", rows[i][1])
+        i += 1
+        if not pair:
             continue
-        pair = re.match(r"^([A-Za-z_][\w-]*)\s*:\s*(.*)$", raw)
-        if pair:
-            key = pair.group(1)
-            data[key] = parse_scalar(pair.group(2))
-    return data
+        key, rest = pair.group(1), (pair.group(2) or "").strip()
+        if rest and not rest.startswith("#"):
+            data[key] = parse_scalar(rest)
+        elif i < len(rows) and (rows[i][0] > indent or (rows[i][0] == indent and rows[i][1].startswith("-"))):
+            data[key], i = _parse_block(rows, i, rows[i][0])
+        else:
+            data[key] = ""
+    return data, i
 
 
 def fmt_value(value) -> str:
@@ -422,6 +456,30 @@ class Project:
             return [v.strip()]
         return list(default)
 
+    def cfg_map(self, key: str) -> dict:
+        v = self.config.get(key)
+        return v if isinstance(v, dict) else {}
+
+    def tracker(self) -> dict:
+        t = self.cfg_map("tracker")
+        provider = (t.get("provider") or "none").strip().lower() if isinstance(t.get("provider"), str) else "none"
+        labels = t.get("labels") if isinstance(t.get("labels"), list) else ["sdd"]
+        return {
+            "provider": provider or "none",
+            "project": t.get("project", "") if isinstance(t.get("project"), str) else "",
+            "mode": t.get("mode", "push") if isinstance(t.get("mode"), str) else "push",
+            "statuses": t.get("statuses") if isinstance(t.get("statuses"), dict) else {},
+            "issue_types": t.get("issue_types") if isinstance(t.get("issue_types"), dict) else {},
+            "blocked_label": t.get("blocked_label") or "sdd-bloqueado",
+            "labels": labels,
+        }
+
+    def external_ref(self, doc: "Doc"):
+        provider = self.tracker()["provider"]
+        if provider == "none":
+            return ""
+        return next((e for e in doc.list("external") if e.startswith(provider + ":")), "")
+
     def max_parallel(self) -> int:
         try:
             return max(0, int(self.cfg("max_parallel", "0")))
@@ -513,7 +571,33 @@ def validate(project: Project, only=None):
     for aid in sorted(project.adrs):
         if only is None or aid in only:
             validate_adr(project, project.adrs[aid], add)
+    if only is None:
+        validate_config(project, add)
     return issues
+
+
+def validate_config(project: Project, add):
+    t = project.tracker()
+    if t["provider"] != "none":
+        if not t["project"]:
+            add("ERROR", "sdd-config", f"tracker.provider = {t['provider']} exige tracker.project")
+        missing = [s for s in STATUSES if not t["statuses"].get(s)]
+        if missing:
+            add("WARN", "sdd-config", f"tracker.statuses sem mapeamento para: {', '.join(missing)}")
+        kinds = ["epic"] + list(TYPES)
+        missing = [k for k in kinds if not t["issue_types"].get(k)]
+        if missing:
+            add("WARN", "sdd-config", f"tracker.issue_types sem mapeamento para: {', '.join(missing)}")
+    fields = set(re.findall(r"\{(\w+)\}", project.cfg("pr_title", PR_TITLE_DEFAULT)))
+    if fields - PR_TITLE_FIELDS:
+        add("ERROR", "sdd-config", f"pr_title com campos desconhecidos: {', '.join(sorted(fields - PR_TITLE_FIELDS))} "
+                                   f"(use {', '.join(sorted(PR_TITLE_FIELDS))})")
+    vendored = project.root / VENDORED_TOOL
+    if vendored.exists():
+        m = re.search(r'SDD_TOOL_VERSION = "([^"]+)"', vendored.read_text(encoding="utf-8"))
+        if not m or m.group(1) != SDD_TOOL_VERSION:
+            add("WARN", "sdd-config", f"{VENDORED_TOOL} ({m.group(1) if m else '?'}) difere da skill ({SDD_TOOL_VERSION}) "
+                                      "— rode `vendor --force` para atualizar")
 
 
 def validate_spec(project: Project, doc: Doc, add):
@@ -605,6 +689,12 @@ def validate_refs(project: Project, doc: Doc, add):
             add("WARN", sid, f"contrato de {pid} mudou (v{ver} → v{current}): revise esta spec e atualize o pin")
         if provider.status == "deprecated" and doc.status in OPEN:
             add("ERROR", sid, f"consome contrato de {pid}, que está deprecated")
+    for ext in doc.list("external"):
+        if not EXTERNAL_RE.match(ext):
+            add("ERROR", sid, f"external inválido '{ext}' (formato provedor:referência, ex: jira:PAY-123, github:org/repo#12)")
+    provider = project.tracker()["provider"]
+    if provider != "none" and doc.status in OPEN and not project.external_ref(doc):
+        add("WARN", sid, f"sem item no board ({provider}) — rode `sync` e execute as operações do adaptador")
     for adr in doc.list("adrs"):
         if adr not in project.adrs:
             add("ERROR", sid, f"adrs: {adr} não existe em docs/adr/")
@@ -1071,8 +1161,20 @@ def require_plan(project: Project):
 
 # ---------------------------------------------------------------- commands
 
-def cmd_validate(project: Project, ids):
+def cmd_validate(project: Project, ids, staged: bool = False, exclude_drafts: bool = False):
     only = None
+    if staged:
+        files = run_git(project.root, "diff", "--cached", "--name-only")[1].splitlines()
+        ids = sorted({m.group(0) for f in files for m in [re.search(r"(SPEC|ADR)-\d{4,}", Path(f).name)]
+                      if m and f.startswith(("docs/specs/", "docs/adr/"))})
+        ids = [i for i in ids if not (i in project.specs and project.specs[i].status == "proposed")]
+        if not ids:
+            print("validate --staged: nenhuma spec/ADR não-rascunho no stage")
+            return 0
+    if exclude_drafts and not ids:
+        drafts = {sid for sid, d in project.specs.items() if d.status == "proposed"}
+        issues = [i for i in validate(project) if i[1] not in drafts]
+        return report_issues(issues, f"projeto inteiro, exceto {len(drafts)} rascunho(s)")
     if ids:
         unknown = [i for i in ids if i not in project.specs and i not in project.adrs]
         if unknown:
@@ -1081,14 +1183,15 @@ def cmd_validate(project: Project, ids):
         for i in ids:
             if i in project.specs and project.specs[i].tier == "epic":
                 only |= {k.id for k in project.children(i)}
-    issues = validate(project, only)
+    return report_issues(validate(project, only), ", ".join(sorted(only)) if only else "projeto inteiro")
+
+
+def report_issues(issues, scope: str) -> int:
     errors = [i for i in issues if i[0] == "ERROR"]
     warns = [i for i in issues if i[0] == "WARN"]
     for level, subject, msg in sorted(issues, key=lambda x: (x[1], x[0] != "ERROR")):
         print(f"{level:<5} {subject}: {msg}")
-    scope = ", ".join(sorted(only)) if only else "projeto inteiro"
-    verdict = "PASS" if not errors else "FAIL"
-    print(f"\nG0 [{scope}]: {verdict} — {len(errors)} erro(s), {len(warns)} aviso(s)")
+    print(f"\nG0 [{scope}]: {'PASS' if not errors else 'FAIL'} — {len(errors)} erro(s), {len(warns)} aviso(s)")
     return 1 if errors else 0
 
 
@@ -1288,7 +1391,7 @@ def run_git(root: Path, *args):
     return result.returncode, result.stdout, result.stderr
 
 
-def cmd_verify(project: Project, spec_id: str, base):
+def verify_spec(project: Project, spec_id: str, base):
     doc = project.specs.get(spec_id)
     if doc is None:
         die(f"{spec_id} não encontrada")
@@ -1406,13 +1509,21 @@ def cmd_verify(project: Project, spec_id: str, base):
     if run_git(root, "status", "--porcelain")[1].strip():
         results.append(("WARN", "--", "há alterações não commitadas — não entram na verificação"))
 
-    print(f"verify {spec_id} — base {base} @ {merge_base[:7]}, {len(mine)} commit(s) da spec\n")
+    return f"verify {spec_id} — base {base} @ {merge_base[:7]}, {len(mine)} commit(s) da spec", results
+
+
+def print_results(header: str, results) -> int:
+    print(header + "\n")
     for level, gate, msg in results:
         print(f"[{gate}] {level:<4}  {msg}")
     fails = sum(1 for r in results if r[0] == "FAIL")
     warns = sum(1 for r in results if r[0] == "WARN")
     print(f"\nResultado: {'FAIL' if fails else 'PASS'} — {fails} falha(s), {warns} aviso(s)")
     return 1 if fails else 0
+
+
+def cmd_verify(project: Project, spec_id: str, base):
+    return print_results(*verify_spec(project, spec_id, base))
 
 
 def cmd_impacted(project: Project, spec_id: str):
@@ -1457,10 +1568,20 @@ def cmd_impacted(project: Project, spec_id: str):
     return 0
 
 
-def cmd_report(project: Project, spec_id: str):
+def cmd_report(project: Project, spec_id: str, changelog: bool = False):
     doc = project.specs.get(spec_id)
     if doc is None:
         die(f"{spec_id} não encontrada")
+    if changelog:
+        docs = project.children(spec_id) if doc.tier == "epic" else [doc]
+        groups = defaultdict(list)
+        for d in docs:
+            if d.status != "deprecated":
+                groups[CHANGELOG_BY_TYPE.get(d.type, "Changed")].append(f"- {d.title} ({d.id})")
+        for category in ("Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"):
+            if groups[category]:
+                print(f"### {category}\n" + "\n".join(groups[category]) + "\n")
+        return 0
     meta = [f"**Tipo:** {doc.type or '?'}", f"**Tier:** {doc.tier}", f"**Status:** {doc.status}"]
     if doc.scalar("parent"):
         meta.append(f"**Épico:** {doc.scalar('parent')}")
@@ -1556,6 +1677,514 @@ def cmd_resolve(project: Project, spec_id: str, iid: str, resolution: str):
             break
     doc.path.write_text("\n".join(lines), encoding="utf-8")
     print(f"{spec_id}/{iid} resolvido em {today()}: {resolution}")
+    return 0
+
+
+# ---------------------------------------------------------------- status (process state machine)
+
+def gate_ok(gates: dict, gate: str) -> bool:
+    return gates.get(gate, {}).get("status") in ("PASS", "N/A")
+
+
+def has_checklist(doc: Doc) -> bool:
+    return bool(CHECKBOX_RE.search(COMMENT_RE.sub("", doc.section("Checklist") or "")))
+
+
+def spec_state(project: Project, doc: Doc):
+    """Phases done (8 booleans) and the next mandatory step, derived only from the files."""
+    only = {doc.id} | ({k.id for k in project.children(doc.id)} if doc.tier == "epic" else set())
+    errors = [m for lvl, s, m in validate(project, only) if lvl == "ERROR" and s == doc.id]
+    stops = open_impediments(doc)
+    approved = doc.status in APPROVED_PLUS
+
+    if doc.tier == "epic":
+        kids = [k for k in project.children(doc.id) if k.status != "deprecated"]
+        kid_states = [spec_state(project, k)[0] for k in kids]
+        rolled = [bool(kid_states) and all(s[i] for s in kid_states) for i in range(8)]
+        done = [True, not errors or approved, approved, approved and rolled[3], rolled[4], rolled[5], rolled[6],
+                doc.status == "implemented" and not errors]
+    else:
+        gates = gate_table(doc) or {}
+        done = [True, not errors and gate_ok(gates, "G0") or approved, approved, approved and has_checklist(doc),
+                all(gate_ok(gates, g) for g in ("G1", "G2", "G3", "G4")),
+                gate_ok(gates, "G5") and gate_ok(gates, "H2"), gate_ok(gates, "G6"),
+                doc.status == "implemented" and gate_ok(gates, "G7") and not errors]
+
+    def with_errors(text):
+        return text + "".join(f"\n    - {e}" for e in errors[:6]) + ("\n    - …" if len(errors) > 6 else "")
+
+    if doc.status == "deprecated":
+        step = "spec cancelada (deprecated) — nada a fazer"
+    elif stops:
+        step = ("PARADA — resolva antes de qualquer outro passo: "
+                + "; ".join(f"{impediment_label(i)}: {i['Descrição']}" for i in stops)
+                + f". Depois: `resolve {doc.id} IMP-NN --resolution \"...\"`")
+    elif doc.status == "implemented":
+        step = with_errors("inconsistente: corrija e rode validate") if errors else "concluída"
+    elif doc.status == "proposed":
+        if errors:
+            step = with_errors(f"SPEC (G0): corrija {len(errors)} erro(s) e rode `validate {doc.id}`")
+        elif doc.tier != "epic" and not done[1]:
+            step = "SPEC (G0): validate está limpo — registre G0 = PASS com evidência no Registro de Gates"
+        else:
+            step = f"APPROVAL (H1): apresente o resumo e pergunte exatamente: \"{H1_QUESTION}\""
+    elif errors:
+        step = with_errors("corrija as inconsistências antes de seguir")
+    elif doc.tier == "epic":
+        open_kids = [k.id for k in project.children(doc.id) if k.status not in DONE]
+        if not open_kids:
+            step = "CLOSE: marque os critérios de aceite (cada um provado por teste), escreva o Relatório de Entrega e `set status=implemented`"
+        else:
+            step = f"acompanhe as filhas ({', '.join(open_kids)}) com `status` e `next`"
+    elif not has_checklist(doc):
+        step = "PLAN: preencha o Checklist de Implementação (fases começando por testes, + dod_extra) e rode `waves`/`next`/`index`"
+    elif doc.status == "approved":
+        state, label = readiness(project, doc)
+        step = (f"EXECUTE: `set {doc.id} status=in-progress` e despache o Test-writer (references/multi-agent.md)"
+                if state == "ready" else f"aguardando: {label}")
+    else:
+        gates = gate_table(doc) or {}
+        steps = {
+            "G1": f"G1: Test-writer escreve os testes do plano; depois `verify {doc.id}` + resumo das falhas → registre G1",
+            "G2": "G2: Implementer faz os testes passarem seguindo o padrão de referência → registre G2 (build + suíte completa)",
+            "G3": "G3: rode arch_test → registre G3",
+            "G4": f"G4: Reviewer independente (`verify {doc.id}` + veredito) → registre G4",
+            "G5": "G5: aguarde a onda; Integrator faz merge, roda todas as suítes e o CI (`pr-check`) → registre G5",
+            "H2": f"H2: pergunte exatamente: \"{H2_QUESTION}\"",
+            "G6": "G6: Release publica em staging pelo pipeline (smoke + E2E); produção só após confirmação explícita do usuário",
+            "G7": "CLOSE (G7): Relatório de Entrega com Verificação por teste, docs raiz, CHANGELOG, `set status=implemented`",
+        }
+        pending = next((g for g in ("G1", "G2", "G3", "G4", "G5", "H2", "G6", "G7") if not gate_ok(gates, g)), None)
+        step = steps[pending] if pending else f"todos os gates ok — `set {doc.id} status=implemented` e `validate`"
+    t = project.tracker()
+    if t["provider"] != "none" and doc.status != "deprecated" and not project.external_ref(doc):
+        step += f"\n  Board ({t['provider']}): item não vinculado — rode `sync` e execute as operações."
+    return done, step
+
+
+def progress_panel(doc: Doc, done) -> str:
+    lines = [f"> **SDD Progress — {doc.id} ({doc.tier} · {doc.type or '?'})**"]
+    lines += [f"> [{'x' if ok else ' '}] {i}. {name}" for i, (ok, name) in enumerate(zip(done, PHASES), start=1)]
+    return "\n".join(lines)
+
+
+def cmd_status(project: Project, ids):
+    if ids:
+        for sid in ids:
+            doc = project.specs.get(sid)
+            if doc is None:
+                die(f"{sid} não encontrada")
+            done, step = spec_state(project, doc)
+            print(f"{doc.id} — {doc.title} ({doc.tier} · {doc.type or '?'}) — status: {doc.status}\n")
+            print(progress_panel(doc, done))
+            print(f"\nPróximo passo: {step}\n")
+        return 0
+    open_docs = [d for d in sorted(project.specs.values(), key=lambda d: d.id) if d.status in OPEN]
+    if not open_docs:
+        print("Nenhuma spec aberta. Novo trabalho: DISCOVER → `new`.")
+        return 0
+    for doc in open_docs:
+        done, step = spec_state(project, doc)
+        phase = next((PHASES[i] for i, ok in enumerate(done) if not ok), "—")
+        print(f"{doc.id}  {doc.status:<11} {phase:<20} {doc.title}")
+        print(f"             → {step.splitlines()[0]}")
+    return 0
+
+
+# ---------------------------------------------------------------- export / board sync (agnostic)
+
+def spec_record(project: Project, doc: Doc, plan) -> dict:
+    wave = plan[0] if plan else {}
+    state, label = (readiness(project, doc) if doc.tier != "epic" and doc.status in OPEN else (None, None))
+    gates = gate_table(doc) or {}
+    return {
+        "id": doc.id, "title": doc.title, "tier": doc.tier, "type": doc.type, "status": doc.status,
+        "created": doc.scalar("created"), "parent": doc.scalar("parent") or None,
+        "depends_on": doc.list("depends_on"), "consumes_contract": doc.list("consumes_contract"),
+        "contract_version": contract_version(doc), "touches": doc.list("touches"), "adrs": doc.list("adrs"),
+        "external": doc.list("external"), "approved_by": doc.scalar("approved_by") or None,
+        "approved_at": doc.scalar("approved_at") or None, "path": project.rel(doc.path),
+        "wave": wave.get(doc.id), "readiness": {"state": state, "label": label} if state else None,
+        "tests": plan_test_ids(doc) if doc.tier != "epic" else [],
+        "gates": {g: gates[g] for g in GATE_ROWS if g in gates},
+        "impediments": impediments(doc),
+        "next_step": spec_state(project, doc)[1],
+    }
+
+
+def build_export(project: Project) -> dict:
+    plan = compute_waves(project)
+    running, batch, held = next_batch(project, plan) if plan else ([], [], [])
+    return {
+        "sdd_tool_version": SDD_TOOL_VERSION,
+        "generated_at": today(),
+        "tracker": project.tracker(),
+        "specs": [spec_record(project, project.specs[s], plan) for s in sorted(project.specs)],
+        "adrs": [{"id": a.id, "title": a.title, "status": a.status, "origin": a.scalar("origin") or None,
+                  "enforced_by": a.scalar("enforced_by") or None, "path": project.rel(a.path)}
+                 for a in sorted(project.adrs.values(), key=lambda d: d.id)],
+        "plan": {"cycle": plan is None, "running": running, "next_batch": batch,
+                 "held": [{"id": s, "reason": r} for s, r in held]},
+        "validation": [{"level": l, "subject": s, "message": m} for l, s, m in validate(project)],
+    }
+
+
+def cmd_export(project: Project, out):
+    text = json.dumps(build_export(project), ensure_ascii=False, indent=2)
+    if out:
+        Path(out).write_text(text + "\n", encoding="utf-8")
+        print(f"escrito: {out}")
+    else:
+        print(text)
+    return 0
+
+
+def sync_operations(project: Project, board):
+    t = project.tracker()
+    provider, statuses = t["provider"], t["statuses"]
+    ops = []
+    for doc in sorted(project.specs.values(), key=lambda d: d.id):
+        ref = project.external_ref(doc)
+        if not ref:
+            if doc.status == "deprecated":
+                continue
+            parent = project.specs.get(doc.scalar("parent"))
+            ops.append({
+                "op": "create_item", "spec": doc.id, "title": f"[{doc.id}] {doc.title}",
+                "issue_type": t["issue_types"].get("epic" if doc.tier == "epic" else doc.type, ""),
+                "parent": (project.external_ref(parent) or f"{parent.id} (crie o épico primeiro e rode sync de novo)")
+                          if parent else "",
+                "labels": list(t["labels"]) + [doc.id], "status": statuses.get(doc.status, ""),
+                "spec_path": project.rel(doc.path),
+                "then": f"set {doc.id} external=[{provider}:<chave-criada>]",
+            })
+            continue
+        if board is None:
+            continue
+        item = board.get(ref)
+        if item is None:
+            ops.append({"op": "missing_on_board", "spec": doc.id, "ref": ref})
+            continue
+        want_status = statuses.get(doc.status, "")
+        if want_status and norm(str(item.get("status", ""))) != norm(want_status):
+            ops.append({"op": "transition", "spec": doc.id, "ref": ref, "from": item.get("status"), "to": want_status})
+        stops = open_impediments(doc)
+        if bool(item.get("blocked")) != bool(stops):
+            ops.append({"op": "set_blocked" if stops else "clear_blocked", "spec": doc.id, "ref": ref,
+                        "label": t["blocked_label"],
+                        "comment": "; ".join(f"{doc.id}/{impediment_label(i)}: {i['Descrição']}" for i in stops)})
+        for dep in doc.list("depends_on"):
+            dep_ref = project.external_ref(project.specs[dep]) if dep in project.specs else ""
+            if dep_ref and ref not in (board.get(dep_ref, {}).get("blocks") or []):
+                ops.append({"op": "link", "type": "blocks", "from": dep_ref, "to": ref, "spec": doc.id})
+    if board is not None:
+        known = {project.external_ref(d) for d in project.specs.values()}
+        for ref in sorted(set(board) - known):
+            ops.append({"op": "orphan", "ref": ref, "note": "item com label SDD no board sem spec correspondente"})
+    return ops
+
+
+def cmd_sync(project: Project, board_file, as_json: bool, check: bool):
+    t = project.tracker()
+    if t["provider"] == "none":
+        print("tracker.provider = none — o repositório é o único board. Nada a sincronizar.")
+        return 0
+    board = None
+    if board_file:
+        raw = json.loads(Path(board_file).read_text(encoding="utf-8"))
+        board = {i["ref"]: i for i in raw.get("items", []) if isinstance(i, dict) and i.get("ref")}
+    ops = sync_operations(project, board)
+    if as_json:
+        print(json.dumps({"provider": t["provider"], "project": t["project"], "operations": ops}, ensure_ascii=False, indent=2))
+    else:
+        print(f"Board: {t['provider']} · {t['project']} — {len(ops)} operação(ões)")
+        if board is None:
+            print("(sem --board: só itens faltantes; gere o snapshot pelo adaptador para conferir status, bloqueios e vínculos)")
+        for op in ops:
+            details = ", ".join(f"{k}={v}" for k, v in op.items() if k != "op" and v not in ("", [], None))
+            print(f"  {op['op']:<16} {details}")
+    return 1 if check and ops else 0
+
+
+# ---------------------------------------------------------------- pull requests (agnostic)
+
+class _Blank(dict):
+    def __missing__(self, key):
+        return ""
+
+
+def sub_text(doc: Doc, section: str, sub: str) -> str:
+    content = COMMENT_RE.sub("", doc.section(section) or "")
+    return (find_sub(parse_subsections(content), sub) or "").strip()
+
+
+def labeled_line(doc: Doc, section: str, label: str) -> str:
+    content = COMMENT_RE.sub("", doc.section(section) or "")
+    m = re.search(rf"\*\*{re.escape(label)}:\*\*\s*(.+)", content)
+    return m.group(1).strip() if m else ""
+
+
+def pr_title(project: Project, docs) -> str:
+    fmt = project.cfg("pr_title", PR_TITLE_DEFAULT)
+    if len(docs) == 1:
+        d = docs[0]
+        values = {"conv": CONVENTIONAL_BY_TYPE.get(d.type, "feat"), "type": d.type, "title": d.title,
+                  "id": d.id, "scope": d.scalar("scope")}
+    else:
+        parents = {d.scalar("parent") for d in docs}
+        epic = project.specs.get(parents.pop()) if len(parents) == 1 else None
+        convs = {CONVENTIONAL_BY_TYPE.get(d.type, "feat") for d in docs}
+        values = {"conv": "feat" if "feat" in convs else sorted(convs)[0], "type": "wave",
+                  "title": epic.title if epic else "; ".join(d.title for d in docs),
+                  "id": ", ".join(d.id for d in docs), "scope": ""}
+    title = values["title"]
+    if len(title) > 1 and title[0].isupper() and title[1].islower():
+        values["title"] = title[0].lower() + title[1:]
+    return re.sub(r"\(\)", "", fmt.format_map(_Blank(values))).strip()
+
+
+def pr_body(project: Project, docs) -> str:
+    many = len(docs) > 1
+    out = [f"<!-- sdd: {' '.join(d.id for d in docs)} — gerado por spec_graph.py pr -->", "", "## Resumo", ""]
+    for d in docs:
+        summary = (sub_text(d, "Relatório de Entrega", "O que foi entregue")
+                   or COMMENT_RE.sub("", d.section("Visão Geral") or d.section("Problema") or "").strip())
+        why = labeled_line(d, "Motivação", "Motivação") or COMMENT_RE.sub("", d.section("Causa Raiz") or "").strip()
+        prefix = f"**{d.id}** — " if many else ""
+        out.append(f"{prefix}{summary}".strip())
+        if why:
+            out += ["", f"**Por quê:** {why}"]
+        out.append("")
+    out += ["## Specs", "", "| Spec | Título | Tier · Tipo | Status | Board |", "|---|---|---|---|---|"]
+    for d in docs:
+        out.append(f"| [{d.id}]({project.rel(d.path)}) | {md_cell(d.title)} | {d.tier} · {d.type} | {d.status} "
+                   f"| {md_cell(', '.join(d.list('external')) or '—')} |")
+    out.append("")
+    for heading, render in (("Como foi feito", pr_how), ("Arquitetura", pr_architecture),
+                            ("Como foi testado", pr_tests), ("Risco, rollout e rollback", pr_rollout),
+                            ("Breaking changes", pr_breaking), ("Gates", pr_gates)):
+        out += [f"## {heading}", ""]
+        for d in docs:
+            if many:
+                out += [f"### {d.id} — {d.title}", ""]
+            out += [render(project, d), ""]
+    extras = [d for d in docs if impediments(d) or parse_tables(COMMENT_RE.sub("", d.section("Emendas") or "")) and
+              any(rows for _, rows in parse_tables(COMMENT_RE.sub("", d.section("Emendas") or "")))]
+    if extras:
+        out += ["## Impedimentos e emendas", ""]
+        for d in extras:
+            if many:
+                out += [f"### {d.id}", ""]
+            for name in ("Registro de Impedimentos", "Emendas"):
+                content = COMMENT_RE.sub("", d.section(name) or "").strip()
+                if any(rows for _, rows in parse_tables(content)):
+                    out += [f"**{name}**", "", content, ""]
+    out += ["## Checklist", "",
+            "- [ ] Spec(s) aprovada(s) (H1) e gates G0–G4 com evidência",
+            "- [ ] Testes do plano (unitários, integração, contrato, E2E) passando no CI",
+            "- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado",
+            "- [ ] Nenhuma alteração fora do escopo (`touches`) da spec",
+            "- [ ] Documentação e CHANGELOG (Keep a Changelog) atualizados quando aplicável",
+            "- [ ] Sem segredos ou dados sensíveis no código ou nos logs", ""]
+    refs = [d.id for d in docs] + [e.split(":", 1)[1] for d in docs for e in d.list("external")]
+    out.append("Refs: " + ", ".join(refs))
+    return "\n".join(out) + "\n"
+
+
+def pr_how(project, d):
+    return sub_text(d, "Relatório de Entrega", "Como foi feito") or \
+        (labeled_line(d, "Decisão Arquitetural", "Decisão") or COMMENT_RE.sub("", d.section("Mudança Proposta") or "").strip() or "—")
+
+
+def pr_architecture(project, d):
+    lines = []
+    ref = labeled_line(d, "Decisão Arquitetural", "Contexto") or labeled_line(d, "Mudança Proposta", "Padrão seguido")
+    if ref:
+        lines.append(f"- **Padrão seguido:** {ref}")
+    deviation = labeled_line(d, "Decisão Arquitetural", "Desvio do padrão existente")
+    lines.append(f"- **Desvio do padrão existente:** {deviation or 'Nenhum'}")
+    for aid in d.list("adrs"):
+        a = project.adrs.get(aid)
+        lines.append(f"- {aid} — {a.title} ({a.status})" if a else f"- {aid}")
+    return "\n".join(lines)
+
+
+def pr_tests(project, d):
+    verification = sub_text(d, "Relatório de Entrega", "Verificação")
+    if any(rows for _, rows in parse_tables(verification)):
+        return verification
+    return "Testes do plano (ainda sem Relatório de Entrega): " + (", ".join(f"`{d.id}:{t}`" for t in plan_test_ids(d)) or "—")
+
+
+def pr_rollout(project, d):
+    rollout = COMMENT_RE.sub("", d.section("Plano de Rollout") or "").strip()
+    return rollout or (f"- **Rollback:** {labeled_line(d, 'Mudança Proposta', 'Rollback')}"
+                       if labeled_line(d, "Mudança Proposta", "Rollback") else "—")
+
+
+def pr_breaking(project, d):
+    v = contract_version(d)
+    if v > 1:
+        return (f"Contrato em v{v} — ver Emendas da spec. Se quebra consumidores, marque `!` no título "
+                "(Conventional Commits) e descreva a migração.")
+    return "Nenhuma"
+
+
+def pr_gates(project, d):
+    return COMMENT_RE.sub("", d.section("Registro de Gates") or "").strip() or "—"
+
+
+def cmd_pr(project: Project, ids, title_only: bool, out):
+    docs = []
+    for sid in ids:
+        d = project.specs.get(sid)
+        if d is None:
+            die(f"{sid} não encontrada")
+        docs += [k for k in project.children(sid) if k.status in APPROVED_PLUS] if d.tier == "epic" else [d]
+    if not docs:
+        die("nenhuma spec executável aprovada para o PR")
+    title = pr_title(project, docs)
+    if title_only:
+        print(title)
+        return 0
+    body = pr_body(project, docs)
+    if out:
+        Path(out).write_text(body, encoding="utf-8")
+        print(title)
+        print(f"corpo escrito em: {out}", file=sys.stderr)
+    else:
+        print(title + "\n\n" + body)
+    return 0
+
+
+def cmd_pr_check(project: Project, title, body, body_file, base):
+    title = title if title is not None else os.environ.get("PR_TITLE", "")
+    if body_file:
+        body = Path(body_file).read_text(encoding="utf-8")
+    body = body if body is not None else os.environ.get("PR_BODY", "")
+    results = []
+    refs = sorted(set(SPEC_REF_RE.findall(title + "\n" + body)))
+    m = CONVENTIONAL_RE.match(title)
+    if not m or m.group(1).lower() not in COMMIT_TYPES:
+        results.append(("WARN", "PR", f"título fora do Conventional Commits (<tipo>(escopo)?: descrição; tipos: {', '.join(COMMIT_TYPES)})"))
+    docs = []
+    if not refs:
+        if "[no-spec]" in title.lower():
+            results.append(("WARN", "PR", "PR marcado [no-spec] — reviewer confirma que não há mudança de comportamento"))
+        else:
+            results.append(("FAIL", "PR", "PR não referencia nenhuma spec (SPEC-NNNN no título ou corpo); "
+                                          "mudança sem comportamento: marque [no-spec] no título"))
+    for ref in refs:
+        d = project.specs.get(ref)
+        if d is None:
+            results.append(("FAIL", "PR", f"{ref} não existe em docs/specs"))
+        elif d.tier == "epic":
+            results.append(("INFO", "PR", f"{ref} é épico — verificando só as specs executáveis citadas"))
+        elif d.status not in APPROVED_PLUS:
+            results.append(("FAIL", "H1", f"{ref} está '{d.status}' — só entra com spec aprovada pelo humano"))
+        else:
+            docs.append(d)
+    if docs:
+        ids = {d.id for d in docs}
+        for level, subject, msg in validate(project, ids):
+            if level == "ERROR" and subject in ids:
+                results.append(("FAIL", "G0", f"{subject}: {msg}"))
+        for d in docs:
+            gates = gate_table(d) or {}
+            missing = [g for g in MERGE_GATES if not gate_ok(gates, g)]
+            if missing:
+                results.append(("FAIL", "gates", f"{d.id}: sem PASS/N/A com evidência em {', '.join(missing)} antes do merge"))
+            for item in open_impediments(d):
+                results.append(("FAIL", "IMP", f"{d.id}: impedimento aberto {impediment_label(item)} — {item['Descrição']}"))
+            _, spec_results = verify_spec(project, d.id, base)
+            results += [(lvl, gate, f"{d.id}: {msg}") for lvl, gate, msg in spec_results if lvl in ("FAIL", "WARN")]
+        base_ref = base or project.cfg("base_branch", "main")
+        code, merge_base, _ = run_git(project.root, "merge-base", base_ref, "HEAD")
+        if code == 0:
+            changed = [f for f in run_git(project.root, "diff", "--name-only", merge_base.strip(), "HEAD")[1].splitlines() if f]
+            allowed = [p for d in docs for p in d.list("touches")] + project.cfg_list("scope_exempt", DEFAULT_SCOPE_EXEMPT)
+            outside = [f for f in changed if not matches_any(f, allowed)]
+            if outside:
+                results.append(("FAIL", "G4", "arquivos do PR fora do `touches` das specs citadas: " + ", ".join(outside[:10])
+                                + (" …" if len(outside) > 10 else "")))
+    if refs and "## Como foi testado" not in body:
+        results.append(("WARN", "PR", "corpo fora do padrão — gere com `spec_graph.py pr <SPEC-ID>`"))
+    header = f"pr-check — specs: {', '.join(refs) or 'nenhuma'}"
+    return print_results(header, results)
+
+
+# ---------------------------------------------------------------- vendor (enforcement outside the model)
+
+PR_TEMPLATE_PATHS = {
+    "github": ".github/pull_request_template.md",
+    "gitlab": ".gitlab/merge_request_templates/Default.md",
+    "azure": ".azuredevops/pull_request_template.md",
+}
+CI_TARGETS = {
+    "github": ("ci/github-actions.yml", ".github/workflows/sdd.yml"),
+    "gitlab": ("ci/gitlab-ci.yml", "ci/sdd.gitlab-ci.yml"),
+    "generic": ("ci/sdd-check.sh", "tools/sdd/ci-check.sh"),
+}
+AGENT_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
+AGENT_BLOCK_RE = re.compile(r"<!-- sdd:start -->.*?<!-- sdd:end -->\n?", re.S)
+
+
+def cmd_vendor(project: Project, ci, pr_template, hooks: bool, agents: bool, changelog: bool, force: bool):
+    notes = []
+
+    def put(rel: str, content: str, executable: bool = False):
+        dest = project.root / rel
+        if dest.exists():
+            current = dest.read_text(encoding="utf-8")
+            if current == content:
+                print(f"inalterado: {rel}")
+                return
+            if not force:
+                print(f"mantido (já existe e difere, use --force para sobrescrever): {rel}")
+                return
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(content, encoding="utf-8")
+        if executable:
+            dest.chmod(0o755)
+        print(f"escrito: {rel}")
+
+    def asset(name: str) -> str:
+        path = ASSETS_DIR / name
+        if not path.exists():
+            die(f"asset não encontrado: {path}")
+        return path.read_text(encoding="utf-8")
+
+    put(VENDORED_TOOL, Path(__file__).read_text(encoding="utf-8"), executable=True)
+    if ci:
+        src, dest = CI_TARGETS[ci]
+        put(dest, asset(src), executable=dest.endswith(".sh"))
+        if ci == "gitlab":
+            notes.append(f"inclua no .gitlab-ci.yml: `include: {{ local: '{dest}' }}`")
+        if ci == "generic":
+            notes.append(f"no seu CI, exporte PR_TITLE, PR_BODY e BASE_REF e rode `{dest}` com histórico completo do git")
+    if pr_template:
+        put(PR_TEMPLATE_PATHS[pr_template], asset("pull_request_template.md"))
+    if hooks:
+        put(".githooks/commit-msg", asset("hooks/commit-msg"), executable=True)
+        put(".githooks/pre-commit", asset("hooks/pre-commit"), executable=True)
+        notes.append("ative os hooks (decisão do time): `git config core.hooksPath .githooks` "
+                     "— ou chame os mesmos scripts pelo husky/lefthook/pre-commit que o projeto já usa")
+    if changelog and not (project.root / "CHANGELOG.md").exists():
+        put("CHANGELOG.md", asset("CHANGELOG.template.md"))
+    if agents:
+        block = asset("agents-snippet.md")
+        existing = [f for f in AGENT_FILES if (project.root / f).exists()] or ["AGENTS.md"]
+        for name in existing:
+            path = project.root / name
+            text = path.read_text(encoding="utf-8") if path.exists() else ""
+            new = AGENT_BLOCK_RE.sub(block, text) if AGENT_BLOCK_RE.search(text) else (text.rstrip() + "\n\n" + block if text else block)
+            if new != text:
+                path.write_text(new, encoding="utf-8")
+                print(f"atualizado: {name} (bloco SDD)")
+        if existing == ["AGENTS.md"] and not any((project.root / f).exists() for f in ("CLAUDE.md", "GEMINI.md")):
+            notes.append("criado AGENTS.md; Claude Code lê CLAUDE.md e Gemini lê GEMINI.md — crie-os com `@AGENTS.md` se usar essas ferramentas")
+    for note in notes:
+        print(f"→ {note}")
     return 0
 
 
@@ -1718,6 +2347,32 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("validate", help="G0: valida specs/ADRs (todos ou os IDs informados; épico inclui filhas)")
     p.add_argument("ids", nargs="*")
+    p.add_argument("--staged", action="store_true", help="só specs/ADRs no stage do git, exceto rascunhos (pre-commit)")
+    p.add_argument("--exclude-drafts", action="store_true", help="ignora erros de specs 'proposed' (CI)")
+    p = sub.add_parser("status", help="fase atual e próximo passo obrigatório (todas as abertas ou os IDs)")
+    p.add_argument("ids", nargs="*")
+    p = sub.add_parser("export", help="estado completo em JSON neutro (para adaptadores de board e automações)")
+    p.add_argument("--out")
+    p = sub.add_parser("sync", help="operações para alinhar o board ao repositório (repo → board)")
+    p.add_argument("--board", help="snapshot neutro do board em JSON (gerado pelo adaptador)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--check", action="store_true", help="exit 1 se houver divergência")
+    p = sub.add_parser("pr", help="título e corpo padronizados de PR para uma ou mais specs (épico = filhas aprovadas)")
+    p.add_argument("ids", nargs="+")
+    p.add_argument("--title", action="store_true", help="imprime só o título")
+    p.add_argument("--out", help="escreve o corpo nesse arquivo e imprime o título")
+    p = sub.add_parser("pr-check", help="CI: PR cita specs aprovadas, gates G0–G4, TDD, escopo (usa PR_TITLE/PR_BODY)")
+    p.add_argument("--title")
+    p.add_argument("--body")
+    p.add_argument("--body-file")
+    p.add_argument("--base", help="ref da branch alvo (ex: origin/main)")
+    p = sub.add_parser("vendor", help="instala no projeto o controle fora do modelo: script, CI, template de PR, hooks, bloco em AGENTS.md")
+    p.add_argument("--ci", choices=tuple(CI_TARGETS))
+    p.add_argument("--pr-template", choices=tuple(PR_TEMPLATE_PATHS))
+    p.add_argument("--hooks", action="store_true")
+    p.add_argument("--agents", action="store_true")
+    p.add_argument("--changelog", action="store_true", help="cria CHANGELOG.md (Keep a Changelog) se não existir")
+    p.add_argument("--force", action="store_true")
     sub.add_parser("waves", help="plano de execução em ondas + próximo lote")
     sub.add_parser("next", help="próximo lote pronto para despachar")
     p = sub.add_parser("index", help="gera docs/specs/INDEX.md")
@@ -1729,6 +2384,7 @@ def main(argv=None):
     p.add_argument("id")
     p = sub.add_parser("report", help="resumo de entrega (o que, como, verificação, gates) para PR/changelog")
     p.add_argument("id")
+    p.add_argument("--changelog", action="store_true", help="entrada no formato Keep a Changelog")
     p = sub.add_parser("impede", help="registra impedimento (spec | decisão | trabalho | externo | falha)")
     p.add_argument("id")
     p.add_argument("--type", required=True)
@@ -1759,7 +2415,19 @@ def main(argv=None):
     root = Path(args.root).resolve() if args.root else find_root(Path.cwd())
     project = Project(root)
     if args.command == "validate":
-        return cmd_validate(project, args.ids)
+        return cmd_validate(project, args.ids, args.staged, args.exclude_drafts)
+    if args.command == "status":
+        return cmd_status(project, args.ids)
+    if args.command == "export":
+        return cmd_export(project, args.out)
+    if args.command == "sync":
+        return cmd_sync(project, args.board, args.json, args.check)
+    if args.command == "pr":
+        return cmd_pr(project, args.ids, args.title, args.out)
+    if args.command == "pr-check":
+        return cmd_pr_check(project, args.title, args.body, args.body_file, args.base)
+    if args.command == "vendor":
+        return cmd_vendor(project, args.ci, args.pr_template, args.hooks, args.agents, args.changelog, args.force)
     if args.command == "waves":
         return cmd_waves(project)
     if args.command == "next":
@@ -1771,7 +2439,7 @@ def main(argv=None):
     if args.command == "impacted":
         return cmd_impacted(project, args.id)
     if args.command == "report":
-        return cmd_report(project, args.id)
+        return cmd_report(project, args.id, args.changelog)
     if args.command == "impede":
         return cmd_impede(project, args.id, args.type, args.reason, args.owner, args.phase, args.tried)
     if args.command == "resolve":

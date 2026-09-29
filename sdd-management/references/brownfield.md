@@ -12,6 +12,8 @@ The first time SDD runs in an existing repository, as part of DISCOVER:
 4. **No architecture test suite?** Create a spec (`type: refactor`, no behavior change) that encodes the as-is ADRs as architecture tests. Until it is implemented, G3 is N/A pointing to it.
 5. **No CI or no deploy pipeline?** Same: a spec to create it. Until then G5's CI part and G6 are N/A pointing to that spec.
 6. If the project used the old SDD layout, run `migrate`.
+7. **Board:** look for signs of a tracker (issue keys like `PAY-123` in commits, branch names or PR templates; links in the docs), confirm with the human, and record `tracker` in `sdd-config.yml`. The existing backlog is **not** imported: a ticket becomes a spec only when someone starts working on it (intake in `references/trackers/<provider>.md`).
+8. **Enforcement:** propose `vendor --agents --ci <provider> --pr-template <provider> --hooks --changelog`, respecting what already exists (existing PR template, CI, hook manager, changelog format — adapt instead of replacing).
 
 The baseline doesn't block the first feature: it runs in parallel or right before it, and the gaps are explicit N/As with pointers.
 
@@ -28,7 +30,7 @@ The baseline doesn't block the first feature: it runs in parallel or right befor
 
 Before modifying code without coverage:
 
-1. The Test-writer writes **characterization tests** (`CH-xx`) that pin the current behavior. They must **pass** on the current code, and they're committed first (`test(...): characterize ... [SPEC-NNNN]`).
+1. The Test-writer writes **characterization tests** (`CH-xx`) that pin the current behavior. They must **pass** on the current code, and they're committed first (`test(<scope>): characterize ...` with footer `Refs: SPEC-NNNN`).
 2. Then the red tests for the new or fixed behavior.
 3. When a characterization test encodes the bug being fixed, the plan says so and the test changes in the same spec.
 4. Prefer introducing seams (dependency injection, adapters) over broad rewrites. Refactor only what the spec needs; list further improvements as new specs.

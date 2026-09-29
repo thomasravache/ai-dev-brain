@@ -12,6 +12,7 @@ consumes_contract: []
 contract_version: 1
 touches: []
 adrs: []
+external: []
 size: M
 approved_by:
 approved_at:
@@ -27,10 +28,10 @@ approved_at:
 ## 2. Motivação & Escopo
 **Motivação:** {{Por que essa mudança é necessária? Qual problema resolve ou que valor agrega?}}
 
-**Dentro do escopo:**
+**Objetivos (dentro do escopo):**
 - {{O que será entregue nesta spec}}
 
-**Fora do escopo:**
+**Não-objetivos (fora do escopo):**
 - {{O que explicitamente NÃO será feito — itens que poderiam ser assumidos mas não serão}}
 
 ## 3. Dependências
@@ -54,8 +55,13 @@ approved_at:
 **ADRs:** {{ADR-NNNN aplicados ou criados por esta spec (liste também no frontmatter `adrs`) | N/A}}
 
 ## 5. Requisitos Não-Funcionais
-<!-- Não omita a seção. Todo requisito diz como será medido. Se não houver, escreva "N/A". -->
-- {{requisito — como será medido (ex: p95 < 200ms a 100 req/s — teste de carga k6 no staging) | N/A}}
+<!-- Preocupações transversais de design doc. Não omita linhas: cada uma tem requisito + como será medido, ou "N/A — motivo". -->
+- **Desempenho e escala:** {{ex: p95 < 200ms a 100 req/s — teste de carga no staging | N/A — motivo}}
+- **Segurança:** {{authN/authZ, validação de entrada, riscos OWASP relevantes — como será verificado | N/A — motivo}}
+- **Privacidade e dados pessoais:** {{LGPD/GDPR: dados coletados, base legal, retenção, mascaramento em logs | N/A — motivo}}
+- **Disponibilidade e resiliência:** {{timeouts, retries, idempotência, degradação | N/A — motivo}}
+- **Acessibilidade (UI):** {{WCAG 2.2 AA nas telas afetadas — verificação com axe/Lighthouse | N/A — motivo}}
+- **Custo:** {{impacto em infraestrutura/serviços pagos | N/A — motivo}}
 
 ## 6. Artefato A — Contrato
 **Interface:** `{{ex: POST /api/v1/cards | evento CardAdded | ICardService.AddAsync | tela /carteira}}`

@@ -14,10 +14,11 @@ Before choosing any technology, ask the user what cannot be inferred. Track each
 - **Targets:** availability, latency, peak patterns, RPO/RTO.
 - **Team:** size, languages and frameworks it already masters, who operates production.
 - **Constraints:** budget, cloud/on-prem preference, company standards, time to first release.
+- **Tracking:** where the work will be followed — repository only, Jira, GitHub, Linear, other (recorded in `tracker`).
 
 ## 2. Stack selection — best fit for the domain
 
-One ADR per layer decision (`origin: decision`), each with an **Opções Avaliadas** matrix and **Fontes**.
+One ADR per layer decision (`origin: decision`, MADR format), with **Opções Consideradas**, the weighted **Prós e Contras** matrix and sources under **Mais Informações**.
 
 | Layer | Decide |
 |---|---|
@@ -35,7 +36,7 @@ Rules:
 
 - **Fit over fashion.** Score options against criteria weighted by the framing: domain fit; maturity, LTS and maintenance activity; ecosystem for this domain; performance and scalability for the stated load; security/compliance support; team skill and hiring market; operational cost and complexity; hosting fit; lock-in and license.
 - **Two or three real options per layer**, including the team's current stack when it has one — familiarity is a legitimate, heavily weighted criterion.
-- **Verify currency.** Training data goes stale. When web search or documentation tools are available, confirm current stable/LTS versions, support windows and maintenance status from official sources and record them under *Fontes* with the date. Never recommend end-of-life or deprecated technology. If verification isn't possible, say so explicitly in the ADR and to the user.
+- **Verify currency.** Training data goes stale. When web search or documentation tools are available, confirm current stable/LTS versions, support windows and maintenance status from official sources and record them under *Mais Informações* with the date. Never recommend end-of-life or deprecated technology. If verification isn't possible, say so explicitly in the ADR and to the user.
 - **Prefer managed services and proven technology** unless a requirement demands otherwise: fewer moving parts means faster delivery and cheaper operation.
 - **Evaluate the stack as a whole**: typed contracts end to end, shared tooling, one way to run everything locally.
 - The human approves the stack at H1 of the foundation epic, before any code.
@@ -66,9 +67,9 @@ Create an epic with `type: foundation`. Adapt the children to the product, but n
 
 | # | Child spec (type foundation) | Delivers |
 |---|---|---|
-| 1 | Repository & tooling | structure, build, lint/format, pre-commit hooks, `sdd-config.yml`, conventions in the root docs |
+| 1 | Repository & tooling | structure, build, lint/format, `sdd-config.yml` (incl. `tracker`), `vendor --agents --pr-template --hooks --changelog`, conventions in the root docs (Conventional Commits, Keep a Changelog, SemVer) |
 | 2 | Test harness | unit + integration (real dependencies) + E2E running locally and in CI with one example each; architecture test suite enforcing the foundation ADRs |
-| 3 | CI pipeline | on every push/PR: build, lint, unit, integration, architecture, E2E, dependency and secret scanning, artifact/container build; main always green and deployable |
+| 3 | CI pipeline | on every push/PR: build, lint, unit, integration, architecture, E2E, dependency and secret scanning, artifact/container build, plus the SDD job (`vendor --ci`) required in branch protection; main always green and deployable |
 | 4 | Environments & IaC | staging and production as code, secrets management, database migrations executed by the pipeline |
 | 5 | Walking skeleton | the thinnest real journey (e.g. sign in → see an empty dashboard) through every layer, with its E2E test, deployed to staging and production by the pipeline |
 | 6 | Observability baseline | structured logs, metrics, traces, error tracking, health checks, an alert on the skeleton journey |

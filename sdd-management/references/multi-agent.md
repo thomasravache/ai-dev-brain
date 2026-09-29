@@ -26,16 +26,26 @@ Test-writer and Implementer are **different agents with fresh context**: tests w
 - Test-writer then Implementer work sequentially on the same spec branch; Reviewer reads it; Integrator merges it into the integration branch.
 - Manual worktree when the tool doesn't manage one: `git worktree add ../<repo>-<spec-id> -b sdd/<spec-id>-<slug> sdd/<epic-id>`; remove it after the merge (`git worktree remove`).
 
-## Commit conventions (checked by `verify`)
+## Commit conventions (checked by `verify`, the `commit-msg` hook and `pr-check`)
 
-Every commit references the spec ID in the subject or body (e.g. trailer `Spec: SPEC-0042`). Follow the project's conventional-commit scope rules.
+[Conventional Commits 1.0](https://www.conventionalcommits.org/): `<type>(<scope>)?!?: <description>` — imperative, lowercase, no trailing period; the body explains **why**; the spec goes in a git trailer footer `Refs: SPEC-0042` (several specs: `Refs: SPEC-0042, SPEC-0043`). Types: `build chore ci docs feat fix perf refactor revert style test`. A contract-breaking change uses `!` and a `BREAKING CHANGE:` footer. Follow the project's own scope rules.
 
 | Commit | Purpose |
 |---|---|
-| `chore(<scope>): scaffold <contract> [SPEC-0042]` | optional; types/interfaces/signatures only, throwing NotImplemented |
-| `test(<scope>): characterize <area> [SPEC-0042]` | brownfield: CH tests pinning current behavior (they pass); before any other change |
-| `test(<scope>): <tests> [SPEC-0042]` | red; only files under `test_paths` |
-| `feat\|fix\|refactor\|perf(<scope>): ... [SPEC-0042]` | green / refactor |
+| `chore(<scope>): scaffold <contract>` + `Refs: SPEC-0042` | optional; types/interfaces/signatures only, throwing NotImplemented |
+| `test(<scope>): characterize <area>` + `Refs: SPEC-0042` | brownfield: CH tests pinning current behavior (they pass); before any other change |
+| `test(<scope>): <tests>` + `Refs: SPEC-0042` | red; only files under `test_paths` |
+| `feat\|fix\|refactor\|perf(<scope>): ...` + `Refs: SPEC-0042` | green / refactor |
+
+Example:
+
+```text
+test(wallet): add failing tests for card limit
+
+Covers UT-01..UT-03 and IT-01 from the approved contract.
+
+Refs: SPEC-0042
+```
 
 ## Wave loop
 
@@ -93,8 +103,8 @@ Role: Test-writer (SDD) for <SPEC-ID> — <title>.
 Repository: <repo path>. Work on branch <spec branch> (worktree: <path>).
 Read first: <spec path> (Contrato + Plano de Testes), docs/specs/sdd-config.yml, ADRs <adrs>, <skill dir>/references/testing.md, the existing tests of the reference implementation <paths> (follow their structure, naming and libraries), and for each consumed contract only the Contrato section of <provider spec paths> at the pinned version.
 Task: write EVERY test listed in the test plan (<IDs>), at its level: CH (characterization — must PASS on the current code, commit them first), UT, IT with real dependencies (containers/emulators, not mocks), CT, E2E through the real UI/public API. Tag each one with "<SPEC-ID>:<ID>" using <stack tag convention>. Except CH, tests must compile and FAIL for the expected reason (assertion or NotImplemented), never because of setup or compile errors.
-You may add contract scaffolding (types/interfaces/signatures throwing NotImplemented, no logic) in a separate commit "chore(<scope>): scaffold ... [<SPEC-ID>]".
-Commit tests as "test(<scope>): ... [<SPEC-ID>]". Only touch: <touches>.
+You may add contract scaffolding (types/interfaces/signatures throwing NotImplemented, no logic) in a separate commit "chore(<scope>): scaffold ..." with footer "Refs: <SPEC-ID>".
+Commit tests as "test(<scope>): ..." (Conventional Commits) with footer "Refs: <SPEC-ID>". Only touch: <touches>.
 Run: <test command>. Do not write production logic.
 If the spec is ambiguous, contradictory or untestable: stop and report SPEC_DEFECT — do not guess.
 Report only: STATUS (DONE | SPEC_DEFECT | BLOCKED); commits (SHA + subject); tests per ID with file; failing summary (count + reason per ID); notes.
@@ -108,7 +118,7 @@ Repository: <repo path>. Branch <spec branch> (worktree: <path>), which already 
 Read first: <spec path> (whole spec), docs/specs/sdd-config.yml, ADRs <adrs>, and the reference implementation the spec's Decisão Arquitetural cites (<paths>) — your code must look like it belongs there.
 Task: implement the minimum needed to make the tests pass, then refactor keeping everything green, following the checklist phases in section "Checklist de Implementação" (report which items you completed; do not edit the spec file). Implement the Plano de Rollout items that live in code (feature flag, backward-compatible migration, logs/metrics).
 Rules: do not change the red tests (if a test is wrong, stop and report TEST_DEFECT with the reason); only touch <touches>; do not change the contract; keep the existing architecture, patterns, libraries and conventions — no new library, layer or pattern unless an approved ADR in the spec covers it.
-Commit as "feat|fix|refactor(<scope>): ... [<SPEC-ID>]".
+Commit as "feat|fix|refactor(<scope>): ..." (Conventional Commits) with footer "Refs: <SPEC-ID>".
 Gates to run before reporting: build "<build>", full tests "<test>", architecture "<arch_test>", lint "<lint>", coverage "<coverage>" (min <coverage_min_changed_lines>% of changed lines).
 If the spec is wrong or incomplete: stop and report SPEC_DEFECT with the exact gap — never diverge silently.
 Report only: STATUS (DONE | SPEC_DEFECT | TEST_DEFECT | BLOCKED); commits; G2 evidence (command → result counts); G3 evidence; checklist items completed; deviations or risks; STOP block if not DONE.

@@ -99,7 +99,7 @@ After every spec branch of the wave is merged into the integration branch, in de
 
 - On the **merged result**: build, full suite, integration, E2E (local environment), architecture and security scan pass.
 - Contract tests run against the real provider when provider and consumer both exist in the merged code.
-- **CI pipeline green** for the integration branch/PR (`ci`). Pushing the branch or opening the PR to trigger CI happens only with the user's confirmation — a standing authorization written in the project's root docs counts.
+- **CI pipeline green** for the integration branch/PR (`ci`), including the SDD job (`validate --exclude-drafts` + `pr-check`). The PR title/body come from `spec_graph.py pr`. Pushing the branch or opening the PR to trigger CI happens only with the user's confirmation — a standing authorization written in the project's root docs counts.
 - Merge conflicts are resolved preserving both behaviors; a conflict that needs a design choice goes to the Architect.
 - No CI yet → the CI part is N/A pointing to the spec that creates the pipeline.
 - Evidence: integration commit SHA, command results, CI run ID/URL.

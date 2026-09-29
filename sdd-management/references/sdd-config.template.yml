@@ -54,6 +54,37 @@ scope_exempt:
 # Omitido = padrão da skill (package.json, *.csproj, pyproject.toml, go.mod, pom.xml, ...).
 dependency_manifests: []
 
+# --- Board / tracker (opcional) ---
+# O repositório é sempre a fonte da verdade; o board é uma visão dele (repo → board).
+# Credenciais NUNCA aqui: o agente usa a autenticação da ferramenta (MCP, CLI, API).
+# Guia de cada adaptador: references/trackers/<provider>.md da skill.
+tracker:
+  provider: none            # none | jira | github | linear | azure | trello | <outro>
+  project: ""               # Jira: chave do projeto (PAY) · GitHub: owner/repo · Linear: time
+  mode: push                # push (repo → board) | push+intake (tickets também viram specs)
+  labels:
+    - sdd
+  blocked_label: sdd-bloqueado
+  # status da spec → status/coluna do board (Jira: nome do status de destino da transição)
+  statuses:
+    proposed: ""
+    approved: ""
+    in-progress: ""
+    implemented: ""
+    deprecated: ""
+  # tier/type da spec → tipo de item no board
+  issue_types:
+    epic: ""
+    feature: ""
+    fix: ""
+    refactor: ""
+    migration: ""
+    foundation: ""
+
+# --- Pull requests ---
+# Título gerado por `spec_graph.py pr` (Conventional Commits). Campos: {conv} {type} {title} {id} {scope}
+pr_title: "{conv}: {title} [{id}]"
+
 # --- Documentação (G7) ---
 root_docs:
   - CLAUDE.md

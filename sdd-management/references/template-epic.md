@@ -7,6 +7,7 @@ status: proposed
 created: {{created}}
 depends_on: []
 adrs: []
+external: []
 approved_by:
 approved_at:
 ---
@@ -19,10 +20,10 @@ approved_at:
 {{Resultado de negócio e técnico esperado ao final do épico.}}
 
 ## 2. Escopo
-**Dentro do escopo:**
+**Objetivos (dentro do escopo):**
 - {{O que o épico entrega}}
 
-**Fora do escopo:**
+**Não-objetivos (fora do escopo):**
 - {{O que fica explicitamente de fora}}
 
 ## 3. Arquitetura Alvo

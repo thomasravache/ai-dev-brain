@@ -1,0 +1,16 @@
+# SDD — bloqueia o merge de MR sem spec aprovada, gates, TDD (red antes do green) ou escopo.
+# Inclua no .gitlab-ci.yml:  include: { local: 'ci/sdd.gitlab-ci.yml' }
+# e ative "Pipelines must succeed" nas configurações de merge request.
+sdd:
+  stage: test
+  image: python:3.12            # imagem completa (traz git); fixe por digest se o time exigir
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0                # histórico completo para comparar com a branch alvo
+    PR_TITLE: $CI_MERGE_REQUEST_TITLE
+    PR_BODY: $CI_MERGE_REQUEST_DESCRIPTION
+  script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - python3 tools/sdd/spec_graph.py validate --exclude-drafts
+    - python3 tools/sdd/spec_graph.py pr-check --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"

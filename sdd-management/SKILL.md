@@ -38,11 +38,17 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 |---|---|
 | `new --tier lite\|full\|epic --title "..." [--parent SPEC-X]` | Create a spec from the template with the next ID |
 | `new-adr --title "..."` | Create an ADR |
-| `validate [ID ...]` | **G0** and closing checks: frontmatter, references, cycles, sections, markers, contract ↔ test traceability, test mix (UT/IT/CT/E2E), delivery report and Definition of Done (an epic ID includes its children) |
+| `status [ID ...]` | **Where am I?** Current phase, progress panel and the next mandatory step — derived only from the files. Run it before every step instead of relying on memory. |
+| `validate [ID ...] [--staged] [--exclude-drafts]` | **G0** and closing checks: frontmatter, references, cycles, sections, markers, contract ↔ test traceability, test mix (UT/IT/CT/E2E), delivery report and Definition of Done (an epic ID includes its children) |
 | `waves` | Execution plan in waves + next batch |
 | `next` | Batch ready to dispatch now (no file conflicts, ≤ `max_parallel`) and what is blocked |
 | `verify SPEC-X [--base BRANCH]` | **G1/G4** via git: red before green, test tags in code, files inside `touches`, dependency changes without ADR |
-| `report SPEC-X` | Delivery summary (what, how, verification, gates, impediments) for PR description and changelog |
+| `report SPEC-X [--changelog]` | Delivery summary (what, how, verification, gates, impediments); `--changelog` prints the Keep a Changelog entry |
+| `pr ID [ID ...] [--title] [--out FILE]` | Standard PR title (Conventional Commits) and body built from specs, ADRs, verification and gates; an epic ID = its approved children |
+| `pr-check [--base REF]` | CI gate: the PR (title/body from `PR_TITLE`/`PR_BODY`) cites approved specs with G0–G4 recorded, no open impediment, TDD order, files inside `touches` |
+| `export [--out FILE]` | Whole state as neutral JSON (for board adapters and automations) |
+| `sync [--board SNAPSHOT] [--json] [--check]` | Operations to align the board with the repository (repo → board); `--check` exits 1 on drift |
+| `vendor [--ci github\|gitlab\|generic] [--pr-template github\|gitlab\|azure] [--hooks] [--agents] [--changelog] [--force]` | Installs the enforcement into the project: `tools/sdd/spec_graph.py`, CI job, PR template, git hooks, SDD block in AGENTS.md/CLAUDE.md/GEMINI.md, CHANGELOG |
 | `impede SPEC-X --type T --reason "..." --owner "..." [--phase G2] [--tried "..."]` | Record an impediment (`spec \| decisão \| trabalho \| externo \| falha`) |
 | `resolve SPEC-X IMP-NN --resolution "..."` | Close an impediment pointing to its resolution (Emenda, answer/ADR, SPEC-NNNN, action) |
 | `set ID [ID ...] key=value ...` | Update frontmatter (`today` = current date; lists as `[A, B]`) |
@@ -52,6 +58,21 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 | `next-id spec\|adr` | Next free ID |
 
 Never compute IDs, cycles, waves or scope by eye, and never hand-edit `INDEX.md` — run the script.
+
+## Staying on track (enforcement outside the model)
+
+No model reliably remembers a long process — context gets summarized, sessions change, the skill may not even load. The process therefore **lives in files and checks, not in the model's memory**:
+
+1. **Project instruction** — `vendor --agents` writes an SDD block into `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`, so any agent in the repo is told to load this skill and follow `status`.
+2. **State machine in the files** — `status` tells, from the spec files alone, the phase and the next mandatory step. **Before every step, run `status`**; after a context summary or a new session, run it first.
+3. **Git hooks** — `vendor --hooks`: `commit-msg` enforces Conventional Commits with `Refs: SPEC-NNNN`; `pre-commit` validates changed specs/ADRs. Activation (`git config core.hooksPath .githooks` or the team's husky/lefthook/pre-commit) is the team's decision.
+4. **CI as the final gate** — `vendor --ci ...` installs a job running `validate --exclude-drafts` and `pr-check`. Made **required** in branch protection, nothing reaches the main branch without an approved spec, recorded gates, red-before-green and in-scope changes — whatever the model did or forgot.
+
+`tools/sdd/spec_graph.py` is a vendored copy of this skill's script, versioned with the project so CI and teammates without the skill run the same checks; `validate` warns when it is older than the skill (`vendor --force` updates it). Tool-specific hooks (e.g. Claude Code hooks) are optional extras, never required.
+
+## Board (optional, agnostic)
+
+The repository stays the source of truth; a board is a view of it. The choice is recorded in `docs/specs/sdd-config.yml` → `tracker` (`provider: none` by default), so every session and tool knows it. Specs link to board items through `external: [jira:PAY-123]`. `sync` computes the operations (create, transition, link, block/unblock) and the agent executes them with the adapter guide `references/trackers/<provider>.md` using the tools it has (MCP, CLI, API) — never storing credentials. Direction is repo → board; with `mode: push+intake`, tickets can also be the origin of specs. Contract and sync points: `references/trackers/README.md`. Board writes are visible to others: user confirmation or a standing authorization in the root docs.
 
 ## Project layout
 
@@ -87,6 +108,7 @@ consumes_contract: [SPEC-0041@1]    # only needs that CONTRACT approved (pinned 
 contract_version: 1                 # bumped by every amendment to this spec's contract
 touches: [src/Payments/**, tests/Payments.Tests/**]
 adrs: [ADR-0007]
+external: [jira:PAY-123]            # board items (optional; format provider:key)
 size: M                             # S | M (L is not allowed — make it an epic)
 approved_by: thomas                 # H1, set only after the human answers "Aprovado"
 approved_at: 2026-09-28
@@ -121,7 +143,10 @@ Start or end every response **to the user** with this panel (subagents don't pri
 ## Workflow
 
 ### 1. DISCOVER
+- Run `status` (if `docs/specs` exists) to resume from the files, not from memory.
 - Decide **greenfield or brownfield** and follow its guide.
+- **Board:** if `tracker` isn't configured, ask where work is tracked (repository only, Jira, GitHub, Linear, other) and record it in `sdd-config.yml`; brownfield: look for signs first (issue keys in commits/branches/PR templates) and confirm.
+- **Enforcement:** if `tools/sdd/spec_graph.py` is missing or outdated, propose `vendor --agents --ci <provider> --pr-template <provider> --hooks --changelog` (greenfield: part of the foundation epic) — the user approves the files.
 - Read `docs/specs/INDEX.md`, `docs/specs/sdd-config.yml`, the related specs and every **accepted ADR** — new work must respect accumulated decisions.
 - No `sdd-config.yml`? Create it from `references/sdd-config.template.yml` with the project's real commands (build, tests, E2E, architecture, security, CI, deploy), running each once to confirm it works. Missing capabilities (no CI, no E2E, no architecture tests, manual deploy) become specs, and the matching gates are N/A pointing to them until they exist.
 - **Brownfield:** find the reference implementation (the 1–3 most similar existing features and their tests), the conventions, and how the code reaches production. **Greenfield:** product framing questions, then stack options per layer with current versions verified.
@@ -173,7 +198,7 @@ Then `waves` + `next`, and present the wave plan: what runs in parallel and why 
 For each spec in the batch from `next`, follow `references/multi-agent.md`: Test-writer (G1) → Implementer (G2, G3) → Reviewer (G4), each spec on its own branch/worktree, up to `max_parallel` at a time. Gate criteria and evidence: `references/gates.md`. `set SPEC-X status=in-progress` when a spec is dispatched.
 
 ### 6. INTEGRATE (G5 + H2)
-When every spec in the wave has G4 = PASS, the Integrator merges the branches into the integration branch in dependency order and runs build, full suite, E2E, contract, architecture and security checks on the merged result, and — with the user's authorization to push — confirms CI is green (G5). Then ask exactly:
+When every spec in the wave has G4 = PASS, the Integrator merges the branches into the integration branch in dependency order and runs build, full suite, E2E, contract, architecture and security checks on the merged result, and — with the user's authorization to push — opens the PR with the standard body (`pr <ids> --out pr.md`) and confirms CI, including `pr-check`, is green (G5). Then ask exactly:
 
 > "Onda N integrada: build, testes (unitários, integração, contrato, E2E), arquitetura e CI passando (G5). Deseja revisar antes de prosseguir? Digite 'Aprovado' para seguir ou solicite ajustes."
 
@@ -184,10 +209,10 @@ Release deploys through the pipeline to staging, runs smoke + E2E against it, an
 
 ### 8. CLOSE (G7)
 - Fill each spec's **Relatório de Entrega** from the gate evidence: what was delivered, how it was done, proof of fix (`type: fix`), **Verificação** with one row per test ID (PASS + evidence), Deploy, Pendências as new specs. Check every item of the Definição de Pronto — an item that isn't true stays unchecked and the spec stays open.
-- Update the root docs (delivered features out of the backlog, architecture, new conventions or instructions) and the changelog (`report SPEC-X` as the base).
+- Update the root docs (delivered features out of the backlog, architecture, new conventions or instructions) and the `CHANGELOG.md` in Keep a Changelog format with Semantic Versioning (`report SPEC-X --changelog` gives the entry).
 - Record G7, `set <ids> status=implemented`. Close the epic when all children are `implemented`/`deprecated`, its acceptance criteria are checked (each proven by its test) and its Relatório de Entrega is written.
 - `validate` must be clean for the closed specs; run `index`.
-- Pushing, opening a PR or merging into `base_branch` only with the user's explicit confirmation, following the project's PR conventions (`report` output makes a good PR description).
+- Pushing, opening a PR or merging into `base_branch` only with the user's explicit confirmation, following the project's PR conventions (`pr` generates the title and body).
 
 ## Gaps and impediments
 
@@ -223,6 +248,8 @@ Approved contracts are frozen. When something must change — asked by the user,
 Cancelling: `set SPEC-X status=deprecated` and add `> Deprecated: <motivo>` under the title; `validate` flags open specs that still depend on it.
 
 ## Rules
+
+- **`status` before every step.** Never rely on memory of the process; the files are the state.
 
 - **No implementation code in the Architect role.** Without subagents, switch roles explicitly (solo mode in `references/multi-agent.md`) — all gates still apply.
 - **Single writer for SDD records.** Only the Architect edits `docs/specs/` and `docs/adr/` (status, checklist, gates, impediments, amendments, delivery report), in the main checkout. Subagents report; they never edit spec files in their worktrees — so the index is always current and branches never conflict on specs.

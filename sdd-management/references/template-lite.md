@@ -11,6 +11,7 @@ depends_on: []
 consumes_contract: []
 touches: []
 adrs: []
+external: []
 size: S
 approved_by:
 approved_at:
