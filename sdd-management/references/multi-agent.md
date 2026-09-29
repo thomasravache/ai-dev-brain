@@ -42,7 +42,8 @@ Every commit references the spec ID in the subject or body (e.g. trailer `Spec: 
 1. `spec_graph.py next` → the batch to dispatch now (already excludes file conflicts and respects `max_parallel`).
 2. For each spec in the batch: create branch/worktree, `set SPEC-X status=in-progress`, dispatch the **Test-writer**.
 3. Test-writer returns → Architect runs `verify SPEC-X` and checks the failing summary → record G1. FAIL → back to the Test-writer with the reason.
-4. Dispatch the **Implementer** → record G2/G3 from its evidence (re-run the commands if the evidence is thin). `SPEC_DEFECT` → Amendment flow in SKILL.md before continuing.
+4. Dispatch the **Implementer** → record G2/G3 from its evidence (re-run the commands if the evidence is thin).
+   Any report other than DONE/APPROVED → record it at once with `impede` (see *Stops* below) and route it: `SPEC_DEFECT` → Amendment flow; `TEST_DEFECT` → back to the Test-writer; `BLOCKED` → ask the human or create the missing spec.
 5. Dispatch the **Reviewer** → record G4. `CHANGES_REQUESTED` → Implementer receives the findings verbatim → Reviewer again.
 6. When every spec of the wave has G4 = PASS → dispatch the **Integrator** → G5 → ask H2 (human).
 7. Dispatch **Release** for staging → G6 (staging). Production only after the user confirms that release in chat → G6 (production).
@@ -55,9 +56,35 @@ Specs of the same batch are independent by construction: no `depends_on` between
 
 The consumer's Test-writer builds test doubles strictly from the provider spec's contract section at the pinned version (`SPEC-0041@1`). The consumer's CT tests encode what it expects from the provider; the provider's CT tests prove it delivers that. At G5 the Integrator runs the consumer's integration/contract tests against the real provider. A mismatch is a `SPEC_DEFECT` in one of the two specs → Amendment flow.
 
+## Single writer
+
+Only the Architect writes SDD records (`docs/specs/`, `docs/adr/`): status, checklist ticks, gate rows, impediments, amendments, delivery report — in the main checkout, right after each report arrives. Subagents never edit spec files in their worktrees: they report, and the Architect records. This keeps `INDEX.md` current in real time and keeps spec branches free of conflicts on spec files.
+
+## Stops
+
+A subagent that cannot proceed stops — it never guesses, works around the spec or silently narrows scope — and ends its report with a STOP block:
+
+```text
+STOP
+Status: SPEC_DEFECT | TEST_DEFECT | BLOCKED
+Phase/Gate: <e.g. G2>
+Missing: <exactly what prevents progress>
+Tried: <what was attempted and the result>
+Needs: <who must act — Architect, human, third party — and the decision or action needed>
+Suggested type: spec | decisão | trabalho | externo | falha
+```
+
+The Architect turns it into a tracked impediment immediately:
+
+```text
+spec_graph.py impede <SPEC-ID> --type <type> --phase <gate> --reason "<Missing>" --tried "<Tried>" --owner "<Needs>"
+```
+
+…routes it (SKILL.md → *Gaps and impediments*), and closes it with `resolve <SPEC-ID> IMP-NN --resolution "..."` citing the amendment, answer/ADR, new spec or action. The Architect also records `falha` itself after 3 consecutive FAILs of a gate.
+
 ## Dispatch packets
 
-Subagents start with no context: give them everything they need and ask for a structured report. Fill the `<...>` fields.
+Subagents start with no context: give them everything they need and ask for a structured report. Fill the `<...>` fields, and end **every** packet with: "Do not edit files under docs/specs or docs/adr. If you cannot proceed, stop and end your report with the STOP block (Status, Phase/Gate, Missing, Tried, Needs, Suggested type)."
 
 ### Test-writer
 
@@ -79,12 +106,12 @@ Report only: STATUS (DONE | SPEC_DEFECT | BLOCKED); commits (SHA + subject); tes
 Role: Implementer (SDD) for <SPEC-ID> — <title>.
 Repository: <repo path>. Branch <spec branch> (worktree: <path>), which already contains the failing tests (red commits <SHAs>).
 Read first: <spec path> (whole spec), docs/specs/sdd-config.yml, ADRs <adrs>, and the reference implementation the spec's Decisão Arquitetural cites (<paths>) — your code must look like it belongs there.
-Task: implement the minimum needed to make the tests pass, then refactor keeping everything green, following the checklist phases in section "Checklist de Implementação" and ticking items in the spec file as you complete them. Implement the Plano de Rollout items that live in code (feature flag, backward-compatible migration, logs/metrics).
+Task: implement the minimum needed to make the tests pass, then refactor keeping everything green, following the checklist phases in section "Checklist de Implementação" (report which items you completed; do not edit the spec file). Implement the Plano de Rollout items that live in code (feature flag, backward-compatible migration, logs/metrics).
 Rules: do not change the red tests (if a test is wrong, stop and report TEST_DEFECT with the reason); only touch <touches>; do not change the contract; keep the existing architecture, patterns, libraries and conventions — no new library, layer or pattern unless an approved ADR in the spec covers it.
 Commit as "feat|fix|refactor(<scope>): ... [<SPEC-ID>]".
 Gates to run before reporting: build "<build>", full tests "<test>", architecture "<arch_test>", lint "<lint>", coverage "<coverage>" (min <coverage_min_changed_lines>% of changed lines).
 If the spec is wrong or incomplete: stop and report SPEC_DEFECT with the exact gap — never diverge silently.
-Report only: STATUS (DONE | SPEC_DEFECT | TEST_DEFECT | BLOCKED); commits; G2 evidence (command → result counts); G3 evidence; checklist items ticked; deviations or risks.
+Report only: STATUS (DONE | SPEC_DEFECT | TEST_DEFECT | BLOCKED); commits; G2 evidence (command → result counts); G3 evidence; checklist items completed; deviations or risks; STOP block if not DONE.
 ```
 
 ### Reviewer

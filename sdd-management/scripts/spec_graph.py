@@ -47,6 +47,11 @@ ADR_STATUSES = ("proposed", "accepted", "superseded", "rejected")
 ADR_ORIGINS = ("decision", "as-is")
 GATE_ROWS = ("G0", "G1", "G2", "G3", "G4", "G5", "H2", "G6", "G7")
 DELIVERY_SUBSECTIONS = ("O que foi entregue", "Como foi feito", "Verificação", "Definição de Pronto", "Deploy", "Pendências")
+IMPEDIMENT_TYPES = ("spec", "decisão", "trabalho", "externo", "falha")
+IMPEDIMENT_COLUMNS = ("ID", "Aberto em", "Fase/Gate", "Tipo", "Descrição", "Tentativas", "Responsável", "Resolução", "Fechado em")
+IMP_ID_RE = re.compile(r"^IMP-(\d{2,})$")
+ADR_REF_RE = re.compile(r"\bADR-\d{4,}\b")
+CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
 GATE_STATUSES = ("N/A", "FAIL", "PENDING", "PASS")
 LEGACY_DIRS = ("proposed", "approved", "implemented", "deprecated")
 RED_TYPES = {"test"}
@@ -71,18 +76,21 @@ REQUIRED_SECTIONS = {
         ("Visão Geral", True), ("Motivação", True), ("Dependências", True),
         ("Decisão Arquitetural", True), ("Requisitos Não-Funcionais", True),
         ("Contrato", True), ("Plano de Testes", True), ("Plano de Rollout", True),
-        ("Aprovação", False), ("Checklist", False), ("Registro de Gates", False),
+        ("Questões em Aberto", True), ("Aprovação", False), ("Checklist", False),
+        ("Registro de Gates", False), ("Registro de Impedimentos", False),
         ("Relatório de Entrega", False), ("Emendas", False),
     ],
     "lite": [
         ("Problema", True), ("Causa Raiz", True), ("Mudança Proposta", True),
-        ("Plano de Testes", True), ("Aprovação", False), ("Checklist", False),
-        ("Registro de Gates", False), ("Relatório de Entrega", False),
+        ("Plano de Testes", True), ("Questões em Aberto", True), ("Aprovação", False),
+        ("Checklist", False), ("Registro de Gates", False), ("Registro de Impedimentos", False),
+        ("Relatório de Entrega", False), ("Emendas", False),
     ],
     "epic": [
         ("Visão", True), ("Escopo", True), ("Arquitetura Alvo", True), ("Decomposição", True),
         ("Estratégia de Entrega", True), ("Riscos", True), ("Critérios de Aceite", True),
-        ("Aprovação", False), ("Relatório de Entrega", False),
+        ("Questões em Aberto", True), ("Aprovação", False), ("Registro de Impedimentos", False),
+        ("Relatório de Entrega", False), ("Emendas", False),
     ],
 }
 
@@ -212,7 +220,7 @@ def parse_tables(content: str):
     for line in content.split("\n"):
         s = line.strip()
         if s.startswith("|") and s.endswith("|") and len(s) > 1:
-            cur.append([c.strip() for c in s[1:-1].split("|")])
+            cur.append([c.strip() for c in CELL_SPLIT_RE.split(s[1:-1])])
         elif cur:
             raw_tables.append(cur)
             cur = []
@@ -550,6 +558,8 @@ def validate_spec(project: Project, doc: Doc, add):
             add("ERROR", sid, f"seção obrigatória ausente: '{keyword}'")
         elif must_fill and not COMMENT_RE.sub("", content).strip():
             add("ERROR", sid, f"seção vazia: '{keyword}'")
+    validate_questions(doc, add)
+    validate_impediments(project, doc, add)
     if doc.tier == "epic":
         validate_epic(project, doc, add)
     else:
@@ -760,6 +770,106 @@ def gate_table(doc: Doc):
     return gates
 
 
+def normalize_imp_type(value: str):
+    key = norm(value or "").strip()
+    return next((t for t in IMPEDIMENT_TYPES if norm(t) == key), None)
+
+
+def impediments(doc: Doc):
+    content = doc.section("Registro de Impedimentos")
+    if content is None:
+        return []
+    items = []
+    for header, rows in parse_tables(COMMENT_RE.sub("", content)):
+        cols = [norm(c) for c in header]
+        if "id" not in cols:
+            continue
+        idx = {name: cols.index(norm(name)) for name in IMPEDIMENT_COLUMNS if norm(name) in cols}
+        for row in rows:
+            item = {name: (row[i].strip().replace("\\|", "|") if i < len(row) else "") for name, i in idx.items()}
+            for name in IMPEDIMENT_COLUMNS:
+                item.setdefault(name, "")
+            if item["ID"]:
+                items.append(item)
+    return items
+
+
+def open_impediments(doc: Doc):
+    return [i for i in impediments(doc) if not i["Fechado em"]]
+
+
+def age_days(date: str) -> str:
+    try:
+        return f"{(dt.date.today() - dt.date.fromisoformat(date)).days}d"
+    except ValueError:
+        return "?"
+
+
+def impediment_label(item) -> str:
+    kind = normalize_imp_type(item["Tipo"]) or item["Tipo"]
+    return f"{item['ID']} ({kind} → {item['Responsável'] or '?'}, {age_days(item['Aberto em'])})"
+
+
+def validate_questions(doc: Doc, add):
+    content = doc.section("Questões em Aberto")
+    if content is None:
+        return
+    lines = COMMENT_RE.sub("", content).split("\n")
+    pending = [l for l in lines if re.match(r"^\s*[-*] \[ \]", l)]
+    if pending:
+        add("ERROR", doc.id, f"{len(pending)} questão(ões) em aberto sem resposta — responda e registre antes do H1")
+    for line in lines:
+        if re.match(r"^\s*[-*] \[[xX]\]", line) and not re.search(r"\s[—–-]\s", line.split("]", 1)[1]):
+            add("WARN", doc.id, f"questão marcada sem resposta registrada ('pergunta — resposta'): '{line.strip()[6:60]}'")
+
+
+def validate_impediments(project: Project, doc: Doc, add):
+    sid = doc.id
+    emendas = COMMENT_RE.sub("", doc.section("Emendas") or "")
+    amendment_rows = sum(len(rows) for _, rows in parse_tables(emendas))
+    seen = set()
+    for item in impediments(doc):
+        iid = item["ID"]
+        if not IMP_ID_RE.match(iid):
+            add("ERROR", sid, f"impedimento com ID inválido '{iid}' (esperado IMP-NN)")
+        if iid in seen:
+            add("ERROR", sid, f"impedimento {iid} duplicado")
+        seen.add(iid)
+        kind = normalize_imp_type(item["Tipo"])
+        if kind is None:
+            add("ERROR", sid, f"{iid}: tipo '{item['Tipo']}' inválido ({' | '.join(IMPEDIMENT_TYPES)})")
+        if not valid_date(item["Aberto em"]):
+            add("ERROR", sid, f"{iid}: 'Aberto em' deve ser uma data YYYY-MM-DD")
+        if not item["Descrição"]:
+            add("ERROR", sid, f"{iid}: sem descrição do que falta")
+        if not item["Responsável"]:
+            add("ERROR", sid, f"{iid}: sem responsável — quem precisa agir?")
+        closed, resolution = item["Fechado em"], item["Resolução"]
+        if not closed:
+            if doc.status == "implemented":
+                add("ERROR", sid, f"{iid} aberto — spec não pode estar implemented com impedimento aberto")
+            elif doc.status == "deprecated":
+                add("WARN", sid, f"{iid} aberto em spec deprecated — feche registrando o cancelamento como resolução")
+            continue
+        if not valid_date(closed):
+            add("ERROR", sid, f"{iid}: 'Fechado em' deve ser uma data YYYY-MM-DD")
+        if not resolution:
+            add("ERROR", sid, f"{iid}: fechado sem resolução")
+        elif kind == "spec" and ("emenda" not in norm(resolution) or not amendment_rows):
+            add("ERROR", sid, f"{iid}: impedimento de spec se resolve por emenda — cite-a (ex: 'Emenda v2') e registre-a na seção Emendas")
+        elif kind == "trabalho":
+            refs = SPEC_REF_RE.findall(resolution)
+            if not refs:
+                add("ERROR", sid, f"{iid}: impedimento de trabalho se resolve com uma spec — cite o SPEC-NNNN criado")
+            for ref in refs:
+                if ref not in project.specs:
+                    add("ERROR", sid, f"{iid}: resolução cita {ref}, que não existe")
+        elif kind == "decisão":
+            for ref in ADR_REF_RE.findall(resolution):
+                if ref not in project.adrs:
+                    add("ERROR", sid, f"{iid}: resolução cita {ref}, que não existe em docs/adr/")
+
+
 def validate_epic(project: Project, doc: Doc, add):
     sid = doc.id
     kids = project.children(sid)
@@ -863,11 +973,14 @@ def touches_overlap(a: Doc, b: Doc) -> bool:
 
 
 def readiness(project: Project, doc: Doc):
+    stops = "; ".join(impediment_label(i) for i in open_impediments(doc))
     if doc.status == "in-progress":
+        if stops:
+            return "stalled", f"🚧 parada por impedimento: {stops}"
         return "running", "🔄 em andamento"
     if doc.status == "proposed":
-        return "blocked", "⏳ aguardando aprovação (H1)"
-    blockers = []
+        return "blocked", "⏳ aguardando aprovação (H1)" + (f"; 🚧 impedimento: {stops}" if stops else "")
+    blockers = [f"impedimento {stops}"] if stops else []
     for dep in doc.list("depends_on"):
         d = project.specs.get(dep)
         if d is None or d.status != "implemented":
@@ -1002,8 +1115,16 @@ def cmd_waves(project: Project):
 def print_next(project: Project, plan):
     running, batch, held = next_batch(project, plan)
     specs = project.specs
-    if running:
-        print("Em andamento: " + ", ".join(running))
+    active = [s for s in running if readiness(project, specs[s])[0] == "running"]
+    if active:
+        print("Em andamento: " + ", ".join(active))
+    for sid in running:
+        state, label = readiness(project, specs[sid])
+        if state == "stalled":
+            print(f"Parada {sid}: {label}")
+    for epic in sorted((d for d in specs.values() if d.tier == "epic" and d.status in OPEN), key=lambda d: d.id):
+        for item in open_impediments(epic):
+            print(f"Impedimento no épico {epic.id}: {impediment_label(item)} — {item['Descrição']}")
     if batch:
         print("Próximo lote (despachar em paralelo): " + ", ".join(batch))
         for sid in batch:
@@ -1047,7 +1168,18 @@ def build_index(project: Project) -> str:
     ]
     counts = Counter(d.status for d in specs.values() if d.tier != "epic")
     out.append("- Specs: " + (", ".join(f"{s} {counts[s]}" for s in STATUSES if counts[s]) or "nenhuma"))
+    all_imps = [(d, i) for d in sorted(specs.values(), key=lambda d: d.id) for i in impediments(d)]
+    open_imps = [(d, i) for d, i in all_imps if not i["Fechado em"]]
+    out.append(f"- Impedimentos: **{len(open_imps)} aberto(s)**, {len(all_imps) - len(open_imps)} resolvido(s)")
     out.append("")
+    if open_imps:
+        out += ["## Impedimentos Abertos", "",
+                "| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |",
+                "|---|---|---|---|---|---|---|---|"]
+        for d, i in open_imps:
+            out.append(f"| {d.id} | {i['ID']} | {normalize_imp_type(i['Tipo']) or md_cell(i['Tipo'])} | {md_cell(i['Fase/Gate'])} "
+                       f"| {md_cell(i['Responsável'])} | {i['Aberto em']} | {age_days(i['Aberto em'])} | {md_cell(i['Descrição'])} |")
+        out.append("")
 
     out += ["## Plano de Execução", ""]
     if plan is None:
@@ -1057,7 +1189,9 @@ def build_index(project: Project) -> str:
     else:
         wave, members, notes = plan
         running, batch, held = next_batch(project, plan)
-        out.append(f"**Em andamento:** {', '.join(running) or '—'}  ")
+        stalled = [s for s in running if readiness(project, specs[s])[0] == "stalled"]
+        out.append(f"**Em andamento:** {', '.join(s for s in running if s not in stalled) or '—'}  ")
+        out.append(f"**Paradas por impedimento:** {', '.join(stalled) or '—'}  ")
         out.append(f"**Próximo lote:** {', '.join(batch) or '—'}")
         out += ["", "| Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |", "|---|---|---|---|---|---|---|"]
         for w in sorted(members):
@@ -1342,8 +1476,86 @@ def cmd_report(project: Project, spec_id: str):
         gates = COMMENT_RE.sub("", doc.section("Registro de Gates") or "").strip()
         if gates:
             out += ["### Registro de Gates", "", gates, ""]
+    if impediments(doc):
+        out += ["### Impedimentos", "", COMMENT_RE.sub("", doc.section("Registro de Impedimentos") or "").strip(), ""]
     out.append(f"Spec completa: `{project.rel(doc.path)}`")
     print("\n".join(out))
+    return 0
+
+
+def section_bounds(lines, keyword: str):
+    key, start, fence = norm(keyword), None, False
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        if fence or not line.startswith("## "):
+            continue
+        if start is not None:
+            return start, i
+        if key in norm(line[3:]):
+            start = i
+    return (start, len(lines)) if start is not None else None
+
+
+def impediment_table_lines(doc: Doc):
+    lines = doc.text.split("\n")
+    bounds = section_bounds(lines, "Registro de Impedimentos")
+    if bounds is None:
+        die(f"{doc.id} não tem a seção 'Registro de Impedimentos' — atualize a spec para o template atual")
+    table = [i for i in range(bounds[0] + 1, bounds[1]) if lines[i].strip().startswith("|")]
+    if len(table) < 2:
+        die(f"{doc.id}: tabela do Registro de Impedimentos não encontrada")
+    header = [norm(c.strip()) for c in CELL_SPLIT_RE.split(lines[table[0]].strip()[1:-1])]
+    return lines, table, header
+
+
+def cmd_impede(project: Project, spec_id: str, kind: str, reason: str, owner: str, phase, tried):
+    doc = project.specs.get(spec_id)
+    if doc is None:
+        die(f"{spec_id} não encontrada")
+    normalized = normalize_imp_type(kind)
+    if normalized is None:
+        die(f"tipo '{kind}' inválido ({' | '.join(IMPEDIMENT_TYPES)})")
+    lines, table, header = impediment_table_lines(doc)
+    numbers = [int(m.group(1)) for item in impediments(doc) for m in [IMP_ID_RE.match(item["ID"])] if m]
+    iid = f"IMP-{max(numbers, default=0) + 1:02d}"
+    values = {"ID": iid, "Aberto em": today(), "Fase/Gate": phase or "—", "Tipo": normalized,
+              "Descrição": reason, "Tentativas": tried or "—", "Responsável": owner, "Resolução": "", "Fechado em": ""}
+    cells = [md_cell(values.get(next((n for n in IMPEDIMENT_COLUMNS if norm(n) == col), ""), "")) for col in header]
+    lines.insert(table[-1] + 1, "| " + " | ".join(cells) + " |")
+    doc.path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"{spec_id}/{iid} aberto: {normalized} → {owner} — {reason}")
+    return 0
+
+
+def cmd_resolve(project: Project, spec_id: str, iid: str, resolution: str):
+    doc = project.specs.get(spec_id)
+    if doc is None:
+        die(f"{spec_id} não encontrada")
+    item = next((i for i in impediments(doc) if i["ID"] == iid), None)
+    if item is None:
+        die(f"{spec_id}: impedimento {iid} não encontrado")
+    if item["Fechado em"]:
+        die(f"{spec_id}/{iid} já foi fechado em {item['Fechado em']}")
+    kind = normalize_imp_type(item["Tipo"])
+    amendment_rows = sum(len(rows) for _, rows in parse_tables(COMMENT_RE.sub("", doc.section("Emendas") or "")))
+    if kind == "spec" and ("emenda" not in norm(resolution) or not amendment_rows):
+        die("impedimento de spec se resolve por emenda: registre-a na seção Emendas e cite-a (ex: 'Emenda v2 — ...')")
+    if kind == "trabalho":
+        refs = SPEC_REF_RE.findall(resolution)
+        if not refs or any(r not in project.specs for r in refs):
+            die("impedimento de trabalho se resolve com uma spec existente: cite o SPEC-NNNN criado (use `new` antes)")
+    lines, table, header = impediment_table_lines(doc)
+    for idx in table[2:]:
+        cells = [c.strip() for c in CELL_SPLIT_RE.split(lines[idx].strip()[1:-1])]
+        if cells and cells[0] == iid:
+            cells += [""] * (len(header) - len(cells))
+            cells[header.index(norm("Resolução"))] = md_cell(resolution)
+            cells[header.index(norm("Fechado em"))] = today()
+            lines[idx] = "| " + " | ".join(cells) + " |"
+            break
+    doc.path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"{spec_id}/{iid} resolvido em {today()}: {resolution}")
     return 0
 
 
@@ -1517,6 +1729,17 @@ def main(argv=None):
     p.add_argument("id")
     p = sub.add_parser("report", help="resumo de entrega (o que, como, verificação, gates) para PR/changelog")
     p.add_argument("id")
+    p = sub.add_parser("impede", help="registra impedimento (spec | decisão | trabalho | externo | falha)")
+    p.add_argument("id")
+    p.add_argument("--type", required=True)
+    p.add_argument("--reason", required=True, help="o que falta para prosseguir")
+    p.add_argument("--owner", required=True, help="quem precisa agir")
+    p.add_argument("--phase", help="fase ou gate em que parou (ex: G2, EXECUTE)")
+    p.add_argument("--tried", help="o que já foi tentado")
+    p = sub.add_parser("resolve", help="fecha impedimento apontando a resolução (emenda, ADR, SPEC-NNNN ou ação)")
+    p.add_argument("id")
+    p.add_argument("imp_id")
+    p.add_argument("--resolution", required=True)
     p = sub.add_parser("new", help="cria spec a partir do template com o próximo ID")
     p.add_argument("--tier", choices=TIERS, required=True)
     p.add_argument("--title", required=True)
@@ -1549,6 +1772,10 @@ def main(argv=None):
         return cmd_impacted(project, args.id)
     if args.command == "report":
         return cmd_report(project, args.id)
+    if args.command == "impede":
+        return cmd_impede(project, args.id, args.type, args.reason, args.owner, args.phase, args.tried)
+    if args.command == "resolve":
+        return cmd_resolve(project, args.id, args.imp_id, args.resolution)
     if args.command == "new":
         return cmd_new(project, args.tier, args.title, args.slug, args.parent)
     if args.command == "new-adr":

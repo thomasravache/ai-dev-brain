@@ -41,13 +41,17 @@ approved_at:
 - **UT-01** — {{teste de regressão: Dado..., quando..., então...}}
 - {{IT-01 ou E2E-01 — regressão no nível do defeito | Integração/E2E: N/A — motivo}}
 
-## 5. Aprovação (H1)
+## 5. Questões em Aberto
+<!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento (seção Registro de Impedimentos). -->
+{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}
+
+## 6. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
-## 6. Checklist de Implementação
+## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
 
-## 7. Registro de Gates
+## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
@@ -61,7 +65,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
 
-## 8. Relatório de Entrega
+## 9. Registro de Impedimentos
+<!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
+| ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
+|---|---|---|---|---|---|---|---|---|
+
+## 10. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
@@ -87,3 +96,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ### Deploy
 
 ### Pendências
+
+## 11. Emendas
+<!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
+| Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
+|---|---|---|---|---|---|

@@ -4,7 +4,7 @@ The first thing a new product delivers is not a feature: it is a **walking skele
 
 ## 1. Product framing
 
-Before choosing any technology, ask the user what cannot be inferred and record the answers in the foundation epic (Visão, Escopo) and as NFRs:
+Before choosing any technology, ask the user what cannot be inferred. Track each question in the foundation epic's *Questões em Aberto* until answered, then reflect the answers in Visão, Escopo and NFRs:
 
 - **Domain/industry** and the 3–5 core user journeys.
 - **Users:** who, how many at launch and in 12 months, where (regions, latency), which clients (web, mobile, desktop, API consumers).

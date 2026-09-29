@@ -17,13 +17,15 @@ Gate commands come from `docs/specs/sdd-config.yml`. Every agent runs the same c
 | G6 Deploy | Release | after H2 | pipeline run, `smoke_test`, `test_e2e` against the environment |
 | G7 Done & Docs | Architect | closing | `validate` (Relatório de Entrega + DoD) and `index` |
 
-A FAIL is recorded with its reason and sent back to the owner. **Three consecutive FAILs on the same gate for the same spec → stop and escalate to the human** with a diagnosis: what fails, what was tried, and the hypothesis (spec defect, environment, or approach).
+A FAIL is recorded with its reason and sent back to the owner. **Three consecutive FAILs on the same gate for the same spec → stop, record `impede --type falha` and escalate to the human** with a diagnosis: what fails, what was tried, and the hypothesis (spec defect, environment, or approach).
+
+A spec with an open impediment (Registro de Impedimentos) cannot pass G7 or become `implemented`; every impediment closes with a resolution that points to its evidence (Emenda, answer/ADR, SPEC-NNNN, action).
 
 ---
 
 ## G0 — Spec
 
-**Deterministic** — `validate` returns zero errors: valid frontmatter (`type` allowed for the tier, `user_facing` declared); references exist (`parent`, `depends_on`, `consumes_contract` pinned to an existing version, `adrs`); no `depends_on` cycles; required sections present and filled; no `{{...}}` markers; `size` S/M; `touches` declared; test IDs present; `full` has UT + IT, CT when it provides/consumes a contract, E2E when `user_facing: true`; `type: migration` has an ADR; every row of the Mapa de Comportamentos references existing test IDs; epic acceptance criteria cite existing tests.
+**Deterministic** — `validate` returns zero errors: valid frontmatter (`type` allowed for the tier, `user_facing` declared); references exist (`parent`, `depends_on`, `consumes_contract` pinned to an existing version, `adrs`); no `depends_on` cycles; required sections present and filled; no `{{...}}` markers; `size` S/M; `touches` declared; test IDs present; `full` has UT + IT, CT when it provides/consumes a contract, E2E when `user_facing: true`; `type: migration` has an ADR; every row of the Mapa de Comportamentos references existing test IDs; epic acceptance criteria cite existing tests; **no open item in Questões em Aberto**; impediment rows well-formed.
 
 **Judgment** — Architect self-check before presenting for H1:
 - Scope in/out is explicit; nothing in scope lacks a behavior and a test.
@@ -34,6 +36,7 @@ A FAIL is recorded with its reason and sent back to the owner. **Three consecuti
 - `depends_on` only when the other spec's **implementation** is truly required; otherwise `consumes_contract`.
 - `touches` is as narrow as possible.
 - The Plano de Rollout makes the change deployable and reversible.
+- No gap was filled by assumption: every doubt was asked and its answer recorded in Questões em Aberto.
 - A child spec is implementable by one agent in one session.
 
 ## H1 — Spec approval (human)

@@ -42,7 +42,9 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 | `waves` | Execution plan in waves + next batch |
 | `next` | Batch ready to dispatch now (no file conflicts, ≤ `max_parallel`) and what is blocked |
 | `verify SPEC-X [--base BRANCH]` | **G1/G4** via git: red before green, test tags in code, files inside `touches`, dependency changes without ADR |
-| `report SPEC-X` | Delivery summary (what, how, verification, gates) for PR description and changelog |
+| `report SPEC-X` | Delivery summary (what, how, verification, gates, impediments) for PR description and changelog |
+| `impede SPEC-X --type T --reason "..." --owner "..." [--phase G2] [--tried "..."]` | Record an impediment (`spec \| decisão \| trabalho \| externo \| falha`) |
+| `resolve SPEC-X IMP-NN --resolution "..."` | Close an impediment pointing to its resolution (Emenda, answer/ADR, SPEC-NNNN, action) |
 | `set ID [ID ...] key=value ...` | Update frontmatter (`today` = current date; lists as `[A, B]`) |
 | `impacted SPEC-X` | Specs affected by a change in SPEC-X |
 | `index` | Regenerate `docs/specs/INDEX.md` (status, waves, Mermaid graph, ADRs) |
@@ -128,6 +130,7 @@ Start or end every response **to the user** with this panel (subagents don't pri
 ### 2. SPEC (G0)
 - `new --tier <tier> --title "..."`. For an epic: the epic, then each child with `--parent`, then `new-adr` for every cross-cutting decision (greenfield: one per stack layer, with options matrix and sources).
 - Fill every section and remove every `{{...}}` marker. Declare `type`, `user_facing`, `depends_on`, `consumes_contract` (pinned `@version`), narrow `touches`, `adrs`, `size`.
+- Every doubt goes to **Questões em Aberto** and is asked to the user; record each answer in the spec. Never fill a gap with an assumption.
 - Decisão Arquitetural: brownfield cites the reference implementation and declares any deviation; greenfield traces to the foundation ADRs.
 - `full`: every observable behavior (success and **each** error) is a row of the **Mapa de Comportamentos** referencing test IDs. Tests are written as `**UT-01** — Dado…, quando…, então…` (`CH` characterization, `UT` unit, `IT` integration, `CT` contract, `E2E` end-to-end). A category without tests is written "N/A — motivo", without an ID.
 - Plano de Rollout: strategy (direct, flag, canary, blue-green), data migration, compatibility, observability, rollback.
@@ -186,24 +189,48 @@ Release deploys through the pipeline to staging, runs smoke + E2E against it, an
 - `validate` must be clean for the closed specs; run `index`.
 - Pushing, opening a PR or merging into `base_branch` only with the user's explicit confirmation, following the project's PR conventions (`report` output makes a good PR description).
 
+## Gaps and impediments
+
+Every stop is tracked in the spec file, versioned by git, and visible in `INDEX.md` — never only in the chat.
+
+**Before approval — Questões em Aberto.** Doubts found in DISCOVER or while drafting go in the spec's *Questões em Aberto* as `- [ ] pergunta (quem responde)`. Ask the user; record the answer as `- [x] pergunta — resposta (quem, data)`. `validate` fails while any question is open, so no spec reaches H1 with an unanswered doubt. An answer that is an architectural decision also becomes an ADR.
+
+**After approval — Registro de Impedimentos.** When any agent cannot proceed it stops and reports `SPEC_DEFECT`, `TEST_DEFECT` or `BLOCKED` with *what is missing, what was tried, and who must act*. The Architect records it immediately with `impede`, then routes it:
+
+| Type | When | Who acts | Resolved by (`resolve --resolution`) |
+|---|---|---|---|
+| `spec` | the spec is wrong, incomplete or contradictory | Architect + human | an amendment: Emendas row + "Emenda vN" (Amendments below) |
+| `decisão` | only the human can decide (business rule, trade-off, priority) | human | the answer; architectural → ADR cited |
+| `trabalho` | something that requires code is missing (another spec, CI, test harness) | Architect | the new `SPEC-NNNN` (create it with `new` first) |
+| `externo` | access, credentials, environment down, third party | human or third party | the action taken |
+| `falha` | 3 consecutive FAILs on the same gate | human | diagnosis + decision |
+
+- A spec with an open impediment is shown as **stopped** by `next`/`waves` (with age and owner) and in the *Impedimentos Abertos* table of `INDEX.md`; it cannot become `implemented`.
+- The blocked spec's other work continues only if unaffected; the rest of the wave proceeds normally.
+- Record in the child spec when one child is blocked; in the epic when the problem spans several children (wave integration conflict, broken CI, cross-cutting decision).
+- Ask the human in chat for `decisão`, `externo` and `falha` right after recording them; list open impediments in every progress update until resolved.
+
 ## Amendments
 
-Approved contracts are frozen. When something must change — asked by the user, or discovered during execution (agents stop and report `SPEC_DEFECT` instead of diverging silently):
+Approved contracts are frozen. When something must change — asked by the user, or discovered during execution (agents stop and report `SPEC_DEFECT` instead of diverging silently, recorded as a `spec` impediment):
 1. Add a row to **Emendas**: new version, date, change, reason, impacted specs.
 2. If the contract changed: bump `contract_version`, update the Mapa de Comportamentos and the test plan, run `validate`.
 3. Run `impacted SPEC-X`. Consumers pinned to the old version become blocked in `waves`/`next` until reviewed.
 4. Ask for human approval (H1) of the amendment and record it in the row.
 5. Review every impacted consumer (its own amendment if its contract changes) and update its pin: `set SPEC-Y consumes_contract=[SPEC-X@2]`.
+6. If it came from an impediment: `resolve SPEC-X IMP-NN --resolution "Emenda v2 — ..."`.
 
 Cancelling: `set SPEC-X status=deprecated` and add `> Deprecated: <motivo>` under the title; `validate` flags open specs that still depend on it.
 
 ## Rules
 
 - **No implementation code in the Architect role.** Without subagents, switch roles explicitly (solo mode in `references/multi-agent.md`) — all gates still apply.
+- **Single writer for SDD records.** Only the Architect edits `docs/specs/` and `docs/adr/` (status, checklist, gates, impediments, amendments, delivery report), in the main checkout. Subagents report; they never edit spec files in their worktrees — so the index is always current and branches never conflict on specs.
+- **No untracked stop.** Every question goes to *Questões em Aberto* and every impediment to the *Registro de Impedimentos* before anything else happens.
 - **No self-approval.** H1, H2 and production releases only from the human, in chat.
 - **No silent deviation** from the existing architecture: `type: migration` or an approved ADR, or it's a G4 blocker.
 - **No PASS without evidence** in the gate table; **no `implemented` without a proven Relatório de Entrega**.
 - **Script over judgment** for everything deterministic: IDs, cycles, waves, scope, TDD order, test traceability, index.
 - **Phase-gated execution.** Never start the next wave before H2 of the current one.
-- **Escalate after 3 consecutive FAILs** of the same gate on the same spec instead of looping.
+- **Escalate after 3 consecutive FAILs** of the same gate on the same spec instead of looping: `impede --type falha`, then ask the human.
 - **Progress visibility.** Never answer the user without the progress panel.
