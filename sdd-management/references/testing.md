@@ -6,6 +6,7 @@ Tests are the executable form of the spec. Every behavior of the contract is pro
 
 | ID | Level | Proves | Rules |
 |---|---|---|---|
+| guard (any ID, marked `(guarda)` in the plan) | Guard | behavior that already exists and the change must preserve (e.g. "below the threshold the old rule still applies") | written with the red tests but expected to **pass** before and after the change; marked `(guarda: passa antes da mudança)` in the plan so G1 doesn't treat them as broken red |
 | `CH` | Characterization | current behavior of existing code, before changing it | must **pass** on the current code; written first in brownfield areas without coverage |
 | `UT` | Unit | domain logic, rules, calculations, edge cases | fast, no I/O; doubles only at boundaries; the bulk of the suite |
 | `IT` | Integration | the code works with its **real** infrastructure: database, queue, cache, HTTP clients, framework wiring, migrations | real dependencies via containers (e.g. Testcontainers) or official emulators — mocking the thing an integration test exists to exercise hides exactly the bugs it should find |

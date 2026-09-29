@@ -14,7 +14,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.09.4"
+SDD_TOOL_VERSION = "2026.09.5"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -672,6 +672,12 @@ def validate_refs(project: Project, doc: Doc, add):
             add("ERROR", sid, f"depends_on: {dep} não existe")
         elif specs[dep].status == "deprecated" and doc.status in OPEN:
             add("ERROR", sid, f"depende de {dep}, que está deprecated — reavalie a dependência")
+    version = contract_version(doc)
+    if doc.tier != "epic" and version > 1 and not doc.legacy:
+        amendments = sum(len(rows) for _, rows in parse_tables(COMMENT_RE.sub("", doc.section("Emendas") or "")))
+        if amendments < version - 1:
+            add("ERROR", sid, f"contract_version v{version} exige {version - 1} emenda(s) registrada(s) na seção Emendas "
+                              f"(encontrada(s): {amendments})")
     for pid, ver, raw in contract_refs(doc):
         if pid is None:
             add("ERROR", sid, f"consumes_contract inválido '{raw}' (formato SPEC-NNNN@versão)")

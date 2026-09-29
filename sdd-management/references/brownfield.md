@@ -25,6 +25,7 @@ The baseline doesn't block the first feature: it runs in parallel or right befor
 - `verify` warns when dependency manifests change in a spec without an ADR, so the Reviewer confirms whether it's an approved deviation or a justified version bump.
 - **Two patterns coexisting?** Follow the one used by the module being changed. If that's unclear, follow the most recent accepted ADR. If there is none, ask the human and record the answer as an ADR.
 - The Reviewer (G4) treats an unapproved deviation as a **blocker**.
+- **Commit convention:** `verify` and `pr-check` read the Conventional Commits type (`test`, `feat`, `fix`…) to prove red-before-green. If the team uses another convention (e.g. `LOJA-12 descrição`), don't impose silently: ask the human and record an ADR reconciling both — for example `fix(LOJA-12): descrição` + `Refs: SPEC-NNNN` — and set `pr_title` in `sdd-config.yml` to match (e.g. `"{conv}({scope}): {title} [{id}]"` with `scope: LOJA-12` in the spec). Also adapt existing hooks, PR templates and changelog formats instead of replacing them.
 
 ## 3. Changing code without tests
 

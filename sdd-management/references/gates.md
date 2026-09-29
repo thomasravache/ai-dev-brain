@@ -46,9 +46,10 @@ Exact question in SKILL.md. Only an explicit "Aprovado" from the user in chat co
 ## G1 — Red
 
 - Every test ID in the plan exists in code with the tag `SPEC-XXXX:<ID>` (`verify`).
-- `CH` tests **pass** on the current code; every other new test compiles/loads and **fails for the expected reason** (assertion failure or NotImplemented from scaffolding) — never compile errors, missing fixtures or broken setup.
+- `CH` tests and tests marked `(guarda)` in the plan **pass** on the current code; every other new test compiles/loads and **fails for the expected reason** (assertion failure or NotImplemented from scaffolding) — never compile errors, missing fixtures or broken setup.
 - Red commits are `test(...)` commits that reference the spec and touch only `test_paths`. Contract scaffolding (types, interfaces, signatures that throw NotImplemented — no logic) goes in a separate `chore(...): scaffold ...` commit.
 - No `feat|fix|refactor|perf` commit for the spec before the first red commit.
+- A new test that passes on red but isn't marked `CH` or `(guarda)` is a spec defect: either it doesn't test the new behavior, or the plan must mark it as a guard (amendment).
 - Evidence: `verify` G1 lines + failing summary, e.g. `CH-01 pass; UT-01..03 fail (assertion), IT-01 fail (NotImplemented), E2E-01 fail (element not found) — abc1234`.
 
 Test levels, mandatory coverage and tag conventions: `references/testing.md`.
