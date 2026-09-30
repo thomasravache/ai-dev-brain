@@ -39,10 +39,33 @@ At the end of every wave, and in CI if desired: produce a snapshot and run `sync
 
 Creating, editing or commenting on board items is visible to other people: do it only with the user's confirmation or a standing authorization written in the project's root docs.
 
+## Capabilities by tool
+
+Fidelity is not the same everywhere: the adapter declares what the tool supports and degrades explicitly — never pretends.
+
+| Tool | Hierarchy (epic → spec) | Dependency link | Custom statuses | Item types | Labels | Access | Validated against a real board |
+|---|---|---|---|---|---|---|---|
+| Repository only (`none`) | `parent` in frontmatter | `depends_on` | 5 SDD statuses | tier/type | — | files | yes (default) |
+| Jira (`jira.md`) | Epic / parent | "Blocks" link | workflow (admin) | issue types (admin) | yes | MCP, CLI, REST | **no** |
+| GitHub (`github.md`) | sub-issues / task list | dependencies / "Blocked by" text | labels or Project field | labels / issue types | yes | `gh`, MCP | **no** |
+| Linear (`linear.md`) | parent / sub-issues | "blocks" relation | team workflow states | labels | yes | API, MCP | **no** |
+| Azure Boards (`azure-boards.md`) | parent/child links | predecessor/successor links | process states | work item types | tags | `az boards`, REST | **no** |
+| Trello (`trello.md`) | checklist on the epic card | text in card + checklist (degraded) | lists | labels | yes | REST, Power-Ups | **no** |
+
+Before the first real use of an adapter, run it with the user watching and record what differed in the adapter's guide.
+
+## Preparing a new board (bootstrap)
+
+1. `spec_graph.py sync --structure` prints what the board must have, in neutral terms: the statuses and item types mapped in `tracker`, the labels (SDD + blocked) and the relations (parent, blocks).
+2. The adapter checks access and permissions, then **proposes** the plan to the user: create what the tool lets it create (labels, lists, fields) and, where it needs an administrator (e.g. Jira workflows and issue types), map the existing ones instead and ask the user to confirm the mapping in `sdd-config.yml`.
+3. After the user's confirmation it creates the structure, creates one test item and removes it, and records the result.
+4. From then on, snapshots include a `structure` block and `sync --board snapshot.json --check` reports missing statuses, item types or labels as well as item drift.
+
 ## Neutral snapshot format
 
 ```json
 {
+  "structure": { "statuses": ["To Do", "In Progress", "Done"], "issue_types": ["Epic", "Story", "Bug"], "labels": ["sdd"] },
   "items": [
     { "ref": "jira:PAY-123", "status": "In Progress", "blocked": false, "blocks": ["jira:PAY-124"] }
   ]

@@ -530,6 +530,42 @@ class JourneysTest(ProjectTest):
         self.assertIn("[jornada: pagamento], que não está em critical_journeys", self.p.validate(sid).stdout + self.p.validate().stdout)
 
 
+class BoardTest(ProjectTest):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.p = Project(self.tmp, config_extra=(
+            "tracker:\n  provider: jira\n  project: PAY\n  statuses:\n    proposed: \"To Do\"\n    approved: \"Selected\"\n"
+            "    in-progress: \"In Progress\"\n    implemented: \"Done\"\n    deprecated: \"Won't Do\"\n"
+            "  issue_types:\n    epic: Epic\n    feature: Story\n"))
+
+    def test_structure_and_drift(self):
+        import json
+        out = json.loads(self.p.run("sync", "--structure").stdout)
+        self.assertIn("In Progress", out["structure"]["statuses"])
+        self.assertIn("sdd-bloqueado", out["structure"]["labels"])
+        sid = self.full()
+        self.p.set(sid, external="[jira:PAY-1]")
+        snap = self.tmp / "board.json"
+        snap.write_text(json.dumps({"structure": {"statuses": ["To Do", "Done"], "issue_types": ["Story"], "labels": ["sdd"]},
+                                    "items": [{"ref": "jira:PAY-1", "status": "Done", "blocked": False}]}), encoding="utf-8")
+        result = self.p.run("sync", "--board", str(snap), "--json", "--check")
+        self.assertEqual(result.returncode, 1)
+        ops = {(o["op"], o.get("name") or o.get("to")) for o in json.loads(result.stdout)["operations"]}
+        self.assertIn(("create_status", "In Progress"), ops)
+        self.assertIn(("create_issue_type", "Epic"), ops)
+        self.assertIn(("create_label", "sdd-bloqueado"), ops)
+        self.assertIn(("transition", "To Do"), ops)
+
+    def test_h1_via_pr_approval(self):
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + "h1_policy: pr-approval\n", encoding="utf-8")
+        sid = self.full(external="[jira:PAY-2]")
+        self.p.run("set", sid, "status=approved", "approved_by=revisora", "approved_at=today")
+        self.assertIn("registre approved_via", self.p.validate().stdout)
+        self.p.set(sid, approved_via='"PR #12"')
+        self.assertNotIn("approved_via", self.p.validate().stdout)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()

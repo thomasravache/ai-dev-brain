@@ -832,6 +832,13 @@ def validate_config(project: Project, add):
         missing = [k for k in kinds if not t["issue_types"].get(k)]
         if missing:
             add("WARN", "sdd-config", f"tracker.issue_types sem mapeamento para: {', '.join(missing)}")
+    h1 = project.cfg("h1_policy", "chat")
+    if h1 not in ("chat", "pr-approval"):
+        add("ERROR", "sdd-config", f"h1_policy '{h1}' inválida (chat | pr-approval)")
+    elif h1 == "pr-approval":
+        for sid, doc in sorted(project.specs.items()):
+            if doc.status in APPROVED_PLUS and not doc.legacy and not doc.scalar("approved_via"):
+                add("WARN", sid, "h1_policy pr-approval: registre approved_via (ex: \"PR #12\") com o revisor em approved_by")
     policy = project.cfg("h2_policy", "per-wave")
     if policy not in ("per-wave", "auto-on-green"):
         add("ERROR", "sdd-config", f"h2_policy '{policy}' inválida (per-wave | auto-on-green)")
@@ -2292,6 +2299,27 @@ def cmd_export(project: Project, out):
     return 0
 
 
+def required_structure(project: Project) -> dict:
+    t = project.tracker()
+    return {
+        "statuses": sorted({v for v in t["statuses"].values() if v}),
+        "issue_types": sorted({v for v in t["issue_types"].values() if v}),
+        "labels": sorted(set(t["labels"]) | {t["blocked_label"]}),
+        "relations": ["parent (épico → spec)", "blocks (dependência → dependente)"],
+    }
+
+
+def structure_operations(project: Project, structure: dict):
+    ops = []
+    need = required_structure(project)
+    for key, op in (("statuses", "create_status"), ("issue_types", "create_issue_type"), ("labels", "create_label")):
+        have = {norm(str(x)) for x in (structure.get(key) or [])}
+        for value in need[key]:
+            if norm(value) not in have:
+                ops.append({"op": op, "name": value})
+    return ops
+
+
 def sync_operations(project: Project, board):
     t = project.tracker()
     provider, statuses = t["provider"], t["statuses"]
@@ -2337,16 +2365,22 @@ def sync_operations(project: Project, board):
     return ops
 
 
-def cmd_sync(project: Project, board_file, as_json: bool, check: bool):
+def cmd_sync(project: Project, board_file, as_json: bool, check: bool, structure: bool = False):
     t = project.tracker()
+    if structure:
+        print(json.dumps({"provider": t["provider"], "project": t["project"], "structure": required_structure(project)},
+                         ensure_ascii=False, indent=2))
+        return 0
     if t["provider"] == "none":
         print("tracker.provider = none — o repositório é o único board. Nada a sincronizar.")
         return 0
-    board = None
+    board, structure_ops = None, []
     if board_file:
         raw = json.loads(Path(board_file).read_text(encoding="utf-8"))
         board = {i["ref"]: i for i in raw.get("items", []) if isinstance(i, dict) and i.get("ref")}
-    ops = sync_operations(project, board)
+        if isinstance(raw.get("structure"), dict):
+            structure_ops = structure_operations(project, raw["structure"])
+    ops = structure_ops + sync_operations(project, board)
     if as_json:
         print(json.dumps({"provider": t["provider"], "project": t["project"], "operations": ops}, ensure_ascii=False, indent=2))
     else:
@@ -2942,6 +2976,7 @@ def main(argv=None):
     p.add_argument("--board", help="snapshot neutro do board em JSON (gerado pelo adaptador)")
     p.add_argument("--json", action="store_true")
     p.add_argument("--check", action="store_true", help="exit 1 se houver divergência")
+    p.add_argument("--structure", action="store_true", help="imprime a estrutura que o board precisa ter (preparação)")
     p = sub.add_parser("pr", help="título e corpo padronizados de PR para uma ou mais specs (épico = filhas aprovadas)")
     p.add_argument("ids", nargs="+")
     p.add_argument("--title", action="store_true", help="imprime só o título")
@@ -3026,7 +3061,7 @@ def main(argv=None):
     if args.command == "export":
         return cmd_export(project, args.out)
     if args.command == "sync":
-        return cmd_sync(project, args.board, args.json, args.check)
+        return cmd_sync(project, args.board, args.json, args.check, args.structure)
     if args.command == "pr":
         return cmd_pr(project, args.ids, args.title, args.out)
     if args.command == "pr-check":

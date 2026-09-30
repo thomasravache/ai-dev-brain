@@ -173,7 +173,7 @@ Present a summary — for an epic: the children, the dependency graph, the waves
 
 > "Os contratos e os cenários de teste estão adequados e seguem o padrão atual? Digite 'Aprovado' para prosseguir ou solicite ajustes."
 
-Only after the user answers "Aprovado": `set <ids> status=approved approved_by=<user> approved_at=today` and `set <adr-ids> status=accepted`. One approval of an epic covers the children presented with it. Adjustments → back to step 2.
+With `h1_policy: pr-approval` (teams), the approval of the change request that contains the spec counts as H1: record the reviewer in `approved_by` and `approved_via: "PR #n"`. Only after the user answers "Aprovado" (or approves that PR): `set <ids> status=approved approved_by=<user> approved_at=today` and `set <adr-ids> status=accepted`. One approval of an epic covers the children presented with it. Adjustments → back to step 2.
 
 ### 4. PLAN
 Fill the **Checklist de Implementação** of each approved spec — every phase starts with tests — and append the project's `dod_extra` items to its Definição de Pronto:

@@ -101,6 +101,11 @@ change_flow_reason: ""
 # Regex das mensagens de merge da sua plataforma (padrão cobre GitHub, GitLab, Azure DevOps, Bitbucket).
 # pr_merge_pattern: "Merge pull request #?\d+|See merge request"
 
+# --- Aprovação humana da spec (H1) ---
+# chat: o humano responde "Aprovado" na conversa. pr-approval: a aprovação do PR que contém a spec vale como H1
+# (registre approved_by = revisor e approved_via = "PR #n"). Útil em equipe; a spec entra num PR só de spec antes do código.
+h1_policy: chat
+
 # --- Aprovação humana da integração (H2) ---
 # per-wave: o humano aprova cada onda integrada (gate SPEC-X H2 --by <nome>).
 # auto-on-green: o humano autorizou, uma vez, considerar H2 aprovado quando G5 = PASS (gate SPEC-X H2 --run).
