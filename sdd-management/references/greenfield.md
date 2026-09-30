@@ -67,7 +67,7 @@ Create an epic with `type: foundation`. Adapt the children to the product, but n
 
 | # | Child spec (type foundation) | Delivers |
 |---|---|---|
-| 1 | Repository & tooling | structure, build, lint/format, `sdd-config.yml` (incl. `tracker`), `vendor --agents --pr-template --hooks --changelog`, conventions in the root docs (Conventional Commits, Keep a Changelog, SemVer) |
+| 1 | Repository & tooling | structure, build, lint/format, `sdd-config.yml` (incl. `tracker`), `vendor --agents --pr-template --hooks --changelog --codeowners --owner`, branch protection (required checks, required review, no direct push), conventions in the root docs (Conventional Commits, Keep a Changelog, SemVer) |
 | 2 | Test harness | unit + integration (real dependencies) + E2E running locally and in CI with one example each; architecture test suite enforcing the foundation ADRs |
 | 3 | CI pipeline | on every push/PR: build, lint, unit, integration, architecture, E2E, dependency and secret scanning, artifact/container build, plus the SDD job (`vendor --ci`) required in branch protection; main always green and deployable |
 | 4 | Environments & IaC | staging and production as code, secrets management, database migrations executed by the pipeline |

@@ -13,7 +13,7 @@ The first time SDD runs in an existing repository, as part of DISCOVER:
 5. **No CI or no deploy pipeline?** Same: a spec to create it. Until then G5's CI part and G6 are N/A pointing to that spec.
 6. If the project used the old SDD layout, run `migrate`. If it already uses SDD but with specs from an older skill version, run `upgrade` (dry run, then `--apply`) and `vendor --force` to refresh `tools/sdd/`.
 7. **Board:** look for signs of a tracker (issue keys like `PAY-123` in commits, branch names or PR templates; links in the docs), confirm with the human, and record `tracker` in `sdd-config.yml`. The existing backlog is **not** imported: a ticket becomes a spec only when someone starts working on it (intake in `references/trackers/<provider>.md`).
-8. **Enforcement:** propose `vendor --agents --ci <provider> --pr-template <provider> --hooks --changelog`, respecting what already exists (existing PR template, CI, hook manager, changelog format — adapt instead of replacing).
+8. **Enforcement:** propose `vendor --agents --ci <provider> --pr-template <provider> --hooks --changelog --codeowners <provider> --owner <@owner>`, respecting what already exists (existing PR template, CI, hook manager, changelog format — adapt instead of replacing).
 
 The baseline doesn't block the first feature: it runs in parallel or right before it, and the gaps are explicit N/As with pointers.
 

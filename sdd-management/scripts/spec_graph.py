@@ -63,6 +63,10 @@ CHANGELOG_BY_TYPE = {"feature": "Added", "fix": "Fixed", "refactor": "Changed", 
 PR_TITLE_DEFAULT = "{conv}: {title} [{id}]"
 PR_TITLE_FIELDS = {"conv", "type", "title", "id", "scope"}
 MERGE_GATES = ("G0", "G1", "G2", "G3", "G4")
+# Merge messages that change-request platforms generate (GitHub, GitLab, Azure DevOps, Bitbucket); override with pr_merge_pattern.
+PR_MERGE_PATTERN_DEFAULT = r"Merge pull request #?\d+|See merge request|Merged PR \d+|Merge pull request .* from|\(#\d+\)$|\(!\d+\)$"
+SQUASH_PATTERN = r"\(#\d+\)$|\(!\d+\)$"
+CONTROL_PATHS = ["tools/sdd/", "docs/specs/sdd-config.yml", "docs/adr/", ".githooks/"]
 PHASES = ("DISCOVER", "SPEC (G0)", "APPROVAL (H1)", "PLAN (waves)", "EXECUTE (G1–G4)",
           "INTEGRATE (G5 + H2)", "DEPLOY (G6)", "CLOSE (G7)")
 H1_QUESTION = ("Os contratos e os cenários de teste estão adequados e seguem o padrão atual? "
@@ -579,6 +583,7 @@ def validate(project: Project, only=None):
             validate_adr(project, project.adrs[aid], add)
     if only is None:
         validate_config(project, add)
+        validate_change_flow(project, add)
         seen = defaultdict(list)
         for sid, doc in sorted(project.specs.items()):
             evidence = ((gate_table(doc) or {}).get("G2") or {}).get("evidence", "")
@@ -588,6 +593,51 @@ def validate(project: Project, only=None):
             if len(sids) > 1:
                 add("WARN", sids[0], f"evidência de G2 idêntica em {', '.join(sids)} ('{evidence[:50]}') — cada spec precisa da própria execução")
     return issues
+
+
+def validate_change_flow(project: Project, add):
+    flow = project.cfg("change_flow", "pr")
+    if flow not in ("pr", "direct"):
+        add("ERROR", "sdd-config", f"change_flow '{flow}' inválido (pr | direct)")
+        return
+    if flow == "direct":
+        if not project.cfg("change_flow_reason"):
+            add("ERROR", "sdd-config", "change_flow: direct exige change_flow_reason (ex: repositório pessoal sem plataforma)")
+        return
+    if run_git(project.root, "rev-parse", "--is-inside-work-tree")[0] != 0:
+        return
+    base = project.cfg("base_branch", "main")
+    first = run_git(project.root, "log", "--format=%H", "--diff-filter=A", "--reverse", base, "--", "docs/specs")[1].split()
+    if not first:
+        return
+    log = run_git(project.root, "log", "--first-parent", "--format=%h%x1f%P%x1f%s", f"{first[0]}..{base}", "-n", "300")[1]
+    pattern = re.compile(project.cfg("pr_merge_pattern", PR_MERGE_PATTERN_DEFAULT))
+    direct, records, local_merges, squashed = [], [], [], []
+    for line in log.splitlines():
+        sha, parents, subject = (line.split("\x1f") + ["", ""])[:3]
+        is_merge = len(parents.split()) > 1
+        if is_merge and not pattern.search(subject):
+            local_merges.append(f"{sha} {subject[:50]}")
+        elif not is_merge and re.search(SQUASH_PATTERN, subject):
+            squashed.append(sha)
+        elif not is_merge:
+            files = run_git(project.root, "show", "--name-only", "--format=", sha)[1].split()
+            if files and all(f.startswith(("docs/specs/", "docs/adr/")) for f in files):
+                records.append(sha)
+            else:
+                direct.append(f"{sha} {subject[:50]}")
+    if direct:
+        add("WARN", "fluxo", f"{len(direct)} commit(s) de código direto(s) na {base} sem solicitação de mudança (change_flow: pr): "
+                             + "; ".join(direct[:3]) + " — proteja a branch e passe tudo por PR/MR")
+    if records:
+        add("WARN", "fluxo", f"{len(records)} commit(s) de registros SDD direto(s) na {base} — registre gates na branch de "
+                             "integração (vão no PR da onda) e o fechamento (G6/G7) num PR de fechamento")
+    if local_merges:
+        add("WARN", "fluxo", f"{len(local_merges)} merge(s) na {base} sem PR/MR (feitos localmente?): "
+                             + "; ".join(local_merges[:3]) + " — ajuste pr_merge_pattern se a plataforma usa outra mensagem")
+    if squashed:
+        add("WARN", "fluxo", f"{len(squashed)} merge(s) por squash: os commits citados nas evidências dos gates somem do histórico "
+                             "— prefira merge commit (ADR de fluxo de mudança) ou registre o commit final no G5")
 
 
 def validate_config(project: Project, add):
@@ -2265,6 +2315,14 @@ def cmd_pr_check(project: Project, title, body, body_file, base):
     if not refs:
         if "[no-spec]" in title.lower():
             results.append(("WARN", "PR", "PR marcado [no-spec] — reviewer confirma que não há mudança de comportamento"))
+            base_ref = base or project.cfg("base_branch", "main")
+            code, mb, _ = run_git(project.root, "merge-base", base_ref, "HEAD")
+            if code == 0:
+                changed = [f for f in run_git(project.root, "diff", "--name-only", mb.strip(), "HEAD")[1].splitlines() if f]
+                code_files = [f for f in changed if not (f.endswith(".md") or f.startswith("docs/"))]
+                if code_files:
+                    results.append(("WARN", "PR", "[no-spec] altera arquivos que não são documentação: " + ", ".join(code_files[:8])
+                                    + " — se muda comportamento, precisa de spec (mesmo lite, criada na hora)"))
         else:
             results.append(("FAIL", "PR", "PR não referencia nenhuma spec (SPEC-NNNN no título ou corpo); "
                                           "mudança sem comportamento: marque [no-spec] no título"))
@@ -2323,7 +2381,11 @@ AGENT_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
 AGENT_BLOCK_RE = re.compile(r"<!-- sdd:start -->.*?<!-- sdd:end -->\n?", re.S)
 
 
-def cmd_vendor(project: Project, ci, pr_template, hooks: bool, agents: bool, changelog: bool, force: bool):
+CODEOWNERS_PATHS = {"github": ".github/CODEOWNERS", "gitlab": ".gitlab/CODEOWNERS"}
+
+
+def cmd_vendor(project: Project, ci, pr_template, hooks: bool, agents: bool, changelog: bool, force: bool,
+               codeowners=None, owner=None):
     notes = []
 
     def put(rel: str, content: str, executable: bool = False):
@@ -2363,6 +2425,18 @@ def cmd_vendor(project: Project, ci, pr_template, hooks: bool, agents: bool, cha
         put(".githooks/pre-commit", asset("hooks/pre-commit"), executable=True)
         notes.append("ative os hooks (decisão do time): `git config core.hooksPath .githooks` "
                      "— ou chame os mesmos scripts pelo husky/lefthook/pre-commit que o projeto já usa")
+    if codeowners:
+        if not owner:
+            die("--codeowners exige --owner (ex: @usuario ou @org/time)")
+        extra = [CI_TARGETS[ci][1]] if ci else []
+        lines = ["# SDD: arquivos de controle exigem revisão de quem responde pelo processo"] + \
+                [f"/{path} {owner}" for path in CONTROL_PATHS + extra]
+        if codeowners in CODEOWNERS_PATHS:
+            put(CODEOWNERS_PATHS[codeowners], "\n".join(lines) + "\n")
+            notes.append("ative 'exigir revisão de code owners' na proteção da branch para o arquivo ter efeito")
+        else:
+            notes.append("plataforma sem CODEOWNERS: configure revisores obrigatórios por caminho para: "
+                         + ", ".join(CONTROL_PATHS + extra))
     if changelog and not (project.root / "CHANGELOG.md").exists():
         put("CHANGELOG.md", asset("CHANGELOG.template.md"))
     if agents:
@@ -2661,6 +2735,8 @@ def main(argv=None):
     p.add_argument("--hooks", action="store_true")
     p.add_argument("--agents", action="store_true")
     p.add_argument("--changelog", action="store_true", help="cria CHANGELOG.md (Keep a Changelog) se não existir")
+    p.add_argument("--codeowners", help="github | gitlab | outra (lista caminhos para revisores obrigatórios)")
+    p.add_argument("--owner", help="dono dos arquivos de controle (ex: @usuario)")
     p.add_argument("--force", action="store_true")
     sub.add_parser("waves", help="plano de execução em ondas + próximo lote")
     sub.add_parser("next", help="próximo lote pronto para despachar")
@@ -2731,7 +2807,8 @@ def main(argv=None):
     if args.command == "pr-check":
         return cmd_pr_check(project, args.title, args.body, args.body_file, args.base)
     if args.command == "vendor":
-        return cmd_vendor(project, args.ci, args.pr_template, args.hooks, args.agents, args.changelog, args.force)
+        return cmd_vendor(project, args.ci, args.pr_template, args.hooks, args.agents, args.changelog, args.force,
+                          args.codeowners, args.owner)
     if args.command == "waves":
         return cmd_waves(project)
     if args.command == "next":

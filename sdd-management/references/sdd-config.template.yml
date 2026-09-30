@@ -81,6 +81,14 @@ tracker:
     migration: ""
     foundation: ""
 
+# --- Fluxo de mudança ---
+# pr: toda mudança entra na base_branch por solicitação de mudança revisada (PR/MR/equivalente), com merge commit.
+# direct: só para repositório sem plataforma (pessoal/local), com motivo registrado.
+change_flow: pr
+change_flow_reason: ""
+# Regex das mensagens de merge da sua plataforma (padrão cobre GitHub, GitLab, Azure DevOps, Bitbucket).
+# pr_merge_pattern: "Merge pull request #?\d+|See merge request"
+
 # --- Aprovação humana da integração (H2) ---
 # per-wave: o humano aprova cada onda integrada (gate SPEC-X H2 --by <nome>).
 # auto-on-green: o humano autorizou, uma vez, considerar H2 aprovado quando G5 = PASS (gate SPEC-X H2 --run).

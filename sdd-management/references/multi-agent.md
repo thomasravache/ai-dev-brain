@@ -68,7 +68,7 @@ The consumer's Test-writer builds test doubles strictly from the provider spec's
 
 ## Single writer
 
-Only the Architect writes SDD records (`docs/specs/`, `docs/adr/`): status, checklist ticks, gate rows, impediments, amendments, delivery report — in the main checkout, right after each report arrives. Subagents never edit spec files in their worktrees: they report, and the Architect records. This keeps `INDEX.md` current in real time and keeps spec branches free of conflicts on spec files.
+Only the Architect writes SDD records (`docs/specs/`, `docs/adr/`): status, checklist ticks, gate rows, impediments, amendments, delivery report — in the main checkout, **on the integration branch** (never directly on `base_branch`), right after each report arrives. Records made before the merge ride in the wave's change request; records made after it (G6 deploy, G7 closing) go in a short closing change request per wave. Subagents never edit spec files in their worktrees: they report, and the Architect records. This keeps `INDEX.md` current in real time and keeps spec branches free of conflicts on spec files.
 
 ## Stops
 

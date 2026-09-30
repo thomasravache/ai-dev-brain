@@ -399,6 +399,51 @@ class H2PolicyTest(ProjectTest):
         self.assertIn("declare h2_policy: auto-on-green", self.p.validate().stdout)
 
 
+class ChangeFlowTest(ProjectTest):
+    def commit(self, name, content, message):
+        (self.tmp / name).parent.mkdir(parents=True, exist_ok=True)
+        (self.tmp / name).write_text(content, encoding="utf-8")
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", message)
+
+    def test_direct_code_and_record_commits_are_distinguished(self):
+        sid = self.full()
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: adota sdd")
+        self.commit("src/a.py", "x", "feat: direto na main")
+        self.commit(f"docs/specs/{self.p.path(sid).name}", self.p.path(sid).read_text() + "\n", "docs(specs): gate")
+        out = self.p.validate().stdout
+        self.assertIn("1 commit(s) de código direto(s)", out)
+        self.assertRegex(out, r"\d+ commit\(s\) de registros SDD direto\(s\)")
+
+    def test_local_merge_without_change_request_is_flagged(self):
+        self.full()
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: adota sdd")
+        git(self.tmp, "checkout", "-qb", "feature")
+        self.commit("src/a.py", "x", "feat: a")
+        git(self.tmp, "checkout", "-q", "main")
+        git(self.tmp, "merge", "-q", "--no-ff", "feature", "-m", "merge: feature into main")
+        self.assertIn("merge(s) na main sem PR/MR", self.p.validate().stdout)
+        git(self.tmp, "checkout", "-qb", "feature2")
+        self.commit("src/b.py", "y", "feat: b")
+        git(self.tmp, "checkout", "-q", "main")
+        git(self.tmp, "merge", "-q", "--no-ff", "feature2", "-m", "Merge pull request #7 from org/feature2")
+        self.assertIn("1 merge(s) na main sem PR/MR", self.p.validate().stdout)
+
+    def test_direct_flow_requires_reason(self):
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + "change_flow: direct\n", encoding="utf-8")
+        self.assertIn("exige change_flow_reason", self.p.validate().stdout)
+
+    def test_vendor_codeowners(self):
+        self.assertNotEqual(self.p.run("vendor", "--codeowners", "github").returncode, 0)
+        self.p.run("vendor", "--codeowners", "github", "--owner", "@thomas", "--ci", "github")
+        owners = (self.tmp / ".github/CODEOWNERS").read_text()
+        self.assertIn("/tools/sdd/ @thomas", owners)
+        self.assertIn("/.github/workflows/sdd.yml @thomas", owners)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()
