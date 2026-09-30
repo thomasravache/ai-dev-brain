@@ -57,6 +57,8 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 | `set ID [ID ...] key=value ...` | Update frontmatter (`today` = current date; lists as `[A, B]`) |
 | `impacted SPEC-X` | Specs affected by a change in SPEC-X |
 | `index` | Regenerate `docs/specs/INDEX.md` (status, waves, Mermaid graph, ADRs) |
+| `pillars` | Coverage of the delivery pillars required by `pillars.profile` (covered, proposed, waived, **without decision**) and recurring N/A — see `references/pillars.md` |
+| `new-adr --baseline <pillar>` | Creates a pillar's ADR with verifiable rules already written and blanks for the project's tool choices (always `proposed`) |
 | `upgrade [ID ...] [--apply]` | Brings specs written with older templates to the current ones: adds missing sections (in the right place), frontmatter keys and gate rows; dry run by default. Run it after updating the skill |
 | `migrate [--apply]` | Convert the legacy layout (status folders + date-prefixed names) |
 | `next-id spec\|adr` | Next free ID |
@@ -150,6 +152,7 @@ Start or end every response **to the user** with this panel (subagents don't pri
 - Run `status` (if `docs/specs` exists) to resume from the files, not from memory.
 - Decide **greenfield or brownfield** and follow its guide.
 - **Board:** if `tracker` isn't configured, ask where work is tracked (repository only, Jira, GitHub, Linear, other) and record it in `sdd-config.yml`; brownfield: look for signs first (issue keys in commits/branches/PR templates) and confirm.
+- **Pillars:** set `pillars.profile` (greenfield: from the framing; brownfield: only if the user opts in) and run `pillars`. Every required pillar gets an ADR (`new-adr --baseline <id>`) or a waiver with reason — say plainly what is missing and why it matters (e.g. "falta decidir segredos e dados sensíveis: credenciais em código são a falha mais comum"). Details: `references/pillars.md`.
 - **Enforcement:** if `tools/sdd/spec_graph.py` is missing or outdated, propose `vendor --agents --ci <provider> --pr-template <provider> --hooks --changelog` (greenfield: part of the foundation epic) — the user approves the files.
 - Read `docs/specs/INDEX.md`, `docs/specs/sdd-config.yml`, the related specs and every **accepted ADR** — new work must respect accumulated decisions.
 - No `sdd-config.yml`? Create it from `references/sdd-config.template.yml` with the project's real commands (build, tests, E2E, architecture, security, CI, deploy), running each once to confirm it works. Missing capabilities (no CI, no E2E, no architecture tests, manual deploy) become specs, and the matching gates are N/A pointing to them until they exist.

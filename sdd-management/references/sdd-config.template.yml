@@ -81,6 +81,14 @@ tracker:
     migration: ""
     foundation: ""
 
+# --- Pilares de entrega (references/pillars.md) ---
+# profile: minimo | padrao | rigoroso — ativa a checagem de cobertura (`pillars`, validate, INDEX).
+# Projeto novo: defina no DISCOVER. Projeto existente: opt-in (deixe vazio para não checar).
+pillars:
+  profile: ""
+  waived: {}              # ex: custo: "protótipo interno sem orçamento próprio"
+  extra: {}               # pilares próprios do projeto/organização: id: "Título"
+
 # --- Fluxo de mudança ---
 # pr: toda mudança entra na base_branch por solicitação de mudança revisada (PR/MR/equivalente), com merge commit.
 # direct: só para repositório sem plataforma (pessoal/local), com motivo registrado.

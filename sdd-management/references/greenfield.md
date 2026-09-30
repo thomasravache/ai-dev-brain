@@ -63,7 +63,7 @@ Domain drivers and their usual implications (starting points for the matrix, not
 
 ## 4. Foundation epic
 
-Create an epic with `type: foundation`. Adapt the children to the product, but never drop testing, pipeline, deploy or observability:
+Set `pillars.profile` in `sdd-config.yml` from the framing and create one ADR per required pillar (`new-adr --baseline <id>`, then fill the tool choices) — they are approved with the foundation epic, which can't pass G0 while a required pillar has no decision (`references/pillars.md`). Create an epic with `type: foundation`. Adapt the children to the product, but never drop testing, pipeline, deploy or observability:
 
 | # | Child spec (type foundation) | Delivers |
 |---|---|---|

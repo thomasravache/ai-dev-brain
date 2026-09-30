@@ -444,6 +444,49 @@ class ChangeFlowTest(ProjectTest):
         self.assertIn("/.github/workflows/sdd.yml @thomas", owners)
 
 
+class PillarsTest(ProjectTest):
+    def set_profile(self, profile, extra=""):
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + f"pillars:\n  profile: {profile}\n" + extra, encoding="utf-8")
+
+    def test_catalog_and_baselines_are_consistent(self):
+        for pid in sg.PILLARS:
+            self.assertTrue((SKILL / "references" / "adr-baseline" / f"{pid}.md").exists(), pid)
+            self.assertIn(f"`{pid}`", (SKILL / "references" / "pillars.md").read_text())
+
+    def test_opt_in_and_coverage_states(self):
+        self.assertNotIn("pilares", self.p.validate().stdout)
+        self.set_profile("minimo", "  waived:\n    custo: \"protótipo interno sem orçamento\"\n")
+        out = self.p.validate().stdout
+        self.assertIn("sem decisão no perfil minimo", out)
+        self.assertEqual(self.p.run("new-adr", "--baseline", "testes").returncode, 0)
+        coverage = {pid: state for pid, _, state, _ in sg.pillar_coverage(sg.Project(self.tmp))}
+        self.assertEqual(coverage["testes"], "proposto")
+        self.assertEqual(coverage["entrega"], "sem decisão")
+        self.assertNotIn("custo", coverage)  # custo is padrao-level, not required by minimo
+
+    def test_foundation_epic_blocked_at_g0_with_missing_pillars(self):
+        self.set_profile("minimo")
+        epic = self.p.new("epic", "Fundação")
+        self.p.fill(epic, type="foundation")
+        self.assertIn("épico de fundação não passa do G0", self.p.validate(epic).stdout + self.p.validate().stdout)
+
+    def test_waiver_needs_reason_and_unknown_pillar_fails(self):
+        self.set_profile("minimo", "  waived:\n    entrega: curto\n    inventado: \"motivo suficientemente longo\"\n")
+        out = self.p.validate().stdout
+        self.assertIn("pillars.waived.entrega: motivo", out)
+        self.assertIn("pilar desconhecido 'inventado'", out)
+
+    def test_recurrent_na_is_reported(self):
+        self.set_profile("minimo")
+        for name in ("A", "B", "C"):
+            sid = self.full(name)
+            text = self.p.path(sid).read_text(encoding="utf-8")
+            text = re.sub(r"\| (G6 [^|]*)\| PENDING \| \| \|", r"| \1| N/A | sem ambiente remoto por enquanto | 2026-01-01 |", text)
+            self.p.path(sid).write_text(text, encoding="utf-8")
+        self.assertIn("G6 N/A em 3 specs", self.p.validate().stdout)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()

@@ -67,6 +67,27 @@ MERGE_GATES = ("G0", "G1", "G2", "G3", "G4")
 PR_MERGE_PATTERN_DEFAULT = r"Merge pull request #?\d+|See merge request|Merged PR \d+|Merge pull request .* from|\(#\d+\)$|\(!\d+\)$"
 SQUASH_PATTERN = r"\(#\d+\)$|\(!\d+\)$"
 CONTROL_PATHS = ["tools/sdd/", "docs/specs/sdd-config.yml", "docs/adr/", ".githooks/"]
+
+# Pillars of an end-to-end delivery. Neutral: each is a question the project answers with an ADR (or a recorded waiver).
+PILLAR_CATALOG_VERSION = "2026.09"
+PROFILES = ("minimo", "padrao", "rigoroso")
+PILLARS = {
+    "arquitetura": ("Arquitetura e fronteiras", "Como o sistema é dividido e quais dependências são proibidas?", "minimo"),
+    "testes": ("Estratégia de testes", "Quais níveis de teste, onde rodam e o que é obrigatório?", "minimo"),
+    "qualidade-codigo": ("Qualidade de código", "Formatação, lint, tipos e análise estática rodam automaticamente?", "minimo"),
+    "entrega": ("Entrega contínua e ambientes", "Como o código chega a produção, e como volta atrás?", "minimo"),
+    "fluxo-mudanca": ("Fluxo de mudança", "Como mudanças entram na branch principal e quem revisa?", "minimo"),
+    "segredos-dados": ("Segredos e dados sensíveis", "Onde ficam credenciais e como dados pessoais são protegidos?", "minimo"),
+    "seguranca-acesso": ("Identidade e acesso", "Como usuários e serviços se autenticam e o que cada um pode fazer?", "padrao"),
+    "dependencias": ("Dependências e ciclo de vida da stack", "Como vulnerabilidades, atualizações e fim de suporte são tratados?", "padrao"),
+    "observabilidade": ("Observabilidade", "Como se sabe que o sistema está saudável ou quebrado?", "padrao"),
+    "resiliencia": ("Resiliência e recuperação", "Backups, tempo de recuperação e tolerância a falhas?", "padrao"),
+    "dados-migracoes": ("Dados e migrações", "Como o schema evolui sem quebrar versões em uso?", "padrao"),
+    "custo": ("Custo", "Quanto custa operar, com que premissas, e como é acompanhado?", "padrao"),
+    "desempenho-escala": ("Desempenho e escala", "Quais metas de carga e latência, e como são verificadas?", "rigoroso"),
+    "acessibilidade-conformidade": ("Acessibilidade e conformidade", "Quais normas (acessibilidade, legais, do setor) se aplicam?", "rigoroso"),
+}
+NA_RECURRENT_THRESHOLD = 3
 PHASES = ("DISCOVER", "SPEC (G0)", "APPROVAL (H1)", "PLAN (waves)", "EXECUTE (G1–G4)",
           "INTEGRATE (G5 + H2)", "DEPLOY (G6)", "CLOSE (G7)")
 H1_QUESTION = ("Os contratos e os cenários de teste estão adequados e seguem o padrão atual? "
@@ -584,6 +605,7 @@ def validate(project: Project, only=None):
     if only is None:
         validate_config(project, add)
         validate_change_flow(project, add)
+        validate_pillars(project, add)
         seen = defaultdict(list)
         for sid, doc in sorted(project.specs.items()):
             evidence = ((gate_table(doc) or {}).get("G2") or {}).get("evidence", "")
@@ -593,6 +615,116 @@ def validate(project: Project, only=None):
             if len(sids) > 1:
                 add("WARN", sids[0], f"evidência de G2 idêntica em {', '.join(sids)} ('{evidence[:50]}') — cada spec precisa da própria execução")
     return issues
+
+
+def pillar_settings(project: Project):
+    cfg = project.cfg_map("pillars")
+    profile = cfg.get("profile") if isinstance(cfg.get("profile"), str) else ""
+    extra = cfg.get("extra") if isinstance(cfg.get("extra"), dict) else {}
+    return profile.strip(), pillar_waivers(project), extra
+
+
+def required_pillars(project: Project):
+    profile, _, extra = pillar_settings(project)
+    if profile not in PROFILES:
+        return []
+    level = PROFILES.index(profile)
+    ids = [pid for pid, (_, _, lvl) in PILLARS.items() if PROFILES.index(lvl) <= level]
+    return ids + [pid for pid in extra if pid not in ids]
+
+
+def pillar_coverage(project: Project):
+    _, waived, extra = pillar_settings(project)
+    rows = []
+    for pid in required_pillars(project):
+        title = PILLARS[pid][0] if pid in PILLARS else str(extra.get(pid, pid))
+        adrs = [a for a in sorted(project.adrs.values(), key=lambda d: d.id) if pid in a.list("pillars")]
+        accepted = [a.id for a in adrs if a.status == "accepted"]
+        proposed = [a.id for a in adrs if a.status == "proposed"]
+        if accepted:
+            state, detail = "coberto", ", ".join(accepted)
+        elif proposed:
+            state, detail = "proposto", ", ".join(proposed) + " (aguarda aprovação)"
+        elif pid in waived:
+            state, detail = "dispensado", str(waived[pid])
+        else:
+            state, detail = "sem decisão", f"`new-adr --baseline {pid}`" if pid in PILLARS else "crie um ADR com pillars: [" + pid + "]"
+        rows.append((pid, title, state, detail))
+    return rows
+
+
+def recurrent_na(project: Project):
+    """Gates repeatedly N/A for a pillar that isn't waived: the gap is permanent, not temporary."""
+    _, waived, _ = pillar_settings(project)
+    out = []
+    for gate, pid in GATE_PILLAR.items():
+        sids = [sid for sid, d in sorted(project.specs.items())
+                if not d.legacy and ((gate_table(d) or {}).get(gate) or {}).get("status") == "N/A"]
+        if len(sids) >= NA_RECURRENT_THRESHOLD and pid not in waived:
+            out.append((gate, pid, sids))
+    return out
+
+
+def validate_pillars(project: Project, add):
+    profile, waived, extra = pillar_settings(project)
+    known = set(PILLARS) | set(extra)
+    for pid in waived:
+        if pid not in known:
+            add("ERROR", "sdd-config", f"pillars.waived: pilar desconhecido '{pid}' ({', '.join(sorted(known))})")
+        elif len(str(waived[pid]).strip()) < 15:
+            add("ERROR", "sdd-config", f"pillars.waived.{pid}: motivo com pelo menos 15 caracteres")
+    for adr in project.adrs.values():
+        unknown = [p for p in adr.list("pillars") if p not in known]
+        if unknown:
+            add("ERROR", adr.id, f"pillars desconhecido(s): {', '.join(unknown)} — veja `pillars` (ou declare em pillars.extra)")
+    foundations = [d for d in project.specs.values() if d.tier == "epic" and d.type == "foundation"]
+    if profile and profile not in PROFILES:
+        add("ERROR", "sdd-config", f"pillars.profile '{profile}' inválido ({' | '.join(PROFILES)})")
+        return
+    if not profile:
+        if foundations:
+            add("WARN", "sdd-config", "projeto com épico de fundação sem pillars.profile (minimo | padrao | rigoroso) — rode `pillars`")
+        return
+    missing = [pid for pid, _, state, _ in pillar_coverage(project) if state == "sem decisão"]
+    if missing:
+        add("WARN", "pilares", f"sem decisão no perfil {profile}: {', '.join(missing)} — `pillars` mostra como resolver")
+        for epic in foundations:
+            if epic.status == "proposed":
+                add("ERROR", epic.id, f"épico de fundação não passa do G0 com pilares sem decisão: {', '.join(missing)} "
+                                      "(crie o ADR de base ou registre a dispensa com motivo)")
+    covered = {pid for pid, _, state, _ in pillar_coverage(project) if state == "coberto"}
+    for gate, pid, sids in recurrent_na(project):
+        if pid in covered:
+            add("WARN", "pilares", f"{gate} N/A em {len(sids)} specs — o pilar '{pid}' tem ADR mas nada o verifica: "
+                                   "crie a spec do teste/pipeline que o garante")
+        else:
+            add("WARN", "pilares", f"{gate} N/A em {len(sids)} specs — o pilar '{pid}' está em aberto de forma permanente: "
+                                   f"crie a spec que resolve ou registre pillars.waived.{pid} com motivo")
+
+
+def cmd_pillars(project: Project):
+    profile, waived, _ = pillar_settings(project)
+    if profile not in PROFILES:
+        print("pillars.profile não definido no sdd-config.yml (minimo | padrao | rigoroso). Catálogo:")
+        for pid, (title, question, lvl) in PILLARS.items():
+            print(f"  {pid:<28} [{lvl}] {title} — {question}")
+        return 0
+    print(f"Pilares — perfil {profile} (catálogo {PILLAR_CATALOG_VERSION})\n")
+    icons = {"coberto": "✅", "proposto": "📝", "dispensado": "➖", "sem decisão": "⚠"}
+    for pid, title, state, detail in pillar_coverage(project):
+        print(f"{icons[state]} {title} [{pid}] — {state}: {detail}")
+        if state == "sem decisão" and pid in PILLARS:
+            print(f"     pergunta a responder: {PILLARS[pid][1]}")
+    covered = {pid for pid, _, state, _ in pillar_coverage(project) if state == "coberto"}
+    for gate, pid, sids in recurrent_na(project):
+        listed = f"{', '.join(sids[:5])}{' …' if len(sids) > 5 else ''}"
+        if pid in covered:
+            print(f"\n⚠ {gate} N/A em {len(sids)} specs ({listed}): o pilar '{pid}' tem ADR, mas nada o verifica — "
+                  "crie a spec do teste/pipeline que o garante (enforced_by)")
+        else:
+            print(f"\n⚠ {gate} N/A em {len(sids)} specs ({listed}): pilar '{pid}' sem solução — crie a spec que resolve "
+                  "ou registre a dispensa")
+    return 0
 
 
 def validate_change_flow(project: Project, add):
@@ -1374,6 +1506,12 @@ def build_index(project: Project) -> str:
                        f"| {md_cell(i['Responsável'])} | {i['Aberto em']} | {age_days(i['Aberto em'])} | {md_cell(i['Descrição'])} |")
         out.append("")
 
+    coverage = pillar_coverage(project)
+    if coverage:
+        out += ["## Cobertura de Pilares", "", f"Perfil: **{pillar_settings(project)[0]}**", "",
+                "| Pilar | Situação | Detalhe |", "|---|---|---|"]
+        out += [f"| {md_cell(title)} | {state} | {md_cell(detail)} |" for _, title, state, detail in coverage]
+        out.append("")
     out += ["## Plano de Execução", ""]
     if plan is None:
         out.append("⛔ Ciclo em `depends_on` — planejamento impossível até ser resolvido.")
@@ -2018,6 +2156,9 @@ def cmd_status(project: Project, ids):
             print(progress_panel(doc, done))
             print(f"\nPróximo passo: {step}\n")
         return 0
+    gaps = [pid for pid, _, state, _ in pillar_coverage(project) if state == "sem decisão"]
+    if gaps:
+        print(f"⚠ Pilares sem decisão: {', '.join(gaps)} — rode `pillars`\n")
     open_docs = [d for d in sorted(project.specs.values(), key=lambda d: d.id) if d.status in OPEN]
     if not open_docs:
         print("Nenhuma spec aberta. Novo trabalho: DISCOVER → `new`.")
@@ -2485,8 +2626,16 @@ def cmd_new(project: Project, tier: str, title: str, slug, parent):
     return 0
 
 
-def cmd_new_adr(project: Project, title: str, slug):
-    new_id, dest, text = create_from_template(project, "template-adr.md", project.adr_dir, "ADR", title, slug)
+def cmd_new_adr(project: Project, title, slug, baseline=None):
+    template = "template-adr.md"
+    if baseline:
+        if baseline not in PILLARS:
+            die(f"pilar desconhecido '{baseline}' ({', '.join(PILLARS)})")
+        template = f"adr-baseline/{baseline}.md"
+        title = title or PILLARS[baseline][0]
+    if not title:
+        die("informe --title (ou --baseline <pilar>)")
+    new_id, dest, text = create_from_template(project, template, project.adr_dir, "ADR", title, slug)
     dest.write_text(text, encoding="utf-8")
     print(f"{new_id}  {project.rel(dest)}")
     return 0
@@ -2778,13 +2927,15 @@ def main(argv=None):
     p.add_argument("--title", required=True)
     p.add_argument("--slug")
     p.add_argument("--parent")
-    p = sub.add_parser("new-adr", help="cria ADR a partir do template")
-    p.add_argument("--title", required=True)
+    p = sub.add_parser("new-adr", help="cria ADR a partir do template (ou do ADR de base de um pilar com --baseline)")
+    p.add_argument("--title")
+    p.add_argument("--baseline", help="pilar do catálogo (veja `pillars`)")
     p.add_argument("--slug")
     p = sub.add_parser("set", help="atualiza frontmatter: set ID [ID ...] chave=valor (valor 'today' = data de hoje)")
     p.add_argument("args", nargs="+")
     p = sub.add_parser("next-id", help="próximo ID livre")
     p.add_argument("kind", choices=("spec", "adr"))
+    sub.add_parser("pillars", help="cobertura dos pilares de entrega (perfil do sdd-config) e N/A recorrente")
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
     p.add_argument("--apply", action="store_true")
@@ -2831,11 +2982,13 @@ def main(argv=None):
     if args.command == "new":
         return cmd_new(project, args.tier, args.title, args.slug, args.parent)
     if args.command == "new-adr":
-        return cmd_new_adr(project, args.title, args.slug)
+        return cmd_new_adr(project, args.title, args.slug, args.baseline)
     if args.command == "set":
         return cmd_set(project, args.args)
     if args.command == "next-id":
         return cmd_next_id(project, args.kind)
+    if args.command == "pillars":
+        return cmd_pillars(project)
     if args.command == "upgrade":
         return cmd_upgrade(project, args.ids, args.apply)
     if args.command == "migrate":

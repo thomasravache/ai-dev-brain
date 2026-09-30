@@ -4,6 +4,7 @@ title: {{title}}
 status: proposed
 origin: decision
 date: {{created}}
+pillars: []
 decision_makers: []
 consulted: []
 informed: []
