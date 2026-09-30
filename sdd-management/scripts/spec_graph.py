@@ -48,7 +48,7 @@ TYPES_BY_TIER = {
 }
 SIZES = ("S", "M", "L")
 ADR_STATUSES = ("proposed", "accepted", "rejected", "deprecated", "superseded")
-ADR_ORIGINS = ("decision", "as-is")
+ADR_ORIGINS = ("decision", "user", "as-is")
 GATE_ROWS = ("G0", "G1", "G2", "G3", "G4", "G5", "H2", "G6", "G7")
 DELIVERY_SUBSECTIONS = ("O que foi entregue", "Como foi feito", "Verificação", "Definição de Pronto", "Deploy", "Pendências")
 IMPEDIMENT_TYPES = ("spec", "decisão", "trabalho", "externo", "falha")
@@ -1239,6 +1239,8 @@ def validate_adr(project: Project, adr: Doc, add):
     origin = adr.scalar("origin").lower()
     if origin and origin not in ADR_ORIGINS:
         add("ERROR", aid, f"origin inválido '{origin}' ({' | '.join(ADR_ORIGINS)})")
+    if not PLACEHOLDER_RE.search(COMMENT_RE.sub("", adr.text)) and adr.status in ("proposed", "accepted"):
+        validate_adr_content(adr, origin, add)
     if PLACEHOLDER_RE.search(COMMENT_RE.sub("", adr.text)):
         add("ERROR", aid, "marcadores {{...}} não preenchidos")
     if adr.status == "accepted" and not adr.scalar("enforced_by"):
@@ -1252,6 +1254,24 @@ def validate_adr(project: Project, adr: Doc, add):
     sup = adr.scalar("supersedes")
     if sup and sup not in project.adrs:
         add("ERROR", aid, f"supersedes: {sup} não existe")
+
+
+def validate_adr_content(adr: Doc, origin: str, add):
+    """Decision quality: options and sources for recommended decisions; risks recorded for user-chosen ones."""
+    aid = adr.id
+    options = COMMENT_RE.sub("", adr.section("Opções") or "")
+    bullets = [l for l in options.split("\n") if re.match(r"^\s*[-*]\s+\S", l) and not re.match(r"^\s*[-*]\s+N/A", l, re.I)]
+    sources = COMMENT_RE.sub("", (adr.section("Mais Informações") or "") + (adr.section("Fontes") or ""))
+    consequences = COMMENT_RE.sub("", adr.section("Consequências") or adr.section("Resultado da Decisão") or "")
+    if origin in ("", "decision"):
+        if len(bullets) < 2:
+            add("WARN", aid, "decisão recomendada com menos de 2 opções consideradas — compare alternativas reais "
+                             "(ou use origin: user se a escolha veio do usuário, ou as-is se já existia)")
+        if not re.search(r"https?://", sources) and not re.search(r"n[aã]o verificad", norm(sources)):
+            add("WARN", aid, "sem fontes (links oficiais com data) nem declaração explícita de 'não verificado' em Mais Informações")
+    elif origin == "user":
+        if not re.search(r"ruim|risco|trade-?off|limita", norm(consequences)):
+            add("WARN", aid, "escolha do usuário sem riscos registrados — respeite a escolha, mas registre riscos e custos em Consequências")
 
 
 def find_cycles(project: Project):

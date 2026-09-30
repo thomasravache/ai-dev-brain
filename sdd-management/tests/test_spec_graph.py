@@ -487,6 +487,35 @@ class PillarsTest(ProjectTest):
         self.assertIn("G6 N/A em 3 specs", self.p.validate().stdout)
 
 
+class AdrQualityTest(ProjectTest):
+    def adr(self, origin, options, sources, consequences="- **Ruim**, porque custa mais"):
+        out = self.p.run("new-adr", "--title", f"Decisão {origin}")
+        aid = out.stdout.split()[0]
+        path = next((self.tmp / "docs/adr").glob(f"{aid}-*.md"))
+        text = path.read_text(encoding="utf-8")
+        text = re.sub(r"## Opções Consideradas\n.*?(?=\n## )", "## Opções Consideradas\n" + options + "\n", text, flags=re.S)
+        text = re.sub(r"## Mais Informações\n.*", "## Mais Informações\n" + sources + "\n", text, flags=re.S)
+        text = re.sub(r"### Consequências\n.*?(?=\n### )", "### Consequências\n" + consequences + "\n", text, flags=re.S)
+        text = re.sub(r"\{\{([^{}]*)\}\}", lambda m: m.group(1), text)
+        path.write_text(text, encoding="utf-8")
+        self.p.run("set", aid, f"origin={origin}")
+        return aid
+
+    def test_decision_needs_options_and_sources(self):
+        aid = self.adr("decision", "- Opção A", "sem nada")
+        out = self.p.validate(aid).stdout
+        self.assertIn("menos de 2 opções", out)
+        self.assertIn("sem fontes", out)
+        ok = self.adr("decision", "- Opção A\n- Opção B", "https://example.org/docs (2026-09-30)")
+        self.assertNotIn("WARN", self.p.validate(ok).stdout)
+
+    def test_user_choice_is_respected_but_needs_risks(self):
+        aid = self.adr("user", "- Vercel (escolhida pelo usuário)", "", consequences="- **Boa**, porque o time conhece")
+        out = self.p.validate(aid).stdout
+        self.assertNotIn("menos de 2 opções", out)
+        self.assertIn("sem riscos registrados", out)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()

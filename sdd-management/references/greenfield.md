@@ -39,6 +39,8 @@ Rules:
 - **Verify currency.** Training data goes stale. When web search or documentation tools are available, confirm current stable/LTS versions, support windows and maintenance status from official sources and record them under *Mais Informações* with the date. Never recommend end-of-life or deprecated technology. If verification isn't possible, say so explicitly in the ADR and to the user.
 - **Prefer managed services and proven technology** unless a requirement demands otherwise: fewer moving parts means faster delivery and cheaper operation.
 - **Evaluate the stack as a whole**: typed contracts end to end, shared tooling, one way to run everything locally.
+- **Respect what the user already chose.** If the user specified a technology, hosting or vendor, record it as `origin: user`: don't reopen the choice, don't pad it with alternatives — only record risks, costs and conflicts with other requirements (budget, compliance). Recommend alternatives only when a requirement is actually violated, and ask. Layers the user didn't specify are `origin: decision` (compared options) and inherited ones in brownfield are `as-is`.
+- **Cost is a constraint and a criterion.** For hosting and paid services, the ADR carries a cost model: usage assumptions, monthly estimate per option in current/2x/10x scenarios, free-tier limits, prices checked at the official source with the date (or "não verificado"), and the comparison with the stated budget. Exceeding it requires the human's decision.
 - The human approves the stack at H1 of the foundation epic, before any code.
 
 Domain drivers and their usual implications (starting points for the matrix, not rules):
