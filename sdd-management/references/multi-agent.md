@@ -51,10 +51,10 @@ Refs: SPEC-0042
 
 1. `spec_graph.py next` → the batch to dispatch now (already excludes file conflicts and respects `max_parallel`).
 2. For each spec in the batch: create branch/worktree, `set SPEC-X status=in-progress`, dispatch the **Test-writer**.
-3. Test-writer returns → Architect runs `verify SPEC-X` and checks the failing summary → record G1. FAIL → back to the Test-writer with the reason.
-4. Dispatch the **Implementer** → record G2/G3 from its evidence (re-run the commands if the evidence is thin).
+3. Test-writer returns → Architect records G1 with `gate SPEC-X G1 --run --cwd <worktree>` (verify + red test run). FAIL → back to the Test-writer with the reason.
+4. Dispatch the **Implementer** → record G2/G3 with `gate SPEC-X G2 --run --cwd <worktree>` and `gate SPEC-X G3 --run --cwd <worktree>` — never copy the Implementer's reported numbers.
    Any report other than DONE/APPROVED → record it at once with `impede` (see *Stops* below) and route it: `SPEC_DEFECT` → Amendment flow; `TEST_DEFECT` → back to the Test-writer; `BLOCKED` → ask the human or create the missing spec.
-5. Dispatch the **Reviewer** → record G4. `CHANGES_REQUESTED` → Implementer receives the findings verbatim → Reviewer again.
+5. Dispatch the **Reviewer** → record G4 with `gate SPEC-X G4 --run --cwd <worktree> --by "<reviewer>: <verdict>"`. `CHANGES_REQUESTED` → Implementer receives the findings verbatim → Reviewer again.
 6. When every spec of the wave has G4 = PASS → dispatch the **Integrator** → G5 → ask H2 (human).
 7. Dispatch **Release** for staging → G6 (staging). Production only after the user confirms that release in chat → G6 (production).
 8. G7 for the specs being closed (Relatório de Entrega, docs, changelog) → `index`.

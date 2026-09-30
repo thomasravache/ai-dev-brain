@@ -4,6 +4,8 @@ A gate is a checkpoint with objective pass criteria. Every executable spec (`lit
 
 Gate commands come from `docs/specs/sdd-config.yml`. Every agent runs the same commands — never improvise a different command per agent.
 
+**Recording:** `spec_graph.py gate SPEC-X <G> --run [--cwd <worktree>]` runs the gate's check and writes the row itself (command, exit code, last output line, commit; refuses a dirty tree). G0 = `validate`; G1 = `verify` (G1 lines) + test command expected **red** (`--expect-green` when every new test is a guard/characterization); G2 = build, test, lint, coverage; G3 = arch_test; G4 = `verify` + `--by "<reviewer>: APPROVED …"`; G5 = build, test, integration, E2E, arch, security; G6 = smoke_test; G7 = delivery report + Definition of Done. Human gates use `--by`. `--manual --evidence` exists for when a command truly can't run and is flagged by `validate`; identical G2 evidence across specs is flagged too. A gate can only pass after all earlier gates are PASS or N/A.
+
 | Gate | Owner | When | Deterministic part |
 |---|---|---|---|
 | G0 Spec | Architect | before H1 | `spec_graph.py validate SPEC-X` |

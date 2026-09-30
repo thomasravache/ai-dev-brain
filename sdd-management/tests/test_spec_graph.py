@@ -304,6 +304,84 @@ class CommandsTest(ProjectTest):
         self.assertIn("registre G0 = PASS", self.p.run("status", sid).stdout)
 
 
+class GateTest(ProjectTest):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.p = Project(self.tmp, config_extra=(
+            'build: "python3 -c \\"print(\'build ok\')\\""\n'
+            'test: "python3 -c \\"import sys; print(\'Ran 3 tests OK\'); sys.exit(0)\\""\n'
+            'arch_test: ""\n'))
+
+    def gate(self, sid, *args):
+        return self.p.run("gate", sid, *args)
+
+    def committed_spec(self):
+        sid = self.full()
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: spec")
+        return sid
+
+    def row(self, sid, gate):
+        return sg.gate_table(sg.Project(self.tmp).specs[sid])[gate]
+
+    def test_order_is_enforced(self):
+        sid = self.committed_spec()
+        out = self.gate(sid, "G2", "--run")
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("só depois de G0, G1", out.stderr)
+
+    def test_run_generates_evidence_and_manual_is_flagged(self):
+        sid = self.committed_spec()
+        self.assertEqual(self.gate(sid, "G0", "--run").returncode, 0)
+        self.assertIn("validate: 0 erro", self.row(sid, "G0")["evidence"])
+        self.gate(sid, "G1", "--manual", "--evidence", "red visto no terminal")
+        self.assertTrue(self.row(sid, "G1")["evidence"].startswith("MANUAL:"))
+        self.assertIn("evidência manual", self.p.validate(sid).stdout)
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: gates")
+        self.assertEqual(self.gate(sid, "G2", "--run").returncode, 0)
+        evidence = self.row(sid, "G2")["evidence"]
+        self.assertIn("build exit 0", evidence)
+        self.assertIn("Ran 3 tests OK", evidence)
+
+    def test_pass_without_run_is_refused(self):
+        sid = self.committed_spec()
+        out = self.gate(sid, "G0")
+        self.assertIn("--run", out.stderr)
+
+    def test_na_for_architecture_needs_pointer_or_waiver(self):
+        sid = self.committed_spec()
+        for g in ("G0",):
+            self.gate(sid, g, "--run")
+        self.gate(sid, "G1", "--manual", "--evidence", "x")
+        self.gate(sid, "G2", "--manual", "--evidence", "x")
+        out = self.gate(sid, "G3", "--na", "não temos suíte de arquitetura")
+        self.assertIn("precisa apontar", out.stderr)
+        other = self.full("Suíte de arquitetura")
+        self.assertEqual(self.gate(sid, "G3", "--na", f"suíte será criada na {other}").returncode, 0)
+
+    def test_dirty_tree_is_refused_for_command_gates(self):
+        sid = self.committed_spec()
+        self.gate(sid, "G0", "--run")
+        self.gate(sid, "G1", "--manual", "--evidence", "x")
+        (self.tmp / "README.md").write_text("mudou\n", encoding="utf-8")
+        out = self.gate(sid, "G2", "--run")
+        self.assertIn("não commitadas", out.stderr)
+
+    def test_human_gate_needs_approver(self):
+        sid = self.committed_spec()
+        out = self.gate(sid, "H2")
+        self.assertNotEqual(out.returncode, 0)
+
+    def test_duplicate_g2_evidence_is_warned(self):
+        a, b = self.full("A"), self.full("B")
+        for sid in (a, b):
+            text = self.p.path(sid).read_text(encoding="utf-8")
+            text = re.sub(r"\| (G2 [^|]*)\| PENDING \| \| \|", r"| \1| PASS | dotnet test (commit 24ed311) | 2026-01-01 |", text)
+            self.p.path(sid).write_text(text, encoding="utf-8")
+        self.assertIn("evidência de G2 idêntica", self.p.validate().stdout)
+
+
 class RealProjectsTest(unittest.TestCase):
     """Read-only: runs the tool against real projects listed in SDD_REAL_PROJECTS (skipped when unset)."""
 
