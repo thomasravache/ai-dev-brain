@@ -56,6 +56,7 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 | `set ID [ID ...] key=value ...` | Update frontmatter (`today` = current date; lists as `[A, B]`) |
 | `impacted SPEC-X` | Specs affected by a change in SPEC-X |
 | `index` | Regenerate `docs/specs/INDEX.md` (status, waves, Mermaid graph, ADRs) |
+| `upgrade [ID ...] [--apply]` | Brings specs written with older templates to the current ones: adds missing sections (in the right place), frontmatter keys and gate rows; dry run by default. Run it after updating the skill |
 | `migrate [--apply]` | Convert the legacy layout (status folders + date-prefixed names) |
 | `next-id spec\|adr` | Next free ID |
 

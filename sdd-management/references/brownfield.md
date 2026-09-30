@@ -11,7 +11,7 @@ The first time SDD runs in an existing repository, as part of DISCOVER:
 3. **Create `sdd-config.yml`** with the real commands and run each one. Record the true state — failing tests, flaky tests, missing CI, manual deploys — as specs, never as silent assumptions.
 4. **No architecture test suite?** Create a spec (`type: refactor`, no behavior change) that encodes the as-is ADRs as architecture tests. Until it is implemented, G3 is N/A pointing to it.
 5. **No CI or no deploy pipeline?** Same: a spec to create it. Until then G5's CI part and G6 are N/A pointing to that spec.
-6. If the project used the old SDD layout, run `migrate`.
+6. If the project used the old SDD layout, run `migrate`. If it already uses SDD but with specs from an older skill version, run `upgrade` (dry run, then `--apply`) and `vendor --force` to refresh `tools/sdd/`.
 7. **Board:** look for signs of a tracker (issue keys like `PAY-123` in commits, branch names or PR templates; links in the docs), confirm with the human, and record `tracker` in `sdd-config.yml`. The existing backlog is **not** imported: a ticket becomes a spec only when someone starts working on it (intake in `references/trackers/<provider>.md`).
 8. **Enforcement:** propose `vendor --agents --ci <provider> --pr-template <provider> --hooks --changelog`, respecting what already exists (existing PR template, CI, hook manager, changelog format — adapt instead of replacing).
 

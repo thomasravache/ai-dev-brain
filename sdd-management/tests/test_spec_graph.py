@@ -382,6 +382,26 @@ class GateTest(ProjectTest):
         self.assertIn("evidência de G2 idêntica", self.p.validate().stdout)
 
 
+class UpgradeTest(ProjectTest):
+    def test_upgrade_restores_sections_keys_and_gate_rows(self):
+        sid = self.full()
+        text = self.p.path(sid).read_text(encoding="utf-8")
+        text = re.sub(r"## 9\. Questões em Aberto\n.*?(?=## 10\.)", "", text, flags=re.S)
+        text = re.sub(r"## 13\. Registro de Impedimentos\n.*?(?=## 14\.)", "", text, flags=re.S)
+        text = text.replace("external: []\n", "").replace("| G7 Pronto & Docs | PENDING | | |\n", "")
+        self.p.path(sid).write_text(text, encoding="utf-8")
+        before = self.p.validate(sid).stdout
+        self.assertIn("seção obrigatória ausente", before)
+        self.assertEqual(self.p.run("upgrade", sid).returncode, 0)
+        self.assertEqual(self.p.path(sid).read_text(encoding="utf-8"), text)  # dry run changes nothing
+        self.assertEqual(self.p.run("upgrade", sid, "--apply").returncode, 0)
+        upgraded = self.p.path(sid).read_text(encoding="utf-8")
+        self.assertIn("external: []", upgraded)
+        self.assertIn("| G7 Pronto & Docs | PENDING | | |", upgraded)
+        self.assertLess(upgraded.index("## Questões em Aberto"), upgraded.index("## 10. Aprovação"))
+        self.assertNotIn("seção obrigatória ausente", self.p.validate(sid).stdout)
+
+
 class RealProjectsTest(unittest.TestCase):
     """Read-only: runs the tool against real projects listed in SDD_REAL_PROJECTS (skipped when unset)."""
 

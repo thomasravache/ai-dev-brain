@@ -2442,6 +2442,101 @@ def cmd_next_id(project: Project, kind: str):
     return 0
 
 
+# ---------------------------------------------------------------- upgrade (bring old specs to the current templates)
+
+def template_parts(tier: str):
+    text = (TEMPLATES_DIR / f"template-{tier}.md").read_text(encoding="utf-8")
+    fm, body = split_frontmatter(text)
+    keys = [line.split(":", 1)[0].strip() for line in (fm or "").splitlines() if re.match(r"^[A-Za-z_][\w-]*\s*:", line)]
+    meta = parse_yaml_subset(fm or "")
+    return keys, meta, parse_sections(body)
+
+
+def strip_number(heading: str) -> str:
+    return re.sub(r"^\d+(\.\d+)*\.?\s*", "", heading).strip()
+
+
+def upgrade_doc(doc: Doc):
+    keys, tmeta, tsections = template_parts(doc.tier)
+    text, changes = doc.text, []
+    for key in keys:
+        if key in doc.meta:
+            continue
+        default = tmeta.get(key, "")
+        if isinstance(default, str) and "{{" in default:
+            continue
+        text = set_meta(text, key, default)
+        changes.append(f"frontmatter +{key}: {fmt_value(default) or '(vazio)'}")
+    lines = text.split("\n")
+    required = [kw for kw, _ in REQUIRED_SECTIONS[doc.tier]]
+    tnames = [strip_number(h) for h, _ in tsections]
+    for keyword in required:
+        if section_bounds(lines, keyword) is not None:
+            continue
+        idx = next((i for i, name in enumerate(tnames) if norm(keyword) in norm(name)), None)
+        if idx is None:
+            continue
+        content = tsections[idx][1].replace("{{id}}", doc.id)
+        if doc.status != "proposed":
+            content = PLACEHOLDER_RE.sub("", content.replace(
+                "{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}", "Nenhuma (seção adicionada por upgrade)"))
+        block = [f"## {tnames[idx]}"] + content.rstrip("\n").split("\n") + [""]
+        insert_at = None
+        for later in tnames[idx + 1:]:
+            bounds = section_bounds(lines, later)
+            if bounds is not None:
+                insert_at = bounds[0]
+                break
+        if insert_at is None:
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines += block
+        else:
+            lines[insert_at:insert_at] = block
+        changes.append(f"seção +{tnames[idx]}")
+    text = "\n".join(lines)
+    gate_rows = [row for h, c in tsections if norm("Registro de Gates") in norm(h)
+                 for _, rows in parse_tables(c) for row in rows]
+    probe = Doc(doc.path, text)
+    existing = gate_table(probe)
+    if existing is not None:
+        missing = [row for row in gate_rows if row[0].split()[0].upper() not in existing]
+        if missing:
+            lines = text.split("\n")
+            start, end = section_bounds(lines, "Registro de Gates")
+            last = max(i for i in range(start + 1, end) if lines[i].strip().startswith("|"))
+            lines[last + 1:last + 1] = [f"| {row[0]} | PENDING | | |" for row in missing]
+            text = "\n".join(lines)
+            changes.append("gates +" + ", ".join(row[0].split()[0] for row in missing))
+    return text, changes
+
+
+def cmd_upgrade(project: Project, ids, apply: bool):
+    targets = [project.specs[i] for i in ids] if ids else [d for _, d in sorted(project.specs.items())]
+    total = 0
+    for doc in targets:
+        if doc.legacy or doc.tier not in TIERS:
+            continue
+        text, changes = upgrade_doc(doc)
+        if not changes:
+            continue
+        total += 1
+        print(f"{doc.id} [{doc.status}]")
+        for change in changes:
+            print(f"  {change}")
+        if doc.status == "implemented" and doc.section("Relatório de Entrega") is None:
+            print("  ⚠ implemented sem Relatório de Entrega: preencha a seção adicionada ou marque `legacy: true`")
+        if apply:
+            doc.path.write_text(text, encoding="utf-8")
+    if not total:
+        print("Todas as specs já estão no formato atual.")
+    elif not apply:
+        print(f"\nSimulação: {total} spec(s) seriam atualizadas. Rode com --apply para gravar.")
+    else:
+        print(f"\nAtualizadas {total} spec(s). Rode `validate` para ver o que ainda precisa ser preenchido.")
+    return 0
+
+
 def legacy_title(body: str, fallback: str) -> str:
     for line in body.split("\n"):
         if line.startswith("# "):
@@ -2600,6 +2695,9 @@ def main(argv=None):
     p.add_argument("args", nargs="+")
     p = sub.add_parser("next-id", help="próximo ID livre")
     p.add_argument("kind", choices=("spec", "adr"))
+    p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
+    p.add_argument("ids", nargs="*")
+    p.add_argument("--apply", action="store_true")
     p = sub.add_parser("migrate", help="converte o layout legado (pastas de status + nomes com data)")
     p.add_argument("--apply", action="store_true")
     args = parser.parse_args(argv)
@@ -2647,6 +2745,8 @@ def main(argv=None):
         return cmd_set(project, args.args)
     if args.command == "next-id":
         return cmd_next_id(project, args.kind)
+    if args.command == "upgrade":
+        return cmd_upgrade(project, args.ids, args.apply)
     if args.command == "migrate":
         return cmd_migrate(project, args.apply)
     return 2
