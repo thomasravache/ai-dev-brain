@@ -1,6 +1,7 @@
 ---
 name: sdd-management
-description: Spec-Driven Development (SDD) manager and multi-agent orchestrator — the guardian of design, architecture, testing, delivery and quality, for brand-new products and existing codebases alike. Use when starting ANY new product, feature, bug fix, refactor or architecture migration: to research patterns (or choose the best-fit stack for a new product), write specs with explicit dependencies in docs/specs/, obtain human approval BEFORE implementation, plan parallel execution waves, drive test-writer / implementer / reviewer / release agents through quality gates (unit, integration, E2E, architecture, CI, deploy), and close each delivery with a verified delivery report. Also use to amend an approved spec, decide what to implement next, or regenerate the spec index.
+description: >-
+  Spec-Driven Development (SDD) manager and multi-agent orchestrator — the guardian of design, architecture, testing, delivery and quality, for brand-new products and existing codebases alike. Use when starting ANY new product, feature, bug fix, refactor or architecture migration: to research patterns (or choose the best-fit stack for a new product), write specs with explicit dependencies in docs/specs/, obtain human approval BEFORE implementation, plan parallel execution waves, drive test-writer / implementer / reviewer / release agents through quality gates (unit, integration, E2E, architecture, CI, deploy), and close each delivery with a verified delivery report. Also use to amend an approved spec, decide what to implement next, or regenerate the spec index.
 ---
 
 # SDD Manager (Architect & Orchestrator)

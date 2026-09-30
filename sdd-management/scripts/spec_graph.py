@@ -979,14 +979,17 @@ def validate_epic(project: Project, doc: Doc, add):
     if doc.status in APPROVED_PLUS and not kids:
         add("ERROR", sid, f"épico aprovado sem specs filhas (nenhuma spec com parent: {sid})")
     decomposition = COMMENT_RE.sub("", doc.section("Decomposição") or "")
+    # Only the first column lists children; other columns (e.g. "Depende de") may cite specs of other epics.
+    listed = {ref for _, rows in parse_tables(decomposition) for row in rows if row
+              for ref in SPEC_REF_RE.findall(row[0])}
     for kid in kids:
         if kid.id not in decomposition:
             add("WARN", sid, f"filha {kid.id} não aparece na seção Decomposição")
     for ref in sorted(set(SPEC_REF_RE.findall(decomposition))):
         if ref not in project.specs:
             add("WARN", sid, f"Decomposição cita {ref}, que ainda não existe")
-        elif project.specs[ref].scalar("parent") != sid:
-            add("WARN", sid, f"Decomposição cita {ref}, mas ela não tem parent: {sid}")
+        elif ref in listed and project.specs[ref].scalar("parent") != sid:
+            add("WARN", sid, f"Decomposição lista {ref} como filha, mas ela não tem parent: {sid}")
     criteria = COMMENT_RE.sub("", doc.section("Critérios de Aceite") or "")
     level = "ERROR" if doc.status == "implemented" else "WARN"
     for line in (l for l in criteria.split("\n") if CHECKBOX_RE.match(l)):
