@@ -602,6 +602,20 @@ def validate_config(project: Project, add):
         missing = [k for k in kinds if not t["issue_types"].get(k)]
         if missing:
             add("WARN", "sdd-config", f"tracker.issue_types sem mapeamento para: {', '.join(missing)}")
+    policy = project.cfg("h2_policy", "per-wave")
+    if policy not in ("per-wave", "auto-on-green"):
+        add("ERROR", "sdd-config", f"h2_policy '{policy}' inválida (per-wave | auto-on-green)")
+    elif policy == "auto-on-green" and not (project.cfg("h2_policy_approved_by") and valid_date(project.cfg("h2_policy_approved_at"))):
+        add("ERROR", "sdd-config", "h2_policy auto-on-green exige h2_policy_approved_by e h2_policy_approved_at (decisão humana registrada)")
+    h2_texts = defaultdict(list)
+    for sid, doc in sorted(project.specs.items()):
+        evidence = ((gate_table(doc) or {}).get("H2") or {}).get("evidence", "")
+        if evidence and not evidence.startswith("política auto-on-green") and not doc.legacy:
+            h2_texts[re.sub(r"\s+", " ", evidence.lower())].append(sid)
+    for evidence, sids in h2_texts.items():
+        if len(sids) >= 3:
+            add("WARN", "sdd-config", f"H2 com o mesmo texto em {len(sids)} specs ('{evidence[:50]}') — se é uma autorização "
+                                      "permanente, declare h2_policy: auto-on-green no sdd-config.yml em vez de repeti-la")
     fields = set(re.findall(r"\{(\w+)\}", project.cfg("pr_title", PR_TITLE_DEFAULT)))
     if fields - PR_TITLE_FIELDS:
         add("ERROR", "sdd-config", f"pr_title com campos desconhecidos: {', '.join(sorted(fields - PR_TITLE_FIELDS))} "

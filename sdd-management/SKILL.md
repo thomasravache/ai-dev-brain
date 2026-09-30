@@ -205,7 +205,7 @@ When every spec in the wave has G4 = PASS, the Integrator merges the branches in
 
 > "Onda N integrada: build, testes (unitários, integração, contrato, E2E), arquitetura e CI passando (G5). Deseja revisar antes de prosseguir? Digite 'Aprovado' para seguir ou solicite ajustes."
 
-After "Aprovado", record H2.
+After "Aprovado", record H2 (`gate SPEC-X H2 --by <user>`). If the user grants a standing authorization ("merge when CI is green"), record it **once** as `h2_policy: auto-on-green` with `h2_policy_approved_by/at` in `sdd-config.yml` — then `gate SPEC-X H2 --run` records it from G5 — instead of repeating the authorization in every spec. Production releases are never covered by that policy.
 
 ### 7. DEPLOY (G6)
 Release deploys through the pipeline to staging, runs smoke + E2E against it, and records G6 (staging). For production, ask the user to confirm that specific release (version, strategy, rollback) and deploy only after an explicit yes; run smoke tests, watch the metrics listed in the Plano de Rollout, roll back if they degrade. Then go back to step 5 with `next`, or to step 8 when the specs are ready to close.

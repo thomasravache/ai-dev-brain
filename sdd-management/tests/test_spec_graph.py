@@ -382,6 +382,23 @@ class GateTest(ProjectTest):
         self.assertIn("evidência de G2 idêntica", self.p.validate().stdout)
 
 
+class H2PolicyTest(ProjectTest):
+    def test_auto_on_green_requires_recorded_decision(self):
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + "h2_policy: auto-on-green\n", encoding="utf-8")
+        self.assertIn("exige h2_policy_approved_by", self.p.validate().stdout)
+        cfg.write_text(cfg.read_text() + "h2_policy_approved_by: thomas\nh2_policy_approved_at: 2026-09-29\n", encoding="utf-8")
+        self.assertNotIn("h2_policy", self.p.validate().stdout)
+
+    def test_repeated_h2_text_suggests_policy(self):
+        for name in ("A", "B", "C"):
+            sid = self.full(name)
+            text = self.p.path(sid).read_text(encoding="utf-8")
+            text = re.sub(r"\| (H2 [^|]*)\| PENDING \| \| \|", r"| \1| PASS | Autorização permanente do usuário | 2026-01-01 |", text)
+            self.p.path(sid).write_text(text, encoding="utf-8")
+        self.assertIn("declare h2_policy: auto-on-green", self.p.validate().stdout)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()

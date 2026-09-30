@@ -81,6 +81,14 @@ tracker:
     migration: ""
     foundation: ""
 
+# --- Aprovação humana da integração (H2) ---
+# per-wave: o humano aprova cada onda integrada (gate SPEC-X H2 --by <nome>).
+# auto-on-green: o humano autorizou, uma vez, considerar H2 aprovado quando G5 = PASS (gate SPEC-X H2 --run).
+# Deploy em PRODUÇÃO nunca é coberto por esta política: sempre confirmação explícita por release.
+h2_policy: per-wave
+h2_policy_approved_by: ""
+h2_policy_approved_at: ""
+
 # --- Pull requests ---
 # Título gerado por `spec_graph.py pr` (Conventional Commits). Campos: {conv} {type} {title} {id} {scope}
 pr_title: "{conv}: {title} [{id}]"
