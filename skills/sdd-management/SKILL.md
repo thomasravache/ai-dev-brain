@@ -59,6 +59,7 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 | `index` | Regenerate `docs/specs/INDEX.md` (status, waves, Mermaid graph, ADRs) |
 | `pillars` | Coverage of the delivery pillars required by `pillars.profile` (covered, proposed, waived, **without decision**) and recurring N/A — see `references/pillars.md` |
 | `new-adr --baseline <pillar>` | Creates a pillar's ADR with verifiable rules already written and blanks for the project's tool choices (always `proposed`) |
+| `worktree SPEC-X [--create]` | Standard worktree path (`worktree_dir`, default `../{repo}.worktrees/<spec>`, outside the repo) and branch for a spec; `--create` creates it from the integration branch. `status`/`validate` flag worktrees left behind |
 | `upgrade [ID ...] [--apply]` | Brings specs written with older templates to the current ones: adds missing sections (in the right place), frontmatter keys and gate rows; dry run by default. Run it after updating the skill |
 | `migrate [--apply]` | Convert the legacy layout (status folders + date-prefixed names) |
 | `next-id spec\|adr` | Next free ID |

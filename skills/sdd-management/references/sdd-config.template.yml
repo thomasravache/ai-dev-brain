@@ -38,6 +38,11 @@ deploy_production: ""
 staging_url: ""
 production_url: ""
 
+# --- Worktrees ---
+# Fora do repositório, agrupadas por projeto ({repo} = nome da pasta do repositório). Dentro do repo (ex: .worktrees)
+# só com a pasta no .gitignore, .dockerignore e nas exclusões das ferramentas.
+worktree_dir: "../{repo}.worktrees"
+
 # --- Rastreabilidade e escopo (G1, G4) ---
 # Commits test(...) só podem tocar aqui.
 test_paths:

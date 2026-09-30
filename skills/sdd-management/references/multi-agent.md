@@ -24,7 +24,9 @@ Test-writer and Implementer are **different agents with fresh context**: tests w
 - Integration branch: `sdd/<epic-id>` (or `sdd/<spec-id>` for a standalone spec), created from `base_branch`.
 - Spec branch: `sdd/<spec-id>-<slug>`, created from the integration branch at the start of the wave (so it contains previous waves).
 - Test-writer then Implementer work sequentially on the same spec branch; Reviewer reads it; Integrator merges it into the integration branch.
-- Manual worktree when the tool doesn't manage one: `git worktree add ../<repo>-<spec-id> -b sdd/<spec-id>-<slug> sdd/<epic-id>`; remove it after the merge (`git worktree remove`).
+- **Worktrees live outside the repository, grouped per project:** `worktree_dir` in `sdd-config.yml`, default `../{repo}.worktrees` → e.g. `~/dev/video-downloader.worktrees/SPEC-0002-repositorio-tooling/`. Outside the repo no tool (container builds, IDE indexing, test discovery, globs, watchers) ever sees the code twice — by construction, not by exclusion lists. Inside the repo is possible (`worktree_dir: .worktrees`) but then it must be in `.gitignore`, `.dockerignore` and every tool's exclusions; `validate` warns when it isn't ignored.
+- Create it with `spec_graph.py worktree SPEC-X --create` (standard path and branch `sdd/<spec-id>-<slug>`, started from the epic's integration branch); without `--create` it only prints path and branch. When the AI tool manages worktrees itself (e.g. Claude Code's agent isolation), use the path it returns.
+- Remove it after the merge (`git worktree remove <path>`); `status` and `validate` list worktrees whose spec is already implemented/deprecated or whose folder no longer exists (`git worktree prune`).
 
 ## Commit conventions (checked by `verify`, the `commit-msg` hook and `pr-check`)
 

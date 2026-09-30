@@ -14,7 +14,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.09.6"
+SDD_TOOL_VERSION = "2026.09.7"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -608,6 +608,7 @@ def validate(project: Project, only=None):
         validate_change_flow(project, add)
         validate_pillars(project, add)
         validate_journeys(project, add)
+        validate_worktrees(project, add)
         seen = defaultdict(list)
         for sid, doc in sorted(project.specs.items()):
             evidence = ((gate_table(doc) or {}).get("G2") or {}).get("evidence", "")
@@ -772,6 +773,93 @@ def cmd_journeys(project: Project):
         print(f"{icons[state]} {title} [{jid}] — {state}" + (f": {', '.join(sids)}" if sids else ""))
     for sid, jid in unknown:
         print(f"✖ {sid} marca jornada desconhecida '{jid}'")
+    return 0
+
+
+WORKTREE_DIR_DEFAULT = "../{repo}.worktrees"
+
+
+def worktree_base(project: Project) -> Path:
+    pattern = project.cfg("worktree_dir", WORKTREE_DIR_DEFAULT).replace("{repo}", project.root.name)
+    base = Path(pattern)
+    return (base if base.is_absolute() else project.root / base).resolve()
+
+
+def spec_slug(doc: Doc) -> str:
+    stem = doc.path.stem
+    return stem[len(doc.id) + 1:] if stem.startswith(doc.id + "-") else slugify(doc.title)
+
+
+def worktree_for(project: Project, doc: Doc):
+    slug = spec_slug(doc)
+    return worktree_base(project) / f"{doc.id}-{slug}", f"sdd/{doc.id}-{slug}"
+
+
+def list_worktrees(project: Project):
+    code, out, _ = run_git(project.root, "worktree", "list", "--porcelain")
+    if code != 0:
+        return []
+    entries, cur = [], {}
+    for line in out.splitlines() + [""]:
+        if not line.strip():
+            if cur:
+                entries.append(cur)
+            cur = {}
+        elif line.startswith("worktree "):
+            cur["path"] = line[9:]
+        elif line.startswith("branch "):
+            cur["branch"] = line[7:].replace("refs/heads/", "")
+        elif line.startswith("prunable"):
+            cur["prunable"] = True
+    return entries[1:]  # the first entry is the main checkout
+
+
+def stale_worktrees(project: Project):
+    stale = []
+    for entry in list_worktrees(project):
+        m = re.search(r"\bsdd/(SPEC-\d{4,})", entry.get("branch", ""))
+        doc = project.specs.get(m.group(1)) if m else None
+        if entry.get("prunable") or not Path(entry.get("path", "")).exists():
+            stale.append((entry.get("path", "?"), "pasta não existe mais — rode `git worktree prune`"))
+        elif doc is not None and doc.status in DONE:
+            stale.append((entry["path"], f"{doc.id} está {doc.status} — `git worktree remove {entry['path']}`"))
+    return stale
+
+
+def validate_worktrees(project: Project, add):
+    if run_git(project.root, "rev-parse", "--is-inside-work-tree")[0] != 0:
+        return
+    base = worktree_base(project)
+    try:
+        inside = base.relative_to(project.root.resolve())
+    except ValueError:
+        inside = None
+    if inside is not None and run_git(project.root, "check-ignore", "-q", str(inside) + "/")[0] != 0:
+        add("WARN", "worktrees", f"worktree_dir '{inside}' fica dentro do repositório e não está no .gitignore — "
+                                 "adicione-o (e exclua a pasta de builds de container, IDE e descoberta de testes) ou use "
+                                 f"o padrão {WORKTREE_DIR_DEFAULT}")
+    for path, why in stale_worktrees(project):
+        add("WARN", "worktrees", f"worktree esquecida {path}: {why}")
+
+
+def cmd_worktree(project: Project, spec_id: str, create: bool, base):
+    doc = project.specs.get(spec_id)
+    if doc is None or doc.tier == "epic":
+        die(f"{spec_id} não encontrada ou é épico")
+    path, branch = worktree_for(project, doc)
+    if not create:
+        print(f"{path}\n{branch}")
+        return 0
+    if path.exists():
+        die(f"{path} já existe")
+    start = base or (f"sdd/{doc.scalar('parent')}" if doc.scalar("parent") else project.cfg("base_branch", "main"))
+    exists = run_git(project.root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")[0] == 0
+    args = ["worktree", "add", str(path), branch] if exists else ["worktree", "add", str(path), "-b", branch, start]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    code, out, err = run_git(project.root, *args)
+    if code != 0:
+        die(f"git worktree add falhou: {err.strip()}")
+    print(f"worktree criada: {path}\nbranch: {branch}" + ("" if exists else f" (a partir de {start})"))
     return 0
 
 
@@ -2236,6 +2324,8 @@ def cmd_status(project: Project, ids):
             print(progress_panel(doc, done))
             print(f"\nPróximo passo: {step}\n")
         return 0
+    for path, why in stale_worktrees(project):
+        print(f"⚠ worktree esquecida {path}: {why}")
     gaps = [pid for pid, _, state, _ in pillar_coverage(project) if state == "sem decisão"]
     if gaps:
         print(f"⚠ Pilares sem decisão: {', '.join(gaps)} — rode `pillars`\n")
@@ -3043,6 +3133,10 @@ def main(argv=None):
     p.add_argument("args", nargs="+")
     p = sub.add_parser("next-id", help="próximo ID livre")
     p.add_argument("kind", choices=("spec", "adr"))
+    p = sub.add_parser("worktree", help="caminho e branch padronizados da worktree de uma spec (--create cria)")
+    p.add_argument("id")
+    p.add_argument("--create", action="store_true")
+    p.add_argument("--base", help="branch de partida (padrão: integração do épico ou base_branch)")
     sub.add_parser("journeys", help="cobertura das jornadas críticas (critical_journeys) por testes E2E")
     sub.add_parser("pillars", help="cobertura dos pilares de entrega (perfil do sdd-config) e N/A recorrente")
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
@@ -3096,6 +3190,8 @@ def main(argv=None):
         return cmd_set(project, args.args)
     if args.command == "next-id":
         return cmd_next_id(project, args.kind)
+    if args.command == "worktree":
+        return cmd_worktree(project, args.id, args.create, args.base)
     if args.command == "journeys":
         return cmd_journeys(project)
     if args.command == "pillars":

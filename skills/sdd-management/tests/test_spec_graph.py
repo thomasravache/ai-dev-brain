@@ -566,6 +566,33 @@ class BoardTest(ProjectTest):
         self.assertNotIn("approved_via", self.p.validate().stdout)
 
 
+class WorktreeTest(ProjectTest):
+    def test_default_path_is_outside_repo_and_create_works(self):
+        sid = self.full("Minha feature")
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: spec")
+        out = self.p.run("worktree", sid).stdout.split("\n")
+        expected = (self.tmp.parent / f"{self.tmp.name}.worktrees" / f"{sid}-minha-feature").resolve()
+        self.assertEqual(Path(out[0]), expected)
+        self.assertEqual(out[1], f"sdd/{sid}-minha-feature")
+        try:
+            created = self.p.run("worktree", sid, "--create")
+            self.assertEqual(created.returncode, 0, created.stderr)
+            self.assertTrue((expected / "README.md").exists())
+            self.p.run("set", sid, "status=deprecated")
+            self.assertIn("worktree esquecida", self.p.validate().stdout)
+        finally:
+            subprocess.run(["git", "worktree", "remove", "--force", str(expected)], cwd=self.tmp, capture_output=True)
+            shutil.rmtree(expected.parent, ignore_errors=True)
+
+    def test_inside_repo_must_be_ignored(self):
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + "worktree_dir: .worktrees\n", encoding="utf-8")
+        self.assertIn("não está no .gitignore", self.p.validate().stdout)
+        (self.tmp / ".gitignore").write_text(".worktrees/\n", encoding="utf-8")
+        self.assertNotIn("não está no .gitignore", self.p.validate().stdout)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()
