@@ -88,6 +88,7 @@ PILLARS = {
     "acessibilidade-conformidade": ("Acessibilidade e conformidade", "Quais normas (acessibilidade, legais, do setor) se aplicam?", "rigoroso"),
 }
 NA_RECURRENT_THRESHOLD = 3
+JOURNEY_TAG_RE = re.compile(r"\[jornada:\s*([\w-]+)\]", re.I)
 PHASES = ("DISCOVER", "SPEC (G0)", "APPROVAL (H1)", "PLAN (waves)", "EXECUTE (G1–G4)",
           "INTEGRATE (G5 + H2)", "DEPLOY (G6)", "CLOSE (G7)")
 H1_QUESTION = ("Os contratos e os cenários de teste estão adequados e seguem o padrão atual? "
@@ -606,6 +607,7 @@ def validate(project: Project, only=None):
         validate_config(project, add)
         validate_change_flow(project, add)
         validate_pillars(project, add)
+        validate_journeys(project, add)
         seen = defaultdict(list)
         for sid, doc in sorted(project.specs.items()):
             evidence = ((gate_table(doc) or {}).get("G2") or {}).get("evidence", "")
@@ -724,6 +726,52 @@ def cmd_pillars(project: Project):
         else:
             print(f"\n⚠ {gate} N/A em {len(sids)} specs ({listed}): pilar '{pid}' sem solução — crie a spec que resolve "
                   "ou registre a dispensa")
+    return 0
+
+
+def journey_coverage(project: Project):
+    journeys = project.cfg_map("critical_journeys")
+    proven, planned = defaultdict(list), defaultdict(list)
+    unknown = []
+    for sid, doc in sorted(project.specs.items()):
+        plan = COMMENT_RE.sub("", doc.section("Plano de Testes") or "")
+        for line in plan.split("\n"):
+            if "E2E-" not in line:
+                continue
+            for jid in JOURNEY_TAG_RE.findall(line):
+                if jid not in journeys:
+                    unknown.append((sid, jid))
+                elif doc.status == "implemented":
+                    proven[jid].append(sid)
+                elif doc.status in OPEN:
+                    planned[jid].append(sid)
+    rows = []
+    for jid, title in journeys.items():
+        state = "provada" if proven[jid] else "planejada" if planned[jid] else "descoberta"
+        rows.append((jid, str(title), state, proven[jid] or planned[jid]))
+    return rows, unknown
+
+
+def validate_journeys(project: Project, add):
+    rows, unknown = journey_coverage(project)
+    for sid, jid in unknown:
+        add("ERROR", sid, f"E2E marca [jornada: {jid}], que não está em critical_journeys do sdd-config")
+    uncovered = [jid for jid, _, state, _ in rows if state == "descoberta"]
+    if uncovered:
+        add("WARN", "jornadas", f"jornadas críticas sem E2E em nenhuma spec: {', '.join(uncovered)} — "
+                                "marque o E2E que as prova com [jornada: <id>] ou crie a spec")
+
+
+def cmd_journeys(project: Project):
+    rows, unknown = journey_coverage(project)
+    if not rows:
+        print("Nenhuma jornada em critical_journeys no sdd-config.yml.")
+        return 0
+    icons = {"provada": "✅", "planejada": "📝", "descoberta": "⚠"}
+    for jid, title, state, sids in rows:
+        print(f"{icons[state]} {title} [{jid}] — {state}" + (f": {', '.join(sids)}" if sids else ""))
+    for sid, jid in unknown:
+        print(f"✖ {sid} marca jornada desconhecida '{jid}'")
     return 0
 
 
@@ -1531,6 +1579,11 @@ def build_index(project: Project) -> str:
         out += ["## Cobertura de Pilares", "", f"Perfil: **{pillar_settings(project)[0]}**", "",
                 "| Pilar | Situação | Detalhe |", "|---|---|---|"]
         out += [f"| {md_cell(title)} | {state} | {md_cell(detail)} |" for _, title, state, detail in coverage]
+        out.append("")
+    journeys, _ = journey_coverage(project)
+    if journeys:
+        out += ["## Jornadas Críticas", "", "| Jornada | Situação | Specs |", "|---|---|---|"]
+        out += [f"| {md_cell(title)} | {state} | {', '.join(sids) or '—'} |" for _, title, state, sids in journeys]
         out.append("")
     out += ["## Plano de Execução", ""]
     if plan is None:
@@ -2955,6 +3008,7 @@ def main(argv=None):
     p.add_argument("args", nargs="+")
     p = sub.add_parser("next-id", help="próximo ID livre")
     p.add_argument("kind", choices=("spec", "adr"))
+    sub.add_parser("journeys", help="cobertura das jornadas críticas (critical_journeys) por testes E2E")
     sub.add_parser("pillars", help="cobertura dos pilares de entrega (perfil do sdd-config) e N/A recorrente")
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
@@ -3007,6 +3061,8 @@ def main(argv=None):
         return cmd_set(project, args.args)
     if args.command == "next-id":
         return cmd_next_id(project, args.kind)
+    if args.command == "journeys":
+        return cmd_journeys(project)
     if args.command == "pillars":
         return cmd_pillars(project)
     if args.command == "upgrade":

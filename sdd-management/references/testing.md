@@ -51,6 +51,12 @@ Every test carries `SPEC-NNNN:<ID>` so `verify` can prove that each planned test
 
 A test that serves several specs carries several tags.
 
+## Critical journeys
+
+List what the product must never break in `critical_journeys` (`sdd-config.yml`), e.g. `checkout: "Cliente conclui uma compra"`. Each E2E that proves one carries `[jornada: <id>]` on its line in the spec's test plan. `spec_graph.py journeys` (and `INDEX.md`) shows each journey as **provada** (an implemented spec proves it), **planejada** (only open specs) or **descoberta** (no E2E at all); `validate` warns on uncovered journeys and rejects unknown ids. Keep the list short — it drives which E2E tests are worth their cost.
+
+When choosing the E2E tool (ADR of the `testes` pillar), compare 2–3 options on: stability (auto-waiting, no fixed sleeps), parallel execution, the browsers/devices the product targets, failure diagnostics (traces, video, screenshots), CI integration, cost/licensing and team skill. Flaky tests go to quarantine for a bounded time with a spec to fix them — never retry-until-green.
+
 ## E2E environment
 
 - Runs **locally** against the app started by one command (docker compose or equivalent) and **in CI** against an ephemeral environment or staging.

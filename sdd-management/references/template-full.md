@@ -70,6 +70,8 @@ approved_at:
 {{Especificação no formato idiomático do projeto (OpenAPI, AsyncAPI, Proto, assinaturas, schema, fluxo de tela). Inclua entrada, resposta de sucesso e todos os erros.}}
 ```
 
+**Design:** {{link do fluxo/protótipo aprovado para as telas afetadas | N/A — sem interface}}
+
 **Arquivos/módulos afetados:** ver `touches` no frontmatter. {{Detalhe arquivos a criar/alterar se ajudar o implementador | N/A}}
 
 ### 6.1 Mapa de Comportamentos
@@ -100,7 +102,7 @@ approved_at:
 
 ### 7.5 Testes E2E
 <!-- Obrigatório (E2E-xx) quando user_facing: true: jornada nova ou atualização do E2E que já cobre a jornada. Poucos e significativos. -->
-- {{E2E-01 — jornada do usuário: passos e resultado visível | N/A — user_facing: false}}
+- {{E2E-01 — jornada do usuário: passos e resultado visível [jornada: <id em critical_journeys>] | N/A — user_facing: false}}
 
 ### 7.6 Outros
 - {{performance, segurança, acessibilidade exigidos pelos RNFs — ferramenta e critério | N/A}}

@@ -17,7 +17,7 @@ sys.path.insert(0, str(SCRIPT.parent))
 import spec_graph as sg  # noqa: E402
 
 FILL = {
-    "{{E2E-01 — jornada do usuário: passos e resultado visível | N/A — user_facing: false}}": "**E2E-01** — jornada principal",
+    "{{E2E-01 — jornada do usuário: passos e resultado visível [jornada: <id em critical_journeys>] | N/A — user_facing: false}}": "**E2E-01** — jornada principal",
     "{{CH-01 — comportamento atual que deve ser preservado | N/A — área já coberta por testes ou projeto novo}}": "N/A — projeto novo",
     "{{CT-01 — verificação do contrato fornecido/consumido | N/A — não há contrato entre specs}}": "N/A — sem contrato",
     "{{CH-01 — comportamento atual preservado | Caracterização: N/A — área já coberta}}": "Caracterização: N/A — coberta",
@@ -514,6 +514,20 @@ class AdrQualityTest(ProjectTest):
         out = self.p.validate(aid).stdout
         self.assertNotIn("menos de 2 opções", out)
         self.assertIn("sem riscos registrados", out)
+
+
+class JourneysTest(ProjectTest):
+    def test_journey_states_and_unknown_ids(self):
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + 'critical_journeys:\n  checkout: "Compra"\n  login: "Entrar"\n', encoding="utf-8")
+        out = self.p.validate().stdout
+        self.assertIn("jornadas críticas sem E2E em nenhuma spec: checkout, login", out)
+        sid = self.full()
+        self.p.edit(sid, "- **E2E-01** — jornada principal", "- **E2E-01** — jornada principal [jornada: checkout]")
+        rows, _ = sg.journey_coverage(sg.Project(self.tmp))
+        self.assertEqual({jid: state for jid, _, state, _ in rows}, {"checkout": "planejada", "login": "descoberta"})
+        self.p.edit(sid, "[jornada: checkout]", "[jornada: pagamento]")
+        self.assertIn("[jornada: pagamento], que não está em critical_journeys", self.p.validate(sid).stdout + self.p.validate().stdout)
 
 
 class UpgradeTest(ProjectTest):
