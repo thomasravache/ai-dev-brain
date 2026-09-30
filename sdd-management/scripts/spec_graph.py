@@ -80,6 +80,7 @@ DEFAULT_TEST_PATHS = [
     "**/*Tests.*", "**/*Test.*", "**/test_*.py", "**/*_test.*",
 ]
 DEFAULT_SCOPE_EXEMPT = ["docs/specs/**", "docs/adr/**"]
+DEFAULT_ROOT_DOCS = ["README.md", "AGENTS.md", "CLAUDE.md", "GEMINI.md"]
 DEFAULT_MANIFESTS = [
     "**/package.json", "**/*.csproj", "**/*.fsproj", "**/Directory.Packages.props", "**/packages.config",
     "**/requirements*.txt", "**/pyproject.toml", "**/Pipfile", "**/go.mod", "**/pom.xml",
@@ -482,7 +483,7 @@ class Project:
 
     def scope_exempt(self):
         """Paths never out of scope: configured exemptions plus root docs and changelog updated at G7."""
-        docs = self.cfg_list("root_docs", []) + [self.cfg("changelog", "CHANGELOG.md")]
+        docs = self.cfg_list("root_docs", DEFAULT_ROOT_DOCS) + [self.cfg("changelog", "CHANGELOG.md")]
         return self.cfg_list("scope_exempt", DEFAULT_SCOPE_EXEMPT) + [d for d in docs if d]
 
     def max_parallel(self) -> int:
