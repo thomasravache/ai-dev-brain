@@ -14,7 +14,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.09.8"
+SDD_TOOL_VERSION = "2026.09.9"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -609,6 +609,7 @@ def validate(project: Project, only=None):
         validate_pillars(project, add)
         validate_journeys(project, add)
         validate_worktrees(project, add)
+        validate_test_tooling(project, add)
         seen = defaultdict(list)
         for sid, doc in sorted(project.specs.items()):
             evidence = ((gate_table(doc) or {}).get("G2") or {}).get("evidence", "")
@@ -861,6 +862,34 @@ def cmd_worktree(project: Project, spec_id: str, create: bool, base):
         die(f"git worktree add falhou: {err.strip()}")
     print(f"worktree criada: {path}\nbranch: {branch}" + ("" if exists else f" (a partir de {start})"))
     return 0
+
+
+REQUIRED_TEST_LEVELS = (("unitario", "Unitário"), ("integracao", "Integração"), ("e2e", "E2E"))
+
+
+def validate_test_tooling(project: Project, add):
+    """The `testes` pillar decides a tool (or a reasoned N/A) per test level; may be spread over several ADRs."""
+    adrs = [a for a in sorted(project.adrs.values(), key=lambda d: d.id)
+            if "testes" in a.list("pillars") and a.status in ("proposed", "accepted")]
+    if not adrs or any(PLACEHOLDER_RE.search(COMMENT_RE.sub("", a.text)) for a in adrs):
+        return
+    levels = {}
+    for adr in adrs:
+        for header, rows in parse_tables(COMMENT_RE.sub("", adr.body)):
+            if not header or norm(header[0]) not in ("nivel", "nível"):
+                continue
+            for row in rows:
+                if len(row) > 1 and row[0]:
+                    levels.setdefault(norm(row[0]), (row[1].strip(), adr.id))
+    level = "WARN" if any(a.status == "accepted" for a in adrs) else "ERROR"
+    subject = adrs[0].id
+    for key, label in REQUIRED_TEST_LEVELS:
+        tool, where = levels.get(key, ("", subject))
+        if not tool:
+            add(level, where, f"pilar testes sem decisão para o nível {label}: tabela 'Ferramenta por nível' "
+                              "(ferramenta, por quê, onde roda) ou 'N/A — motivo'")
+        elif re.match(r"^N/A", tool, re.I) and len(re.sub(r"^N/A\s*[—–:-]?\s*", "", tool, flags=re.I)) < 10:
+            add(level, where, f"pilar testes: N/A no nível {label} sem motivo")
 
 
 def validate_change_flow(project: Project, add):

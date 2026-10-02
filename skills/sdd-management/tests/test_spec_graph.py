@@ -475,6 +475,22 @@ class PillarsTest(ProjectTest):
         self.assertEqual(coverage["entrega"], "sem decisão")
         self.assertNotIn("custo", coverage)  # custo is padrao-level, not required by minimo
 
+    def test_test_tooling_table_per_level(self):
+        self.set_profile("minimo")
+        aid = self.p.run("new-adr", "--baseline", "testes").stdout.split()[0]
+        path = next((self.tmp / "docs/adr").glob(f"{aid}-*.md"))
+        text = re.sub(r"\{\{([^{}]*)\}\}", lambda m: m.group(1).split(" | ")[0], path.read_text(encoding="utf-8"))
+        text = text.replace("- Opção A — ferramenta ou abordagem\n- Opção B", "- Ferramenta X\n- Ferramenta Y")
+        text = text.replace("Referências neutras:", "Fonte: https://example.org (2026-10-02). Referências neutras:")
+        path.write_text(text, encoding="utf-8")
+        self.assertNotIn("pilar testes", self.p.validate().stdout)
+        path.write_text(text.replace("| E2E | ferramenta |", "| E2E | N/A |"), encoding="utf-8")
+        self.assertIn(f"ERROR {aid}: pilar testes: N/A no nível E2E sem motivo", self.p.validate().stdout)
+        path.write_text(re.sub(r"\| Integração \|[^\n]*\n", "", text), encoding="utf-8")
+        self.assertIn("sem decisão para o nível Integração", self.p.validate().stdout)
+        self.p.run("set", aid, "status=accepted")
+        self.assertIn(f"WARN  {aid}: pilar testes sem decisão para o nível Integração", self.p.validate().stdout)
+
     def test_foundation_epic_blocked_at_g0_with_missing_pillars(self):
         self.set_profile("minimo")
         epic = self.p.new("epic", "Fundação")

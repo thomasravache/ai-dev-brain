@@ -51,6 +51,10 @@ Every test carries `SPEC-NNNN:<ID>` so `verify` can prove that each planned test
 
 A test that serves several specs carries several tags.
 
+## Tooling decision
+
+Which tool runs each level is decided once per project, in the ADR(s) of the `testes` pillar (`new-adr --baseline testes`), table **Ferramenta por nível**: unit, integration (and how real dependencies come up), contract, E2E, load and accessibility when required — tool or approach, why, where it runs, or `N/A — reason`. Agents never pick a different tool per spec; changing a tool is a new ADR. Brownfield: record the tools already in use (as-is).
+
 ## Critical journeys
 
 List what the product must never break in `critical_journeys` (`sdd-config.yml`), e.g. `checkout: "Cliente conclui uma compra"`. Each E2E that proves one carries `[jornada: <id>]` on its line in the spec's test plan. `spec_graph.py journeys` (and `INDEX.md`) shows each journey as **provada** (an implemented spec proves it), **planejada** (only open specs) or **descoberta** (no E2E at all); `validate` warns on uncovered journeys and rejects unknown ids. Keep the list short — it drives which E2E tests are worth their cost.

@@ -38,6 +38,17 @@ Sem estratégia explícita, os testes ficam desbalanceados (muitos E2E instávei
 - Teste instável é defeito: vai para quarentena por no máximo {{N}} dias com spec aberta para corrigir; nunca retry-até-passar.
 - Cobertura das linhas alteradas ≥ {{meta, ex: 80%}} quando a medição estiver configurada.
 
+**Ferramenta por nível:**
+<!-- Uma linha por nível: ferramenta ou abordagem, por que, onde roda. Nível que não se aplica: "N/A — motivo" na coluna Ferramenta. Unitário, Integração e E2E são verificados pelo validate. -->
+| Nível | Ferramenta / abordagem | Por quê | Onde roda |
+|---|---|---|---|
+| Unitário | {{ferramenta}} | {{motivo}} | {{local + CI}} |
+| Integração | {{ferramenta + como as dependências reais sobem (containers, emulador, banco local)}} | {{motivo}} | {{local + CI}} |
+| Contrato | {{ferramenta ou abordagem | N/A — sem contrato entre specs/serviços}} | {{motivo}} | {{CI}} |
+| E2E | {{ferramenta | N/A — sem jornada de usuário (ex.: biblioteca)}} | {{motivo}} | {{local + CI + staging}} |
+| Carga | {{ferramenta | N/A — sem meta de desempenho nos RNFs}} | {{motivo}} | {{staging}} |
+| Acessibilidade | {{ferramenta | N/A — sem interface}} | {{motivo}} | {{CI}} |
+
 ### Consequências
 - **Boa**, porque {{o que melhora}}
 - **Ruim**, porque {{o que custa ou limita}}
