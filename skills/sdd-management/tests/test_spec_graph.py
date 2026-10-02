@@ -17,7 +17,7 @@ sys.path.insert(0, str(SCRIPT.parent))
 import spec_graph as sg  # noqa: E402
 
 FILL = {
-    "{{E2E-01 — jornada do usuário: passos e resultado visível [jornada: <id em critical_journeys>] | N/A — user_facing: false}}": "**E2E-01** — jornada principal",
+    "{{E2E-01 — jornada do usuário: passos e resultado visível [jornada: <id em critical_journeys>] | N/A — por que nenhuma jornada de usuário é afetada (obrigatório com user_facing: false)}}": "**E2E-01** — jornada principal",
     "{{CH-01 — comportamento atual que deve ser preservado | N/A — área já coberta por testes ou projeto novo}}": "N/A — projeto novo",
     "{{CT-01 — verificação do contrato fornecido/consumido | N/A — não há contrato entre specs}}": "N/A — sem contrato",
     "{{CH-01 — comportamento atual preservado | Caracterização: N/A — área já coberta}}": "Caracterização: N/A — coberta",
@@ -149,6 +149,16 @@ class ValidateTest(ProjectTest):
         self.p.edit(sid, "- **E2E-01** — jornada principal", "- N/A")
         self.p.edit(sid, "UT-01, IT-01, E2E-01", "UT-01, IT-01")
         self.assertIn("user_facing: true exige", self.p.validate(sid).stdout)
+
+    def test_user_facing_false_needs_reason(self):
+        sid = self.full(user_facing="false")
+        self.p.edit(sid, "- **E2E-01** — jornada principal", "- N/A — user_facing: false")
+        self.p.edit(sid, "UT-01, IT-01, E2E-01", "UT-01, IT-01")
+        self.assertIn("ERROR SPEC-0001: user_facing: false sem justificativa", self.p.validate(sid).stdout)
+        self.p.run("set", sid, "status=approved", "approved_by=t", "approved_at=today")
+        self.assertIn("WARN  SPEC-0001: user_facing: false sem justificativa", self.p.validate(sid).stdout)
+        self.p.edit(sid, "- N/A — user_facing: false", "- N/A — job interno de reprocessamento, sem tela nem API pública")
+        self.assertNotIn("sem justificativa", self.p.validate(sid).stdout)
 
     def test_behavior_map_must_reference_planned_tests(self):
         sid = self.full()

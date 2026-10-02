@@ -19,7 +19,7 @@ When the NFRs demand it, also: performance/load (k6, Gatling, JMeter, Locust, NB
 
 | Spec | Required (enforced by `validate`) |
 |---|---|
-| `full` | ≥ 1 `UT` and ≥ 1 `IT`; `CT` when it provides or consumes a contract between specs; ≥ 1 `E2E` when `user_facing: true` — a new E2E or an update of the E2E that already covers the journey |
+| `full` | ≥ 1 `UT` and ≥ 1 `IT`; `CT` when it provides or consumes a contract between specs; ≥ 1 `E2E` when `user_facing: true` — a new E2E or an update of the E2E that already covers the journey; with `user_facing: false`, the E2E section must say **why** no user journey (UI or public API) is affected — `N/A — <reason>` — so the exemption is a visible decision at approval |
 | `lite` | ≥ 1 regression test that fails before the fix, at the level where the defect shows up (`IT` across I/O boundaries, `E2E` for user-journey bugs — warned when `user_facing: true`) |
 | `epic` | every acceptance criterion cites the test that proves it (`SPEC-NNNN:E2E-01`, or `IT` for non-journey criteria) |
 | brownfield area without coverage | `CH` tests for the code being changed, committed before the change |

@@ -14,7 +14,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.09.7"
+SDD_TOOL_VERSION = "2026.09.8"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -1098,6 +1098,14 @@ def validate_executable(project: Project, doc: Doc, add):
             add("ERROR", sid, "user_facing deve ser true ou false (true = altera jornada do usuário em UI ou API pública)")
         elif user_facing == "true" and "E2E" not in kinds:
             add("ERROR", sid, "user_facing: true exige ao menos um teste E2E (E2E-xx) da jornada afetada")
+        elif user_facing == "false" and "E2E" not in kinds:
+            e2e = find_sub(parse_subsections(plan), "E2E") or ""
+            m = re.search(r"N/A\s*[—–:-]?\s*(.*)", e2e)
+            reason = re.sub(r"user_facing\s*:\s*false", "", m.group(1) if m else "", flags=re.I).strip(" .;—–-")
+            if len(reason) < 15:
+                add("ERROR" if status == "proposed" else "WARN", sid,
+                    "user_facing: false sem justificativa: na seção Testes E2E escreva \"N/A — <por que nenhuma jornada "
+                    "de usuário (UI ou API pública) é afetada>\"")
         if doc.type == "migration" and not doc.list("adrs"):
             add("ERROR", sid, "type migration exige o ADR da nova arquitetura/padrão em adrs")
         validate_contract_map(doc, defined, add)

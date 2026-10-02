@@ -27,7 +27,7 @@ A spec with an open impediment (Registro de Impedimentos) cannot pass G7 or beco
 
 ## G0 — Spec
 
-**Deterministic** — `validate` returns zero errors: valid frontmatter (`type` allowed for the tier, `user_facing` declared); references exist (`parent`, `depends_on`, `consumes_contract` pinned to an existing version, `adrs`); no `depends_on` cycles; required sections present and filled; no `{{...}}` markers; `size` S/M; `touches` declared; test IDs present; `full` has UT + IT, CT when it provides/consumes a contract, E2E when `user_facing: true`; `type: migration` has an ADR; every row of the Mapa de Comportamentos references existing test IDs; epic acceptance criteria cite existing tests; **no open item in Questões em Aberto**; impediment rows well-formed.
+**Deterministic** — `validate` returns zero errors: valid frontmatter (`type` allowed for the tier, `user_facing` declared); references exist (`parent`, `depends_on`, `consumes_contract` pinned to an existing version, `adrs`); no `depends_on` cycles; required sections present and filled; no `{{...}}` markers; `size` S/M; `touches` declared; test IDs present; `full` has UT + IT, CT when it provides/consumes a contract, E2E when `user_facing: true` (and a written reason when `false`); `type: migration` has an ADR; every row of the Mapa de Comportamentos references existing test IDs; epic acceptance criteria cite existing tests; **no open item in Questões em Aberto**; impediment rows well-formed.
 
 **Judgment** — Architect self-check before presenting for H1:
 - Scope in/out is explicit; nothing in scope lacks a behavior and a test.
