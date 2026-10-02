@@ -14,7 +14,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.09.9"
+SDD_TOOL_VERSION = "2026.09.10"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -827,6 +827,31 @@ def stale_worktrees(project: Project):
     return stale
 
 
+def misplaced_worktrees(project: Project):
+    """Worktrees outside worktree_dir (e.g. old sibling folders, or a folder inside the repo)."""
+    base = worktree_base(project)
+    root = project.root.resolve()
+    allow = project.cfg_list("worktree_allow", [])
+    out = []
+    for entry in list_worktrees(project):
+        path = Path(entry.get("path", "")).resolve()
+        if not path.exists() or path == base or base in path.parents:
+            continue
+        inside = root in path.parents
+        rel = path.relative_to(root).as_posix() if inside else str(path)
+        if allow and matches_any(rel, allow):
+            continue
+        branch = entry.get("branch", "")
+        m = re.search(r"\bsdd/(SPEC-\d{4,}[\w-]*)", branch)
+        target = base / (m.group(1) if m else path.name)
+        why = ""
+        if inside and run_git(project.root, "check-ignore", "-q", rel + "/")[0] != 0:
+            why = " — está DENTRO do repositório e fora do .gitignore (ferramentas podem ver o código em dobro)"
+        out.append((str(path), f"fora do worktree_dir{why}; quando ninguém estiver trabalhando nela: "
+                               f"`git worktree move {path} {target}`"))
+    return out
+
+
 def validate_worktrees(project: Project, add):
     if run_git(project.root, "rev-parse", "--is-inside-work-tree")[0] != 0:
         return
@@ -841,6 +866,8 @@ def validate_worktrees(project: Project, add):
                                  f"o padrão {WORKTREE_DIR_DEFAULT}")
     for path, why in stale_worktrees(project):
         add("WARN", "worktrees", f"worktree esquecida {path}: {why}")
+    for path, why in misplaced_worktrees(project):
+        add("WARN", "worktrees", f"worktree {path} {why}")
 
 
 def cmd_worktree(project: Project, spec_id: str, create: bool, base):
@@ -2363,6 +2390,8 @@ def cmd_status(project: Project, ids):
         return 0
     for path, why in stale_worktrees(project):
         print(f"⚠ worktree esquecida {path}: {why}")
+    for path, why in misplaced_worktrees(project):
+        print(f"⚠ worktree {path} {why}")
     gaps = [pid for pid, _, state, _ in pillar_coverage(project) if state == "sem decisão"]
     if gaps:
         print(f"⚠ Pilares sem decisão: {', '.join(gaps)} — rode `pillars`\n")

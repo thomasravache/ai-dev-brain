@@ -42,6 +42,9 @@ production_url: ""
 # Fora do repositório, agrupadas por projeto ({repo} = nome da pasta do repositório). Dentro do repo (ex: .worktrees)
 # só com a pasta no .gitignore, .dockerignore e nas exclusões das ferramentas.
 worktree_dir: "../{repo}.worktrees"
+# Worktrees criadas pela própria ferramenta de IA numa pasta dela (globs relativos à raiz do repo ou caminhos absolutos)
+# não são apontadas como fora do lugar. Ex: ".claude/worktrees/**"
+worktree_allow: []
 
 # --- Rastreabilidade e escopo (G1, G4) ---
 # Commits test(...) só podem tocar aqui.

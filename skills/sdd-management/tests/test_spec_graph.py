@@ -611,6 +611,28 @@ class WorktreeTest(ProjectTest):
             subprocess.run(["git", "worktree", "remove", "--force", str(expected)], cwd=self.tmp, capture_output=True)
             shutil.rmtree(expected.parent, ignore_errors=True)
 
+    def test_misplaced_worktrees_are_reported(self):
+        sid = self.full("Outra feature")
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: spec")
+        sibling = (self.tmp.parent / f"{self.tmp.name}-{sid}").resolve()
+        inside = (self.tmp / ".worktrees" / "x").resolve()
+        try:
+            git(self.tmp, "worktree", "add", "-q", str(sibling), "-b", f"sdd/{sid}-outra-feature")
+            git(self.tmp, "worktree", "add", "-q", str(inside), "-b", "tmp-inside")
+            out = self.p.validate().stdout
+            self.assertIn(f"worktree {sibling} fora do worktree_dir", out)
+            self.assertIn(f"{self.tmp.name}.worktrees/{sid}-outra-feature", out)
+            self.assertIn("DENTRO do repositório e fora do .gitignore", out)
+            self.assertIn("fora do worktree_dir", self.p.run("status").stdout)
+            cfg = self.tmp / "docs/specs/sdd-config.yml"
+            cfg.write_text(cfg.read_text() + "worktree_allow:\n  - \".worktrees/**\"\n", encoding="utf-8")
+            self.assertNotIn(str(inside), self.p.validate().stdout)
+        finally:
+            for path in (sibling, inside):
+                subprocess.run(["git", "worktree", "remove", "--force", str(path)], cwd=self.tmp, capture_output=True)
+            shutil.rmtree(sibling, ignore_errors=True)
+
     def test_inside_repo_must_be_ignored(self):
         cfg = self.tmp / "docs/specs/sdd-config.yml"
         cfg.write_text(cfg.read_text() + "worktree_dir: .worktrees\n", encoding="utf-8")
