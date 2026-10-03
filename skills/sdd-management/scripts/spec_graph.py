@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import datetime as dt
 import heapq
 import json
@@ -14,7 +15,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.09.10"
+SDD_TOOL_VERSION = "2026.09.11"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -1635,11 +1636,21 @@ def cmd_validate(project: Project, ids, staged: bool = False, exclude_drafts: bo
     return report_issues(validate(project, only), ", ".join(sorted(only)) if only else "projeto inteiro")
 
 
+def ci_annotate(level: str, message: str):
+    """When running in GitHub Actions, surface findings as annotations on the PR (plain text elsewhere)."""
+    if os.environ.get("GITHUB_ACTIONS") != "true" or level not in ("ERROR", "FAIL", "WARN"):
+        return
+    kind = "warning" if level == "WARN" else "error"
+    text = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::{kind} title=SDD::{text}")
+
+
 def report_issues(issues, scope: str) -> int:
     errors = [i for i in issues if i[0] == "ERROR"]
     warns = [i for i in issues if i[0] == "WARN"]
     for level, subject, msg in sorted(issues, key=lambda x: (x[1], x[0] != "ERROR")):
         print(f"{level:<5} {subject}: {msg}")
+        ci_annotate(level, f"{subject}: {msg}")
     print(f"\nG0 [{scope}]: {'PASS' if not errors else 'FAIL'} — {len(errors)} erro(s), {len(warns)} aviso(s)")
     return 1 if errors else 0
 
@@ -1976,6 +1987,7 @@ def print_results(header: str, results) -> int:
     print(header + "\n")
     for level, gate, msg in results:
         print(f"[{gate}] {level:<4}  {msg}")
+        ci_annotate(level, f"[{gate}] {msg}")
     fails = sum(1 for r in results if r[0] == "FAIL")
     warns = sum(1 for r in results if r[0] == "WARN")
     print(f"\nResultado: {'FAIL' if fails else 'PASS'} — {fails} falha(s), {warns} aviso(s)")
@@ -2694,7 +2706,6 @@ def cmd_pr(project: Project, ids, title_only: bool, out):
     if out:
         Path(out).write_text(body, encoding="utf-8")
         print(title)
-        print(f"corpo escrito em: {out}", file=sys.stderr)
     else:
         print(title + "\n\n" + body)
     return 0
@@ -2712,9 +2723,19 @@ def cmd_pr_check(project: Project, title, body, body_file, base):
         if re.match(r"^\s*(refs\s*:|<!--\s*sdd:)", line, re.I):
             declared |= set(SPEC_REF_RE.findall(line))
     refs = sorted(declared) if declared else sorted(set(SPEC_REF_RE.findall(body)))
-    m = CONVENTIONAL_RE.match(title)
+    title_level = "WARN" if project.cfg("pr_title_policy", "fail") == "warn" else "FAIL"
+    bare = re.sub(r"\s*\[no-spec\]\s*", " ", title, flags=re.I).replace(" :", ":").strip()
+    m = CONVENTIONAL_RE.match(bare)
     if not m or m.group(1).lower() not in COMMIT_TYPES:
-        results.append(("WARN", "PR", f"título fora do Conventional Commits (<tipo>(escopo)?: descrição; tipos: {', '.join(COMMIT_TYPES)})"))
+        results.append((title_level, "PR", f"título fora do Conventional Commits: '{title[:60]}' — use "
+                        f"<tipo>(escopo)?: descrição [SPEC-NNNN] (tipos: {', '.join(COMMIT_TYPES)}); "
+                        "gere com `pr SPEC-X --title`"))
+    try:
+        max_len = int(project.cfg("pr_title_max", "100"))
+    except ValueError:
+        max_len = 100
+    if len(title) > max_len:
+        results.append((title_level, "PR", f"título com {len(title)} caracteres (máximo {max_len})"))
     docs = []
     if not refs:
         if "[no-spec]" in title.lower():
@@ -2789,18 +2810,21 @@ CODEOWNERS_PATHS = {"github": ".github/CODEOWNERS", "gitlab": ".gitlab/CODEOWNER
 
 
 def cmd_vendor(project: Project, ci, pr_template, hooks: bool, agents: bool, changelog: bool, force: bool,
-               codeowners=None, owner=None):
+               codeowners=None, owner=None, overwrite=False):
     notes = []
 
-    def put(rel: str, content: str, executable: bool = False):
+    def put(rel: str, content: str, executable: bool = False, always: bool = False):
         dest = project.root / rel
         if dest.exists():
             current = dest.read_text(encoding="utf-8")
             if current == content:
                 print(f"inalterado: {rel}")
                 return
-            if not force:
-                print(f"mantido (já existe e difere, use --force para sobrescrever): {rel}")
+            if not (always or overwrite):
+                changed = sum(1 for l in difflib.unified_diff(current.splitlines(), content.splitlines(), lineterm="")
+                              if l[:1] in "+-" and l[:3] not in ("+++", "---"))
+                print(f"mantido (customizado no projeto, {changed} linha(s) diferem do modelo da skill): {rel} — "
+                      "revise e, se quiser o modelo, use --overwrite")
                 return
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(content, encoding="utf-8")
@@ -2814,7 +2838,7 @@ def cmd_vendor(project: Project, ci, pr_template, hooks: bool, agents: bool, cha
             die(f"asset não encontrado: {path}")
         return path.read_text(encoding="utf-8")
 
-    put(VENDORED_TOOL, Path(__file__).read_text(encoding="utf-8"), executable=True)
+    put(VENDORED_TOOL, Path(__file__).read_text(encoding="utf-8"), executable=True, always=True)
     if ci:
         src, dest = CI_TARGETS[ci]
         put(dest, asset(src), executable=dest.endswith(".sh"))
@@ -3150,7 +3174,8 @@ def main(argv=None):
     p.add_argument("--changelog", action="store_true", help="cria CHANGELOG.md (Keep a Changelog) se não existir")
     p.add_argument("--codeowners", help="github | gitlab | outra (lista caminhos para revisores obrigatórios)")
     p.add_argument("--owner", help="dono dos arquivos de controle (ex: @usuario)")
-    p.add_argument("--force", action="store_true")
+    p.add_argument("--force", action="store_true", help="(compatibilidade) a ferramenta em tools/sdd é sempre atualizada")
+    p.add_argument("--overwrite", action="store_true", help="substitui também arquivos customizados (workflow, template, hooks)")
     sub.add_parser("waves", help="plano de execução em ondas + próximo lote")
     sub.add_parser("next", help="próximo lote pronto para despachar")
     p = sub.add_parser("index", help="gera docs/specs/INDEX.md")
@@ -3228,7 +3253,7 @@ def main(argv=None):
         return cmd_pr_check(project, args.title, args.body, args.body_file, args.base)
     if args.command == "vendor":
         return cmd_vendor(project, args.ci, args.pr_template, args.hooks, args.agents, args.changelog, args.force,
-                          args.codeowners, args.owner)
+                          args.codeowners, args.owner, args.overwrite)
     if args.command == "waves":
         return cmd_waves(project)
     if args.command == "next":

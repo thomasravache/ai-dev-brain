@@ -125,6 +125,9 @@ h2_policy_approved_at: ""
 # --- Pull requests ---
 # Título gerado por `spec_graph.py pr` (Conventional Commits). Campos: {conv} {type} {title} {id} {scope}
 pr_title: "{conv}: {title} [{id}]"
+# fail: pr-check reprova título fora do Conventional Commits ou maior que pr_title_max (warn: só avisa).
+pr_title_policy: fail
+pr_title_max: 100
 
 # --- Documentação (G7) ---
 root_docs:

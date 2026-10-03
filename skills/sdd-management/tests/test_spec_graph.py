@@ -294,6 +294,51 @@ class GitChecksTest(ProjectTest):
         self.assertNotIn(other + ":", out.stdout)
 
 
+class PrTitleTest(GitChecksTest):
+    def ready_pr(self):
+        sid = self.prepare()
+        spec = self.p.path(sid)
+        self.p.run("set", sid, "status=approved", "approved_by=t", "approved_at=today")
+        text = re.sub(r"\| (G[0-4] [^|]*)\| PENDING \| \| \|", r"| \1| PASS | ok | 2026-01-01 |", spec.read_text(encoding="utf-8"))
+        spec.write_text(text, encoding="utf-8")
+        self.commit({"tests/a/test_a.py": self.tags(sid)}, f"test(a): red\n\nRefs: {sid}")
+        self.commit({"src/a/a.py": "x = 1"}, f"feat(a): green\n\nRefs: {sid}")
+        return sid
+
+    def check(self, title, sid, extra_env=None):
+        env = {"PR_TITLE": title, "PR_BODY": f"## Como foi testado\nRefs: {sid}"}
+        env.update(extra_env or {})
+        return self.p.run("pr-check", "--base", "main", env=env)
+
+    def test_bad_title_fails_and_policy_can_relax(self):
+        sid = self.ready_pr()
+        out = self.check(f"corpo escrito em: /dev/null [{sid}]", sid)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("[PR] FAIL  título fora do Conventional Commits", out.stdout)
+        self.assertEqual(self.check(f"feat(a): coisa boa [{sid}]", sid).returncode, 0)
+        self.assertIn("caracteres (máximo 100)", self.check("feat: " + "x" * 120 + f" [{sid}]", sid).stdout)
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + "pr_title_policy: warn\n", encoding="utf-8")
+        self.assertEqual(self.check(f"titulo livre [{sid}]", sid).returncode, 0)
+
+    def test_no_spec_tag_anywhere_is_accepted(self):
+        sid = self.ready_pr()
+        out = self.check("build(deps) [no-spec]: bump lib", sid)
+        self.assertNotIn("título fora do Conventional Commits", out.stdout)
+
+    def test_github_annotations(self):
+        sid = self.ready_pr()
+        out = self.check(f"errado [{sid}]", sid, {"GITHUB_ACTIONS": "true"})
+        self.assertIn("::error title=SDD::[PR] título fora do Conventional Commits", out.stdout)
+
+    def test_pr_out_prints_only_the_title(self):
+        sid = self.ready_pr()
+        out = self.p.run("pr", sid, "--out", str(self.tmp / "pr.md"))
+        self.assertEqual(out.stderr, "")
+        self.assertEqual(len(out.stdout.strip().splitlines()), 1)
+        self.assertTrue(out.stdout.startswith("feat"))
+
+
 class CommandsTest(ProjectTest):
     def test_migrate_legacy_layout(self):
         legacy = self.tmp / "docs/specs/implemented"
@@ -308,6 +353,19 @@ class CommandsTest(ProjectTest):
         second = self.p.run("vendor", "--agents", "--ci", "github", "--pr-template", "github", "--hooks").stdout
         self.assertNotIn("escrito:", second)
         self.assertEqual((self.tmp / "AGENTS.md").read_text().count("sdd:start"), 1)
+
+    def test_vendor_keeps_customized_files_and_refreshes_tool(self):
+        self.p.run("vendor", "--ci", "github")
+        wf = self.tmp / ".github/workflows/sdd.yml"
+        wf.write_text(wf.read_text().replace("actions/checkout@v5", "actions/checkout@abc123 # v5"), encoding="utf-8")
+        tool = self.tmp / "tools/sdd/spec_graph.py"
+        tool.write_text("# antigo\n", encoding="utf-8")
+        out = self.p.run("vendor", "--ci", "github").stdout
+        self.assertIn("mantido (customizado no projeto", out)
+        self.assertIn("abc123", wf.read_text())
+        self.assertIn("SDD_TOOL_VERSION", tool.read_text())
+        self.p.run("vendor", "--ci", "github", "--overwrite")
+        self.assertNotIn("abc123", wf.read_text())
 
     def test_status_reports_next_step(self):
         sid = self.full()
