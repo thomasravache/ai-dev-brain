@@ -90,6 +90,7 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 ## 10. Registro de Impedimentos
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-14 | G1 | decisão | Ondas do épico aguardam o H2 da SPEC-0001, parada por IMP-02 (GitHub Actions bloqueado por cobrança) | next/waves: SPEC-0003..0005 aguardando por arquivos em comum com SPEC-0001 | thomas | thomas autorizou em 2026-10-14 começar a SPEC-0003 antes do H2 da SPEC-0001 ('não podemos parar agora'); risco baixo: o código da SPEC-0001 já está na base da épica (sdd/SPEC-0002). G5 de cada filha segue exigindo a CI quando as Actions voltarem | 2026-10-14 |
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico. -->
