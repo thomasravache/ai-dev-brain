@@ -863,6 +863,7 @@ class PrivateJourneyTest(PrivateTestCase):
         self.assertEqual(scan.returncode, 0, scan.stdout)
         for gate in ("G1", "G2", "G4", "G7"):
             self.assertIn("| PASS |", gate_row(spec, gate), gate)
+        self.assertIn("ci exit 0", gate_row(spec, "G5"))
         self.assertIn("squash", gate_row(spec, "G7"))
 
 
