@@ -6,7 +6,7 @@
 
 - Validação (G0): **0 erro(s), 0 aviso(s)**
 - Specs: in-progress 1
-- Impedimentos: **0 aberto(s)**, 0 resolvido(s)
+- Impedimentos: **0 aberto(s)**, 1 resolvido(s)
 
 ## Cobertura de Pilares
 

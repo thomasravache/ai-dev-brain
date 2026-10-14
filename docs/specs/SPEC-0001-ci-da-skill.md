@@ -175,10 +175,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 9c2f5e4 | 2026-10-14 |
-| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0001:UT-05, SPEC-00 — a9e4ef2 | 2026-10-14 |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=1, skipped=1)) — 1762aaa | 2026-10-14 |
+| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 53c8181 | 2026-10-14 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 53c8181 | 2026-10-14 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; minor: regra {tools,sdd} do checador de vendor pode dar falso positivo raro em sys.path; avisos do verify justificados: IT-01/02 vivem no workflow, architecture_rules.py é a implementação, test_spec_graph.py só teve ajustes de lint sem mudar asserções — 53c8181 | 2026-10-14 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
