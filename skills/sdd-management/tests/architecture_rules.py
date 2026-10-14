@@ -126,3 +126,5 @@ def vendor_copy_findings(source: str, filename: str) -> list[str]:
             if module == "tools.sdd" or module.startswith("tools.sdd."):
                 findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_VENDOR_COPY} — import de '{module}'"))
     return [message for _, message in sorted(findings)]
+
+import os  # lint proposital: F401

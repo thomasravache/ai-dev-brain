@@ -27,7 +27,7 @@ class ImportRulesTest(unittest.TestCase):
         """SPEC-0001:UT-01"""
         source = "import os\nimport yaml\nfrom helpers import x\n"
         findings = import_findings(source, "scripts/spec_graph.py", local_modules=["helpers"])
-        self.assertEqual(len(findings), 2, report(findings))
+        self.assertEqual(len(findings), 99, report(findings))  # IT-02: falha proposital
         self.assertIn("scripts/spec_graph.py:2", findings[0])
         self.assertIn("'yaml'", findings[0])
         self.assertIn("scripts/spec_graph.py:3", findings[1])
