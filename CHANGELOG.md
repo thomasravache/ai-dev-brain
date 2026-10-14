@@ -10,8 +10,6 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ### Added
 - Modo privado, parte 1: `private init|status|off`, registro do usuário (`projects.json`) e `spec_root` fora do repositório, versionado por git próprio com push opcional; `vendor` e `pr-check` recusados em modo privado (SPEC-0003).
-
-### Added
 - CI do repositório: lint (Ruff 0.17), testes de arquitetura das regras do ADR-0001 e suíte completa em Python 3.9 e 3.15 (SPEC-0001).
 
 ### Changed
