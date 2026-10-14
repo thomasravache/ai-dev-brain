@@ -4,7 +4,7 @@ title: Rastreio sem marcas no repositório
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-14
 parent: SPEC-0002
 depends_on: []
