@@ -1,7 +1,7 @@
 ---
 id: ADR-0003
 title: Qualidade de código
-status: proposed
+status: accepted
 origin: decision
 date: 2026-10-14
 pillars: [qualidade-codigo]

@@ -1,7 +1,7 @@
 ---
 id: ADR-0005
 title: Fluxo de mudança e versionamento da skill
-status: proposed
+status: accepted
 origin: decision
 date: 2026-10-14
 pillars: [fluxo-mudanca]

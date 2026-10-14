@@ -1,7 +1,7 @@
 ---
 id: ADR-0001
 title: Arquitetura e fronteiras
-status: proposed
+status: accepted
 origin: decision
 date: 2026-10-14
 pillars: [arquitetura]

@@ -4,7 +4,7 @@ title: "CI da skill: testes, lint e arquitetura"
 tier: full
 type: foundation
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-10-14
 parent:
 depends_on: []
@@ -14,8 +14,8 @@ touches: [.github/workflows/ci.yml, ruff.toml, skills/sdd-management/tests/**, s
 adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0005]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-14
 ---
 
 # SPEC-0001 — CI da skill: testes, lint e arquitetura
@@ -151,7 +151,25 @@ skills/sdd-management/tests/test_architecture.py — mensagem de falha (uma linh
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+
+**Fase 1: Testes de arquitetura**
+- [ ] Red: escrever UT-01..UT-06 com a tag `SPEC-0001:<ID>`; UT-02, UT-04 e UT-06 (guardas) passam no código atual, UT-01, UT-03 e UT-05 falham pelo motivo certo
+- [ ] Green: implementar os checadores (`ast`) em `test_architecture.py` até tudo passar
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Lint**
+- [ ] `ruff.toml` (py39, exclui `tools/`) e ajustes no `spec_graph.py` sem mudança de comportamento; motivo ao lado de cada regra ignorada
+- [ ] Validar: `uvx ruff check` limpo + suíte completa (G2) + `arch_test` (G3)
+
+**Fase 3: CI e documentação**
+- [ ] `.github/workflows/ci.yml` (matriz 3.9 + versão atual, actions fixadas por SHA) com a tag `SPEC-0001:IT-01` e `SPEC-0001:IT-02`
+- [ ] `lint` e `arch_test` no sdd-config; README e SKILL.md com Python 3.9+; `SDD_TOOL_VERSION` e CHANGELOG
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (IT-01), CI vermelha no PR descartável (IT-02) (G5) e aprovação (H2)
+- [ ] Deploy: N/A — pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |
