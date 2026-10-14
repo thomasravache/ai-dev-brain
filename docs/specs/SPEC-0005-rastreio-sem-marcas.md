@@ -189,10 +189,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 38819da | 2026-10-14 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=9, errors=2, skipped=1)) — e451978 | 2026-10-14 |
+| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 71036b0 | 2026-10-14 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 71036b0 | 2026-10-14 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; minor: G7 calcula patch-id de até 200 commits da base (segundos em repositório grande); detecção de scaffold no completo passou de tipo chore para assunto iniciado por chore (equivalente); TEST_DEFECTs corrigidos em commits test próprios (placeholders do lite; rebase sem avanço da base, 5f…) — 71036b0 | 2026-10-14 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
