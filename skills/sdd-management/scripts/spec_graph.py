@@ -703,6 +703,14 @@ def cmd_private(project: Project, action: str, spec_root, sync):
         for warning in spec_root_pending(project.spec_root, project.sync):
             print(f"⚠ {warning}")
         return 0
+    if action == "detect":
+        if not project.private:
+            die("private detect: este repositório não está em modo privado (rode `private init`)")
+        conv = team_conventions(project)
+        write_team_block(project.config_path, conv)
+        commit_records(project, "sdd: private detect")
+        print(describe_team(conv))
+        return 0
     if action == "off":
         key = next((k for k in repo_keys(root) if k in projects), None)
         if key is None:
@@ -741,8 +749,11 @@ def cmd_private(project: Project, action: str, spec_root, sync):
         config.write_text((TEMPLATES_DIR / "sdd-config.template.yml").read_text(encoding="utf-8"), encoding="utf-8")
     if not (target / ".git").exists():
         run_git(target, "init", "-q")
+    conv = team_conventions(Project(root))
+    write_team_block(config, conv)
     commit_spec_root(target, sync, "sdd: private init")
     print(f"modo privado ativado para {key}\n  spec_root: {target}\n  sync: {sync}")
+    print(describe_team(conv))
     print(install_leak_hook(root))
     return 0
 
@@ -812,8 +823,7 @@ def added_lines(diff: str):
     return out
 
 
-def leak_scan(project: Project, root: Path, staged=False, rng=None, message=None, branch=None):
-    """Coleta as fontes (diff staged, commits do intervalo, mensagem, branch) e devolve os achados."""
+def leak_rules(project: Project):
     try:
         patterns = build_leak_patterns(project.spec_root, project.cfg_list("leak_patterns", []), project.adrs)
         allow = [re.compile(a) for a in project.cfg_list("leak_allow", [])]
@@ -821,6 +831,12 @@ def leak_scan(project: Project, root: Path, staged=False, rng=None, message=None
         die(str(e))
     except re.error as e:
         die(f"leak_allow: regex inválida '{e.pattern}': {e}")
+    return patterns, allow
+
+
+def leak_scan(project: Project, root: Path, staged=False, rng=None, message=None, branch=None):
+    """Coleta as fontes (diff staged, commits do intervalo, mensagem, branch) e devolve os achados."""
+    patterns, allow = leak_rules(project)
     found = []
     if staged:
         for path, number, text in added_lines(run_git(root, "diff", "--cached", "-U0", "--no-color")[1]):
@@ -2673,7 +2689,8 @@ def gate_run(project: Project, doc: Doc, spec_id, gate, workdir: Path, branch_di
             ok = ok and merged
             parts.append(text)
     else:
-        configured = [key for key in GATE_COMMANDS[gate] if project.cfg(key)]
+        keys = GATE_COMMANDS[gate] + (("ci",) if gate == "G5" and project.private else ())
+        configured = [key for key in keys if project.cfg(key)]
         if not configured:
             die(f"nenhum comando configurado para {gate} ({', '.join(GATE_COMMANDS[gate])}) — configure no sdd-config "
                 f"ou registre N/A com --na apontando a spec que vai criá-lo")
@@ -3056,9 +3073,138 @@ def labeled_line(doc: Doc, section: str, label: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+PR_TEMPLATE_CANDIDATES = (".github/pull_request_template.md", ".github/PULL_REQUEST_TEMPLATE.md",
+                          "docs/pull_request_template.md", ".gitlab/merge_request_templates/Default.md",
+                          ".azuredevops/pull_request_template.md")
+PR_SECTION_KEYWORDS = (("risk", ("risco", "risk", "rollback", "rollout")),
+                       ("test", ("teste", "test", "como testar", "how to test")),
+                       ("summary", ("resumo", "summary", "descricao", "description", "o que", "what")))
+
+
 def detect_team_conventions(first_parent_parents, subjects, files, hooks_path="") -> dict:
     """Convenções do time: forma de merge, padrão de mensagens, gerenciador de hooks e template de PR."""
-    return {}
+    if not first_parent_parents:
+        merge = "desconhecida"
+    else:
+        merges = sum(1 for n in first_parent_parents if n > 1)
+        merge = "merge" if merges / len(first_parent_parents) >= 0.2 else "linear"
+    recent = list(subjects)[:50]
+    if not recent:
+        commits = "desconhecida"
+    else:
+        conventional = sum(1 for s in recent if CONVENTIONAL_RE.match(s))
+        commits = "conventional" if conventional / len(recent) >= 0.8 else "livre"
+    hooks = "core.hooksPath" if hooks_path else next((label for name, label in TEAM_HOOK_MARKERS if name in files), "nenhum")
+    template = next((c for c in PR_TEMPLATE_CANDIDATES if c in files), "")
+    return {"merge": merge, "commits": commits, "hooks": hooks, "pr_template": template}
+
+
+def team_conventions(project: Project) -> dict:
+    root = project.root
+    base = project.cfg("base_branch", "main")
+    if run_git(root, "rev-parse", "--verify", "--quiet", base)[0] != 0:
+        base = "HEAD"
+    parents = [len(line.split()) for line in
+               run_git(root, "log", "--first-parent", "-n", "200", "--format=%P", base)[1].splitlines()]
+    subjects = run_git(root, "log", "--no-merges", "-n", "50", "--format=%s", base)[1].splitlines()
+    files = {name for name in PR_TEMPLATE_CANDIDATES + tuple(n for n, _ in TEAM_HOOK_MARKERS) if (root / name).exists()}
+    hooks_path = run_git(root, "config", "--get", "core.hooksPath")[1].strip()
+    return detect_team_conventions(parents, subjects, files, hooks_path)
+
+
+def write_team_block(config_path: Path, conv: dict):
+    """Grava (ou troca) o bloco `team:` no sdd-config do spec_root."""
+    lines = config_path.read_text(encoding="utf-8").split("\n") if config_path.exists() else []
+    out, skipping = [], False
+    for line in lines:
+        if line.startswith(("team:", "# Convenções do time")):
+            skipping = True
+            continue
+        if skipping and (line.startswith((" ", "\t")) or not line.strip()):
+            continue
+        skipping = False
+        out.append(line)
+    block = ["# Convenções do time (detectadas por `private init`/`private detect`; corrija se preciso)", "team:"]
+    block += [f'  {key}: "{value}"' if key == "pr_template" else f"  {key}: {value}" for key, value in conv.items()]
+    text = "\n".join(out).rstrip("\n") + "\n\n" + "\n".join(block) + "\n"
+    config_path.write_text(text, encoding="utf-8")
+
+
+def describe_team(conv: dict) -> str:
+    return (f"Detectado: merge {conv['merge']} · commits {conv['commits']} · hooks {conv['hooks']} · "
+            f"template {conv['pr_template'] or 'nenhum'}")
+
+
+def plan_sentences(doc: Doc):
+    """Testes do plano em linguagem natural, sem IDs nem `→ caminho::nome`."""
+    out = []
+    for line in COMMENT_RE.sub("", doc.section("Plano de Testes") or "").splitlines():
+        if not TEST_ID_RE.search(line):
+            continue
+        text = re.sub(r"^\s*-\s*\*\*[A-Z0-9]+-\d+\*\*\s*[—–-]\s*", "", line)
+        text = TEST_TARGET_RE.sub("", text)
+        text = re.sub(r"\(guarda[^)]*\)\s*", "", text).strip()
+        if text:
+            out.append(f"- {text}")
+    return out
+
+
+def private_pr_parts(docs) -> dict:
+    summary, tests, risk = [], [], []
+    for d in docs:
+        overview = COMMENT_RE.sub("", d.section("Visão Geral") or d.section("Problema") or "").strip()
+        motivation = labeled_line(d, "Motivação", "Motivação")
+        summary += [p for p in (overview, motivation) if p]
+        tests += plan_sentences(d)
+        rollout = COMMENT_RE.sub("", d.section("Plano de Rollout") or "").strip()
+        rollback = labeled_line(d, "Mudança Proposta", "Rollback")
+        risk += [rollout] if rollout else ([f"Rollback: {rollback}"] if rollback else [])
+    return {"summary": "\n\n".join(summary) or "—", "test": "\n".join(tests) or "—", "risk": "\n\n".join(risk) or "—"}
+
+
+def fill_team_template(template: str, parts: dict) -> str:
+    """Preenche as seções do template do time por título; as demais ficam como estão."""
+    out, filling = [], False
+    for line in template.split("\n"):
+        if line.startswith("#"):
+            heading = norm(line.lstrip("#"))
+            kind = next((k for k, words in PR_SECTION_KEYWORDS if any(w in heading for w in words)), None)
+            if filling:
+                out.append("")
+            out.append(line)
+            filling = kind is not None
+            if filling:
+                out += [parts[kind]]
+            continue
+        if filling:
+            if line.strip().startswith("<!--"):
+                out.insert(len(out) - 1, line)
+            continue
+        out.append(line)
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def private_pr(project: Project, docs):
+    team = project.cfg_map("team")
+    if len(docs) == 1:
+        title, conv = docs[0].title, CONVENTIONAL_BY_TYPE.get(docs[0].type, "feat")
+    else:
+        parents = {d.scalar("parent") for d in docs}
+        epic = project.specs.get(parents.pop()) if len(parents) == 1 else None
+        title = epic.title if epic else "; ".join(d.title for d in docs)
+        convs = {CONVENTIONAL_BY_TYPE.get(d.type, "feat") for d in docs}
+        conv = "feat" if "feat" in convs else min(convs)
+    if team.get("commits") == "conventional":
+        lowered = title[0].lower() + title[1:] if len(title) > 1 and title[0].isupper() and title[1].islower() else title
+        title = f"{conv}: {lowered}"
+    parts = private_pr_parts(docs)
+    template_path = project.root / team["pr_template"] if team.get("pr_template") else None
+    if template_path and template_path.exists():
+        body = fill_team_template(template_path.read_text(encoding="utf-8"), parts)
+    else:
+        body = (f"## O que muda\n\n{parts['summary']}\n\n## Como testar\n\n{parts['test']}\n\n"
+                f"## Riscos e rollback\n\n{parts['risk']}\n")
+    return title, body
 
 
 def pr_title(project: Project, docs) -> str:
@@ -3180,6 +3326,24 @@ def cmd_pr(project: Project, ids, title_only: bool, out):
         docs += [k for k in project.children(sid) if k.status in APPROVED_PLUS] if d.tier == "epic" else [d]
     if not docs:
         die("nenhuma spec executável aprovada para o PR")
+    if project.private:
+        title, body = private_pr(project, docs)
+        patterns, allow = leak_rules(project)
+        found = leak_findings(title, "título", patterns, allow)
+        found += leak_findings("" if title_only else body, "corpo do PR", patterns, allow)
+        if found:
+            for origin, number, label, snippet in found:
+                print(f"[LEAK] FAIL {origin}:{number} — {label} — \"{snippet}\"")
+            print("pr: o PR teria marcas do SDD — ajuste a spec e gere de novo (nada foi gravado)")
+            return 1
+        if title_only:
+            print(title)
+        elif out:
+            Path(out).write_text(body, encoding="utf-8")
+            print(title)
+        else:
+            print(title + "\n\n" + body)
+        return 0
     title = pr_title(project, docs)
     if title_only:
         print(title)
