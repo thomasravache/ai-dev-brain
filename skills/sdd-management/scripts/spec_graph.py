@@ -9,13 +9,15 @@ import heapq
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.10.3"
+SDD_TOOL_VERSION = "2026.10.4"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -2170,9 +2172,131 @@ def cmd_index(project: Project, stdout: bool):
     return 0
 
 
-def run_git(root: Path, *args):
-    result = subprocess.run(["git", *args], check=False, cwd=root, capture_output=True, text=True)
+def run_git(root: Path, *args, input=None):
+    result = subprocess.run(["git", *args], check=False, cwd=root, capture_output=True, text=True, input=input)
     return result.returncode, result.stdout, result.stderr
+
+
+TEST_TARGET_RE = re.compile(r"(?:→|->)\s*`?(\S+?)::(\S+?)`?\s*$")
+LEDGER_SECTION = "Commits"
+
+
+def role_by_files(files, test_paths) -> str:
+    """Modo privado: papel do commit pelos arquivos — red (só test_paths) ou green (algum arquivo fora)."""
+    return "red" if files and all(matches_any(f, test_paths) for f in files) else "green"
+
+
+def parse_test_target(line: str):
+    """Linha do plano com `→ caminho::nome` (ou `->`): (caminho, nome), ou None sem mapeamento."""
+    m = TEST_TARGET_RE.search(line.strip())
+    return (m.group(1), m.group(2)) if m else None
+
+
+def plan_test_targets(doc: Doc) -> dict:
+    """ID do teste → (caminho, nome), para as linhas do plano que apontam `→ caminho::nome`."""
+    targets = {}
+    for line in COMMENT_RE.sub("", doc.section("Plano de Testes") or "").splitlines():
+        ids = TEST_ID_RE.findall(line)
+        target = parse_test_target(line)
+        if ids and target:
+            targets.setdefault(ids[0], target)
+    return targets
+
+
+def patch_id(root: Path, diff: str) -> str:
+    out = run_git(root, "patch-id", "--stable", input=diff)[1].split()
+    return out[0] if out else ""
+
+
+def spec_commits(project: Project, spec_id: str, root: Path, base: str):
+    """Commits da spec em merge-base..HEAD: por mensagem (modo completo) ou pela branch inteira (modo privado)."""
+    code, merge_base, err = run_git(root, "merge-base", base, "HEAD")
+    if code != 0:
+        die(f"não foi possível achar merge-base com '{base}': {err.strip()}")
+    merge_base = merge_base.strip()
+    _, log, _ = run_git(root, "log", "--reverse", "--no-merges", "--format=%H%x1f%s%x1f%b%x1e", f"{merge_base}..HEAD")
+    test_paths = project.cfg_list("test_paths", DEFAULT_TEST_PATHS)
+    commits = []
+    for chunk in log.split("\x1e"):
+        if not chunk.strip():
+            continue
+        parts = chunk.strip("\n").split("\x1f")
+        sha, subject = parts[0].strip(), parts[1] if len(parts) > 1 else ""
+        body = parts[2] if len(parts) > 2 else ""
+        files = run_git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha)[1].split()
+        if "scaffold" in subject.lower() and (project.private or subject.lower().startswith("chore")):
+            kind = "scaffold"
+        elif project.private:
+            kind = role_by_files(files, test_paths)
+        else:
+            m = CONVENTIONAL_RE.match(subject)
+            ctype = m.group(1).lower() if m else ""
+            kind = "red" if ctype in RED_TYPES else "green" if ctype in GREEN_TYPES else "other"
+        commits.append({"sha": sha, "subject": subject, "body": body, "kind": kind, "files": files})
+    if project.private:
+        return merge_base, commits, commits
+    ref_re = re.compile(rf"\b{re.escape(spec_id)}\b")
+    return merge_base, commits, [c for c in commits if ref_re.search(c["subject"] + "\n" + c["body"])]
+
+
+def write_commit_ledger(project: Project, doc: Doc, root: Path):
+    """Modo privado: grava na spec (spec_root) os commits da branch com papel, SHA, patch-id e arquivos."""
+    merge_base, _, mine = spec_commits(project, doc.id, root, project.cfg("base_branch", "main"))
+    if not mine:
+        return
+    rows = []
+    for c in mine:
+        pid = patch_id(root, run_git(root, "show", "--format=", c["sha"])[1])
+        rows.append(f"| {c['kind']} | {c['sha']} | {pid} | {md_cell(', '.join(c['files']))} |")
+    head = run_git(root, "rev-parse", "HEAD")[1].strip()
+    rows.append(f"| branch | {head} | {patch_id(root, run_git(root, 'diff', merge_base, 'HEAD')[1])} | — |")
+    block = [f"## {LEDGER_SECTION}",
+             "<!-- Modo privado: gravado pelo gate --run. Liga a spec aos commits da branch sem marcas no repositório. -->",
+             "| Papel | SHA | patch-id | Arquivos |", "|---|---|---|---|", *rows, ""]
+    lines = doc.path.read_text(encoding="utf-8").split("\n")
+    bounds = section_bounds(lines, LEDGER_SECTION)
+    if bounds:
+        lines[bounds[0]:bounds[1]] = block
+    else:
+        lines = lines + ([""] if lines and lines[-1].strip() else []) + block
+    doc.path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+
+
+def ledger_rows(doc_path: Path):
+    lines = doc_path.read_text(encoding="utf-8").split("\n")
+    bounds = section_bounds(lines, LEDGER_SECTION)
+    rows = []
+    for line in lines[bounds[0] + 1:bounds[1]] if bounds else []:
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 3 and cells[0] in ("red", "green", "scaffold", "branch"):
+            rows.append({"role": cells[0], "sha": cells[1], "pid": cells[2]})
+    return rows
+
+
+def find_spec_merge(project: Project, doc: Doc, root: Path):
+    """Modo privado: onde a spec entrou na base — merge commit, squash (patch-id da branch) ou rebase (patch-ids)."""
+    rows = ledger_rows(doc.path)
+    if not rows:
+        return False, "registro de commits vazio — rode o gate G1 ou G2 na branch da spec antes"
+    base = project.cfg("base_branch", "main")
+    branch = next((r for r in rows if r["role"] == "branch"), None)
+    commits = [r for r in rows if r["role"] != "branch"]
+    head = branch["sha"] if branch else commits[-1]["sha"]
+    if run_git(root, "merge-base", "--is-ancestor", head, base)[0] == 0:
+        for merge in run_git(root, "rev-list", "--first-parent", "--merges", base)[1].split():
+            if (run_git(root, "merge-base", "--is-ancestor", head, merge)[0] == 0
+                    and run_git(root, "merge-base", "--is-ancestor", head, f"{merge}^1")[0] != 0):
+                return True, f"merge {merge[:7]}"
+        return True, f"merge (fast-forward) {head[:7]}"
+    pids = {}
+    for sha in run_git(root, "rev-list", "--first-parent", "--no-merges", "-n", "200", base)[1].split():
+        pids.setdefault(patch_id(root, run_git(root, "show", "--format=", sha)[1]), sha)
+    if branch and branch["pid"] in pids:
+        return True, f"squash {pids[branch['pid']][:7]}"
+    found = [pids.get(r["pid"]) for r in commits]
+    if found and all(found):
+        return True, f"rebase {found[0][:7]}..{found[-1][:7]}"
+    return False, f"merge da spec não encontrado em {base}"
 
 
 def verify_spec(project: Project, spec_id: str, base, git_root=None):
@@ -2185,37 +2309,10 @@ def verify_spec(project: Project, spec_id: str, base, git_root=None):
     if run_git(root, "rev-parse", "--is-inside-work-tree")[0] != 0:
         die("não é um repositório git")
     base = base or project.cfg("base_branch", "main")
-    code, merge_base, err = run_git(root, "merge-base", base, "HEAD")
-    if code != 0:
-        die(f"não foi possível achar merge-base com '{base}': {err.strip()}")
-    merge_base = merge_base.strip()
-    _, log, _ = run_git(root, "log", "--reverse", "--no-merges", "--format=%H%x1f%s%x1f%b%x1e", f"{merge_base}..HEAD")
-
+    merge_base, commits, mine = spec_commits(project, spec_id, root, base)
     test_paths = project.cfg_list("test_paths", DEFAULT_TEST_PATHS)
     exempt = project.scope_exempt()
-    commits = []
-    for chunk in log.split("\x1e"):
-        if not chunk.strip():
-            continue
-        parts = chunk.strip("\n").split("\x1f")
-        sha, subject = parts[0].strip(), parts[1] if len(parts) > 1 else ""
-        body = parts[2] if len(parts) > 2 else ""
-        m = CONVENTIONAL_RE.match(subject)
-        ctype = m.group(1).lower() if m else ""
-        if ctype in RED_TYPES:
-            kind = "red"
-        elif ctype in GREEN_TYPES:
-            kind = "green"
-        elif ctype == "chore" and "scaffold" in subject.lower():
-            kind = "scaffold"
-        else:
-            kind = "other"
-        files = run_git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha)[1].split()
-        commits.append({"sha": sha, "subject": subject, "body": body, "kind": kind, "files": files})
-
-    ref_re = re.compile(rf"\b{re.escape(spec_id)}\b")
-    mine = [c for c in commits if ref_re.search(c["subject"] + "\n" + c["body"])]
-    untraced = [c for c in commits if not SPEC_REF_RE.search(c["subject"] + "\n" + c["body"])]
+    untraced = [] if project.private else [c for c in commits if not SPEC_REF_RE.search(c["subject"] + "\n" + c["body"])]
     short = lambda c: f"{c['sha'][:7]} {c['subject'][:72]}"
     is_test = lambda f: matches_any(f, test_paths)
     is_exempt = lambda f: matches_any(f, exempt)
@@ -2224,9 +2321,11 @@ def verify_spec(project: Project, spec_id: str, base, git_root=None):
     reds = [i for i, c in enumerate(mine) if c["kind"] == "red"]
     greens = [i for i, c in enumerate(mine) if c["kind"] == "green"]
     if not mine:
-        results.append(("FAIL", "G1", f"nenhum commit referencia {spec_id} em {base}..HEAD"))
+        results.append(("FAIL", "G1", f"nenhum commit da spec em {base}..HEAD" if project.private
+                        else f"nenhum commit referencia {spec_id} em {base}..HEAD"))
     elif not reds:
-        results.append(("FAIL", "G1", "nenhum commit test(...) — a fase Red não foi registrada"))
+        results.append(("FAIL", "G1", "nenhum commit só de testes — a fase Red não foi registrada" if project.private
+                        else "nenhum commit test(...) — a fase Red não foi registrada"))
     else:
         early = [mine[i] for i in greens if i < reds[0]]
         if early:
@@ -2243,6 +2342,20 @@ def verify_spec(project: Project, spec_id: str, base, git_root=None):
     plan_ids = plan_test_ids(doc)
     if not plan_ids:
         results.append(("FAIL", "G1", "plano de testes sem IDs"))
+    elif project.private:
+        targets, missing = plan_test_targets(doc), []
+        for tid in plan_ids:
+            target = targets.get(tid)
+            if target is None:
+                missing.append(f"{tid} (sem → caminho::nome no plano)")
+                continue
+            code, content, _ = run_git(root, "show", f"HEAD:{target[0]}")
+            if code != 0 or target[1] not in content:
+                missing.append(f"{tid} ({target[0]}::{target[1]})")
+        if missing:
+            results.append(("FAIL", "G1", "teste do plano sem caminho::nome no HEAD: " + ", ".join(missing)))
+        else:
+            results.append(("PASS", "G1", f"rastreabilidade: {len(plan_ids)}/{len(plan_ids)} testes do plano no código ({', '.join(plan_ids)})"))
     else:
         missing, outside = [], []
         for tid in plan_ids:
@@ -2438,7 +2551,8 @@ def pillar_waivers(project: Project) -> dict:
     return waived if isinstance(waived, dict) else {}
 
 
-def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, manual, allow_dirty, expect_green=False):
+def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, manual, allow_dirty, expect_green=False,
+             at=None):
     doc = project.specs.get(spec_id)
     if doc is None or doc.tier == "epic":
         die(f"{spec_id} não encontrada ou é épico (gates são por spec executável)")
@@ -2492,6 +2606,32 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
         print(f"{spec_id} {gate} = PASS (manual) — {evidence}")
         return 0
 
+    branch_dir = workdir
+    if gate == "G1" and not at and project.private:
+        reds = [c for c in spec_commits(project, spec_id, workdir, project.cfg("base_branch", "main"))[2]
+                if c["kind"] == "red"]
+        at = reds[-1]["sha"] if reds else None
+    temp_dir = None
+    if gate == "G1" and at:
+        if run_git(workdir, "rev-parse", "--verify", "--quiet", f"{at}^{{commit}}")[0] != 0:
+            die(f"--at {at}: commit não encontrado")
+        temp_dir = Path(tempfile.mkdtemp(prefix="sdd-g1-"))
+        code, _, err = run_git(workdir, "worktree", "add", "--detach", str(temp_dir / "wt"), at)
+        if code != 0:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            die(f"git worktree add falhou: {err.strip()}")
+        workdir = temp_dir / "wt"
+    try:
+        return gate_run(project, doc, spec_id, gate, workdir, branch_dir, by, allow_dirty, expect_green, bool(at))
+    finally:
+        if temp_dir:
+            if run_git(branch_dir, "worktree", "remove", "--force", str(workdir))[0] != 0:
+                print(f"aviso: remova a worktree temporária com `git worktree remove --force {workdir}`", file=sys.stderr)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def gate_run(project: Project, doc: Doc, spec_id, gate, workdir: Path, branch_dir: Path, by, allow_dirty, expect_green,
+             at_red: bool):
     sha, dirty = head_ref(workdir)
     if dirty and not allow_dirty and gate != "G0":
         die(f"há alterações não commitadas em {workdir}: a evidência precisa apontar um commit (commite ou use --allow-dirty)")
@@ -2511,6 +2651,11 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
             red = code != 0
             ok = red or expect_green
             parts.append(f"`{project.cfg('test')}` exit {code} ({'red' if red else 'verde'}: {summary})")
+            if not red and not expect_green and not at_red:
+                reds = [c for c in spec_commits(project, spec_id, workdir, project.cfg("base_branch", "main"))[2]
+                        if c["kind"] == "red"]
+                if reds:
+                    parts.append(f"HEAD já verde: rode com --at {reds[-1]['sha'][:7]} (último commit red)")
         if gate == "G4":
             if not by:
                 die("G4 exige o veredito do Reviewer: --by \"<revisor>: APPROVED ...\"")
@@ -2523,6 +2668,10 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
         validate_delivery(doc, plan, lambda lvl, s, m: issues.append(m) if lvl == "ERROR" else None)
         ok = not issues
         parts.append("Relatório de Entrega e Definição de Pronto: " + ("ok" if ok else issues[0][:80]))
+        if project.private:
+            merged, text = find_spec_merge(project, doc, workdir)
+            ok = ok and merged
+            parts.append(text)
     else:
         configured = [key for key in GATE_COMMANDS[gate] if project.cfg(key)]
         if not configured:
@@ -2544,6 +2693,8 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
             parts.append("leak-check: limpo")
     evidence_text = "; ".join(parts) + f" — {sha}" + (" (árvore suja)" if dirty else "")
     set_gate_row(doc, gate, "PASS" if ok else "FAIL", evidence_text)
+    if project.private and gate in ("G1", "G2", "G3", "G4", "G5"):
+        write_commit_ledger(project, doc, branch_dir)
     print(f"{spec_id} {gate} = {'PASS' if ok else 'FAIL'} — {evidence_text}")
     return 0 if ok else 1
 
@@ -3526,6 +3677,7 @@ def main(argv=None):
     p.add_argument("--manual", action="store_true", help="PASS sem execução (marcado MANUAL:, gera aviso)")
     p.add_argument("--allow-dirty", action="store_true")
     p.add_argument("--expect-green", action="store_true", help="G1: todos os testes novos são de guarda/caracterização")
+    p.add_argument("--at", help="G1: roda no commit red indicado, numa worktree temporária")
     p = sub.add_parser("impede", help="registra impedimento (spec | decisão | trabalho | externo | falha)")
     p.add_argument("id")
     p.add_argument("--type", required=True)
@@ -3616,7 +3768,7 @@ def dispatch(args, project: Project):
         return cmd_report(project, args.id, args.changelog)
     if args.command == "gate":
         return cmd_gate(project, args.id, args.gate, args.run, args.cwd, args.na, args.fail, args.by, args.evidence,
-                        args.manual, args.allow_dirty, args.expect_green)
+                        args.manual, args.allow_dirty, args.expect_green, args.at)
     if args.command == "impede":
         return cmd_impede(project, args.id, args.type, args.reason, args.owner, args.phase, args.tried)
     if args.command == "resolve":
