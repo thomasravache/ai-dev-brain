@@ -182,7 +182,7 @@ class PrivateWorkTest(PrivateTestCase):
         """SPEC-0003:IT-02"""
         self.e.init()
         before = len(self.e.root_log())
-        for args in (("new", "--tier", "lite", "--title", "Corrige soma"), ("set", "SPEC-0001", "size=S"),
+        for args in (("new", "--tier", "lite", "--title", "Corrige soma"), ("set", "SPEC-0001", "external=[jira:PAY-1]"),
                      ("gate", "SPEC-0001", "G0", "--run"), ("index",)):
             out = self.e.run(*args)
             self.assertTrue(out.stderr.startswith(BANNER), (args, out.stderr))
