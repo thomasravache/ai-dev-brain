@@ -828,7 +828,8 @@ class PrivateJourneyTest(PrivateTestCase):
         config = e.spec_root / "sdd-config.yml"
         config.write_text(config.read_text(encoding="utf-8")
                           .replace('test: ""', 'test: "grep -q \'return a + b$\' src/soma.py"')
-                          .replace('arch_test: ""', 'arch_test: "true"').replace('ci: ""', 'ci: "true"'),
+                          .replace('arch_test: ""', 'arch_test: "true"').replace('ci: ""', 'ci: "true"')
+                          .replace("  waived: {}", '  waived:\n    entrega: "deploy é do time"\n  #'),
                           encoding="utf-8")
         e.run("new", "--tier", "lite", "--title", "Corrige soma")
         spec = next((e.spec_root / "specs").glob("SPEC-0001-*.md"))
@@ -848,7 +849,7 @@ class PrivateJourneyTest(PrivateTestCase):
         for gate, extra in (("G2", ()), ("G3", ()), ("G4", ("--by", "revisor: APPROVED")), ("G5", ())):
             e.run("gate", "SPEC-0001", gate, "--run", "--cwd", str(wt), *extra)
         e.run("gate", "SPEC-0001", "H2", "--by", "thomas")
-        e.run("gate", "SPEC-0001", "G6", "--na", "sem deploy no teste — SPEC-0001")
+        e.run("gate", "SPEC-0001", "G6", "--na", "deploy é do time — pilar entrega dispensado")
         pr = self.tmp / "pr.md"
         self.assertEqual(e.run("pr", "SPEC-0001", "--out", str(pr)).returncode, 0)
         git(e.repo, "merge", "-q", "--squash", "fix/corrige-soma", env=e.env)
