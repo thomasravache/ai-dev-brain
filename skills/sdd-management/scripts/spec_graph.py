@@ -744,6 +744,20 @@ def cmd_private(project: Project, action: str, spec_root, sync):
     return 0
 
 
+def build_leak_patterns(spec_root, extra):
+    """Padrões do leak-check: [(rótulo, regex compilada)] — padrões padrão, caminho do spec_root e extras do usuário."""
+    return []
+
+
+def leak_findings(text: str, origin: str, patterns, allow):
+    """Achados de vazamento em text: [(origem, linha, rótulo, trecho)]."""
+    return []
+
+
+def cmd_leak_check(project: Project, staged: bool, rng, message, branch):
+    die("leak-check: não implementado")
+
+
 def die(msg: str, code: int = 2):
     print(f"erro: {msg}", file=sys.stderr)
     sys.exit(code)
@@ -3401,6 +3415,11 @@ def main(argv=None):
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
     p.add_argument("--apply", action="store_true")
+    p = sub.add_parser("leak-check", help="modo privado: marcas do SDD no diff, mensagens e branch (sem fonte: tudo)")
+    p.add_argument("--staged", action="store_true")
+    p.add_argument("--range", dest="rng", help="intervalo de commits A..B (A = 000… → commits fora dos remotos)")
+    p.add_argument("--message", help="arquivo com a mensagem de commit")
+    p.add_argument("--branch", help="nome de branch")
     p = sub.add_parser("private", help="modo privado: SDD fora do repositório do time (init | status | off)")
     p.add_argument("action", choices=["init", "status", "off"])
     p.add_argument("--spec-root", help="pasta das specs (padrão: <default_root>/<org>/<repo>)")
@@ -3474,6 +3493,8 @@ def dispatch(args, project: Project):
         return cmd_pillars(project)
     if args.command == "upgrade":
         return cmd_upgrade(project, args.ids, args.apply)
+    if args.command == "leak-check":
+        return cmd_leak_check(project, args.staged, args.rng, args.message, args.branch)
     if args.command == "private":
         return cmd_private(project, args.action, args.spec_root, args.sync)
     if args.command == "migrate":
