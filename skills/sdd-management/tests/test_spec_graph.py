@@ -14,7 +14,7 @@ from pathlib import Path
 SKILL = Path(__file__).resolve().parent.parent
 SCRIPT = SKILL / "scripts" / "spec_graph.py"
 sys.path.insert(0, str(SCRIPT.parent))
-import spec_graph as sg  # noqa: E402
+import spec_graph as sg
 
 FILL = {
     "{{E2E-01 — jornada do usuário: passos e resultado visível [jornada: <id em critical_journeys>] | N/A — por que nenhuma jornada de usuário é afetada (obrigatório com user_facing: false)}}": "**E2E-01** — jornada principal",
@@ -47,7 +47,7 @@ class Project:
 
     def run(self, *args, env=None):
         full_env = dict(os.environ, **(env or {}))
-        return subprocess.run([sys.executable, str(SCRIPT), *args], cwd=self.root, capture_output=True,
+        return subprocess.run([sys.executable, str(SCRIPT), *args], check=False, cwd=self.root, capture_output=True,
                               text=True, env=full_env)
 
     def new(self, tier, title, parent=None):
@@ -212,7 +212,7 @@ class PlanningTest(ProjectTest):
         self.assertEqual((wave[a], wave[b]), (1, 1))
         self.assertEqual(wave[c], 2)
         self.assertEqual(wave[d], 2)  # max_parallel = 2
-        running, batch, held = sg.next_batch(project, (wave, members, {}))
+        _running, batch, _held = sg.next_batch(project, (wave, members, {}))
         self.assertEqual(sorted(batch), sorted([a, b]))
 
     def test_stale_contract_pin_blocks(self):
@@ -577,9 +577,9 @@ class AdrQualityTest(ProjectTest):
         aid = out.stdout.split()[0]
         path = next((self.tmp / "docs/adr").glob(f"{aid}-*.md"))
         text = path.read_text(encoding="utf-8")
-        text = re.sub(r"## Opções Consideradas\n.*?(?=\n## )", "## Opções Consideradas\n" + options + "\n", text, flags=re.S)
-        text = re.sub(r"## Mais Informações\n.*", "## Mais Informações\n" + sources + "\n", text, flags=re.S)
-        text = re.sub(r"### Consequências\n.*?(?=\n### )", "### Consequências\n" + consequences + "\n", text, flags=re.S)
+        text = re.sub(r"## Opções Consideradas\n.*?(?=\n## )", "## Opções Consideradas\n" + options + "\n", text, flags=re.DOTALL)
+        text = re.sub(r"## Mais Informações\n.*", "## Mais Informações\n" + sources + "\n", text, flags=re.DOTALL)
+        text = re.sub(r"### Consequências\n.*?(?=\n### )", "### Consequências\n" + consequences + "\n", text, flags=re.DOTALL)
         text = re.sub(r"\{\{([^{}]*)\}\}", lambda m: m.group(1), text)
         path.write_text(text, encoding="utf-8")
         self.p.run("set", aid, f"origin={origin}")
@@ -666,7 +666,7 @@ class WorktreeTest(ProjectTest):
             self.p.run("set", sid, "status=deprecated")
             self.assertIn("worktree esquecida", self.p.validate().stdout)
         finally:
-            subprocess.run(["git", "worktree", "remove", "--force", str(expected)], cwd=self.tmp, capture_output=True)
+            subprocess.run(["git", "worktree", "remove", "--force", str(expected)], check=False, cwd=self.tmp, capture_output=True)
             shutil.rmtree(expected.parent, ignore_errors=True)
 
     def test_misplaced_worktrees_are_reported(self):
@@ -688,7 +688,7 @@ class WorktreeTest(ProjectTest):
             self.assertNotIn(str(inside), self.p.validate().stdout)
         finally:
             for path in (sibling, inside):
-                subprocess.run(["git", "worktree", "remove", "--force", str(path)], cwd=self.tmp, capture_output=True)
+                subprocess.run(["git", "worktree", "remove", "--force", str(path)], check=False, cwd=self.tmp, capture_output=True)
             shutil.rmtree(sibling, ignore_errors=True)
 
     def test_inside_repo_must_be_ignored(self):
@@ -703,8 +703,8 @@ class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()
         text = self.p.path(sid).read_text(encoding="utf-8")
-        text = re.sub(r"## 9\. Questões em Aberto\n.*?(?=## 10\.)", "", text, flags=re.S)
-        text = re.sub(r"## 13\. Registro de Impedimentos\n.*?(?=## 14\.)", "", text, flags=re.S)
+        text = re.sub(r"## 9\. Questões em Aberto\n.*?(?=## 10\.)", "", text, flags=re.DOTALL)
+        text = re.sub(r"## 13\. Registro de Impedimentos\n.*?(?=## 14\.)", "", text, flags=re.DOTALL)
         text = text.replace("external: []\n", "").replace("| G7 Pronto & Docs | PENDING | | |\n", "")
         self.p.path(sid).write_text(text, encoding="utf-8")
         before = self.p.validate(sid).stdout
@@ -728,7 +728,7 @@ class RealProjectsTest(unittest.TestCase):
             self.skipTest("SDD_REAL_PROJECTS not set")
         for path in paths:
             for command in (["validate"], ["waves"], ["status"], ["export"]):
-                out = subprocess.run([sys.executable, str(SCRIPT), *command], cwd=path, capture_output=True, text=True)
+                out = subprocess.run([sys.executable, str(SCRIPT), *command], check=False, cwd=path, capture_output=True, text=True)
                 self.assertNotIn("Traceback", out.stderr, f"{path}: {command}\n{out.stderr}")
 
 

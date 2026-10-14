@@ -16,10 +16,13 @@ Copie a pasta da skill para o diretório de skills da sua ferramenta, por exempl
 cp -R skills/sdd-management ~/.claude/skills/
 ```
 
-A ferramenta da skill (`scripts/spec_graph.py`) só precisa de Python 3.8+ e git.
+A ferramenta da skill (`scripts/spec_graph.py`) só precisa de Python 3.9+ e git.
 
 ## Testes
 
 ```bash
-cd skills/sdd-management && python3 -m unittest discover -s tests
+python3 -m unittest discover -s skills/sdd-management/tests   # suíte completa, inclui os testes de arquitetura
+uvx ruff check                                                 # lint (Ruff 0.17, configurado em ruff.toml)
 ```
+
+A CI (`.github/workflows/ci.yml`) roda os dois em todo PR, em Python 3.9 e 3.15.
