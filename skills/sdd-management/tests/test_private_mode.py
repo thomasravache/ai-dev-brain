@@ -279,7 +279,7 @@ class LeakPatternsTest(unittest.TestCase):
                 "def test_x():  # SPEC-0003:UT-01\n"
                 "## Mapa de Comportamentos\n"
                 "specs em /home/u/sdd/org/repo/specs\n")
-        found = sg.leak_findings(text, "a.py", sg.build_leak_patterns(self.SPEC_ROOT, []), [])
+        found = sg.leak_findings(text, "a.py", sg.build_leak_patterns(self.SPEC_ROOT, [], adr_ids=["ADR-0006"]), [])
         self.assertEqual(sorted({line for _, line, _, _ in found}), [1, 2, 3, 4, 5], found)
         self.assertTrue(all(origin == "a.py" for origin, _, _, _ in found))
 
@@ -362,6 +362,17 @@ class LeakCheckCommandTest(PrivateTestCase):
         out = self.e.run("leak-check", "--branch", "feat/x")
         self.assertEqual(out.returncode, 2)
         self.assertIn("(quebrada", out.stderr)
+
+    def test_team_adrs_are_not_leaks_but_mine_are(self):
+        """SPEC-0004:IT-11"""
+        self.assertEqual(self.e.run("new-adr", "--title", "Minha decisão").returncode, 0)
+        (self.e.repo / "a.py").write_text("# segue o ADR-0002 do time\n", encoding="utf-8")
+        (self.e.repo / "b.py").write_text("# ver ADR-0001\n", encoding="utf-8")
+        git(self.e.repo, "add", "a.py", "b.py", env=self.e.env)
+        out = self.e.run("leak-check", "--staged")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("b.py:1", out.stdout)
+        self.assertNotIn("a.py", out.stdout)
 
     def test_fifty_commits_in_under_two_seconds(self):
         """SPEC-0004:IT-10"""
