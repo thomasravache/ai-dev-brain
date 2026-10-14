@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -249,6 +250,183 @@ class FullModeGuardTest(PrivateTestCase):
         self.assertTrue(list((self.e.repo / "docs/specs").glob("SPEC-0001-*.md")))
         self.assertTrue((self.e.repo / "docs/specs/INDEX.md").exists())
         self.assertFalse((self.tmp / "sdd").exists())
+
+
+def commit_file(env, rel, content, message):
+    path = env.repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    git(env.repo, "add", "-A", env=env.env)
+    git(env.repo, "commit", "-qm", message, env=env.env)
+
+
+def pass_gates(spec: Path, *gates):
+    """Prepara a tabela de gates para um teste que exercita um gate posterior (a ordem é exigida pelo gate)."""
+    names = {"G0": "G0 Spec", "G1": "G1 Red", "G2": "G2 Green", "G3": "G3 Arquitetura"}
+    text = spec.read_text(encoding="utf-8")
+    for g in gates:
+        text = text.replace(f"| {names[g]} | PENDING | | |", f"| {names[g]} | PASS | preparado pelo teste | 2026-10-14 |")
+    spec.write_text(text, encoding="utf-8")
+
+
+class LeakPatternsTest(unittest.TestCase):
+    SPEC_ROOT = Path("/home/u/sdd/org/repo")
+
+    def test_default_patterns_find_each_mark_with_its_line(self):
+        """SPEC-0004:UT-01"""
+        text = ("// ver SPEC-0003\n"
+                "segue o ADR-0006\n"
+                "def test_x():  # SPEC-0003:UT-01\n"
+                "## Mapa de Comportamentos\n"
+                "specs em /home/u/sdd/org/repo/specs\n")
+        found = sg.leak_findings(text, "a.py", sg.build_leak_patterns(self.SPEC_ROOT, [], adr_ids=["ADR-0006"]), [])
+        self.assertEqual(sorted({line for _, line, _, _ in found}), [1, 2, 3, 4, 5], found)
+        self.assertTrue(all(origin == "a.py" for origin, _, _, _ in found))
+
+    def test_user_patterns_and_allowlist(self):
+        """SPEC-0004:UT-02"""
+        patterns = sg.build_leak_patterns(self.SPEC_ROOT, [r"\bProjetoFenix\b"])
+        found = sg.leak_findings("x = 'ProjetoFenix'\ny = 'SPEC-0000-exemplo'\n", "b.py", patterns,
+                                 ["SPEC-0000-exemplo"])
+        self.assertEqual([(line, snippet) for _, line, _, snippet in found], [(1, "x = 'ProjetoFenix'")])
+
+    def test_ordinary_code_is_clean(self):
+        """SPEC-0004:UT-03 (guarda)"""
+        text = ("def test_it_01_total(): assert soma(1, 1) == 2  # IT-01\n"
+                "# a spec do cliente pede ADR sem número\n"
+                "UT-01 = 'código de erro'\n")
+        self.assertEqual(sg.leak_findings(text, "c.py", sg.build_leak_patterns(self.SPEC_ROOT, []), []), [])
+
+
+class LeakCheckCommandTest(PrivateTestCase):
+    def setUp(self):
+        super().setUp()
+        self.e.init()
+
+    def test_reads_patterns_from_the_spec_root_config(self):
+        """SPEC-0004:CT-01"""
+        config = self.e.spec_root / "sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8") + '\nleak_patterns:\n  - "ProjetoFenix"\n', encoding="utf-8")
+        (self.e.repo / "a.py").write_text(f"x = 'ProjetoFenix'\ny = '{self.e.spec_root}'\n", encoding="utf-8")
+        git(self.e.repo, "add", "a.py", env=self.e.env)
+        out = self.e.run("leak-check", "--staged")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("a.py:1", out.stdout)
+        self.assertIn("a.py:2", out.stdout)
+
+    def test_staged_diff(self):
+        """SPEC-0004:IT-01"""
+        commit_file(self.e, "src/a.py", "x = 1\n", "base")
+        (self.e.repo / "src/a.py").write_text("x = 1\n// ver SPEC-0003\n", encoding="utf-8")
+        git(self.e.repo, "add", "-A", env=self.e.env)
+        out = self.e.run("leak-check", "--staged")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("src/a.py:2", out.stdout)
+
+    def test_commit_message_in_range(self):
+        """SPEC-0004:IT-02"""
+        commit_file(self.e, "src/a.py", "x = 1\n", "corrige soma\n\nRefs: SPEC-0003")
+        sha = git(self.e.repo, "rev-parse", "--short=7", "HEAD", env=self.e.env).strip()
+        out = self.e.run("leak-check", "--range", "HEAD~1..HEAD")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn(f"commit {sha}", out.stdout)
+
+    def test_branch_name(self):
+        """SPEC-0004:IT-03"""
+        out = self.e.run("leak-check", "--branch", "sdd/SPEC-0003-x")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("branch", out.stdout)
+
+    def test_pre_push_hook_blocks_marks_and_lets_clean_pushes_through(self):
+        """SPEC-0004:IT-04"""
+        hook = Path(git(self.e.repo, "rev-parse", "--git-path", "hooks", env=self.e.env).strip())
+        hook = (self.e.repo / hook / "pre-push") if not hook.is_absolute() else hook / "pre-push"
+        self.assertTrue(hook.exists())
+        bare = self.tmp / "team.git"
+        git(self.tmp, "init", "-q", "--bare", str(bare), env=self.e.env)
+        git(self.e.repo, "remote", "add", "team", str(bare), env=self.e.env)
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        ok = subprocess.run(["git", "push", "-q", "team", "HEAD:refs/heads/limpa"], cwd=self.e.repo,
+                            capture_output=True, text=True, env=self.e.env, check=False)
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        commit_file(self.e, "src/a.py", "x = 2\n", "corrige\n\nRefs: SPEC-0003")
+        bad = subprocess.run(["git", "push", "-q", "team", "HEAD:refs/heads/suja"], cwd=self.e.repo,
+                             capture_output=True, text=True, env=self.e.env, check=False)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertNotIn("suja", git(bare, "branch", env=self.e.env))
+
+    def test_wrong_regex_is_an_error(self):
+        """SPEC-0004:IT-08"""
+        config = self.e.spec_root / "sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8") + '\nleak_patterns:\n  - "(quebrada"\n', encoding="utf-8")
+        out = self.e.run("leak-check", "--branch", "feat/x")
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("(quebrada", out.stderr)
+
+    def test_team_adrs_are_not_leaks_but_mine_are(self):
+        """SPEC-0004:IT-11"""
+        self.assertEqual(self.e.run("new-adr", "--title", "Minha decisão").returncode, 0)
+        (self.e.repo / "a.py").write_text("# segue o ADR-0002 do time\n", encoding="utf-8")
+        (self.e.repo / "b.py").write_text("# ver ADR-0001\n", encoding="utf-8")
+        git(self.e.repo, "add", "a.py", "b.py", env=self.e.env)
+        out = self.e.run("leak-check", "--staged")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("b.py:1", out.stdout)
+        self.assertNotIn("a.py", out.stdout)
+
+    def test_fifty_commits_in_under_two_seconds(self):
+        """SPEC-0004:IT-10"""
+        for i in range(50):
+            commit_file(self.e, f"src/m{i}.py", f"x = {i}\n", f"passo {i}")
+        start = time.monotonic()
+        out = self.e.run("leak-check", "--range", "HEAD~50..HEAD")
+        elapsed = time.monotonic() - start
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertLess(elapsed, 2.0)
+
+
+class LeakIntegrationTest(PrivateTestCase):
+    def test_team_hook_manager_prevents_installing_the_hook(self):
+        """SPEC-0004:IT-05"""
+        git(self.e.repo, "config", "core.hooksPath", ".team-hooks", env=self.e.env)
+        out = self.e.init()
+        self.assertIn("core.hooksPath", out.stdout)
+        self.assertFalse((self.e.repo / ".git/hooks/pre-push").exists())
+        self.assertFalse((self.e.repo / ".team-hooks").exists())
+        other = PrivateEnv(self.tmp / "husky", remote_url="git@github.com:Org/Husky.git")
+        (other.repo / ".husky").mkdir()
+        other.spec_root = self.tmp / "sdd2"
+        out = other.init()
+        self.assertIn("husky", out.stdout)
+        self.assertFalse((other.repo / ".git/hooks/pre-push").exists())
+
+    def test_worktree_branch_and_folder_have_no_spec_id(self):
+        """SPEC-0004:IT-06"""
+        self.e.init()
+        self.assertEqual(self.e.run("new", "--tier", "full", "--title", "Múltiplos cartões").returncode, 0)
+        out = self.e.run("worktree", "SPEC-0001", "--create")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("feat/multiplos-cartoes", git(self.e.repo, "branch", "--list", env=self.e.env))
+        self.assertNotIn("SPEC", out.stdout)
+
+    def test_gate_with_leaked_commit_fails(self):
+        """SPEC-0004:IT-07"""
+        self.e.init()
+        self.e.run("new", "--tier", "lite", "--title", "Corrige soma")
+        spec = next((self.e.spec_root / "specs").glob("SPEC-0001-*.md"))
+        pass_gates(spec, "G0", "G1", "G2", "G3")
+        git(self.e.repo, "switch", "-q", "-c", "fix/corrige-soma", env=self.e.env)
+        commit_file(self.e, "src/a.py", "x = 1\n", "corrige soma\n\nRefs: SPEC-0001")
+        self.e.run("gate", "SPEC-0001", "G4", "--run", "--by", "revisor: APPROVED")
+        row = next(line for line in spec.read_text(encoding="utf-8").splitlines() if line.startswith("| G4"))
+        self.assertIn("FAIL", row)
+        self.assertIn("vazamento", row)
+
+    def test_full_mode_has_nothing_to_check(self):
+        """SPEC-0004:IT-09 (guarda)"""
+        out = self.e.run("leak-check")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("modo completo", out.stdout)
 
 
 if __name__ == "__main__":
