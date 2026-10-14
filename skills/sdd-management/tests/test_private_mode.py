@@ -262,7 +262,8 @@ def commit_file(env, rel, content, message):
 
 def pass_gates(spec: Path, *gates):
     """Prepara a tabela de gates para um teste que exercita um gate posterior (a ordem é exigida pelo gate)."""
-    names = {"G0": "G0 Spec", "G1": "G1 Red", "G2": "G2 Green", "G3": "G3 Arquitetura"}
+    names = {"G0": "G0 Spec", "G1": "G1 Red", "G2": "G2 Green", "G3": "G3 Arquitetura", "G4": "G4 Review",
+             "G5": "G5 Integração & CI", "H2": "H2 Integração aprovada", "G6": "G6 Deploy"}
     text = spec.read_text(encoding="utf-8")
     for g in gates:
         text = text.replace(f"| {names[g]} | PENDING | | |", f"| {names[g]} | PASS | preparado pelo teste | 2026-10-14 |")
@@ -427,6 +428,233 @@ class LeakIntegrationTest(PrivateTestCase):
         out = self.e.run("leak-check")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn("modo completo", out.stdout)
+
+
+PLAN_LINE = "- **UT-01** — {{teste de regressão: Dado..., quando..., então...}}"
+LITE_PLACEHOLDERS = {
+    "{{CH-01 — comportamento atual preservado | Caracterização: N/A — área já coberta}}": "Caracterização: N/A — área coberta",
+    "{{IT-01 ou E2E-01 — regressão no nível do defeito | Integração/E2E: N/A — motivo}}": "Integração: N/A — cálculo puro",
+}
+
+
+def write_plan(spec: Path, ut_line: str):
+    """Plano do lite com um único teste (UT-01) e as outras categorias N/A."""
+    text = spec.read_text(encoding="utf-8").replace(PLAN_LINE, ut_line)
+    for placeholder, value in LITE_PLACEHOLDERS.items():
+        text = text.replace(placeholder, value)
+    spec.write_text(text, encoding="utf-8")
+TEST_CMD = "test -f src/soma.py"
+
+
+def gate_row(spec: Path, gate: str) -> str:
+    return next(line for line in spec.read_text(encoding="utf-8").splitlines() if line.startswith(f"| {gate} "))
+
+
+def sha7(env, rev="HEAD"):
+    return git(env.repo, "rev-parse", "--short=7", rev, env=env.env).strip()
+
+
+class TraceUnitTest(unittest.TestCase):
+    def test_role_comes_from_the_files(self):
+        """SPEC-0005:UT-01"""
+        paths = sg.DEFAULT_TEST_PATHS
+        self.assertEqual(sg.role_by_files(["tests/a_test.py"], paths), "red")
+        self.assertEqual(sg.role_by_files(["src/a.py", "tests/a_test.py"], paths), "green")
+        self.assertEqual(sg.role_by_files(["src/a.py"], paths), "green")
+
+    def test_plan_line_target(self):
+        """SPEC-0005:UT-02"""
+        self.assertEqual(sg.parse_test_target("- **UT-01** — Dado x → tests/x.py::test_y"), ("tests/x.py", "test_y"))
+        self.assertEqual(sg.parse_test_target("- **UT-01** — Dado x -> tests/x.py::test_y"), ("tests/x.py", "test_y"))
+        self.assertIsNone(sg.parse_test_target("- **UT-01** — Dado x, quando y, então z."))
+
+
+class TraceTestCase(PrivateTestCase):
+    """Repositório em modo privado com uma spec lite cujo teste do plano aponta tests/test_soma.py::test_soma."""
+
+    target = "tests/test_soma.py::test_soma"
+
+    def setUp(self):
+        super().setUp()
+        self.e.init()
+        config = self.e.spec_root / "sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8").replace('test: ""', f'test: "{TEST_CMD}"'), encoding="utf-8")
+        self.e.run("new", "--tier", "lite", "--title", "Corrige soma")
+        self.spec = next((self.e.spec_root / "specs").glob("SPEC-0001-*.md"))
+        write_plan(self.spec, f"- **UT-01** — Dado 1 e 1, quando soma, então 2 → {self.target}")
+        self.e.run("set", "SPEC-0001", "touches=[src/**, tests/**]")
+        git(self.e.repo, "switch", "-q", "-c", "fix/corrige-soma", env=self.e.env)
+
+    def red(self):
+        commit_file(self.e, "tests/test_soma.py", "def test_soma():\n    assert soma(1, 1) == 2\n", "adiciona teste da soma")
+        return sha7(self.e)
+
+    def green(self):
+        commit_file(self.e, "src/soma.py", "def soma(a, b):\n    return a + b\n", "implementa a soma")
+        return sha7(self.e)
+
+    def verify(self):
+        return self.e.run("verify", "SPEC-0001").stdout
+
+
+class TraceVerifyTest(TraceTestCase):
+    def test_config_comes_from_the_spec_root(self):
+        """SPEC-0005:CT-01"""
+        config = self.e.spec_root / "sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8") + '\ntest_paths:\n  - "checks/**"\n', encoding="utf-8")
+        text = self.spec.read_text(encoding="utf-8").replace(self.target, "checks/soma_check.py::test_soma")
+        self.spec.write_text(text, encoding="utf-8")
+        self.e.run("set", "SPEC-0001", "touches=[src/**, checks/**]")
+        commit_file(self.e, "checks/soma_check.py", "def test_soma(): pass\n", "adiciona checagem")
+        self.green()
+        out = self.verify()
+        self.assertIn("[G1] PASS  Red antes do Green", out)
+        self.assertNotIn("[G1] FAIL", out)
+
+    def test_red_before_green_without_marks(self):
+        """SPEC-0005:IT-01"""
+        self.red()
+        self.green()
+        out = self.verify()
+        self.assertIn("[G1] PASS  Red antes do Green", out)
+        self.assertNotIn("[G1] FAIL", out)
+        self.assertIn("[G4] PASS", out)
+
+    def test_green_before_red_fails(self):
+        """SPEC-0005:IT-02"""
+        early = self.green()
+        self.red()
+        out = self.verify()
+        self.assertIn("[G1] FAIL  implementação antes dos testes", out)
+        self.assertIn(early, out)
+
+    def test_missing_planned_test_fails(self):
+        """SPEC-0005:IT-03"""
+        self.spec.write_text(self.spec.read_text(encoding="utf-8").replace("::test_soma", "::test_inexistente"),
+                             encoding="utf-8")
+        self.red()
+        self.green()
+        out = self.verify()
+        self.assertIn("tests/test_soma.py::test_inexistente", out)
+        self.assertIn("UT-01", out)
+
+    def test_commits_are_recorded_in_the_spec_root(self):
+        """SPEC-0005:IT-08"""
+        pass_gates(self.spec, "G0")
+        red, green = self.red(), self.green()
+        self.e.run("gate", "SPEC-0001", "G1", "--run", "--at", red)
+        self.e.run("gate", "SPEC-0001", "G2", "--run")
+        text = self.spec.read_text(encoding="utf-8")
+        self.assertIn("## Commits", text)
+        rows = [line for line in text.splitlines() if line.startswith(("| red ", "| green "))]
+        self.assertTrue(any(red in r for r in rows) and any(green in r for r in rows), rows)
+        self.assertTrue(all(len(r.split("|")[3].strip()) >= 7 for r in rows), rows)
+        self.assertEqual(self.e.repo_status(), "")
+        self.assertIn("sdd: gate", "\n".join(self.e.root_log()))
+
+
+class GateAtRedCommitTest(TraceTestCase):
+    def test_g1_at_red_commit_in_private_and_full_modes(self):
+        """SPEC-0005:IT-04"""
+        pass_gates(self.spec, "G0")
+        red = self.red()
+        self.green()
+        self.e.run("gate", "SPEC-0001", "G1", "--run", "--at", red)
+        row = gate_row(self.spec, "G1")
+        self.assertIn("PASS", row)
+        self.assertIn(red, row)
+        self.assertEqual(self.e.run("gate", "SPEC-0001", "G1", "--run", "--at", "0123abc").returncode, 2)
+        self.assertEqual(len(git(self.e.repo, "worktree", "list", env=self.e.env).splitlines()), 1)
+
+        full = PrivateEnv(self.tmp / "full", remote_url=None)
+        (full.repo / "docs/specs").mkdir(parents=True)
+        (full.repo / "docs/specs/sdd-config.yml").write_text(f'base_branch: main\ntest: "{TEST_CMD}"\n', encoding="utf-8")
+        git(full.repo, "add", "-A", env=full.env)
+        git(full.repo, "commit", "-qm", "chore: sdd", env=full.env)
+        full.run("new", "--tier", "lite", "--title", "Corrige soma")
+        spec = next((full.repo / "docs/specs").glob("SPEC-0001-*.md"))
+        write_plan(spec, "- **UT-01** — Dado 1 e 1, então 2")
+        pass_gates(spec, "G0")
+        full.run("set", "SPEC-0001", "touches=[src/**, tests/**, docs/**]")
+        git(full.repo, "add", "-A", env=full.env)
+        git(full.repo, "commit", "-qm", "docs: spec\n\nRefs: SPEC-0001", env=full.env)
+        git(full.repo, "switch", "-q", "-c", "sdd/SPEC-0001", env=full.env)
+        commit_file(full, "tests/test_soma.py", "# SPEC-0001:UT-01\ndef test_soma(): pass\n", "test: soma\n\nRefs: SPEC-0001")
+        full_red = sha7(full)
+        commit_file(full, "src/soma.py", "def soma(a, b): return a + b\n", "fix: soma\n\nRefs: SPEC-0001")
+        full.run("gate", "SPEC-0001", "G1", "--run")
+        row = gate_row(spec, "G1")
+        self.assertIn("FAIL", row)
+        self.assertIn("--at", row)
+        git(full.repo, "add", "-A", env=full.env)
+        git(full.repo, "commit", "-qm", "docs: registra G1\n\nRefs: SPEC-0001", env=full.env)
+        full.run("gate", "SPEC-0001", "G1", "--run", "--at", full_red)
+        row = gate_row(spec, "G1")
+        self.assertIn("PASS", row)
+        self.assertIn(full_red, row)
+
+
+class MergeDetectionTest(TraceTestCase):
+    def deliver(self):
+        """Red, green e G1 registrado (o registro de commits guarda SHAs e patch-ids); depois volta para a main."""
+        pass_gates(self.spec, "G0")
+        red = self.red()
+        self.green()
+        self.e.run("gate", "SPEC-0001", "G1", "--run", "--at", red)
+        git(self.e.repo, "switch", "-q", "main", env=self.e.env)
+        pass_gates(self.spec, "G2", "G3", "G4", "G5", "H2", "G6")
+
+    def test_squash(self):
+        """SPEC-0005:IT-05"""
+        self.deliver()
+        git(self.e.repo, "merge", "-q", "--squash", "fix/corrige-soma", env=self.e.env)
+        git(self.e.repo, "commit", "-qm", "Corrige soma (#12)", env=self.e.env)
+        self.e.run("gate", "SPEC-0001", "G7", "--run")
+        row = gate_row(self.spec, "G7")
+        self.assertIn("squash", row)
+        self.assertIn(sha7(self.e), row)
+
+    def test_rebase(self):
+        """SPEC-0005:IT-06"""
+        self.deliver()
+        commits = git(self.e.repo, "rev-list", "--reverse", "main..fix/corrige-soma", env=self.e.env).split()
+        git(self.e.repo, "cherry-pick", *commits, env=self.e.env)
+        self.e.run("gate", "SPEC-0001", "G7", "--run")
+        self.assertIn("rebase", gate_row(self.spec, "G7"))
+
+    def test_merge_commit_and_missing_merge(self):
+        """SPEC-0005:IT-07"""
+        self.deliver()
+        self.e.run("gate", "SPEC-0001", "G7", "--run")
+        row = gate_row(self.spec, "G7")
+        self.assertIn("FAIL", row)
+        self.assertIn("não encontrado", row)
+        git(self.e.repo, "merge", "-q", "--no-ff", "fix/corrige-soma", "-m", "Merge feature", env=self.e.env)
+        self.e.run("gate", "SPEC-0001", "G7", "--run")
+        self.assertIn("merge", gate_row(self.spec, "G7"))
+
+
+class FullModeVerifyGuardTest(PrivateTestCase):
+    def test_full_mode_verify_still_uses_messages_and_tags(self):
+        """SPEC-0005:IT-09 (guarda)"""
+        repo = self.e
+        (repo.repo / "docs/specs").mkdir(parents=True)
+        (repo.repo / "docs/specs/sdd-config.yml").write_text("base_branch: main\n", encoding="utf-8")
+        git(repo.repo, "add", "-A", env=repo.env)
+        git(repo.repo, "commit", "-qm", "chore: sdd", env=repo.env)
+        repo.run("new", "--tier", "lite", "--title", "Corrige soma")
+        spec = next((repo.repo / "docs/specs").glob("SPEC-0001-*.md"))
+        write_plan(spec, "- **UT-01** — Dado 1 e 1, então 2")
+        repo.run("set", "SPEC-0001", "touches=[src/**, tests/**]")
+        git(repo.repo, "add", "-A", env=repo.env)
+        git(repo.repo, "commit", "-qm", "docs: spec\n\nRefs: SPEC-0001", env=repo.env)
+        git(repo.repo, "switch", "-q", "-c", "sdd/SPEC-0001", env=repo.env)
+        commit_file(repo, "tests/test_soma.py", "# SPEC-0001:UT-01\n", "test: soma\n\nRefs: SPEC-0001")
+        commit_file(repo, "src/soma.py", "x = 1\n", "fix: soma\n\nRefs: SPEC-0001")
+        out = repo.run("verify", "SPEC-0001").stdout
+        self.assertIn("[G1] PASS  Red antes do Green", out)
+        self.assertIn("rastreabilidade: 1/1", out)
+        self.assertNotIn("[G1] FAIL", out)
 
 
 if __name__ == "__main__":
