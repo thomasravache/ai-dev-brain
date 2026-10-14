@@ -53,4 +53,4 @@ Comando `lint` do sdd-config (`ruff check`) na CI e no G2; configuração em `ru
 | Erros pegos antes da revisão (3) | sim | sim | não |
 
 ## Mais Informações
-Referências neutras: documentação oficial do Ruff (docs.astral.sh/ruff). Versão: não verificada neste ADR — a SPEC-0001 fixa a versão na CI e registra a data da verificação.
+Referências neutras: documentação oficial do Ruff (docs.astral.sh/ruff). Fontes: https://docs.astral.sh/ruff/ e https://pypi.org/project/ruff/ (consultado em 2026-10-14). Versão: Ruff 0.17.0, conferida no mesmo dia com `uvx ruff --version`. Uso local: `uvx ruff check`.

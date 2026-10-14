@@ -42,7 +42,7 @@ Cria a CI do `ai-dev-brain`: em todo PR roda o lint (Ruff), os testes de arquite
 ## 3. Dependências
 - **Implementações necessárias:** N/A
 - **Contratos consumidos:** N/A
-- **Pré-requisitos externos:** GitHub Actions habilitado no repositório (privado, plano gratuito: 2.000 minutos/mês; a suíte leva ~14 s localmente).
+- **Pré-requisitos externos:** Ruff 0.17.0 (verificado em 2026-10-14 via `uvx ruff --version`, PyPI); GitHub Actions habilitado no repositório (privado, plano gratuito: 2.000 minutos/mês; a suíte leva ~14 s localmente).
 
 ## 4. Decisão Arquitetural
 **Contexto:** projeto existente. Os testes seguem o padrão de `skills/sdd-management/tests/test_spec_graph.py` (`unittest`, script importado como `sg` para funções puras). O workflow segue o padrão de `skills/sdd-management/assets/ci/github-actions.yml` (permissões mínimas, `concurrency`, checkout sem credenciais persistidas).
@@ -51,7 +51,7 @@ Cria a CI do `ai-dev-brain`: em todo PR roda o lint (Ruff), os testes de arquite
 
 **Justificativa:** o `sdd.yml` é arquivo de controle mantido pelo `vendor`; misturar os jobs faria o `vendor` apontar o arquivo como customizado. `ast` não exige dependência (ADR-0001) e funciona em 3.9.
 
-**Desvio do padrão existente:** Nenhum. Ruff entra só na CI (ADR-0003), não no script.
+**Desvio do padrão existente:** Nenhum. Ruff entra só na CI e no `uvx` local (ADR-0003), não no script. Levantamento em 2026-10-14: 37 achados em `skills/` (21 corrigíveis automaticamente; o resto são variáveis desempacotadas sem uso, `subprocess.run` sem `check` onde o retorno já é conferido, flags de regex e concatenações implícitas) — ajustes sem mudança de comportamento, protegidos pela suíte existente.
 
 **Alternativas descartadas:** testes de arquitetura por `grep` em texto (frágil com strings e comentários); acrescentar os passos no `sdd.yml` (conflito com o `vendor`).
 
@@ -73,7 +73,7 @@ Cria a CI do `ai-dev-brain`: em todo PR roda o lint (Ruff), os testes de arquite
   on: pull_request; push na main
   permissions: contents: read
   job ci — matriz python: ["3.9", "<versão estável mais recente, fixada e verificada na implementação>"]
-    1. ruff check            (Ruff em versão fixa; só na versão mais recente do Python)
+    1. ruff check            (Ruff 0.17.0 fixo; só na versão mais recente do Python)
     2. python -m unittest discover -s skills/sdd-management/tests   (inclui test_architecture.py)
   Sucesso: todos os passos verdes. Falha: qualquer achado de lint, teste ou regra de arquitetura → job vermelho.
 
@@ -82,7 +82,8 @@ docs/specs/sdd-config.yml
   arch_test: "python3 -m unittest discover -s skills/sdd-management/tests -p test_architecture.py"
 
 ruff.toml
-  target-version = "py39"; regras padrão do Ruff
+  target-version = "py39"; regras padrão do Ruff 0.17; exclui tools/ (cópia do vendor, recebe os ajustes pelo vendor)
+  ignorar uma regra exige comentário com o motivo ao lado (ex.: PLW1510 onde o código já confere returncode)
 
 skills/sdd-management/tests/test_architecture.py — mensagem de falha (uma linha por violação):
   <arquivo>:<linha> — <regra do ADR-0001 violada> — <o que foi encontrado>
@@ -155,7 +156,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PASS | validate: 0 erro(s) — 4961077 | 2026-10-14 |
+| G0 Spec | PASS | validate: 0 erro(s) — 2f0733b (árvore suja) | 2026-10-14 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
