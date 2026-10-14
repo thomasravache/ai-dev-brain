@@ -741,21 +741,143 @@ def cmd_private(project: Project, action: str, spec_root, sync):
         run_git(target, "init", "-q")
     commit_spec_root(target, sync, "sdd: private init")
     print(f"modo privado ativado para {key}\n  spec_root: {target}\n  sync: {sync}")
+    print(install_leak_hook(root))
     return 0
+
+
+LEAK_SECTION_TITLES = ("Mapa de Comportamentos", "Registro de Gates", "Relatório de Entrega",
+                       "Registro de Impedimentos", "Questões em Aberto", "Definição de Pronto")
+TEAM_HOOK_MARKERS = ((".husky", "husky"), ("lefthook.yml", "lefthook"), (".lefthook.yml", "lefthook"),
+                     (".pre-commit-config.yaml", "pre-commit"))
 
 
 def build_leak_patterns(spec_root, extra):
     """Padrões do leak-check: [(rótulo, regex compilada)] — padrões padrão, caminho do spec_root e extras do usuário."""
-    return []
+    patterns = [("tag de teste", re.compile(r"\bSPEC-\d{4,}:[A-Z0-9]+-\d+\b")),
+                ("ID de spec", re.compile(r"\bSPEC-\d{4,}\b")),
+                ("ID de ADR", re.compile(r"\bADR-\d{4,}\b")),
+                ("sdd-config", re.compile(r"\bsdd-config\b"))]
+    patterns += [("seção do SDD", re.compile(re.escape(title))) for title in LEAK_SECTION_TITLES]
+    if spec_root:
+        root = Path(spec_root)
+        patterns.append(("caminho do spec_root", re.compile(re.escape(str(root)))))
+        try:
+            patterns.append(("caminho do spec_root", re.compile(re.escape("~/" + root.relative_to(Path.home()).as_posix()))))
+        except ValueError:
+            pass
+    for pattern in extra or []:
+        try:
+            patterns.append(("leak_patterns", re.compile(pattern)))
+        except re.error as e:
+            raise ValueError(f"leak_patterns: regex inválida '{pattern}': {e}") from e
+    return patterns
 
 
-def leak_findings(text: str, origin: str, patterns, allow):
-    """Achados de vazamento em text: [(origem, linha, rótulo, trecho)]."""
-    return []
+def leak_findings(text: str, origin: str, patterns, allow, first_line: int = 1):
+    """Achados de vazamento em text: [(origem, linha, rótulo, trecho)]. leak_allow é testado contra o trecho."""
+    try:
+        allowed = [re.compile(a) for a in allow or []]
+    except re.error as e:
+        raise ValueError(f"leak_allow: regex inválida: {e}") from e
+    found = []
+    for number, line in enumerate(text.splitlines(), first_line):
+        snippet = line.strip()[:80]
+        labels = []
+        for label, rx in patterns:
+            if rx.search(line) and label not in labels:
+                labels.append(label)
+        if labels and not any(a.search(snippet) for a in allowed):
+            found.append((origin, number, ", ".join(labels), snippet))
+    return found
+
+
+def added_lines(diff: str):
+    """Linhas adicionadas num diff -U0: [(arquivo, linha, texto)]."""
+    out, path, number = [], None, 0
+    for line in diff.splitlines():
+        if line.startswith("+++ "):
+            path = line[6:] if line.startswith("+++ b/") else None
+        elif line.startswith("@@"):
+            m = re.match(r"@@ -\S+ \+(\d+)", line)
+            number = int(m.group(1)) if m else 0
+        elif line.startswith("+") and path:
+            out.append((path, number, line[1:]))
+            number += 1
+    return out
+
+
+def leak_scan(project: Project, root: Path, staged=False, rng=None, message=None, branch=None):
+    """Coleta as fontes (diff staged, commits do intervalo, mensagem, branch) e devolve os achados."""
+    try:
+        patterns = build_leak_patterns(project.spec_root, project.cfg_list("leak_patterns", []))
+        allow = project.cfg_list("leak_allow", [])
+        leak_findings("", "", patterns, allow)
+    except ValueError as e:
+        die(str(e))
+    found = []
+    if staged:
+        for path, number, text in added_lines(run_git(root, "diff", "--cached", "-U0", "--no-color")[1]):
+            found += leak_findings(text, path, patterns, allow, number)
+    if rng:
+        start, _, end = rng.partition("..")
+        if start.strip("0") == "":
+            code, out, err = run_git(root, "rev-list", end or "HEAD", "--not", "--remotes")
+        else:
+            code, out, err = run_git(root, "rev-list", rng)
+        if code != 0:
+            die(f"intervalo inválido '{rng}': {err.strip()}")
+        for sha in out.split():
+            found += leak_findings(run_git(root, "log", "-1", "--format=%B", sha)[1], f"commit {sha[:7]}", patterns, allow)
+            for path, number, text in added_lines(run_git(root, "show", "-U0", "--format=", "--no-color", sha)[1]):
+                found += leak_findings(text, f"{path} ({sha[:7]})", patterns, allow, number)
+    if message:
+        found += leak_findings(Path(message).read_text(encoding="utf-8"), "mensagem", patterns, allow)
+    if branch:
+        found += leak_findings(branch, "branch", patterns, allow)
+    return found
 
 
 def cmd_leak_check(project: Project, staged: bool, rng, message, branch):
-    die("leak-check: não implementado")
+    if not project.private:
+        print("modo completo: nada a checar (o leak-check vale para repositórios em modo privado)")
+        return 0
+    root = project.root
+    if not (staged or rng or message or branch):
+        staged = True
+        branch = run_git(root, "rev-parse", "--abbrev-ref", "HEAD")[1].strip()
+        code, base, _ = run_git(root, "merge-base", project.cfg("base_branch", "main"), "HEAD")
+        rng = f"{base.strip()}..HEAD" if code == 0 else None
+    found = leak_scan(project, root, staged, rng, message, branch)
+    for origin, number, label, snippet in found:
+        where = "branch" if origin == "branch" else f"{origin}:{number}"
+        print(f"[LEAK] FAIL {where} — {label} — \"{snippet}\"")
+    print(f"Resultado: {'FAIL' if found else 'PASS'} — {len(found)} achado(s)")
+    return 1 if found else 0
+
+
+def team_hook_manager(root: Path):
+    code, out, _ = run_git(root, "config", "--get", "core.hooksPath")
+    if code == 0 and out.strip():
+        return "core.hooksPath"
+    return next((label for name, label in TEAM_HOOK_MARKERS if (root / name).exists()), None)
+
+
+def install_leak_hook(root: Path) -> str:
+    """Instala o pre-push do leak-check em .git/hooks quando é seguro; devolve a mensagem para o usuário."""
+    manager = team_hook_manager(root)
+    if manager:
+        return (f"⚠ hooks do time detectados ({manager}): o hook local não foi instalado; o leak-check roda dentro de "
+                "worktree/gate/pr — rode `leak-check` antes de cada push")
+    hooks = Path(run_git(root, "rev-parse", "--git-path", "hooks")[1].strip())
+    hook = (hooks if hooks.is_absolute() else root / hooks) / "pre-push"
+    if hook.exists():
+        return f"⚠ {hook} já existe: o hook do leak-check não foi instalado — rode `leak-check` antes de cada push"
+    text = (ASSETS_DIR / "hooks" / "pre-push-leak").read_text(encoding="utf-8")
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text(text.replace("__PYTHON__", sys.executable).replace("__SDD_TOOL__", str(Path(__file__).resolve())),
+                    encoding="utf-8")
+    hook.chmod(0o755)
+    return f"hook pre-push do leak-check instalado em {hook} (local, não versionado)"
 
 
 def die(msg: str, code: int = 2):
@@ -973,6 +1095,8 @@ def spec_slug(doc: Doc) -> str:
 
 def worktree_for(project: Project, doc: Doc):
     slug = spec_slug(doc)
+    if project.private:
+        return worktree_base(project) / slug, f"{CONVENTIONAL_BY_TYPE.get(doc.type, 'feat')}/{slug}"
     return worktree_base(project) / f"{doc.id}-{slug}", f"sdd/{doc.id}-{slug}"
 
 
@@ -1058,6 +1182,11 @@ def cmd_worktree(project: Project, spec_id: str, create: bool, base):
     if not create:
         print(f"{path}\n{branch}")
         return 0
+    if project.private:
+        n, first_path, first_branch = 2, path, branch
+        while path.exists():
+            path, branch = first_path.with_name(f"{first_path.name}-{n}"), f"{first_branch}-{n}"
+            n += 1
     if path.exists():
         die(f"{path} já existe")
     start = base or (f"sdd/{doc.scalar('parent')}" if doc.scalar("parent") else project.cfg("base_branch", "main"))
@@ -2398,6 +2527,16 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
             code, summary = run_shell(project.cfg(key), workdir)
             parts.append(f"{key} exit {code} ({summary})")
             ok = ok and code == 0
+    if project.private and gate in ("G4", "G5"):
+        code, merge_base, _ = run_git(workdir, "merge-base", project.cfg("base_branch", "main"), "HEAD")
+        branch = run_git(workdir, "rev-parse", "--abbrev-ref", "HEAD")[1].strip()
+        leaks = leak_scan(project, workdir, rng=f"{merge_base.strip()}..HEAD" if code == 0 else None, branch=branch)
+        if leaks:
+            ok = False
+            origin, number, label, _ = leaks[0]
+            parts.append(f"vazamento: {len(leaks)} achado(s) (1º: {origin}:{number} — {label})")
+        else:
+            parts.append("leak-check: limpo")
     evidence_text = "; ".join(parts) + f" — {sha}" + (" (árvore suja)" if dirty else "")
     set_gate_row(doc, gate, "PASS" if ok else "FAIL", evidence_text)
     print(f"{spec_id} {gate} = {'PASS' if ok else 'FAIL'} — {evidence_text}")

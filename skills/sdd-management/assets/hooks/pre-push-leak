@@ -1,0 +1,11 @@
+#!/bin/sh
+# SDD modo privado: recusa o push quando há marcas do SDD (IDs de spec e ADR, tags de teste, seções, caminho do spec_root).
+# Instalado por `spec_graph.py private init` em .git/hooks (não versionado). Escape do próprio git: git push --no-verify
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  "__PYTHON__" "__SDD_TOOL__" leak-check --range "$remote_sha..$local_sha" --branch "${remote_ref#refs/heads/}" || status=1
+done
+[ "$status" -eq 0 ] || echo "pre-push: marcas do SDD encontradas — remova-as antes de enviar ao time" >&2
+exit $status
