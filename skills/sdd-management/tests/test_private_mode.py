@@ -726,7 +726,7 @@ class TeamConventionsUnitTest(unittest.TestCase):
         self.assertIn("references/private-mode.md", skill)
         guide = (SKILL / "references" / "private-mode.md").read_text(encoding="utf-8")
         headings = [line[3:] for line in guide.splitlines() if line.startswith("## ")]
-        for topic in ("Ativação", "Onde fica o quê", "Commits e branch", "Gates", "Leak-check", "Limites"):
+        for topic in ("Activation", "Where things live", "Commits and branches", "Gates", "Leak-check", "Limits"):
             self.assertTrue(any(topic in h for h in headings), topic)
 
 
