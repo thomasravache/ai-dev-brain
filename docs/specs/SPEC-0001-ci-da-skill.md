@@ -187,7 +187,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 13. Registro de Impedimentos
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
-| IMP-01 | 2026-10-14 | G1 | spec | UT-05/UT-06 proíbem 'referenciar' tools/sdd, mas o vendor cita esse caminho como destino da cópia (spec_graph.py:22, :70, :2803) e os testes do vendor conferem o destino; a guarda reprovaria código correto | conferido com grep em scripts/ e tests/ | Architect + thomas |  |  |
+| IMP-01 | 2026-10-14 | G1 | spec | UT-05/UT-06 proíbem 'referenciar' tools/sdd, mas o vendor cita esse caminho como destino da cópia (spec_graph.py:22, :70, :2803) e os testes do vendor conferem o destino; a guarda reprovaria código correto | conferido com grep em scripts/ e tests/ | Architect + thomas | Emenda v2 — regra da cópia do vendor proíbe carregar código de tools/sdd (import ou sys.path), não citar o caminho; aprovada por thomas em 2026-10-14 | 2026-10-14 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). -->
@@ -221,4 +221,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
-| 2 | 2026-10-14 | Regra da cópia do vendor: proíbe carregar código de `tools/sdd` (import ou `sys.path`), não citar o caminho; UT-05/UT-06 e Mapa ajustados | IMP-01: o `vendor` cita `tools/sdd` como destino e a guarda reprovaria código correto | Nenhuma | pendente (H1) |
+| 2 | 2026-10-14 | Regra da cópia do vendor: proíbe carregar código de `tools/sdd` (import ou `sys.path`), não citar o caminho; UT-05/UT-06 e Mapa ajustados | IMP-01: o `vendor` cita `tools/sdd` como destino e a guarda reprovaria código correto | Nenhuma | thomas, 2026-10-14 |
