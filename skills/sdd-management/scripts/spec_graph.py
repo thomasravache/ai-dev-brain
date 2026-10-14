@@ -15,7 +15,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.10.1"
+SDD_TOOL_VERSION = "2026.10.2"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -456,11 +456,87 @@ def plan_test_ids(doc: Doc):
     return sorted(set(TEST_ID_RE.findall(plan)), key=test_sort_key)
 
 
+PRIVATE_BANNER = "MODO PRIVADO"
+# Comandos que gravam registros: em modo privado, cada um termina com um commit no git do spec_root.
+RECORD_COMMANDS = {"new", "new-adr", "set", "gate", "impede", "resolve", "index", "upgrade"}
+
+
+def normalize_remote(url: str) -> str:
+    """Chave do registro do modo privado: host/caminho do remoto, sem protocolo, usuário, porta e .git."""
+    url = url.strip()
+    m = (re.match(r"^[\w+.-]+://(?:[^@/]+@)?([^/:]+)(?::\d+)?/(.+)$", url)
+         or re.match(r"^(?:[^@/]+@)?([^/:]+):(?!//)(.+)$", url))
+    if not m:
+        return url.rstrip("/")
+    path = m.group(2).strip("/")
+    path = path.removesuffix(".git")
+    return f"{m.group(1).lower()}/{path}"
+
+
+def registry_path() -> Path:
+    if os.environ.get("SDD_CONFIG_HOME"):
+        return Path(os.environ["SDD_CONFIG_HOME"]) / "projects.json"
+    base = Path(os.environ["XDG_CONFIG_HOME"]) if os.environ.get("XDG_CONFIG_HOME") else Path.home() / ".config"
+    return base / "sdd" / "projects.json"
+
+
+def load_registry() -> dict:
+    path = registry_path()
+    if not path.exists():
+        return {"projects": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as e:
+        die(f"registro inválido: {path}: {e}")
+    if not isinstance(data, dict) or not isinstance(data.get("projects", {}), dict):
+        die(f"registro inválido: {path}: esperado um objeto com \"projects\"")
+    data.setdefault("projects", {})
+    return data
+
+
+def save_registry(data: dict):
+    path = registry_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def repo_keys(root: Path):
+    """Chaves possíveis do repositório no registro: remoto normalizado e caminho da worktree principal."""
+    keys = []
+    code, out, _ = run_git(root, "remote", "get-url", "origin")
+    if code == 0 and out.strip():
+        keys.append(normalize_remote(out))
+    code, out, _ = run_git(root, "rev-parse", "--git-common-dir")
+    main = (root / out.strip()).resolve().parent if code == 0 and out.strip() else root.resolve()
+    keys.append(str(main))
+    return keys
+
+
+def resolve_mode(root: Path):
+    """Entrada do registro do usuário para o repositório em root, ou None (modo completo)."""
+    if not registry_path().exists():
+        return None
+    projects = load_registry()["projects"]
+    for key in repo_keys(root):
+        entry = projects.get(key)
+        if isinstance(entry, dict) and entry.get("mode") == "private" and entry.get("spec_root"):
+            return {"key": key, "mode": "private", "spec_root": Path(entry["spec_root"]).expanduser(),
+                    "sync": entry.get("sync") or "none"}
+    return None
+
+
 class Project:
     def __init__(self, root: Path):
         self.root = root
-        self.specs_dir = root / "docs" / "specs"
-        self.adr_dir = root / "docs" / "adr"
+        mode = resolve_mode(root)
+        self.private = mode is not None
+        self.mode_key = mode["key"] if mode else None
+        self.spec_root = mode["spec_root"] if mode else None
+        self.sync = mode["sync"] if mode else "none"
+        base = self.spec_root if mode else root / "docs"
+        self.specs_dir = base / "specs"
+        self.adr_dir = base / "adr"
+        self.config_path = (self.spec_root if mode else self.specs_dir) / "sdd-config.yml"
         self.config = self._load_config()
         self.specs = {}
         self.adrs = {}
@@ -468,7 +544,7 @@ class Project:
         self._load()
 
     def _load_config(self) -> dict:
-        path = self.specs_dir / "sdd-config.yml"
+        path = self.config_path
         return parse_yaml_subset(path.read_text(encoding="utf-8")) if path.exists() else {}
 
     def cfg(self, key: str, default: str = "") -> str:
@@ -576,6 +652,96 @@ def find_root(start: Path) -> Path:
         if (p / "docs" / "specs").is_dir() or (p / ".git").exists():
             return p
     return start
+
+
+def commit_spec_root(spec_root: Path, sync: str, message: str):
+    """Commit de tudo o que mudou no spec_root; push quando sync = push e há remoto. Falhas viram aviso."""
+    run_git(spec_root, "add", "-A")
+    if run_git(spec_root, "diff", "--cached", "--quiet")[0] == 0:
+        return
+    code, _, err = run_git(spec_root, "commit", "-q", "-m", message)
+    if code != 0:
+        print(f"aviso: commit no spec_root falhou ({spec_root}): {err.strip()}", file=sys.stderr)
+        return
+    remote = run_git(spec_root, "remote")[1].split()
+    if sync == "push" and remote:
+        code, _, err = run_git(spec_root, "push", "-q", remote[0], "HEAD")
+        if code != 0:
+            print(f"aviso: push do spec_root falhou ({remote[0]}): {err.strip()}", file=sys.stderr)
+
+
+def commit_records(project: Project, message: str):
+    """Modo privado: commit dos registros no git do spec_root (e push com sync: push)."""
+    if project.private:
+        commit_spec_root(project.spec_root, project.sync, message)
+
+
+def spec_root_pending(spec_root: Path, sync: str):
+    """Avisos sobre o spec_root: mudanças sem commit e commits sem push."""
+    out = []
+    changed = run_git(spec_root, "status", "--porcelain")[1].splitlines()
+    if changed:
+        out.append(f"spec_root com {len(changed)} mudança(s) sem commit em {spec_root}")
+    if sync == "push":
+        code, ahead, _ = run_git(spec_root, "rev-list", "--count", "@{u}..HEAD")
+        if code == 0 and ahead.strip() not in ("", "0"):
+            out.append(f"spec_root com {ahead.strip()} commit(s) sem push")
+    return out
+
+
+def cmd_private(project: Project, action: str, spec_root, sync):
+    root = project.root
+    registry = load_registry()
+    projects = registry["projects"]
+    if action == "status":
+        if not project.private:
+            print(f"modo completo: nenhuma entrada para este repositório em {registry_path()}")
+            return 0
+        print(f"modo privado: {project.mode_key}\n  spec_root: {project.spec_root}\n  sync: {project.sync}")
+        for warning in spec_root_pending(project.spec_root, project.sync):
+            print(f"⚠ {warning}")
+        return 0
+    if action == "off":
+        key = next((k for k in repo_keys(root) if k in projects), None)
+        if key is None:
+            print("nada a desligar: este repositório não está no registro")
+            return 0
+        entry = projects.pop(key)
+        save_registry(registry)
+        print(f"modo privado desligado para {key}; o spec_root continua em {entry.get('spec_root')}")
+        return 0
+    if run_git(root, "rev-parse", "--is-inside-work-tree")[0] != 0:
+        die("private init roda dentro de um repositório git")
+    if run_git(root, "ls-files", "docs/specs")[1].strip():
+        die("este repositório usa o SDD versionado (modo completo) em docs/specs; o modo privado é para "
+            "repositórios onde o SDD não está no repositório")
+    keys = repo_keys(root)
+    key = keys[0]
+    current = next((projects[k] for k in keys if isinstance(projects.get(k), dict)), {})
+    if spec_root:
+        target = Path(spec_root).expanduser()
+    elif current.get("spec_root"):
+        target = Path(current["spec_root"]).expanduser()
+    else:
+        data_home = Path(os.environ["XDG_DATA_HOME"]) if os.environ.get("XDG_DATA_HOME") else Path.home() / ".local/share"
+        default_root = Path(registry["default_root"]).expanduser() if registry.get("default_root") else data_home / "sdd"
+        target = default_root.joinpath(*key.split("/")[-2:])
+    target = target.resolve()
+    sync = sync or current.get("sync") or "none"
+    for k in keys:
+        projects.pop(k, None)
+    projects[key] = {"mode": "private", "spec_root": str(target), "sync": sync}
+    save_registry(registry)
+    (target / "specs").mkdir(parents=True, exist_ok=True)
+    (target / "adr").mkdir(exist_ok=True)
+    config = target / "sdd-config.yml"
+    if not config.exists():
+        config.write_text((TEMPLATES_DIR / "sdd-config.template.yml").read_text(encoding="utf-8"), encoding="utf-8")
+    if not (target / ".git").exists():
+        run_git(target, "init", "-q")
+    commit_spec_root(target, sync, "sdd: private init")
+    print(f"modo privado ativado para {key}\n  spec_root: {target}\n  sync: {sync}")
+    return 0
 
 
 def die(msg: str, code: int = 2):
@@ -2389,6 +2555,9 @@ def progress_panel(doc: Doc, done) -> str:
 
 
 def cmd_status(project: Project, ids):
+    if project.private:
+        for warning in spec_root_pending(project.spec_root, project.sync):
+            print(f"⚠ {warning}")
     if ids:
         for sid in ids:
             doc = project.specs.get(sid)
@@ -3232,12 +3401,29 @@ def main(argv=None):
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
     p.add_argument("--apply", action="store_true")
+    p = sub.add_parser("private", help="modo privado: SDD fora do repositório do time (init | status | off)")
+    p.add_argument("action", choices=["init", "status", "off"])
+    p.add_argument("--spec-root", help="pasta das specs (padrão: <default_root>/<org>/<repo>)")
+    p.add_argument("--sync", choices=["none", "push"], help="push do spec_root após cada commit (padrão: none)")
     p = sub.add_parser("migrate", help="converte o layout legado (pastas de status + nomes com data)")
     p.add_argument("--apply", action="store_true")
     args = parser.parse_args(argv)
 
     root = Path(args.root).resolve() if args.root else find_root(Path.cwd())
     project = Project(root)
+    if project.private:
+        print(f"{PRIVATE_BANNER} — nada de SDD no repositório (specs em {project.spec_root})", file=sys.stderr)
+        if args.command in ("vendor", "pr-check"):
+            die(f"{args.command} não se aplica em modo privado: o repositório é do time e o SDD fica no spec_root")
+    try:
+        return dispatch(args, project)
+    finally:
+        if project.private and args.command in RECORD_COMMANDS:
+            ids = getattr(args, "ids", None) or [getattr(args, "id", None) or ""]
+            commit_records(project, f"sdd: {args.command} {' '.join(i for i in ids if i)}".strip())
+
+
+def dispatch(args, project: Project):
     if args.command == "validate":
         return cmd_validate(project, args.ids, args.staged, args.exclude_drafts)
     if args.command == "status":
@@ -3288,6 +3474,8 @@ def main(argv=None):
         return cmd_pillars(project)
     if args.command == "upgrade":
         return cmd_upgrade(project, args.ids, args.apply)
+    if args.command == "private":
+        return cmd_private(project, args.action, args.spec_root, args.sync)
     if args.command == "migrate":
         return cmd_migrate(project, args.apply)
     return 2
