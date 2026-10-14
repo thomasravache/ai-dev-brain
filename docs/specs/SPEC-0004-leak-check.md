@@ -192,10 +192,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 5c7f2c8 | 2026-10-14 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=13, skipped=1)) — ab5c4d3 | 2026-10-14 |
+| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 683519f | 2026-10-14 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 683519f | 2026-10-14 |
+| G4 Review | FAIL | verify G1+G4: PASS; revisão: CHANGES_REQUESTED (modo solo) — major: padrão padrão ADR-\d{4,} reprova as ADRs do próprio time (comuns em repositórios corporativos) e bloquearia pushes legítimos; minor: leak_scan valida leak_allow chamando leak_findings vazio; minor: IT-09 marcado como guarda mas o comando é novo — 683519f | 2026-10-14 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -204,6 +204,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 13. Registro de Impedimentos
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-14 | G4 | spec | Contrato manda reprovar qualquer ADR-NNNN; times com ADRs próprias teriam falso positivo em todo push. Proposta: ID de ADR só reprova se o ADR existir no spec_root (ADRs do SDD do usuário); ID de spec continua genérico (SPEC-NNNN raramente é usado por times) | revisão do diff e do contrato; leak_allow resolveria caso a caso, mas o padrão precisa ser seguro por omissão | Architect + thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). -->
