@@ -37,7 +37,7 @@ approved_at:
 **Outras ocorrências:** {{o mesmo defeito existe em outro lugar? liste como novas specs | Nenhuma}}
 
 ## 4. Plano de Testes (TDD)
-<!-- Mínimo: um teste de regressão que reproduz o problema e FALHA antes da correção, no nível em que o defeito aparece (IT para fronteiras de I/O, E2E para jornadas de usuário). Código sem cobertura: primeiro CH-xx fixando o comportamento atual. Tag no código: `{{id}}:<ID>`. Categoria sem teste: "N/A — motivo" SEM ID. -->
+<!-- Mínimo: um teste de regressão que reproduz o problema e FALHA antes da correção, no nível em que o defeito aparece (IT para fronteiras de I/O, E2E para jornadas de usuário). Código sem cobertura: primeiro CH-xx fixando o comportamento atual. Tag no código: `{{id}}:<ID>`. Modo privado: sem tag no código; aponte o teste no fim da linha com `→ caminho::nome` (ex.: `→ tests/test_soma.py::test_soma`). Categoria sem teste: "N/A — motivo" SEM ID. -->
 - {{CH-01 — comportamento atual preservado | Caracterização: N/A — área já coberta}}
 - **UT-01** — {{teste de regressão: Dado..., quando..., então...}}
 - {{IT-01 ou E2E-01 — regressão no nível do defeito | Integração/E2E: N/A — motivo}}
