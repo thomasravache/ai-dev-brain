@@ -9,8 +9,8 @@ import ast
 import importlib.util
 import sys
 import sysconfig
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List, Optional
 
 RULE_STDLIB = "só biblioteca padrão"
 RULE_SINGLE_FILE = "arquivo único"
@@ -37,7 +37,7 @@ def is_stdlib(name: str) -> bool:
     return stdlib in origin.parents and "site-packages" not in origin.parts
 
 
-def import_findings(source: str, filename: str, local_modules: Iterable[str] = ()) -> List[str]:
+def import_findings(source: str, filename: str, local_modules: Iterable[str] = ()) -> list[str]:
     """Imports fora da biblioteca padrão ou de módulos locais (o script é arquivo único)."""
     local = set(local_modules)
     findings = []
@@ -46,8 +46,9 @@ def import_findings(source: str, filename: str, local_modules: Iterable[str] = (
             names = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
             if node.level:
-                findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_SINGLE_FILE} — import relativo "
-                                              f"'{'.' * node.level}{node.module or ''}'"))
+                message = (f"{filename}:{node.lineno} — {RULE_SINGLE_FILE} — import relativo "
+                           f"'{'.' * node.level}{node.module or ''}'")
+                findings.append((node.lineno, message))
                 continue
             names = [node.module]
         else:
@@ -55,27 +56,27 @@ def import_findings(source: str, filename: str, local_modules: Iterable[str] = (
         for name in names:
             top = name.split(".")[0]
             if top in local:
-                findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_SINGLE_FILE} — import de módulo "
-                                              f"local '{top}'"))
+                message = f"{filename}:{node.lineno} — {RULE_SINGLE_FILE} — import de módulo local '{top}'"
+                findings.append((node.lineno, message))
             elif not is_stdlib(top):
                 findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_STDLIB} — import de '{top}'"))
     return [message for _, message in sorted(findings)]
 
 
-def _process_call(node: ast.Call) -> Optional[str]:
+def _process_call(node: ast.Call) -> str | None:
     func = node.func
-    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-        if func.attr in PROCESS_CALLS.get(func.value.id, ()):
-            return f"{func.value.id}.{func.attr}"
+    if (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)
+            and func.attr in PROCESS_CALLS.get(func.value.id, ())):
+        return f"{func.value.id}.{func.attr}"
     return None
 
 
-def subprocess_findings(source: str, filename: str, allowed: Iterable[str]) -> List[str]:
+def subprocess_findings(source: str, filename: str, allowed: Iterable[str]) -> list[str]:
     """Chamadas de subprocess fora das funções permitidas."""
     allowed = set(allowed)
     findings = []
 
-    def visit(node: ast.AST, function: Optional[str]):
+    def visit(node: ast.AST, function: str | None):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             function = node.name
         if isinstance(node, ast.Call):
@@ -90,6 +91,6 @@ def subprocess_findings(source: str, filename: str, allowed: Iterable[str]) -> L
     return [message for _, message in sorted(findings)]
 
 
-def vendor_copy_findings(source: str, filename: str) -> List[str]:
+def vendor_copy_findings(source: str, filename: str) -> list[str]:
     """Código que carrega a cópia do vendor (import de tools/sdd ou tools/sdd no sys.path)."""
     return []

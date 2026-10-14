@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import difflib
 import datetime as dt
+import difflib
 import heapq
 import json
 import os
@@ -29,11 +29,11 @@ TEST_ID_RE = re.compile(r"\b(?:CH|UT|IT|CT|E2E)-\d{2,}\b")
 TEST_DEF_RE = re.compile(r"\*\*((?:CH|UT|IT|CT|E2E)-\d{2,})\*\*")
 TEST_TAG_RE = re.compile(r"\b(SPEC-\d{4,}):((?:CH|UT|IT|CT|E2E)-\d{2,})\b")
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}]*\}\}")
-COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 CONVENTIONAL_RE = re.compile(r"^(\w+)(?:\([^)]*\))?!?:")
 WILDCARD_RE = re.compile(r"[*?]")
-CHECKBOX_RE = re.compile(r"^\s*[-*] \[( |x|X)\]", re.M)
-UNCHECKED_RE = re.compile(r"^\s*[-*] \[ \]", re.M)
+CHECKBOX_RE = re.compile(r"^\s*[-*] \[( |x|X)\]", re.MULTILINE)
+UNCHECKED_RE = re.compile(r"^\s*[-*] \[ \]", re.MULTILINE)
 
 STATUSES = ("proposed", "approved", "in-progress", "implemented", "deprecated")
 OPEN = {"proposed", "approved", "in-progress"}
@@ -89,7 +89,7 @@ PILLARS = {
     "acessibilidade-conformidade": ("Acessibilidade e conformidade", "Quais normas (acessibilidade, legais, do setor) se aplicam?", "rigoroso"),
 }
 NA_RECURRENT_THRESHOLD = 3
-JOURNEY_TAG_RE = re.compile(r"\[jornada:\s*([\w-]+)\]", re.I)
+JOURNEY_TAG_RE = re.compile(r"\[jornada:\s*([\w-]+)\]", re.IGNORECASE)
 PHASES = ("DISCOVER", "SPEC (G0)", "APPROVAL (H1)", "PLAN (waves)", "EXECUTE (G1–G4)",
           "INTEGRATE (G5 + H2)", "DEPLOY (G6)", "CLOSE (G7)")
 H1_QUESTION = ("Os contratos e os cenários de teste estão adequados e seguem o padrão atual? "
@@ -327,8 +327,7 @@ def md_cell(text: str) -> str:
 
 def glob_regex(pattern: str):
     pattern = pattern.strip()
-    if pattern.startswith("./"):
-        pattern = pattern[2:]
+    pattern = pattern.removeprefix("./")
     if not WILDCARD_RE.search(pattern):
         return re.compile("^" + re.escape(pattern.rstrip("/")) + "(?:/.*)?$")
     out, i = [], 0
@@ -502,7 +501,7 @@ class Project:
             "labels": labels,
         }
 
-    def external_ref(self, doc: "Doc"):
+    def external_ref(self, doc: Doc):
         provider = self.tracker()["provider"]
         if provider == "none":
             return ""
@@ -708,7 +707,7 @@ def validate_pillars(project: Project, add):
 
 
 def cmd_pillars(project: Project):
-    profile, waived, _ = pillar_settings(project)
+    profile, _waived, _ = pillar_settings(project)
     if profile not in PROFILES:
         print("pillars.profile não definido no sdd-config.yml (minimo | padrao | rigoroso). Catálogo:")
         for pid, (title, question, lvl) in PILLARS.items():
@@ -848,8 +847,8 @@ def misplaced_worktrees(project: Project):
         why = ""
         if inside and run_git(project.root, "check-ignore", "-q", rel + "/")[0] != 0:
             why = " — está DENTRO do repositório e fora do .gitignore (ferramentas podem ver o código em dobro)"
-        out.append((str(path), f"fora do worktree_dir{why}; quando ninguém estiver trabalhando nela: "
-                               f"`git worktree move {path} {target}`"))
+        out.append((str(path), (f"fora do worktree_dir{why}; quando ninguém estiver trabalhando nela: "
+                                f"`git worktree move {path} {target}`")))
     return out
 
 
@@ -885,7 +884,7 @@ def cmd_worktree(project: Project, spec_id: str, create: bool, base):
     exists = run_git(project.root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")[0] == 0
     args = ["worktree", "add", str(path), branch] if exists else ["worktree", "add", str(path), "-b", branch, start]
     path.parent.mkdir(parents=True, exist_ok=True)
-    code, out, err = run_git(project.root, *args)
+    code, _out, err = run_git(project.root, *args)
     if code != 0:
         die(f"git worktree add falhou: {err.strip()}")
     print(f"worktree criada: {path}\nbranch: {branch}" + ("" if exists else f" (a partir de {start})"))
@@ -916,7 +915,7 @@ def validate_test_tooling(project: Project, add):
         if not tool:
             add(level, where, f"pilar testes sem decisão para o nível {label}: tabela 'Ferramenta por nível' "
                               "(ferramenta, por quê, onde roda) ou 'N/A — motivo'")
-        elif re.match(r"^N/A", tool, re.I) and len(re.sub(r"^N/A\s*[—–:-]?\s*", "", tool, flags=re.I)) < 10:
+        elif re.match(r"^N/A", tool, re.IGNORECASE) and len(re.sub(r"^N/A\s*[—–:-]?\s*", "", tool, flags=re.IGNORECASE)) < 10:
             add(level, where, f"pilar testes: N/A no nível {label} sem motivo")
 
 
@@ -1158,7 +1157,7 @@ def validate_executable(project: Project, doc: Doc, add):
         elif user_facing == "false" and "E2E" not in kinds:
             e2e = find_sub(parse_subsections(plan), "E2E") or ""
             m = re.search(r"N/A\s*[—–:-]?\s*(.*)", e2e)
-            reason = re.sub(r"user_facing\s*:\s*false", "", m.group(1) if m else "", flags=re.I).strip(" .;—–-")
+            reason = re.sub(r"user_facing\s*:\s*false", "", m.group(1) if m else "", flags=re.IGNORECASE).strip(" .;—–-")
             if len(reason) < 15:
                 add("ERROR" if status == "proposed" else "WARN", sid,
                     "user_facing: false sem justificativa: na seção Testes E2E escreva \"N/A — <por que nenhuma jornada "
@@ -1468,7 +1467,7 @@ def validate_adr_content(adr: Doc, origin: str, add):
     """Decision quality: options and sources for recommended decisions; risks recorded for user-chosen ones."""
     aid = adr.id
     options = COMMENT_RE.sub("", adr.section("Opções") or "")
-    bullets = [l for l in options.split("\n") if re.match(r"^\s*[-*]\s+\S", l) and not re.match(r"^\s*[-*]\s+N/A", l, re.I)]
+    bullets = [l for l in options.split("\n") if re.match(r"^\s*[-*]\s+\S", l) and not re.match(r"^\s*[-*]\s+N/A", l, re.IGNORECASE)]
     sources = COMMENT_RE.sub("", (adr.section("Mais Informações") or "") + (adr.section("Fontes") or ""))
     consequences = COMMENT_RE.sub("", adr.section("Consequências") or adr.section("Resultado da Decisão") or "")
     if origin in ("", "decision"):
@@ -1761,8 +1760,8 @@ def build_index(project: Project) -> str:
     elif not plan[0]:
         out.append("Nenhuma spec aberta.")
     else:
-        wave, members, notes = plan
-        running, batch, held = next_batch(project, plan)
+        _wave, members, notes = plan
+        running, batch, _held = next_batch(project, plan)
         stalled = [s for s in running if readiness(project, specs[s])[0] == "stalled"]
         out.append(f"**Em andamento:** {', '.join(s for s in running if s not in stalled) or '—'}  ")
         out.append(f"**Paradas por impedimento:** {', '.join(stalled) or '—'}  ")
@@ -1858,7 +1857,7 @@ def cmd_index(project: Project, stdout: bool):
 
 
 def run_git(root: Path, *args):
-    result = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
+    result = subprocess.run(["git", *args], check=False, cwd=root, capture_output=True, text=True)
     return result.returncode, result.stdout, result.stderr
 
 
@@ -2092,7 +2091,7 @@ MANUAL_PREFIX = "MANUAL:"
 
 def run_shell(command: str, cwd: Path):
     try:
-        result = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True, timeout=1800)
+        result = subprocess.run(command, shell=True, check=False, cwd=cwd, capture_output=True, text=True, timeout=1800)
     except subprocess.TimeoutExpired:
         return 124, "timeout (30 min)"
     lines = [l.strip() for l in (result.stdout + "\n" + result.stderr).splitlines() if l.strip()]
@@ -2589,7 +2588,7 @@ def pr_title(project: Project, docs) -> str:
         parents = {d.scalar("parent") for d in docs}
         epic = project.specs.get(parents.pop()) if len(parents) == 1 else None
         convs = {CONVENTIONAL_BY_TYPE.get(d.type, "feat") for d in docs}
-        values = {"conv": "feat" if "feat" in convs else sorted(convs)[0], "type": "wave",
+        values = {"conv": "feat" if "feat" in convs else min(convs), "type": "wave",
                   "title": epic.title if epic else "; ".join(d.title for d in docs),
                   "id": ", ".join(d.id for d in docs), "scope": ""}
     title = values["title"]
@@ -2720,16 +2719,16 @@ def cmd_pr_check(project: Project, title, body, body_file, base):
     # Only declared specs count (title, "Refs:" line, sdd marker); narrative mentions in the body don't.
     declared = set(SPEC_REF_RE.findall(title))
     for line in body.splitlines():
-        if re.match(r"^\s*(refs\s*:|<!--\s*sdd:)", line, re.I):
+        if re.match(r"^\s*(refs\s*:|<!--\s*sdd:)", line, re.IGNORECASE):
             declared |= set(SPEC_REF_RE.findall(line))
     refs = sorted(declared) if declared else sorted(set(SPEC_REF_RE.findall(body)))
     title_level = "WARN" if project.cfg("pr_title_policy", "fail") == "warn" else "FAIL"
-    bare = re.sub(r"\s*\[no-spec\]\s*", " ", title, flags=re.I).replace(" :", ":").strip()
+    bare = re.sub(r"\s*\[no-spec\]\s*", " ", title, flags=re.IGNORECASE).replace(" :", ":").strip()
     m = CONVENTIONAL_RE.match(bare)
     if not m or m.group(1).lower() not in COMMIT_TYPES:
-        results.append((title_level, "PR", f"título fora do Conventional Commits: '{title[:60]}' — use "
-                        f"<tipo>(escopo)?: descrição [SPEC-NNNN] (tipos: {', '.join(COMMIT_TYPES)}); "
-                        "gere com `pr SPEC-X --title`"))
+        results.append((title_level, "PR", (f"título fora do Conventional Commits: '{title[:60]}' — use "
+                                            f"<tipo>(escopo)?: descrição [SPEC-NNNN] (tipos: {', '.join(COMMIT_TYPES)}); "
+                                            "gere com `pr SPEC-X --title`")))
     try:
         max_len = int(project.cfg("pr_title_max", "100"))
     except ValueError:
@@ -2749,8 +2748,8 @@ def cmd_pr_check(project: Project, title, body, body_file, base):
                     results.append(("WARN", "PR", "[no-spec] altera arquivos que não são documentação: " + ", ".join(code_files[:8])
                                     + " — se muda comportamento, precisa de spec (mesmo lite, criada na hora)"))
         else:
-            results.append(("FAIL", "PR", "PR não referencia nenhuma spec (SPEC-NNNN no título ou corpo); "
-                                          "mudança sem comportamento: marque [no-spec] no título"))
+            results.append(("FAIL", "PR", ("PR não referencia nenhuma spec (SPEC-NNNN no título ou corpo); "
+                                           "mudança sem comportamento: marque [no-spec] no título")))
     for ref in refs:
         d = project.specs.get(ref)
         if d is None:
@@ -2803,7 +2802,7 @@ CI_TARGETS = {
     "generic": ("ci/sdd-check.sh", "tools/sdd/ci-check.sh"),
 }
 AGENT_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
-AGENT_BLOCK_RE = re.compile(r"<!-- sdd:start -->.*?<!-- sdd:end -->\n?", re.S)
+AGENT_BLOCK_RE = re.compile(r"<!-- sdd:start -->.*?<!-- sdd:end -->\n?", re.DOTALL)
 
 
 CODEOWNERS_PATHS = {"github": ".github/CODEOWNERS", "gitlab": ".gitlab/CODEOWNERS"}
@@ -3065,7 +3064,7 @@ def legacy_title(body: str, fallback: str) -> str:
     for line in body.split("\n"):
         if line.startswith("# "):
             title = re.sub(r"^(especifica[cç][aã]o t[eé]cnica|technical spec(ification)?|spec)\s*[:—-]\s*", "",
-                           line[2:].strip(), flags=re.I)
+                           line[2:].strip(), flags=re.IGNORECASE)
             return title or fallback
     return fallback
 
