@@ -751,12 +751,16 @@ TEAM_HOOK_MARKERS = ((".husky", "husky"), ("lefthook.yml", "lefthook"), (".lefth
                      (".pre-commit-config.yaml", "pre-commit"))
 
 
-def build_leak_patterns(spec_root, extra):
-    """Padrões do leak-check: [(rótulo, regex compilada)] — padrões padrão, caminho do spec_root e extras do usuário."""
+def build_leak_patterns(spec_root, extra, adr_ids=()):
+    """Padrões do leak-check: [(rótulo, regex compilada)] — padrões padrão, caminho do spec_root e extras do usuário.
+
+    ADR-NNNN só é achado quando o ADR é do spec_root (adr_ids): ADRs do próprio time não são vazamento.
+    """
     patterns = [("tag de teste", re.compile(r"\bSPEC-\d{4,}:[A-Z0-9]+-\d+\b")),
                 ("ID de spec", re.compile(r"\bSPEC-\d{4,}\b")),
-                ("ID de ADR", re.compile(r"\bADR-\d{4,}\b")),
                 ("sdd-config", re.compile(r"\bsdd-config\b"))]
+    if adr_ids:
+        patterns.append(("ID de ADR", re.compile(r"\b(?:" + "|".join(re.escape(a) for a in sorted(adr_ids)) + r")\b")))
     patterns += [("seção do SDD", re.compile(re.escape(title))) for title in LEAK_SECTION_TITLES]
     if spec_root:
         root = Path(spec_root)
@@ -778,7 +782,7 @@ def leak_findings(text: str, origin: str, patterns, allow, first_line: int = 1):
     try:
         allowed = [re.compile(a) for a in allow or []]
     except re.error as e:
-        raise ValueError(f"leak_allow: regex inválida: {e}") from e
+        raise ValueError(f"leak_allow: regex inválida '{e.pattern}': {e}") from e
     found = []
     for number, line in enumerate(text.splitlines(), first_line):
         snippet = line.strip()[:80]
@@ -809,11 +813,12 @@ def added_lines(diff: str):
 def leak_scan(project: Project, root: Path, staged=False, rng=None, message=None, branch=None):
     """Coleta as fontes (diff staged, commits do intervalo, mensagem, branch) e devolve os achados."""
     try:
-        patterns = build_leak_patterns(project.spec_root, project.cfg_list("leak_patterns", []))
-        allow = project.cfg_list("leak_allow", [])
-        leak_findings("", "", patterns, allow)
+        patterns = build_leak_patterns(project.spec_root, project.cfg_list("leak_patterns", []), project.adrs)
+        allow = [re.compile(a) for a in project.cfg_list("leak_allow", [])]
     except ValueError as e:
         die(str(e))
+    except re.error as e:
+        die(f"leak_allow: regex inválida '{e.pattern}': {e}")
     found = []
     if staged:
         for path, number, text in added_lines(run_git(root, "diff", "--cached", "-U0", "--no-color")[1]):
