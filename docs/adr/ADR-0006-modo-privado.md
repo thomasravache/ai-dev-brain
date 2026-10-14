@@ -1,7 +1,7 @@
 ---
 id: ADR-0006
 title: "Modo privado: estado do SDD fora do repositório"
-status: proposed
+status: accepted
 origin: decision
 date: 2026-10-14
 pillars: []

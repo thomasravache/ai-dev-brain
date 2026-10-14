@@ -4,7 +4,7 @@ title: PR neutro, convenções do time e documentação do modo privado
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-14
 parent: SPEC-0002
 depends_on: [SPEC-0004, SPEC-0005]
@@ -14,8 +14,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: [ADR-0006]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-14
 ---
 
 # SPEC-0006 — PR neutro, convenções do time e documentação do modo privado
@@ -151,14 +151,33 @@ SKILL.md: parágrafo "Private mode" — se `status` mostra MODO PRIVADO, ler ref
 - **Etapas de migração/coexistência:** N/A
 
 ## 9. Questões em Aberto
-- [x] Como o PR segue o padrão do time? — Preenchendo o template de PR do time por título de seção; sem template, corpo neutro de três seções (proposta do Architect, a confirmar no H1)
+- [x] Como o PR segue o padrão do time? — Preenchendo o template de PR do time por título de seção; sem template, corpo neutro de três seções (proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
 - [x] As instruções do modo vão no SKILL.md? — Num arquivo próprio (`references/private-mode.md`) carregado só no modo privado, com um parágrafo curto no SKILL.md (decisão da conversa: mesma skill, modo separado; thomas, 2026-10-14)
 
 ## 10. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+
+**Fase 1: Convenções do time**
+- [ ] Red: UT-01 e CT-01 com a tag `SPEC-0006:<ID>`, IT-01
+- [ ] Green: `detect_team_conventions`, bloco `team:` no `private init` e `private detect`
+
+**Fase 2: PR neutro**
+- [ ] Red: UT-02, IT-02, IT-03, IT-04; IT-06 (guarda) passando
+- [ ] Green: título e corpo no padrão do time, preenchimento do template, leak-check antes de imprimir
+
+**Fase 3: Documentação e jornada**
+- [ ] Red: UT-03, IT-05
+- [ ] Green: `references/private-mode.md`, parágrafo no `SKILL.md`, README; jornada completa passando
+- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy: N/A — pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |

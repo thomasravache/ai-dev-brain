@@ -4,7 +4,7 @@ title: Checagem de vazamento
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-14
 parent: SPEC-0002
 depends_on: []
@@ -14,8 +14,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: [ADR-0006]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-14
 ---
 
 # SPEC-0004 — Checagem de vazamento
@@ -160,14 +160,33 @@ gate G4|G5 --run em modo privado: roda leak-check do intervalo da branch; achado
 - **Etapas de migração/coexistência:** N/A
 
 ## 9. Questões em Aberto
-- [x] Checar também `IT-01`, `UT-01` soltos? — Não: são comuns em código de qualquer time; só a tag completa `SPEC-NNNN:<ID>` (proposta do Architect, a confirmar no H1)
-- [x] Hook `commit-msg` além do `pre-push`? — Não: só pre-push, para não bloquear commits locais de trabalho nem disputar com o hook do time (proposta do Architect, a confirmar no H1)
+- [x] Checar também `IT-01`, `UT-01` soltos? — Não: são comuns em código de qualquer time; só a tag completa `SPEC-NNNN:<ID>` (proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
+- [x] Hook `commit-msg` além do `pre-push`? — Não: só pre-push, para não bloquear commits locais de trabalho nem disputar com o hook do time (proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
 
 ## 10. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+
+**Fase 1: Padrões**
+- [ ] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0004:<ID>`; UT-03 (guarda) passando
+- [ ] Green: `leak_findings` com padrões padrão, `leak_patterns` e `leak_allow`
+
+**Fase 2: Comando e fontes**
+- [ ] Red: IT-01, IT-02, IT-03, IT-08, IT-10; IT-09 (guarda) passando
+- [ ] Green: `leak-check` (staged, range, message, branch), regex inválida = exit 2
+
+**Fase 3: Integrações**
+- [ ] Red: IT-04, IT-05, IT-06, IT-07
+- [ ] Green: hook `assets/hooks/pre-push-leak` e instalação segura no `private init`, branch neutra no `worktree`, leak-check no G4/G5
+- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy: N/A — pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |

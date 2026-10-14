@@ -4,7 +4,7 @@ title: Rastreio sem marcas no repositório
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-14
 parent: SPEC-0002
 depends_on: []
@@ -14,8 +14,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: [ADR-0006]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-14
 ---
 
 # SPEC-0005 — Rastreio sem marcas no repositório
@@ -157,14 +157,33 @@ gate SPEC-X G7 --run em modo privado: procura na base_branch, nesta ordem:
 - **Etapas de migração/coexistência:** N/A
 
 ## 9. Questões em Aberto
-- [x] Como ligar commits à spec sem mensagem? — Pela branch da spec (merge-base..HEAD), registrada no `spec_root` (proposta do Architect, a confirmar no H1)
-- [x] Como reconhecer red e green sem o tipo do commit? — Pelos arquivos (só `test_paths` = red) e pela execução dos testes no commit red (proposta do Architect, a confirmar no H1)
+- [x] Como ligar commits à spec sem mensagem? — Pela branch da spec (merge-base..HEAD), registrada no `spec_root` (proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
+- [x] Como reconhecer red e green sem o tipo do commit? — Pelos arquivos (só `test_paths` = red) e pela execução dos testes no commit red (proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
 
 ## 10. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+
+**Fase 1: Classificação e plano**
+- [ ] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0005:<ID>`; IT-09 (guarda) passando
+- [ ] Green: papel pelo arquivo, parse de `→ caminho::nome`, exemplo nos templates
+
+**Fase 2: verify e G1 no commit red**
+- [ ] Red: IT-01, IT-02, IT-03, IT-04, IT-08
+- [ ] Green: coleta por branch no modo privado, avaliação comum, seção "Commits", `gate G1 --at` com worktree temporária, dica no modo completo
+
+**Fase 3: G7 por merge, squash e rebase**
+- [ ] Red: IT-05, IT-06, IT-07
+- [ ] Green: busca do merge na base por SHA e `patch-id`
+- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy: N/A — pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |

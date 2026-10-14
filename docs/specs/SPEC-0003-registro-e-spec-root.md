@@ -4,7 +4,7 @@ title: Registro do usuário e spec_root
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-14
 parent: SPEC-0002
 depends_on: []
@@ -14,8 +14,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: [ADR-0006, ADR-0001]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-14
 ---
 
 # SPEC-0003 — Registro do usuário e spec_root
@@ -161,14 +161,33 @@ Registro ilegível (JSON inválido) → exit 2 em qualquer comando: "registro in
 - **Etapas de migração/coexistência:** N/A
 
 ## 9. Questões em Aberto
-- [x] Formato do registro? — JSON (`projects.json`), porque o parser de YAML da ferramenta só aceita chaves simples (ADR-0006) (proposta do Architect, a confirmar no H1)
-- [x] Registro ilegível cai para o modo completo? — Não: exit 2, para nunca gravar no repositório do time por engano (proposta do Architect, a confirmar no H1)
+- [x] Formato do registro? — JSON (`projects.json`), porque o parser de YAML da ferramenta só aceita chaves simples (ADR-0006) (proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
+- [x] Registro ilegível cai para o modo completo? — Não: exit 2, para nunca gravar no repositório do time por engano (proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
 
 ## 10. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+
+**Fase 1: Registro e normalização**
+- [ ] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0003:<ID>`, falhando pelo motivo certo
+- [ ] Green: `normalize_remote`, `resolve_mode`, atributos do modo no `Project`
+
+**Fase 2: Comando private e spec_root**
+- [ ] Red: IT-01, IT-07, IT-08, IT-09; IT-04 (guarda) passando no código atual
+- [ ] Green: `private init|status|off`, recusa com `docs/specs` versionado, registro inválido = exit 2
+
+**Fase 3: Comandos em modo privado**
+- [ ] Red: IT-02, IT-03, IT-05, IT-06
+- [ ] Green: caminhos pelo modo, aviso em stderr, `commit_records` + sync, recusa de `vendor`/`pr-check`, avisos no `status`
+- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3); tempo da suíte ≤ +20%
+
+**Fase final: Integração, entrega e documentação**
+- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy: N/A — pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |

@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **0 erro(s), 1 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 4, in-progress 1
+- Specs: approved 4, in-progress 1
 - Impedimentos: **1 aberto(s)**, 1 resolvido(s)
 
 ## Impedimentos Abertos
@@ -36,16 +36,16 @@ Perfil: **minimo**
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0001 | CI da skill: testes, lint e arquitetura | full/M | in-progress | 🚧 parada por impedimento: IMP-02 (externo → thomas, 0d) |  |
-| 2 | SPEC-0003 | Registro do usuário e spec_root | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0001 |
-| 3 | SPEC-0004 | Checagem de vazamento | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003 |
-| 4 | SPEC-0005 | Rastreio sem marcas no repositório | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004 |
-| 5 | SPEC-0006 | PR neutro, convenções do time e documentação do modo privado | full/M | proposed | ⏳ aguardando aprovação (H1) |  |
+| 2 | SPEC-0003 | Registro do usuário e spec_root | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0001 |
+| 3 | SPEC-0004 | Checagem de vazamento | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003 |
+| 4 | SPEC-0005 | Rastreio sem marcas no repositório | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004 |
+| 5 | SPEC-0006 | PR neutro, convenções do time e documentação do modo privado | full/M | approved | ⛔ aguarda implementação de SPEC-0004; aguarda implementação de SPEC-0005 |  |
 
 ## Épicos
 
 | Épico | Título | Status | Progresso |
 |---|---|---|---|
-| SPEC-0002 | Modo privado: SDD fora do repositório do time | proposed | 0/4 implementadas |
+| SPEC-0002 | Modo privado: SDD fora do repositório do time | approved | 0/4 implementadas |
 
 ## Grafo de Dependências
 
@@ -55,10 +55,10 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 flowchart LR
   S0001["SPEC-0001<br/>CI da skill: testes, lint e arquitetura"]:::inprogress
   subgraph E0002["SPEC-0002 · Modo privado: SDD fora do repositório do time"]
-    S0003["SPEC-0003<br/>Registro do usuário e spec_root"]:::proposed
-    S0004["SPEC-0004<br/>Checagem de vazamento"]:::proposed
-    S0005["SPEC-0005<br/>Rastreio sem marcas no repositório"]:::proposed
-    S0006["SPEC-0006<br/>PR neutro, convenções do time e documen…"]:::proposed
+    S0003["SPEC-0003<br/>Registro do usuário e spec_root"]:::approved
+    S0004["SPEC-0004<br/>Checagem de vazamento"]:::approved
+    S0005["SPEC-0005<br/>Rastreio sem marcas no repositório"]:::approved
+    S0006["SPEC-0006<br/>PR neutro, convenções do time e documen…"]:::approved
   end
   S0003 -. contrato v1 .-> S0004
   S0003 -. contrato v1 .-> S0005
@@ -77,11 +77,11 @@ flowchart LR
 | ID | Título | Tier | Tipo | Status | Criada | Épico | Depende de | Consome contrato |
 |---|---|---|---|---|---|---|---|---|
 | [SPEC-0001](SPEC-0001-ci-da-skill.md) | CI da skill: testes, lint e arquitetura | full | foundation | in-progress | 2026-10-14 | — | — | — |
-| [SPEC-0002](SPEC-0002-modo-privado.md) | Modo privado: SDD fora do repositório do time | epic | feature | proposed | 2026-10-14 | — | — | — |
-| [SPEC-0003](SPEC-0003-registro-e-spec-root.md) | Registro do usuário e spec_root | full | feature | proposed | 2026-10-14 | SPEC-0002 | — | — |
-| [SPEC-0004](SPEC-0004-leak-check.md) | Checagem de vazamento | full | feature | proposed | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
-| [SPEC-0005](SPEC-0005-rastreio-sem-marcas.md) | Rastreio sem marcas no repositório | full | feature | proposed | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
-| [SPEC-0006](SPEC-0006-pr-neutro-e-convencoes.md) | PR neutro, convenções do time e documentação do modo privado | full | feature | proposed | 2026-10-14 | SPEC-0002 | SPEC-0004, SPEC-0005 | SPEC-0003@1 |
+| [SPEC-0002](SPEC-0002-modo-privado.md) | Modo privado: SDD fora do repositório do time | epic | feature | approved | 2026-10-14 | — | — | — |
+| [SPEC-0003](SPEC-0003-registro-e-spec-root.md) | Registro do usuário e spec_root | full | feature | approved | 2026-10-14 | SPEC-0002 | — | — |
+| [SPEC-0004](SPEC-0004-leak-check.md) | Checagem de vazamento | full | feature | approved | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
+| [SPEC-0005](SPEC-0005-rastreio-sem-marcas.md) | Rastreio sem marcas no repositório | full | feature | approved | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
+| [SPEC-0006](SPEC-0006-pr-neutro-e-convencoes.md) | PR neutro, convenções do time e documentação do modo privado | full | feature | approved | 2026-10-14 | SPEC-0002 | SPEC-0004, SPEC-0005 | SPEC-0003@1 |
 
 ## ADRs
 
@@ -91,4 +91,4 @@ flowchart LR
 | [ADR-0002](../adr/ADR-0002-estrategia-de-testes.md) | Estratégia de testes | accepted | SPEC-0001 |
 | [ADR-0003](../adr/ADR-0003-qualidade-de-codigo.md) | Qualidade de código | accepted | SPEC-0001 |
 | [ADR-0005](../adr/ADR-0005-fluxo-de-mudanca.md) | Fluxo de mudança e versionamento da skill | accepted | N/A — repositório privado no plano gratuito do GitHub não tem proteção de branch; `validate` aponta commits diretos e merges fora de PR |
-| [ADR-0006](../adr/ADR-0006-modo-privado.md) | Modo privado: estado do SDD fora do repositório | proposed | SPEC-0003 |
+| [ADR-0006](../adr/ADR-0006-modo-privado.md) | Modo privado: estado do SDD fora do repositório | accepted | SPEC-0003 |

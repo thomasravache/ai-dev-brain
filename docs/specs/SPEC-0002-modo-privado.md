@@ -3,13 +3,13 @@ id: SPEC-0002
 title: "Modo privado: SDD fora do repositório do time"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-10-14
 depends_on: []
 adrs: [ADR-0006]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-14
 ---
 
 # SPEC-0002 — Modo privado: SDD fora do repositório do time (Épico)
@@ -81,8 +81,8 @@ Todas alteram `spec_graph.py` e `test_spec_graph.py` (arquivo único, ADR-0001):
 ## 8. Questões em Aberto
 - [x] Onde fica o `spec_root`? — Pasta local versionada por git próprio (opção A); remoto opcional e configurável (`sync: push`) (thomas, 2026-10-14)
 - [x] Mexer em atribuição de IA nos commits? — Não; segue a configuração do agente e a política do time (thomas, 2026-10-14)
-- [x] Raiz padrão das pastas? — Padrão da ferramenta `$XDG_DATA_HOME/sdd`; o registro aceita `default_root`, e o do mantenedor usa `~/dev/sdd` (`~/dev/sdd`: thomas, 2026-10-14; padrão XDG e `default_root`: proposta do Architect, a confirmar no H1)
-- [x] Mais de uma ferramenta de plataforma? — Não: a skill é agnóstica; G5 pelo comando `ci` do sdd-config, merge e convenções detectados pelo `git` (agnóstico: thomas, 2026-10-14; forma de detecção: proposta do Architect, a confirmar no H1)
+- [x] Raiz padrão das pastas? — Padrão da ferramenta `$XDG_DATA_HOME/sdd`; o registro aceita `default_root`, e o do mantenedor usa `~/dev/sdd` (`~/dev/sdd`: thomas, 2026-10-14; padrão XDG e `default_root`: proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
+- [x] Mais de uma ferramenta de plataforma? — Não: a skill é agnóstica; G5 pelo comando `ci` do sdd-config, merge e convenções detectados pelo `git` (agnóstico: thomas, 2026-10-14; forma de detecção: proposta do Architect, confirmada no H1 por thomas, 2026-10-14)
 
 ## 9. Aprovação (H1)
 Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com ele. Registrada no frontmatter (`approved_by`, `approved_at`) do épico e de cada filha.
