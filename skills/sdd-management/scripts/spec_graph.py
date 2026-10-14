@@ -456,11 +456,25 @@ def plan_test_ids(doc: Doc):
     return sorted(set(TEST_ID_RE.findall(plan)), key=test_sort_key)
 
 
+def normalize_remote(url: str) -> str:
+    """Chave do registro do modo privado: host/caminho do remoto, sem protocolo, usuário, porta e .git."""
+    raise NotImplementedError
+
+
+def resolve_mode(root: Path):
+    """Entrada do registro do usuário para o repositório em root, ou None (modo completo)."""
+    raise NotImplementedError
+
+
 class Project:
     def __init__(self, root: Path):
         self.root = root
+        self.private = False
+        self.spec_root = None
+        self.sync = "none"
         self.specs_dir = root / "docs" / "specs"
         self.adr_dir = root / "docs" / "adr"
+        self.config_path = self.specs_dir / "sdd-config.yml"
         self.config = self._load_config()
         self.specs = {}
         self.adrs = {}
@@ -576,6 +590,15 @@ def find_root(start: Path) -> Path:
         if (p / "docs" / "specs").is_dir() or (p / ".git").exists():
             return p
     return start
+
+
+def commit_records(project: Project, message: str):
+    """Modo privado: commit dos registros no git do spec_root (e push com sync: push)."""
+    raise NotImplementedError
+
+
+def cmd_private(project: Project, action: str, spec_root, sync):
+    die("private: não implementado")
 
 
 def die(msg: str, code: int = 2):
@@ -3232,6 +3255,10 @@ def main(argv=None):
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
     p.add_argument("--apply", action="store_true")
+    p = sub.add_parser("private", help="modo privado: SDD fora do repositório do time (init | status | off)")
+    p.add_argument("action", choices=["init", "status", "off"])
+    p.add_argument("--spec-root", help="pasta das specs (padrão: <default_root>/<org>/<repo>)")
+    p.add_argument("--sync", choices=["none", "push"], help="push do spec_root após cada commit (padrão: none)")
     p = sub.add_parser("migrate", help="converte o layout legado (pastas de status + nomes com data)")
     p.add_argument("--apply", action="store_true")
     args = parser.parse_args(argv)
@@ -3288,6 +3315,8 @@ def main(argv=None):
         return cmd_pillars(project)
     if args.command == "upgrade":
         return cmd_upgrade(project, args.ids, args.apply)
+    if args.command == "private":
+        return cmd_private(project, args.action, args.spec_root, args.sync)
     if args.command == "migrate":
         return cmd_migrate(project, args.apply)
     return 2
