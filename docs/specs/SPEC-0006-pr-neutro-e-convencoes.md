@@ -183,10 +183,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — d96b6d4 | 2026-10-14 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=9, skipped=1)) — 5fd7c19 | 2026-10-14 |
+| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 19491ee | 2026-10-14 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 19491ee | 2026-10-14 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; minor: G5 com o comando ci no modo privado veio da promessa do épico e não do contrato da filha (coberto por teste em 68ad8d9); UT-03 com títulos em inglês como as demais references (b2a11f1); IT-04 cita ADR do próprio spec_root (emenda v2 da SPEC-0004); TEST_DEFECT da dispensa do pilar entrega (b29f005) — 19491ee | 2026-10-14 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
