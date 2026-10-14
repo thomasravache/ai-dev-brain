@@ -16,7 +16,7 @@ test_integration: ""
 test_e2e: ""
 # Subconjunto rápido rodado após cada deploy (G6).
 smoke_test: ""
-lint: ""
+lint: "uvx ruff@0.17.0 check"
 # G2 — cobertura das linhas alteradas (ex: diff-cover, coverlet + reportgenerator). Opcional.
 coverage: ""
 coverage_min_changed_lines: 80
@@ -25,7 +25,7 @@ mutation: ""
 
 # --- Arquitetura e segurança (G3, G5) ---
 # Exemplos: "dotnet test --filter Category=Architecture" | "npx depcruise src" | "lint-imports"
-arch_test: ""
+arch_test: "python3 -m unittest discover -s skills/sdd-management/tests -p test_architecture.py"
 # Auditoria de dependências + segredos. Exemplos: "npm audit --audit-level=high" | "dotnet list package --vulnerable" | "gitleaks detect"
 security_scan: ""
 

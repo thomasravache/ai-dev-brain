@@ -132,7 +132,7 @@ skills/sdd-management/tests/test_architecture.py — mensagem de falha (uma linh
 
 **Dublês e dados de teste:** código-fonte sintético em strings, dentro dos próprios testes; nenhum arquivo fora do diretório do teste é escrito.
 
-**Ambiente de execução:** UT localmente e na CI; IT-01 e IT-02 no GitHub Actions (`ubuntu-latest`).
+**Ambiente de execução:** UT localmente e na CI; IT-01 e IT-02 no GitHub Actions (`ubuntu-24.04`: o Python 3.9 não tem build para 26.04).
 
 ## 8. Plano de Rollout
 - **Estratégia:** merge direto do PR; o workflow passa a rodar a partir do próprio PR que o cria.
@@ -175,7 +175,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 9c2f5e4 | 2026-10-14 |
-| G1 Red | PENDING | | |
+| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0001:UT-05, SPEC-00 — a9e4ef2 | 2026-10-14 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
