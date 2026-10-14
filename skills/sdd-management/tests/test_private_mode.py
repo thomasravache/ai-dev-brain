@@ -4,6 +4,7 @@ Cada teste isola HOME, SDD_CONFIG_HOME e XDG_* num diretório temporário: nada 
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -656,6 +657,213 @@ class FullModeVerifyGuardTest(PrivateTestCase):
         self.assertIn("[G1] PASS  Red antes do Green", out)
         self.assertIn("rastreabilidade: 1/1", out)
         self.assertNotIn("[G1] FAIL", out)
+
+
+TEAM_TEMPLATE = "## Summary\n<!-- what changes and why -->\n\n## How to test\n\n## Checklist\n- [ ] tests pass\n"
+
+
+def fill_lite(spec: Path, ut_line: str):
+    """Spec lite completa (sem marcadores), com um único teste no plano."""
+    write_plan(spec, ut_line)
+    text = spec.read_text(encoding="utf-8")
+    text = text.replace("{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}", "Nenhuma")
+    text = text.replace("{{Comportamento atual vs. esperado. Para bug: passos de reprodução, ambiente e impacto.}}",
+                        "A soma de 1 e 1 devolve 3 em vez de 2.")
+    text = re.sub(r"\{\{([^{}|]*)(?:\|[^{}]*)?\}\}", lambda m: m.group(1).strip(), text)
+    spec.write_text(text, encoding="utf-8")
+
+
+def fill_delivery(spec: Path, red: str, green: str):
+    """Relatório de Entrega do lite preenchido e Definição de Pronto marcada (o G7 exige)."""
+    text = spec.read_text(encoding="utf-8")
+    for heading, body in (("### O que foi entregue", "A soma volta a devolver 2 para 1 e 1."),
+                          ("### Como foi feito", "Correção do operador na função soma."),
+                          ("### Deploy", "N/A — sem deploy no teste."), ("### Pendências", "Nenhuma")):
+        text = text.replace(heading + "\n", f"{heading}\n{body}\n", 1)
+    text = text.replace("### Prova de Correção\n<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa "
+                        "depois (commit green + execução). Outros tipos: \"N/A\". -->",
+                        f"### Prova de Correção\nUT-01 falhou em {red} e passa em {green}.")
+    text = text.replace("| Teste | Comportamento | Resultado | Evidência |\n|---|---|---|---|",
+                        f"| Teste | Comportamento | Resultado | Evidência |\n|---|---|---|---|\n| UT-01 | soma 1 e 1 | PASS | {green} |")
+    start = text.index("### Definição de Pronto")
+    end = text.index("### Deploy")
+    text = text[:start] + text[start:end].replace("- [ ]", "- [x]") + text[end:]
+    spec.write_text(text, encoding="utf-8")
+
+
+class TeamConventionsUnitTest(unittest.TestCase):
+    def test_detection_from_history_and_files(self):
+        """SPEC-0006:UT-01"""
+        merges = sg.detect_team_conventions([2, 2, 1, 2, 2], ["feat: a", "fix(x): b", "chore: c", "docs: d", "feat: e"],
+                                            {".husky", ".github/pull_request_template.md"})
+        self.assertEqual(merges, {"merge": "merge", "commits": "conventional", "hooks": "husky",
+                                  "pr_template": ".github/pull_request_template.md"})
+        linear = sg.detect_team_conventions([1, 1, 1], ["Ajusta tela", "corrige bug do login", "WIP"], set())
+        self.assertEqual(linear, {"merge": "linear", "commits": "livre", "hooks": "nenhum", "pr_template": ""})
+        empty = sg.detect_team_conventions([], [], set(), hooks_path=".hooks")
+        self.assertEqual(empty, {"merge": "desconhecida", "commits": "desconhecida", "hooks": "core.hooksPath",
+                                 "pr_template": ""})
+
+    def test_pr_title_follows_the_team(self):
+        """SPEC-0006:UT-02"""
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        e = PrivateEnv(tmp)
+        e.init()
+        e.run("new", "--tier", "full", "--title", "Suporte a múltiplos cartões")
+        config = e.spec_root / "sdd-config.yml"
+        base = config.read_text(encoding="utf-8")
+        for style, expected in (("conventional", "feat: suporte a múltiplos cartões"),
+                                ("livre", "Suporte a múltiplos cartões")):
+            config.write_text(base + f"\nteam:\n  commits: {style}\n", encoding="utf-8")
+            title = e.run("pr", "SPEC-0001", "--title").stdout.strip()
+            self.assertEqual(title, expected)
+            self.assertNotIn("SPEC", title)
+
+    def test_agent_instructions_cover_the_private_mode(self):
+        """SPEC-0006:UT-03"""
+        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("references/private-mode.md", skill)
+        guide = (SKILL / "references" / "private-mode.md").read_text(encoding="utf-8")
+        headings = [line[3:] for line in guide.splitlines() if line.startswith("## ")]
+        for topic in ("Ativação", "Onde fica o quê", "Commits e branch", "Gates", "Leak-check", "Limites"):
+            self.assertTrue(any(topic in h for h in headings), topic)
+
+
+class TeamConventionsTest(PrivateTestCase):
+    def test_init_detects_and_records_team_conventions(self):
+        """SPEC-0006:IT-01"""
+        (self.e.repo / ".husky").mkdir()
+        (self.e.repo / ".husky/pre-commit").write_text("npm test\n", encoding="utf-8")
+        commit_file(self.e, ".github/pull_request_template.md", TEAM_TEMPLATE, "chore: template de PR")
+        for i in range(30):
+            git(self.e.repo, "switch", "-q", "-c", f"f{i}", env=self.e.env)
+            commit_file(self.e, f"src/m{i}.py", f"x = {i}\n", f"feat: módulo {i}")
+            git(self.e.repo, "switch", "-q", "main", env=self.e.env)
+            git(self.e.repo, "merge", "-q", "--no-ff", f"f{i}", "-m", f"Merge pull request #{i}", env=self.e.env)
+        out = self.e.init()
+        self.assertIn("Detectado:", out.stdout)
+        config = sg.parse_yaml_subset((self.e.spec_root / "sdd-config.yml").read_text(encoding="utf-8"))
+        self.assertEqual(config["team"], {"merge": "merge", "commits": "conventional", "hooks": "husky",
+                                          "pr_template": ".github/pull_request_template.md"})
+        start = time.monotonic()
+        self.assertEqual(self.e.run("private", "detect").returncode, 0)
+        self.assertLess(time.monotonic() - start, 1.5)
+
+
+class NeutralPrTest(PrivateTestCase):
+    def prepare(self, template=None):
+        if template:
+            commit_file(self.e, ".github/pull_request_template.md", template, "chore: template de PR")
+        self.e.init()
+        self.e.run("new", "--tier", "lite", "--title", "Corrige soma")
+        self.spec = next((self.e.spec_root / "specs").glob("SPEC-0001-*.md"))
+        fill_lite(self.spec, "- **UT-01** — Dado 1 e 1, quando soma, então 2 → tests/test_soma.py::test_soma")
+
+    def test_fills_the_team_template(self):
+        """SPEC-0006:IT-02"""
+        self.prepare(TEAM_TEMPLATE)
+        out = self.e.run("pr", "SPEC-0001", "--out", str(self.tmp / "pr.md"))
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        body = (self.tmp / "pr.md").read_text(encoding="utf-8")
+        self.assertIn("## Summary", body)
+        self.assertIn("## How to test", body)
+        summary = body.split("## Summary", 1)[1].split("## How to test", 1)[0]
+        self.assertIn("A soma de 1 e 1 devolve 3", summary)
+        tests = body.split("## How to test", 1)[1].split("## Checklist", 1)[0]
+        self.assertIn("Dado 1 e 1, quando soma, então 2", tests)
+        self.assertIn("## Checklist\n- [ ] tests pass", body)
+        self.assertEqual(self.e.run("leak-check", "--message", str(self.tmp / "pr.md")).returncode, 0)
+
+    def test_neutral_body_without_template(self):
+        """SPEC-0006:IT-03"""
+        self.prepare()
+        out = self.e.run("pr", "SPEC-0001")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        for heading in ("## O que muda", "## Como testar", "## Riscos e rollback"):
+            self.assertIn(heading, out.stdout)
+        for mark in ("SPEC-", "<!-- sdd", "Gates", "Refs:", "UT-01"):
+            self.assertNotIn(mark, out.stdout)
+
+    def test_leaking_body_is_refused(self):
+        """SPEC-0006:IT-04"""
+        self.prepare()
+        self.e.run("new-adr", "--title", "Decisão minha")
+        self.spec.write_text(self.spec.read_text(encoding="utf-8").replace(
+            "A soma de 1 e 1 devolve 3 em vez de 2.", "A soma devolve 3 em vez de 2, ver ADR-0001."), encoding="utf-8")
+        out = self.e.run("pr", "SPEC-0001", "--out", str(self.tmp / "pr.md"))
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("ADR-0001", out.stdout + out.stderr)
+        self.assertFalse((self.tmp / "pr.md").exists())
+
+    def test_full_mode_pr_is_unchanged(self):
+        """SPEC-0006:IT-06 (guarda)"""
+        (self.e.repo / "docs/specs").mkdir(parents=True)
+        (self.e.repo / "docs/specs/sdd-config.yml").write_text("base_branch: main\n", encoding="utf-8")
+        self.e.run("new", "--tier", "lite", "--title", "Corrige soma")
+        out = self.e.run("pr", "SPEC-0001")
+        self.assertIn("[SPEC-0001]", out.stdout.splitlines()[0])
+        self.assertIn("<!-- sdd: SPEC-0001", out.stdout)
+        self.assertIn("## Gates", out.stdout)
+
+
+class ModeConsumerContractTest(PrivateTestCase):
+    def test_pr_reads_team_block_from_the_spec_root_config(self):
+        """SPEC-0006:CT-01"""
+        self.e.init()
+        self.e.run("new", "--tier", "lite", "--title", "Corrige soma")
+        config = self.e.spec_root / "sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8") + "\nteam:\n  commits: livre\n", encoding="utf-8")
+        (self.e.repo / "docs/specs").mkdir(parents=True)
+        (self.e.repo / "docs/specs/sdd-config.yml").write_text("team:\n  commits: conventional\n", encoding="utf-8")
+        self.assertEqual(self.e.run("pr", "SPEC-0001", "--title").stdout.strip(), "Corrige soma")
+
+
+class PrivateJourneyTest(PrivateTestCase):
+    def test_whole_private_journey_leaves_no_mark(self):
+        """SPEC-0006:IT-05"""
+        e = self.e
+        commit_file(e, "src/soma.py", "def soma(a, b):\n    return a + b + 1\n", "Primeira versão da soma")
+        e.init()
+        config = e.spec_root / "sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8")
+                          .replace('test: ""', 'test: "grep -q \'return a + b$\' src/soma.py"')
+                          .replace('arch_test: ""', 'arch_test: "true"').replace('ci: ""', 'ci: "true"'),
+                          encoding="utf-8")
+        e.run("new", "--tier", "lite", "--title", "Corrige soma")
+        spec = next((e.spec_root / "specs").glob("SPEC-0001-*.md"))
+        fill_lite(spec, "- **UT-01** — Dado 1 e 1, quando soma, então 2 → tests/test_soma.py::test_soma")
+        e.run("set", "SPEC-0001", "touches=[src/**, tests/**]", "status=approved", "approved_by=thomas", "approved_at=today")
+        self.assertIn("PASS", e.run("gate", "SPEC-0001", "G0", "--run").stdout)
+        out = e.run("worktree", "SPEC-0001", "--create")
+        wt = Path(out.stdout.splitlines()[0].split(": ", 1)[1])
+        work = PrivateEnv.__new__(PrivateEnv)
+        work.__dict__.update(e.__dict__, repo=wt)
+        commit_file(work, "tests/test_soma.py", "from src.soma import soma\n\n\ndef test_soma():\n    assert soma(1, 1) == 2\n",
+                    "Adiciona teste da soma")
+        red = sha7(work)
+        e.run("gate", "SPEC-0001", "G1", "--run", "--cwd", str(wt))
+        commit_file(work, "src/soma.py", "def soma(a, b):\n    return a + b\n", "Corrige a soma")
+        green = sha7(work)
+        for gate, extra in (("G2", ()), ("G3", ()), ("G4", ("--by", "revisor: APPROVED")), ("G5", ())):
+            e.run("gate", "SPEC-0001", gate, "--run", "--cwd", str(wt), *extra)
+        e.run("gate", "SPEC-0001", "H2", "--by", "thomas")
+        e.run("gate", "SPEC-0001", "G6", "--na", "sem deploy no teste — SPEC-0001")
+        pr = self.tmp / "pr.md"
+        self.assertEqual(e.run("pr", "SPEC-0001", "--out", str(pr)).returncode, 0)
+        git(e.repo, "merge", "-q", "--squash", "fix/corrige-soma", env=e.env)
+        git(e.repo, "commit", "-qm", "Corrige soma (#7)", env=e.env)
+        fill_delivery(spec, red, green)
+        e.run("gate", "SPEC-0001", "G7", "--run")
+
+        for leftover in ("docs/specs", "docs/adr", "tools/sdd", ".githooks"):
+            self.assertFalse((e.repo / leftover).exists(), leftover)
+        zero = "0" * 40
+        scan = e.run("leak-check", "--range", f"{zero}..main", "--branch", "fix/corrige-soma", "--message", str(pr))
+        self.assertEqual(scan.returncode, 0, scan.stdout)
+        for gate in ("G1", "G2", "G4", "G7"):
+            self.assertIn("| PASS |", gate_row(spec, gate), gate)
+        self.assertIn("squash", gate_row(spec, "G7"))
 
 
 if __name__ == "__main__":
