@@ -617,6 +617,7 @@ class MergeDetectionTest(TraceTestCase):
     def test_rebase(self):
         """SPEC-0005:IT-06"""
         self.deliver()
+        commit_file(self.e, "docs/outra.md", "mudança do time\n", "outra mudança do time")
         commits = git(self.e.repo, "rev-list", "--reverse", "main..fix/corrige-soma", env=self.e.env).split()
         git(self.e.repo, "cherry-pick", *commits, env=self.e.env)
         self.e.run("gate", "SPEC-0001", "G7", "--run")
