@@ -9,7 +9,7 @@ created: 2026-10-14
 parent: SPEC-0002
 depends_on: []
 consumes_contract: [SPEC-0003@1]
-contract_version: 1
+contract_version: 2
 touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tests/**, skills/sdd-management/assets/hooks/**, CHANGELOG.md]
 adrs: [ADR-0006]
 external: []
@@ -76,7 +76,8 @@ spec_graph.py leak-check [--staged] [--range A..B] [--message FILE] [--branch NO
   exit 0 sem achados; 1 com achados; 2 em erro (regex inválida, intervalo inexistente)
 
 Padrões padrão (sempre ativos em modo privado):
-  \bSPEC-\d{4,}\b   \bADR-\d{4,}\b   \bSPEC-\d{4,}:[A-Z0-9]+-\d+\b
+  \bSPEC-\d{4,}\b   \bSPEC-\d{4,}:[A-Z0-9]+-\d+\b
+  IDs de ADR que existem no spec_root (ADR-NNNN do time, fora do spec_root, não é achado)  [emenda v2]
   títulos dos templates: "Mapa de Comportamentos", "Registro de Gates", "Relatório de Entrega",
     "Registro de Impedimentos", "Questões em Aberto", "Definição de Pronto"
   "sdd-config", e o caminho do spec_root (absoluto e com ~)
@@ -105,6 +106,7 @@ gate G4|G5 --run em modo privado: roda leak-check do intervalo da branch; achado
 | Padrões padrão | texto com ID de spec, tag, título de seção, caminho do spec_root | um achado por ocorrência, com linha | UT-01 |
 | Padrões do usuário e permitidos | `leak_patterns` com codinome; `leak_allow` cobrindo um trecho | codinome achado; trecho permitido ignorado | UT-02 |
 | Texto limpo | código comum, inclusive `IT-01` isolado ou "spec" em minúscula | nenhum achado | UT-03 |
+| ADR do time | `ADR-0001` que não existe no spec_root; `ADR-0001` que existe | não é achado; é achado | IT-11 |
 | Regex inválida | `leak_patterns` com regex quebrada | exit 2 citando o padrão | IT-08 |
 | Diff staged | comentário com ID de spec num arquivo staged | exit 1, achado `arquivo:linha` | IT-01 |
 | Mensagem de commit | commit com `Refs: SPEC-0003` no intervalo | exit 1, achado `commit <sha7>` | IT-02 |
@@ -122,7 +124,7 @@ gate G4|G5 --run em modo privado: roda leak-check do intervalo da branch; achado
 - N/A — comportamento novo; `worktree` no modo completo continua coberto pelos testes existentes (`test_default_path_is_outside_repo_and_create_works`).
 
 ### 7.2 Testes Unitários
-- **UT-01** — Dado um texto com `SPEC-0003`, `ADR-0006`, `SPEC-0003:UT-01`, "Mapa de Comportamentos" e o caminho do `spec_root`, quando `leak_findings` roda com os padrões padrão, então há um achado por ocorrência, cada um com a linha certa.
+- **UT-01** — Dado um texto com `SPEC-0003`, `ADR-0006` (existente no spec_root), `SPEC-0003:UT-01`, "Mapa de Comportamentos" e o caminho do `spec_root`, quando `leak_findings` roda com os padrões padrão, então há um achado por linha, cada um com a linha certa.
 - **UT-02** — Dado `leak_patterns: ["\\bProjetoFenix\\b"]` e `leak_allow: ["SPEC-0000-exemplo"]`, quando `leak_findings` roda sobre um texto com "ProjetoFenix" e "SPEC-0000-exemplo", então acha só "ProjetoFenix".
 - **UT-03** — (guarda: passa antes da mudança) Dado um trecho de código comum com `IT-01`, "spec" em minúscula e `ADR` sem número, quando `leak_findings` roda, então não há achados.
 
@@ -137,6 +139,7 @@ gate G4|G5 --run em modo privado: roda leak-check do intervalo da branch; achado
 - **IT-08** — Dado `leak_patterns: ["(quebrada"]`, quando roda `leak-check`, então sai com 2 citando o padrão.
 - **IT-09** — (guarda: passa antes da mudança) Dado o modo completo, quando roda `leak-check`, então sai com 0 e informa "modo completo".
 - **IT-10** — Dado um intervalo com 50 commits limpos, quando roda `leak-check --range`, então termina em menos de 2 s.
+- **IT-11** — Dado o modo privado com `ADR-0001` criado no spec_root, quando um arquivo staged cita `ADR-0002` (ADR do time) e outro cita `ADR-0001`, então só `ADR-0001` é achado.
 
 ### 7.4 Testes de Contrato
 - **CT-01** — Dado um `Project` em modo privado criado pela API da SPEC-0003@1, quando os comandos desta spec leem `project.private`, `project.spec_root` e `project.config_path`, então usam esses valores (e não caminhos fixos) — verificado com um registro de teste e um `spec_root` fora do repositório.
@@ -204,7 +207,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 13. Registro de Impedimentos
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
-| IMP-01 | 2026-10-14 | G4 | spec | Contrato manda reprovar qualquer ADR-NNNN; times com ADRs próprias teriam falso positivo em todo push. Proposta: ID de ADR só reprova se o ADR existir no spec_root (ADRs do SDD do usuário); ID de spec continua genérico (SPEC-NNNN raramente é usado por times) | revisão do diff e do contrato; leak_allow resolveria caso a caso, mas o padrão precisa ser seguro por omissão | Architect + thomas |  |  |
+| IMP-01 | 2026-10-14 | G4 | spec | Contrato manda reprovar qualquer ADR-NNNN; times com ADRs próprias teriam falso positivo em todo push. Proposta: ID de ADR só reprova se o ADR existir no spec_root (ADRs do SDD do usuário); ID de spec continua genérico (SPEC-NNNN raramente é usado por times) | revisão do diff e do contrato; leak_allow resolveria caso a caso, mas o padrão precisa ser seguro por omissão | Architect + thomas | Emenda v2 — ID de ADR só é achado se existir no spec_root; aprovada por thomas em 2026-10-14 | 2026-10-14 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). -->
@@ -238,3 +241,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-10-14 | ID de ADR só é achado se o ADR existir no spec_root; UT-01 ajustado, IT-11 novo | IMP-01: times com ADRs próprias teriam falso positivo em todo push | Nenhuma | thomas, 2026-10-14 |
