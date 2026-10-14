@@ -3056,6 +3056,11 @@ def labeled_line(doc: Doc, section: str, label: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def detect_team_conventions(first_parent_parents, subjects, files, hooks_path="") -> dict:
+    """Convenções do time: forma de merge, padrão de mensagens, gerenciador de hooks e template de PR."""
+    return {}
+
+
 def pr_title(project: Project, docs) -> str:
     fmt = project.cfg("pr_title", PR_TITLE_DEFAULT)
     if len(docs) == 1:
@@ -3717,7 +3722,7 @@ def main(argv=None):
     p.add_argument("--message", help="arquivo com a mensagem de commit")
     p.add_argument("--branch", help="nome de branch")
     p = sub.add_parser("private", help="modo privado: SDD fora do repositório do time (init | status | off)")
-    p.add_argument("action", choices=["init", "status", "off"])
+    p.add_argument("action", choices=["init", "status", "off", "detect"])
     p.add_argument("--spec-root", help="pasta das specs (padrão: <default_root>/<org>/<repo>)")
     p.add_argument("--sync", choices=["none", "push"], help="push do spec_root após cada commit (padrão: none)")
     p = sub.add_parser("migrate", help="converte o layout legado (pastas de status + nomes com data)")
