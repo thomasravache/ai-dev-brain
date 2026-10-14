@@ -5,7 +5,11 @@ Cada regra é testada contra um exemplo que a viola e contra o código real (gua
 import unittest
 from pathlib import Path
 
-from architecture_rules import import_findings, subprocess_findings
+from architecture_rules import (
+    import_findings,
+    subprocess_findings,
+    vendor_copy_findings,
+)
 
 SKILL = Path(__file__).resolve().parent.parent
 SCRIPT = SKILL / "scripts" / "spec_graph.py"
@@ -56,6 +60,29 @@ class ProcessRulesTest(unittest.TestCase):
         """SPEC-0001:UT-04 (guarda)"""
         findings = subprocess_findings(SCRIPT.read_text(encoding="utf-8"), "scripts/spec_graph.py",
                                        ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual(findings, [], report(findings))
+
+
+class VendorCopyRulesTest(unittest.TestCase):
+    def test_loading_the_vendored_copy_is_reported_and_citing_its_path_is_not(self):
+        """SPEC-0001:UT-05"""
+        source = (
+            "import sys\n"
+            "from tools.sdd import spec_graph\n"
+            "sys.path.insert(0, \"tools/sdd\")\n"
+        )
+        findings = vendor_copy_findings(source, "tests/x.py")
+        self.assertEqual(len(findings), 2, report(findings))
+        self.assertIn("tests/x.py:2", findings[0])
+        self.assertIn("tests/x.py:3", findings[1])
+        self.assertEqual(vendor_copy_findings('VENDORED_TOOL = "tools/sdd/spec_graph.py"\n', "s.py"), [])
+
+    def test_skills_never_load_the_vendored_copy(self):
+        """SPEC-0001:UT-06 (guarda)"""
+        findings = []
+        for path in sorted(SKILLS_ROOT.rglob("*.py")):
+            rel = path.relative_to(SKILLS_ROOT.parent).as_posix()
+            findings += vendor_copy_findings(path.read_text(encoding="utf-8"), rel)
         self.assertEqual(findings, [], report(findings))
 
 
