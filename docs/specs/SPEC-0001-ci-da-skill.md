@@ -188,6 +188,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
 | IMP-01 | 2026-10-14 | G1 | spec | UT-05/UT-06 proíbem 'referenciar' tools/sdd, mas o vendor cita esse caminho como destino da cópia (spec_graph.py:22, :70, :2803) e os testes do vendor conferem o destino; a guarda reprovaria código correto | conferido com grep em scripts/ e tests/ | Architect + thomas | Emenda v2 — regra da cópia do vendor proíbe carregar código de tools/sdd (import ou sys.path), não citar o caminho; aprovada por thomas em 2026-10-14 | 2026-10-14 |
+| IMP-02 | 2026-10-14 | G5 | externo | GitHub Actions não inicia jobs no repositório: 'recent account payments have failed or your spending limit needs to be increased' (runs 38650532309 e 38650548527); IT-01 e IT-02 sem evidência | PRs #1 e #2 abertos; todos os jobs (ci 3.9, ci 3.15, sdd) recusados em 2–3 s sem executar passos | thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). -->
