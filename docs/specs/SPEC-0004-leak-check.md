@@ -196,9 +196,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 5c7f2c8 | 2026-10-14 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=13, skipped=1)) — ab5c4d3 | 2026-10-14 |
-| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 683519f | 2026-10-14 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 683519f | 2026-10-14 |
-| G4 Review | FAIL | verify G1+G4: PASS; revisão: CHANGES_REQUESTED (modo solo) — major: padrão padrão ADR-\d{4,} reprova as ADRs do próprio time (comuns em repositórios corporativos) e bloquearia pushes legítimos; minor: leak_scan valida leak_allow chamando leak_findings vazio; minor: IT-09 marcado como guarda mas o comando é novo — 683519f | 2026-10-14 |
+| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — da55569 | 2026-10-14 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — da55569 | 2026-10-14 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo, 2ª revisão) — major da 1ª revisão resolvido pela emenda v2 (da55569); minor resolvido (leak_allow validado uma vez); minor restante: IT-09 rotulado guarda num comando novo (cosmético) — da55569 | 2026-10-14 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
