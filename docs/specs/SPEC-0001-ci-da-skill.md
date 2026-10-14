@@ -9,7 +9,7 @@ created: 2026-10-14
 parent:
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [.github/workflows/ci.yml, ruff.toml, skills/sdd-management/tests/**, skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/SKILL.md, README.md, CHANGELOG.md]
 adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0005]
 external: []
@@ -28,7 +28,7 @@ Cria a CI do `ai-dev-brain`: em todo PR roda o lint (Ruff), os testes de arquite
 
 **Objetivos (dentro do escopo):**
 - Workflow `.github/workflows/ci.yml` com lint, testes de arquitetura e suíte completa em PRs e na `main`.
-- `test_architecture.py` verificando as regras do ADR-0001 (imports só da biblioteca padrão, arquivo único, processos externos só `git` ou comando do sdd-config, nada de `tools/sdd` dentro de `skills/`).
+- `test_architecture.py` verificando as regras do ADR-0001 (imports só da biblioteca padrão, arquivo único, processos externos só `git` ou comando do sdd-config, nenhum código de `skills/` carregando a cópia em `tools/sdd`).
 - `ruff.toml` (ADR-0003) e o código atual sem achados de lint.
 - Python mínimo declarado como 3.9+ (README, SKILL.md), testado na CI.
 - Comandos `lint` e `arch_test` preenchidos no `docs/specs/sdd-config.yml`.
@@ -100,7 +100,7 @@ skills/sdd-management/tests/test_architecture.py — mensagem de falha (uma linh
 | Import fora da biblioteca padrão | script importa módulo de terceiro | teste falha citando arquivo, linha e módulo | UT-01, UT-02 |
 | Script deixa de ser arquivo único | script importa módulo local de `scripts/` | teste falha citando o import | UT-01, UT-02 |
 | Processo externo não permitido | chamada `subprocess` fora das funções permitidas (`run_git` e executor de comandos do gate) | teste falha citando função e linha | UT-03, UT-04 |
-| Código da skill usa a cópia do vendor | arquivo em `skills/` importa ou referencia `tools/sdd` | teste falha citando o arquivo | UT-05, UT-06 |
+| Código da skill carrega a cópia do vendor | arquivo em `skills/` importa de `tools/sdd` ou põe esse caminho no `sys.path` (citar o caminho como destino da cópia é permitido) | teste falha citando arquivo e linha | UT-05, UT-06 |
 | PR sem problemas | lint, arquitetura e suíte verdes em 3.9 e na versão atual | job `ci` verde | IT-01 |
 | PR com problema | erro de lint ou teste falhando | job `ci` vermelho | IT-02 |
 
@@ -114,8 +114,8 @@ skills/sdd-management/tests/test_architecture.py — mensagem de falha (uma linh
 - **UT-02** — (guarda: passa antes da mudança) Dado o `scripts/spec_graph.py` atual, quando o checador de imports roda, então não há import fora da biblioteca padrão nem de módulo local.
 - **UT-03** — Dado um código-fonte sintético com `subprocess.run(["gh", "pr", "list"])` numa função fora da lista permitida, quando o checador de processos roda, então aponta a chamada com função e linha.
 - **UT-04** — (guarda: passa antes da mudança) Dado o `scripts/spec_graph.py` atual, quando o checador de processos roda, então toda chamada de `subprocess` está em `run_git` ou no executor de comandos do gate.
-- **UT-05** — Dado um código-fonte sintético que importa ou abre `tools/sdd/spec_graph.py`, quando o checador da cópia do vendor roda, então aponta o arquivo e a linha.
-- **UT-06** — (guarda: passa antes da mudança) Dado todo arquivo `.py` em `skills/`, quando o checador da cópia do vendor roda, então nenhum referencia `tools/sdd`.
+- **UT-05** — Dado um código-fonte sintético que faz `from tools.sdd import spec_graph` e outro que faz `sys.path.insert(0, "tools/sdd")`, quando o checador da cópia do vendor roda, então aponta os dois com arquivo e linha; e dado um código que só atribui `"tools/sdd/spec_graph.py"` a uma constante, então não aponta nada.
+- **UT-06** — (guarda: passa antes da mudança) Dado todo arquivo `.py` em `skills/`, quando o checador da cópia do vendor roda, então nenhum importa de `tools/sdd` nem o põe no `sys.path`.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um PR com o código desta spec, quando o workflow `ci` roda no GitHub Actions, então lint, arquitetura e suíte completa passam em Python 3.9 e na versão atual (evidência: execução da CI).
@@ -187,6 +187,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 13. Registro de Impedimentos
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-14 | G1 | spec | UT-05/UT-06 proíbem 'referenciar' tools/sdd, mas o vendor cita esse caminho como destino da cópia (spec_graph.py:22, :70, :2803) e os testes do vendor conferem o destino; a guarda reprovaria código correto | conferido com grep em scripts/ e tests/ | Architect + thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). -->
@@ -220,3 +221,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-10-14 | Regra da cópia do vendor: proíbe carregar código de `tools/sdd` (import ou `sys.path`), não citar o caminho; UT-05/UT-06 e Mapa ajustados | IMP-01: o `vendor` cita `tools/sdd` como destino e a guarda reprovaria código correto | Nenhuma | pendente (H1) |
