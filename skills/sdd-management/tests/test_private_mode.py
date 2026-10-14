@@ -262,7 +262,7 @@ def commit_file(env, rel, content, message):
 
 def pass_gates(spec: Path, *gates):
     """Prepara a tabela de gates para um teste que exercita um gate posterior (a ordem é exigida pelo gate)."""
-    names = {"G1": "G1 Red", "G2": "G2 Green", "G3": "G3 Arquitetura"}
+    names = {"G0": "G0 Spec", "G1": "G1 Red", "G2": "G2 Green", "G3": "G3 Arquitetura"}
     text = spec.read_text(encoding="utf-8")
     for g in gates:
         text = text.replace(f"| {names[g]} | PENDING | | |", f"| {names[g]} | PASS | preparado pelo teste | 2026-10-14 |")
@@ -403,7 +403,7 @@ class LeakIntegrationTest(PrivateTestCase):
         self.e.init()
         self.e.run("new", "--tier", "lite", "--title", "Corrige soma")
         spec = next((self.e.spec_root / "specs").glob("SPEC-0001-*.md"))
-        pass_gates(spec, "G1", "G2", "G3")
+        pass_gates(spec, "G0", "G1", "G2", "G3")
         git(self.e.repo, "switch", "-q", "-c", "fix/corrige-soma", env=self.e.env)
         commit_file(self.e, "src/a.py", "x = 1\n", "corrige soma\n\nRefs: SPEC-0001")
         self.e.run("gate", "SPEC-0001", "G4", "--run", "--by", "revisor: APPROVED")
