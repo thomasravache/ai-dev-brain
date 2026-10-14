@@ -2175,6 +2175,16 @@ def run_git(root: Path, *args):
     return result.returncode, result.stdout, result.stderr
 
 
+def role_by_files(files, test_paths) -> str:
+    """Modo privado: papel do commit pelos arquivos — red (só test_paths) ou green (algum arquivo fora)."""
+    raise NotImplementedError
+
+
+def parse_test_target(line: str):
+    """Linha do plano com `→ caminho::nome` (ou `->`): (caminho, nome), ou None sem mapeamento."""
+    raise NotImplementedError
+
+
 def verify_spec(project: Project, spec_id: str, base, git_root=None):
     doc = project.specs.get(spec_id)
     if doc is None:
@@ -2438,7 +2448,8 @@ def pillar_waivers(project: Project) -> dict:
     return waived if isinstance(waived, dict) else {}
 
 
-def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, manual, allow_dirty, expect_green=False):
+def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, manual, allow_dirty, expect_green=False,
+             at=None):
     doc = project.specs.get(spec_id)
     if doc is None or doc.tier == "epic":
         die(f"{spec_id} não encontrada ou é épico (gates são por spec executável)")
@@ -3526,6 +3537,7 @@ def main(argv=None):
     p.add_argument("--manual", action="store_true", help="PASS sem execução (marcado MANUAL:, gera aviso)")
     p.add_argument("--allow-dirty", action="store_true")
     p.add_argument("--expect-green", action="store_true", help="G1: todos os testes novos são de guarda/caracterização")
+    p.add_argument("--at", help="G1: roda no commit red indicado, numa worktree temporária")
     p = sub.add_parser("impede", help="registra impedimento (spec | decisão | trabalho | externo | falha)")
     p.add_argument("id")
     p.add_argument("--type", required=True)
@@ -3616,7 +3628,7 @@ def dispatch(args, project: Project):
         return cmd_report(project, args.id, args.changelog)
     if args.command == "gate":
         return cmd_gate(project, args.id, args.gate, args.run, args.cwd, args.na, args.fail, args.by, args.evidence,
-                        args.manual, args.allow_dirty, args.expect_green)
+                        args.manual, args.allow_dirty, args.expect_green, args.at)
     if args.command == "impede":
         return cmd_impede(project, args.id, args.type, args.reason, args.owner, args.phase, args.tried)
     if args.command == "resolve":
