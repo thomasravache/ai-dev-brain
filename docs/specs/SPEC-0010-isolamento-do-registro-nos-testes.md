@@ -47,10 +47,10 @@ Nenhuma
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-- [ ] Red: UT-01 com a tag `SPEC-0010:UT-01`, falhando pelo motivo certo
-- [ ] Green: isolamento mínimo do módulo, seguindo `PrivateEnv`
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
+- [x] Red: UT-01 com a tag `SPEC-0010:UT-01`, falhando pelo motivo certo
+- [x] Green: isolamento mínimo do módulo, seguindo `PrivateEnv`
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `SDD_TOOL_VERSION` e CHANGELOG: N/A — só testes mudam; o ADR-0005 exige versão e CHANGELOG apenas em mudança de comportamento do `spec_graph.py`
 - [ ] Review (G4), integração (G5, bypass local enquanto a CI estiver bloqueada) e H2
 - [ ] Relatório de Entrega (G7)
 
@@ -59,11 +59,11 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 3e6c2f5 | 2026-10-14 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=1, skipped=1)) — c7e1b3a | 2026-10-15 |
+| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 8decfd2 | 2026-10-15 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8decfd2 | 2026-10-15 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; WARN de teste fora do red é esperado (a correção é o próprio isolamento, em arquivo de teste); minor: RealProjectsTest também passa a ver o registro vazio, o desejado para um smoke só de leitura — 8decfd2 | 2026-10-15 |
+| G5 Integração & CI | PASS | MANUAL: BYPASS LOCAL (autorizado por thomas em 2026-10-14; GitHub Actions ainda bloqueado em 2026-10-15 — runs de 4–5s com failure): suíte completa e arquitetura verdes no G2/G3 em 8decfd2; suíte também verde com XDG_CONFIG_HOME apontando para um projects.json inválido — refazer na CI do GitHub | 2026-10-15 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
