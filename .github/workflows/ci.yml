@@ -1,0 +1,44 @@
+# CI da skill (SPEC-0001): lint, testes de arquitetura (ADR-0001) e suíte completa.
+# SPEC-0001:IT-01 — verde num PR sem problemas. SPEC-0001:IT-02 — vermelho com erro de lint ou teste falhando.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Menor privilégio: o job só lê o repositório.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    # Fixo em 24.04: o Python 3.9 não tem build para 26.04 em actions/python-versions (verificado em 2026-10-14).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mínimo suportado (ADR-0001) e a versão estável mais recente (verificada em 2026-10-14).
+        python: ["3.9", "3.15"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Lint (ADR-0003)
+        if: matrix.python == '3.15'
+        run: |
+          python -m pip install --disable-pip-version-check ruff==0.17.0
+          ruff check
+
+      - name: Testes de arquitetura e suíte completa
+        run: python -m unittest discover -s skills/sdd-management/tests -v

@@ -1,0 +1,4 @@
+# Lint do ai-dev-brain (ADR-0003). Uso local: uvx ruff check
+target-version = "py39"
+# tools/ é a cópia do vendor: recebe os ajustes quando é atualizada (ADR-0005).
+extend-exclude = ["tools"]
