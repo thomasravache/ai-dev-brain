@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 9 aviso(s)** — rode `spec_graph.py validate`
-- Specs: approved 1, in-progress 8
+- Validação (G0): **0 erro(s), 10 aviso(s)** — rode `spec_graph.py validate`
+- Specs: in-progress 9
 - Impedimentos: **2 aberto(s)**, 7 resolvido(s)
 
 ## Impedimentos Abertos
@@ -30,7 +30,7 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0003, SPEC-0004, SPEC-0005, SPEC-0006, SPEC-0007, SPEC-0008, SPEC-0009  
+**Em andamento:** SPEC-0003, SPEC-0004, SPEC-0005, SPEC-0006, SPEC-0007, SPEC-0008, SPEC-0009, SPEC-0010  
 **Paradas por impedimento:** SPEC-0001  
 **Próximo lote:** —
 
@@ -44,7 +44,7 @@ Perfil: **minimo**
 | 6 | SPEC-0007 | PR do modo completo: breaking changes falso e texto em minúscula | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006 |
 | 7 | SPEC-0008 | Recusar spec_root dentro do repositório | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007 |
 | 8 | SPEC-0009 | gate --run grava o complemento de --evidence | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007; saiu da onda 7: arquivos em comum com SPEC-0008 |
-| 9 | SPEC-0010 | Testes antigos isolados do registro do usuário | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007; saiu da onda 7: arquivos em comum com SPEC-0008; saiu da onda 8: arquivos em comum com SPEC-0009 |
+| 9 | SPEC-0010 | Testes antigos isolados do registro do usuário | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007; saiu da onda 7: arquivos em comum com SPEC-0008; saiu da onda 8: arquivos em comum com SPEC-0009 |
 
 ## Épicos
 
@@ -62,7 +62,7 @@ flowchart LR
   S0007["SPEC-0007<br/>PR do modo completo: breaking changes f…"]:::inprogress
   S0008["SPEC-0008<br/>Recusar spec_root dentro do repositório"]:::inprogress
   S0009["SPEC-0009<br/>gate --run grava o complemento de --evi…"]:::inprogress
-  S0010["SPEC-0010<br/>Testes antigos isolados do registro do …"]:::approved
+  S0010["SPEC-0010<br/>Testes antigos isolados do registro do …"]:::inprogress
   subgraph E0002["SPEC-0002 · Modo privado: SDD fora do repositório do time"]
     S0003["SPEC-0003<br/>Registro do usuário e spec_root"]:::inprogress
     S0004["SPEC-0004<br/>Checagem de vazamento"]:::inprogress
@@ -94,7 +94,7 @@ flowchart LR
 | [SPEC-0007](SPEC-0007-pr-breaking-e-maiuscula.md) | PR do modo completo: breaking changes falso e texto em minúscula | lite | fix | in-progress | 2026-10-14 | — | — | — |
 | [SPEC-0008](SPEC-0008-spec-root-fora-do-repo.md) | Recusar spec_root dentro do repositório | lite | fix | in-progress | 2026-10-14 | — | — | — |
 | [SPEC-0009](SPEC-0009-gate-evidence-complemento.md) | gate --run grava o complemento de --evidence | lite | fix | in-progress | 2026-10-14 | — | — | — |
-| [SPEC-0010](SPEC-0010-isolamento-do-registro-nos-testes.md) | Testes antigos isolados do registro do usuário | lite | fix | approved | 2026-10-14 | — | — | — |
+| [SPEC-0010](SPEC-0010-isolamento-do-registro-nos-testes.md) | Testes antigos isolados do registro do usuário | lite | fix | in-progress | 2026-10-14 | — | — | — |
 
 ## ADRs
 
