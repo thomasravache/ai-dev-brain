@@ -4,7 +4,7 @@ title: Testes antigos isolados do registro do usuário
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-14
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/sdd-management/tests/**]
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-15
 ---
 
 # SPEC-0010 — Testes antigos isolados do registro do usuário
@@ -47,7 +47,12 @@ Nenhuma
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 com a tag `SPEC-0010:UT-01`, falhando pelo motivo certo
+- [ ] Green: isolamento mínimo do módulo, seguindo `PrivateEnv`
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
+- [ ] Review (G4), integração (G5, bypass local enquanto a CI estiver bloqueada) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -67,6 +72,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-15 | G1 | decisão | Onda aguarda o H2 das specs abertas (SPEC-0001, 0003–0009), adiado: merges ficam para depois e o GitHub Actions está bloqueado (IMP-02 do épico) | waves/next: arquivos em comum com specs em andamento | thomas | thomas autorizou em 2026-10-14 continuar todas as implementações antes dos merges ('precisamos continuar todas as implementações'); base: sdd/SPEC-0002, que já contém as specs anteriores | 2026-10-15 |
 
 ## 10. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
