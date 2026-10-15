@@ -339,6 +339,25 @@ class PrTitleTest(GitChecksTest):
         self.assertTrue(out.stdout.startswith("feat"))
 
 
+class PrBodyTest(ProjectTest):
+    def test_breaking_changes_and_capitalized_how(self):
+        """SPEC-0007:UT-01"""
+        sid = self.full("Cartões")
+        self.p.edit(sid, "**Decisão:** ex: novo slice no módulo Payments seguindo o padrão Command/Handler existente",
+                    "**Decisão:** um workflow novo")
+        self.p.set(sid, contract_version="2")
+
+        def section(body, name):
+            return body.split(f"## {name}\n", 1)[1].split("\n## ", 1)[0].strip()
+
+        body = self.p.run("pr", sid).stdout
+        self.assertEqual(section(body, "Breaking changes"), "Nenhuma (contrato em v2; emendas compatíveis — ver Emendas)")
+        self.assertEqual(section(body, "Como foi feito"), "Um workflow novo")
+        self.p.set(sid, breaking='"remove o campo X; migre para Y"')
+        body = self.p.run("pr", sid).stdout
+        self.assertEqual(section(body, "Breaking changes"), "remove o campo X; migre para Y")
+
+
 class CommandsTest(ProjectTest):
     def test_migrate_legacy_layout(self):
         legacy = self.tmp / "docs/specs/implemented"
