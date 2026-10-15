@@ -29,6 +29,24 @@ FILL = {
 }
 
 
+_USER_ENV = {}
+
+
+def setUpModule():
+    """Isola o registro do usuário (projects.json): a suíte não lê nem escreve o da máquina de quem a roda."""
+    _USER_ENV["SDD_CONFIG_HOME"] = os.environ.get("SDD_CONFIG_HOME")
+    _USER_ENV["dir"] = tempfile.mkdtemp()
+    os.environ["SDD_CONFIG_HOME"] = _USER_ENV["dir"]
+
+
+def tearDownModule():
+    if _USER_ENV["SDD_CONFIG_HOME"] is None:
+        os.environ.pop("SDD_CONFIG_HOME", None)
+    else:
+        os.environ["SDD_CONFIG_HOME"] = _USER_ENV["SDD_CONFIG_HOME"]
+    shutil.rmtree(_USER_ENV["dir"], ignore_errors=True)
+
+
 def git(root, *args):
     subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)
 
