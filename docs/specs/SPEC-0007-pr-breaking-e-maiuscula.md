@@ -4,7 +4,7 @@ title: "PR do modo completo: breaking changes falso e texto em minúscula"
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-14
 parent:
 depends_on: []
