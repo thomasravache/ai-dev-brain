@@ -160,6 +160,18 @@ class PrivateInitTest(PrivateTestCase):
         self.assertIn("modo completo", out.stderr)
         self.assertFalse(self.e.registry.exists())
 
+    def test_spec_root_inside_the_repository_is_refused(self):
+        """SPEC-0008:UT-01"""
+        for inside in (self.e.repo / "notas", self.e.repo):
+            out = self.e.run("private", "init", "--spec-root", str(inside))
+            self.assertEqual(out.returncode, 2, out.stdout + out.stderr)
+            self.assertIn(str(self.e.repo), out.stderr)
+            self.assertFalse(self.e.registry.exists())
+        self.assertFalse((self.e.repo / "notas").exists())
+        self.assertEqual(self.e.repo_status(), "")
+        outside = self.e.run("private", "init", "--spec-root", str(self.tmp / "fora"))
+        self.assertEqual(outside.returncode, 0, outside.stderr)
+
     def test_invalid_registry_stops_every_command(self):
         """SPEC-0003:IT-08"""
         self.e.config_home.mkdir()
