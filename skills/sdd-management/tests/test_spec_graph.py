@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SKILL = Path(__file__).resolve().parent.parent
 SCRIPT = SKILL / "scripts" / "spec_graph.py"
@@ -745,6 +746,22 @@ class UpgradeTest(ProjectTest):
         self.assertIn("| G7 Pronto & Docs | PENDING | | |", upgraded)
         self.assertLess(upgraded.index("## Questões em Aberto"), upgraded.index("## 10. Aprovação"))
         self.assertNotIn("seção obrigatória ausente", self.p.validate(sid).stdout)
+
+
+class UserRegistryIsolationTest(ProjectTest):
+    def test_broken_user_registry_does_not_leak_into_the_suite(self):
+        """SPEC-0010:UT-01"""
+        user = self.tmp / "user"
+        (user / "config" / "sdd").mkdir(parents=True)
+        (user / "config" / "sdd" / "projects.json").write_text("{quebrado", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(user / "config"), "HOME": str(user)}):
+            sid = self.full()
+            out = self.p.validate(sid)
+            self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+            self.assertNotIn("MODO PRIVADO", out.stderr)
+            project = sg.Project(self.tmp)
+        self.assertFalse(project.private)
+        self.assertIn(sid, project.specs)
 
 
 class RealProjectsTest(unittest.TestCase):
