@@ -199,7 +199,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — da55569 | 2026-10-14 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — da55569 | 2026-10-14 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo, 2ª revisão) — major da 1ª revisão resolvido pela emenda v2 (da55569); minor resolvido (leak_allow validado uma vez); minor restante: IT-09 rotulado guarda num comando novo (cosmético) — da55569 | 2026-10-14 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK) — fcc3971 | 2026-10-14 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
