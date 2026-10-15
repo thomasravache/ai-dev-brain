@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SKILL = Path(__file__).resolve().parent.parent
 SCRIPT = SKILL / "scripts" / "spec_graph.py"
@@ -26,6 +27,24 @@ FILL = {
     "| {{SPEC-NNNN}} | {{título}} | {{full}} | {{feature}} | {{M}} | {{—}} | {{—}} |": "| — | — | — | — | — | — | — |",
     "{{critério verificável — SPEC-NNNN:E2E-01}}": "critério",
 }
+
+
+_USER_ENV = {}
+
+
+def setUpModule():
+    """Isola o registro do usuário (projects.json): a suíte não lê nem escreve o da máquina de quem a roda."""
+    _USER_ENV["SDD_CONFIG_HOME"] = os.environ.get("SDD_CONFIG_HOME")
+    _USER_ENV["dir"] = tempfile.mkdtemp()
+    os.environ["SDD_CONFIG_HOME"] = _USER_ENV["dir"]
+
+
+def tearDownModule():
+    if _USER_ENV["SDD_CONFIG_HOME"] is None:
+        os.environ.pop("SDD_CONFIG_HOME", None)
+    else:
+        os.environ["SDD_CONFIG_HOME"] = _USER_ENV["SDD_CONFIG_HOME"]
+    shutil.rmtree(_USER_ENV["dir"], ignore_errors=True)
 
 
 def git(root, *args):
@@ -339,6 +358,25 @@ class PrTitleTest(GitChecksTest):
         self.assertTrue(out.stdout.startswith("feat"))
 
 
+class PrBodyTest(ProjectTest):
+    def test_breaking_changes_and_capitalized_how(self):
+        """SPEC-0007:UT-01"""
+        sid = self.full("Cartões")
+        self.p.edit(sid, "**Decisão:** ex: novo slice no módulo Payments seguindo o padrão Command/Handler existente",
+                    "**Decisão:** um workflow novo")
+        self.p.set(sid, contract_version="2")
+
+        def section(body, name):
+            return body.split(f"## {name}\n", 1)[1].split("\n## ", 1)[0].strip()
+
+        body = self.p.run("pr", sid).stdout
+        self.assertEqual(section(body, "Breaking changes"), "Nenhuma (contrato em v2; emendas compatíveis — ver Emendas)")
+        self.assertEqual(section(body, "Como foi feito"), "Um workflow novo")
+        self.p.set(sid, breaking="remove o campo X; migre para Y")
+        body = self.p.run("pr", sid).stdout
+        self.assertEqual(section(body, "Breaking changes"), "remove o campo X; migre para Y")
+
+
 class CommandsTest(ProjectTest):
     def test_migrate_legacy_layout(self):
         legacy = self.tmp / "docs/specs/implemented"
@@ -411,6 +449,15 @@ class GateTest(ProjectTest):
         evidence = self.row(sid, "G2")["evidence"]
         self.assertIn("build exit 0", evidence)
         self.assertIn("Ran 3 tests OK", evidence)
+
+    def test_run_keeps_the_evidence_note(self):
+        """SPEC-0009:UT-01"""
+        sid = self.committed_spec()
+        self.assertEqual(self.gate(sid, "G0", "--run", "--evidence", "bypass até amanhã").returncode, 0)
+        row = self.row(sid, "G0")
+        self.assertEqual(row["status"], "PASS")
+        self.assertIn("validate: 0 erro", row["evidence"])
+        self.assertRegex(row["evidence"], r"nota: bypass até amanhã — [0-9a-f]{7}")
 
     def test_pass_without_run_is_refused(self):
         sid = self.committed_spec()
@@ -717,6 +764,22 @@ class UpgradeTest(ProjectTest):
         self.assertIn("| G7 Pronto & Docs | PENDING | | |", upgraded)
         self.assertLess(upgraded.index("## Questões em Aberto"), upgraded.index("## 10. Aprovação"))
         self.assertNotIn("seção obrigatória ausente", self.p.validate(sid).stdout)
+
+
+class UserRegistryIsolationTest(ProjectTest):
+    def test_broken_user_registry_does_not_leak_into_the_suite(self):
+        """SPEC-0010:UT-01"""
+        user = self.tmp / "user"
+        (user / "config" / "sdd").mkdir(parents=True)
+        (user / "config" / "sdd" / "projects.json").write_text("{quebrado", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(user / "config"), "HOME": str(user)}):
+            sid = self.full()
+            out = self.p.validate(sid)
+            self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+            self.assertNotIn("MODO PRIVADO", out.stderr)
+            project = sg.Project(self.tmp)
+        self.assertFalse(project.private)
+        self.assertIn(sid, project.specs)
 
 
 class RealProjectsTest(unittest.TestCase):

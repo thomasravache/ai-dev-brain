@@ -81,6 +81,10 @@ No model reliably remembers a long process — context gets summarized, sessions
 
 The repository stays the source of truth; a board is a view of it. The choice is recorded in `docs/specs/sdd-config.yml` → `tracker` (`provider: none` by default), so every session and tool knows it. Specs link to board items through `external: [jira:PAY-123]`. `sync` computes the operations (create, transition, link, block/unblock) and the agent executes them with the adapter guide `references/trackers/<provider>.md` using the tools it has (MCP, CLI, API) — never storing credentials. Direction is repo → board; with `mode: push+intake`, tickets can also be the origin of specs. Contract and sync points: `references/trackers/README.md`. Board writes are visible to others: user confirmation or a standing authorization in the root docs.
 
+## Private mode (SDD outside the team's repository)
+
+When the repository is shared with a team that hasn't adopted SDD, the user can keep the whole process on their side with `private init`: specs, ADRs and sdd-config live in an external `spec_root` versioned by its own git, commits and PRs follow the team's conventions, and a leak-check keeps any SDD mark out of the repository. Commands then print **MODO PRIVADO** — when you see it, read `references/private-mode.md` before any step (layout, commits, gates and limits change). Without a registry entry, everything in this file applies as written.
+
 ## Project layout
 
 ```

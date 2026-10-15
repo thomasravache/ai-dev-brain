@@ -10,6 +10,7 @@ parent:
 depends_on: []
 consumes_contract: []
 contract_version: 1
+# breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: []
 adrs: []
 external: []
@@ -82,7 +83,7 @@ approved_at:
 | {{Erro de validação}} | {{entrada inválida}} | {{ex: 400 + código CARD_INVALID; mensagem no formulário}} | {{UT-02}} |
 
 ## 7. Artefato B — Plano de Testes (TDD)
-<!-- Todo teste tem um ID e é escrito ANTES da implementação (Red). No código, cada teste carrega a tag `{{id}}:<ID>` — o G1 (`spec_graph.py verify`) verifica. Categoria sem testes: "N/A — motivo" SEM ID. Teste que protege comportamento existente e passa antes da mudança: marque `(guarda: passa antes da mudança)`. Estratégia completa: references/testing.md da skill. -->
+<!-- Todo teste tem um ID e é escrito ANTES da implementação (Red). No código, cada teste carrega a tag `{{id}}:<ID>` — o G1 (`spec_graph.py verify`) verifica. Modo privado: sem tag no código; aponte o teste no fim da linha com `→ caminho::nome` (ex.: `→ tests/test_soma.py::test_soma`). Categoria sem testes: "N/A — motivo" SEM ID. Teste que protege comportamento existente e passa antes da mudança: marque `(guarda: passa antes da mudança)`. Estratégia completa: references/testing.md da skill. -->
 
 ### 7.1 Testes de Caracterização
 <!-- Projeto existente sem cobertura na área alterada: CH-xx fixam o comportamento atual e PASSAM antes da mudança. -->
