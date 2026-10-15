@@ -197,7 +197,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — f4b6f58 | 2026-10-14 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — f4b6f58 | 2026-10-14 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; minor: private init aceita --spec-root dentro do repositório (fora do contrato; pendência), gravação do registro não atômica; scaffold f3c1da2 sem lógica; TEST_DEFECT do IT-02 corrigido em commit test próprio (099d22d) — 03768b0 | 2026-10-14 |
-| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK) — 5d0456d | 2026-10-14 |
+| G5 Integração & CI | PASS | MANUAL: BYPASS LOCAL (autorizado por thomas em 2026-10-14; GitHub Actions bloqueado por cobrança, IMP-02): test exit 0 e arch_test exit 0 em 5d0456d — refazer na CI do GitHub em 2026-10-15 | 2026-10-14 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
