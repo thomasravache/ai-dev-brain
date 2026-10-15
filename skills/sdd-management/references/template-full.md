@@ -10,6 +10,7 @@ parent:
 depends_on: []
 consumes_contract: []
 contract_version: 1
+# breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: []
 adrs: []
 external: []

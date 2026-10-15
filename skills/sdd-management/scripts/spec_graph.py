@@ -3274,9 +3274,14 @@ def pr_body(project: Project, docs) -> str:
     return "\n".join(out) + "\n"
 
 
+def capitalized(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
+
 def pr_how(project, d):
-    return sub_text(d, "Relatório de Entrega", "Como foi feito") or \
-        (labeled_line(d, "Decisão Arquitetural", "Decisão") or COMMENT_RE.sub("", d.section("Mudança Proposta") or "").strip() or "—")
+    return capitalized(sub_text(d, "Relatório de Entrega", "Como foi feito") or
+                       labeled_line(d, "Decisão Arquitetural", "Decisão") or
+                       COMMENT_RE.sub("", d.section("Mudança Proposta") or "").strip() or "—")
 
 
 def pr_architecture(project, d):
@@ -3306,11 +3311,11 @@ def pr_rollout(project, d):
 
 
 def pr_breaking(project, d):
+    """O que quebra vem da chave `breaking` da spec; uma emenda (contract_version > 1) não é quebra por si só."""
+    if d.scalar("breaking"):
+        return d.scalar("breaking")
     v = contract_version(d)
-    if v > 1:
-        return (f"Contrato em v{v} — ver Emendas da spec. Se quebra consumidores, marque `!` no título "
-                "(Conventional Commits) e descreva a migração.")
-    return "Nenhuma"
+    return f"Nenhuma (contrato em v{v}; emendas compatíveis — ver Emendas)" if v > 1 else "Nenhuma"
 
 
 def pr_gates(project, d):
