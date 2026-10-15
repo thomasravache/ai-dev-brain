@@ -4,9 +4,9 @@
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 1 aviso(s)** — rode `spec_graph.py validate`
-- Specs: in-progress 5
-- Impedimentos: **2 aberto(s)**, 3 resolvido(s)
+- Validação (G0): **0 erro(s), 9 aviso(s)** — rode `spec_graph.py validate`
+- Specs: in-progress 8
+- Impedimentos: **2 aberto(s)**, 6 resolvido(s)
 
 ## Impedimentos Abertos
 
@@ -30,7 +30,7 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0003, SPEC-0004, SPEC-0005, SPEC-0006  
+**Em andamento:** SPEC-0003, SPEC-0004, SPEC-0005, SPEC-0006, SPEC-0007, SPEC-0008, SPEC-0009  
 **Paradas por impedimento:** SPEC-0001  
 **Próximo lote:** —
 
@@ -41,6 +41,9 @@ Perfil: **minimo**
 | 3 | SPEC-0004 | Checagem de vazamento | full/M | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003 |
 | 4 | SPEC-0005 | Rastreio sem marcas no repositório | full/M | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004 |
 | 5 | SPEC-0006 | PR neutro, convenções do time e documentação do modo privado | full/M | in-progress | 🔄 em andamento |  |
+| 6 | SPEC-0007 | PR do modo completo: breaking changes falso e texto em minúscula | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006 |
+| 7 | SPEC-0008 | Recusar spec_root dentro do repositório | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007 |
+| 8 | SPEC-0009 | gate --run grava o complemento de --evidence | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007; saiu da onda 7: arquivos em comum com SPEC-0008 |
 
 ## Épicos
 
@@ -55,6 +58,9 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0001["SPEC-0001<br/>CI da skill: testes, lint e arquitetura"]:::inprogress
+  S0007["SPEC-0007<br/>PR do modo completo: breaking changes f…"]:::inprogress
+  S0008["SPEC-0008<br/>Recusar spec_root dentro do repositório"]:::inprogress
+  S0009["SPEC-0009<br/>gate --run grava o complemento de --evi…"]:::inprogress
   subgraph E0002["SPEC-0002 · Modo privado: SDD fora do repositório do time"]
     S0003["SPEC-0003<br/>Registro do usuário e spec_root"]:::inprogress
     S0004["SPEC-0004<br/>Checagem de vazamento"]:::inprogress
@@ -83,6 +89,9 @@ flowchart LR
 | [SPEC-0004](SPEC-0004-leak-check.md) | Checagem de vazamento | full | feature | in-progress | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
 | [SPEC-0005](SPEC-0005-rastreio-sem-marcas.md) | Rastreio sem marcas no repositório | full | feature | in-progress | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
 | [SPEC-0006](SPEC-0006-pr-neutro-e-convencoes.md) | PR neutro, convenções do time e documentação do modo privado | full | feature | in-progress | 2026-10-14 | SPEC-0002 | SPEC-0004, SPEC-0005 | SPEC-0003@1 |
+| [SPEC-0007](SPEC-0007-pr-breaking-e-maiuscula.md) | PR do modo completo: breaking changes falso e texto em minúscula | lite | fix | in-progress | 2026-10-14 | — | — | — |
+| [SPEC-0008](SPEC-0008-spec-root-fora-do-repo.md) | Recusar spec_root dentro do repositório | lite | fix | in-progress | 2026-10-14 | — | — | — |
+| [SPEC-0009](SPEC-0009-gate-evidence-complemento.md) | gate --run grava o complemento de --evidence | lite | fix | in-progress | 2026-10-14 | — | — | — |
 
 ## ADRs
 
