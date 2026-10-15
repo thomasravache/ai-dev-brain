@@ -179,8 +179,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 53c8181 | 2026-10-14 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 53c8181 | 2026-10-14 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; minor: regra {tools,sdd} do checador de vendor pode dar falso positivo raro em sys.path; avisos do verify justificados: IT-01/02 vivem no workflow, architecture_rules.py é a implementação, test_spec_graph.py só teve ajustes de lint sem mudar asserções — 53c8181 | 2026-10-14 |
-| G5 Integração & CI | PASS | MANUAL: BYPASS LOCAL (autorizado por thomas em 2026-10-14; GitHub Actions bloqueado por cobrança, IMP-02): test exit 0 e arch_test exit 0 em d8be9d6 — refazer na CI do GitHub em 2026-10-15 | 2026-10-14 |
-| H2 Integração aprovada | FAIL | H2 registrado por engano em 2026-10-14 (o bypass vale só para o que depende da CI do GitHub); aguarda a revisão e o merge do thomas | 2026-10-14 |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #1 em ea993f1: ci 3.9 e 3.15 (run 38676625286) e sdd/pr-check (run 38676625192); IT-02 vermelho pelo motivo certo no PR #2 (run 38650548527) — substitui o bypass local de 2026-10-14 — ea993f1 | 2026-10-15 |
+| H2 Integração aprovada | PASS | aprovado por thomas — autorizou os merges em 2026-10-15 ('pode ir seguindo com os merges quando tudo passar'), com G5 verde na CI do GitHub | 2026-10-15 |
 | G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-14 |
 | G7 Pronto & Docs | PENDING | | |
 
@@ -188,7 +188,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
 | IMP-01 | 2026-10-14 | G1 | spec | UT-05/UT-06 proíbem 'referenciar' tools/sdd, mas o vendor cita esse caminho como destino da cópia (spec_graph.py:22, :70, :2803) e os testes do vendor conferem o destino; a guarda reprovaria código correto | conferido com grep em scripts/ e tests/ | Architect + thomas | Emenda v2 — regra da cópia do vendor proíbe carregar código de tools/sdd (import ou sys.path), não citar o caminho; aprovada por thomas em 2026-10-14 | 2026-10-14 |
-| IMP-02 | 2026-10-14 | G5 | externo | GitHub Actions não inicia jobs no repositório: 'recent account payments have failed or your spending limit needs to be increased' (runs 38650532309 e 38650548527); IT-01 e IT-02 sem evidência | PRs #1 e #2 abertos; todos os jobs (ci 3.9, ci 3.15, sdd) recusados em 2–3 s sem executar passos | thomas |  |  |
+| IMP-02 | 2026-10-14 | G5 | externo | GitHub Actions não inicia jobs no repositório: 'recent account payments have failed or your spending limit needs to be increased' (runs 38650532309 e 38650548527); IT-01 e IT-02 sem evidência | PRs #1 e #2 abertos; todos os jobs (ci 3.9, ci 3.15, sdd) recusados em 2–3 s sem executar passos | thomas | repositório tornado público por thomas em 2026-10-15 (Actions sem cobrança); CI voltou: PR #1 ci 3.9/3.15 verdes (run 38663061877) e IT-02 vermelho pelo motivo certo no PR #2 (run 38650548527, fechado); adoção separada no PR #4 (merge fd56978) para o pr-check julgar só esta spec | 2026-10-15 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). -->
