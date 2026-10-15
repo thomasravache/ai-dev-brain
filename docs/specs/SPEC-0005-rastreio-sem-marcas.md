@@ -193,7 +193,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 71036b0 | 2026-10-14 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 71036b0 | 2026-10-14 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; minor: G7 calcula patch-id de até 200 commits da base (segundos em repositório grande); detecção de scaffold no completo passou de tipo chore para assunto iniciado por chore (equivalente); TEST_DEFECTs corrigidos em commits test próprios: placeholders do lite (antes do red) e rebase sem avanço da base (21d0973) — 71036b0 | 2026-10-14 |
-| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK) — ccf8b43 | 2026-10-14 |
+| G5 Integração & CI | PASS | MANUAL: BYPASS LOCAL (autorizado por thomas em 2026-10-14; GitHub Actions bloqueado por cobrança, IMP-02): test exit 0 e arch_test exit 0 em ccf8b43 — refazer na CI do GitHub em 2026-10-15 | 2026-10-14 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
