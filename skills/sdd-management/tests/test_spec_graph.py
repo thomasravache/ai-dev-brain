@@ -353,7 +353,7 @@ class PrBodyTest(ProjectTest):
         body = self.p.run("pr", sid).stdout
         self.assertEqual(section(body, "Breaking changes"), "Nenhuma (contrato em v2; emendas compatíveis — ver Emendas)")
         self.assertEqual(section(body, "Como foi feito"), "Um workflow novo")
-        self.p.set(sid, breaking='"remove o campo X; migre para Y"')
+        self.p.set(sid, breaking="remove o campo X; migre para Y")
         body = self.p.run("pr", sid).stdout
         self.assertEqual(section(body, "Breaking changes"), "remove o campo X; migre para Y")
 
