@@ -63,7 +63,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 8decfd2 | 2026-10-15 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8decfd2 | 2026-10-15 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; WARN de teste fora do red é esperado (a correção é o próprio isolamento, em arquivo de teste); minor: RealProjectsTest também passa a ver o registro vazio, o desejado para um smoke só de leitura — 8decfd2 | 2026-10-15 |
-| G5 Integração & CI | PASS | MANUAL: BYPASS LOCAL (autorizado por thomas em 2026-10-14; GitHub Actions ainda bloqueado em 2026-10-15 — runs de 4–5s com failure): suíte completa e arquitetura verdes no G2/G3 em 8decfd2; suíte também verde com XDG_CONFIG_HOME apontando para um projects.json inválido — refazer na CI do GitHub | 2026-10-15 |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #3 em ee02ae2: ci 3.9 e 3.15 (run 38677000910) e sdd/pr-check (run 38677000897) — substitui o bypass local — 8b350d4 | 2026-10-15 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
