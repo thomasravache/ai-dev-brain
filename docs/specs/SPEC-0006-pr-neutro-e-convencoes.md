@@ -188,8 +188,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 19491ee | 2026-10-14 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major; minor: G5 com o comando ci no modo privado veio da promessa do épico e não do contrato da filha (coberto por teste em 68ad8d9); UT-03 com títulos em inglês como as demais references (b2a11f1); IT-04 cita ADR do próprio spec_root (emenda v2 da SPEC-0004); TEST_DEFECT da dispensa do pilar entrega (b29f005) — 19491ee | 2026-10-14 |
 | G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #3 em ee02ae2: ci 3.9 e 3.15 (run 38677000910) e sdd/pr-check (run 38677000897) — substitui o bypass local — 6da8ea8 | 2026-10-15 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | aprovado por thomas — autorizou os merges em 2026-10-15 ('pode ir seguindo com os merges quando tudo passar'), com G5 verde na CI do GitHub | 2026-10-15 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-15 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
