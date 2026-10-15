@@ -63,7 +63,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 407c0e5 | 2026-10-14 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 407c0e5 | 2026-10-14 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (modo solo) — 0 blocker/major/minor; checagem antes de gravar o registro, pelo caminho da worktree principal (vale também rodando de uma worktree) — 407c0e5 | 2026-10-14 |
-| G5 Integração & CI | PASS | MANUAL: BYPASS LOCAL (autorizado por thomas em 2026-10-14; GitHub Actions bloqueado por cobrança): suíte completa e arquitetura verdes no G2/G3 em 407c0e5 — refazer na CI do GitHub em 2026-10-15 | 2026-10-14 |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #3 em ee02ae2: ci 3.9 e 3.15 (run 38677000910) e sdd/pr-check (run 38677000897) — substitui o bypass local — 196c3a7 | 2026-10-15 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
