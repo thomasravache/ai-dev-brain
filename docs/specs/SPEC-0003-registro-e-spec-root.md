@@ -170,24 +170,24 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 
 **Fase 1: Registro e normalização**
-- [ ] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0003:<ID>`, falhando pelo motivo certo
-- [ ] Green: `normalize_remote`, `resolve_mode`, atributos do modo no `Project`
+- [x] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0003:<ID>`, falhando pelo motivo certo
+- [x] Green: `normalize_remote`, `resolve_mode`, atributos do modo no `Project`
 
 **Fase 2: Comando private e spec_root**
-- [ ] Red: IT-01, IT-07, IT-08, IT-09; IT-04 (guarda) passando no código atual
-- [ ] Green: `private init|status|off`, recusa com `docs/specs` versionado, registro inválido = exit 2
+- [x] Red: IT-01, IT-07, IT-08, IT-09; IT-04 (guarda) passando no código atual
+- [x] Green: `private init|status|off`, recusa com `docs/specs` versionado, registro inválido = exit 2
 
 **Fase 3: Comandos em modo privado**
-- [ ] Red: IT-02, IT-03, IT-05, IT-06
-- [ ] Green: caminhos pelo modo, aviso em stderr, `commit_records` + sync, recusa de `vendor`/`pr-check`, avisos no `status`
-- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3); tempo da suíte ≤ +20%
+- [x] Red: IT-02, IT-03, IT-05, IT-06
+- [x] Green: caminhos pelo modo, aviso em stderr, `commit_records` + sync, recusa de `vendor`/`pr-check`, avisos no `status`
+- [x] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3); tempo da suíte ≤ +20%
 
 **Fase final: Integração, entrega e documentação**
-- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e aprovação (H2)
-- [ ] Deploy: N/A — pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy: N/A — pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |
@@ -210,30 +210,47 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+Modo privado por repositório: registro do usuário `projects.json` (chave = remoto normalizado ou caminho), comandos `private init|status|off`, e todos os comandos lendo e gravando specs, ADRs, sdd-config e INDEX num `spec_root` externo com git próprio (commit automático, `sync: push` opcional). `vendor` e `pr-check` recusados em modo privado.
 
 ### Como foi feito
+`resolve_mode` e o `Project` passam a apontar `specs_dir`, `adr_dir` e `config_path` para o `spec_root` (ADR-0006); escrita de registros centralizada para commitar no `spec_root`. Sem desvio de arquitetura: só biblioteca padrão e `git`.
 
 ### Prova de Correção
+N/A
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Dado `git@github.com:Org/Repo.git`, `https://user@github.com/Org/Repo`, `ssh://git@GitHub.com:22/Org/Repo.git` e… | PASS | `test_private_mode.py::test_same_repository_in_every_url_form_gives_the_same_key` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| UT-02 | Dado um registro com uma entrada por remoto e outra por caminho, quando `resolve_mode` consulta um repositório com aquele remoto, um sem… | PASS | `test_private_mode.py::test_lookup_by_remote_by_path_and_missing` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-01 | Dado um repositório temporário com remoto, quando roda `private init --spec-root <tmp>/sdd/org/repo`, então o registro tem a entrada, o… | PASS | `test_private_mode.py::test_init_registers_and_creates_versioned_spec_root` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-02 | Dado o modo privado ligado, quando roda `new --tier lite`, `set`, `gate SPEC-0001 G0 --run` e `index`, então os arquivos existem só no… | PASS | `test_private_mode.py::test_commands_write_only_to_spec_root_and_commit_there` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-03 | Dado o modo privado ligado, quando roda `vendor --ci generic` e `pr-check`, então ambos saem com 2 e mensagem "não se aplica em modo… | PASS | `test_private_mode.py::test_repository_only_commands_are_refused` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-04 | Dado um registro que só tem entrada para outro repositório, quando roda `new`, `validate`, `index` e `status`, então tudo vai para… | PASS | `test_private_mode.py::test_entry_for_another_repository_keeps_full_mode` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-05 | Dado o modo privado ligado e uma worktree do repositório, quando roda `status` dentro da worktree, então usa o mesmo `spec_root`. | PASS | `test_private_mode.py::test_worktree_resolves_the_same_spec_root` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-06 | Dado o `spec_root` com um remoto bare e `sync: push`, quando roda `new`, então o commit chega ao remoto; com `sync: none`, não chega; com o… | PASS | `test_private_mode.py::test_sync_push_none_failure_and_pending_warnings` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-07 | Dado um repositório que versiona `docs/specs/`, quando roda `private init`, então sai com 2, a mensagem cita o modo completo e o registro… | PASS | `test_private_mode.py::test_repository_with_versioned_sdd_is_refused` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-08 | Dado `projects.json` com JSON inválido, quando roda `status`, então sai com 2 citando o caminho do registro. | PASS | `test_private_mode.py::test_invalid_registry_stops_every_command` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-09 | Dado o modo privado ligado, quando roda `private off`, então a entrada sai do registro, o `spec_root` continua existindo e o próximo… | PASS | `test_private_mode.py::test_off_removes_entry_and_keeps_spec_root` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| CT-01 | Dado o modo privado e o modo completo, quando um `Project` é criado, então expõe a API consumida por SPEC-0004/0005/0006: `project.private`… | PASS | `test_private_mode.py::test_project_exposes_the_mode_api` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — modo solo (projeto de um mantenedor); merge aprovado por thomas (H2)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — conferidos pelos testes do plano e pela CI
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — rollback por revert do merge; ferramenta de linha de comando sem telemetria
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #3, pelo link simbólico `~/.claude/skills/sdd-management`. Versão da ferramenta 2026.10.8. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |

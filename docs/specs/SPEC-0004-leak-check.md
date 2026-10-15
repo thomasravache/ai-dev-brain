@@ -172,24 +172,24 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 
 **Fase 1: Padrões**
-- [ ] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0004:<ID>`; UT-03 (guarda) passando
-- [ ] Green: `leak_findings` com padrões padrão, `leak_patterns` e `leak_allow`
+- [x] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0004:<ID>`; UT-03 (guarda) passando
+- [x] Green: `leak_findings` com padrões padrão, `leak_patterns` e `leak_allow`
 
 **Fase 2: Comando e fontes**
-- [ ] Red: IT-01, IT-02, IT-03, IT-08, IT-10; IT-09 (guarda) passando
-- [ ] Green: `leak-check` (staged, range, message, branch), regex inválida = exit 2
+- [x] Red: IT-01, IT-02, IT-03, IT-08, IT-10; IT-09 (guarda) passando
+- [x] Green: `leak-check` (staged, range, message, branch), regex inválida = exit 2
 
 **Fase 3: Integrações**
-- [ ] Red: IT-04, IT-05, IT-06, IT-07
-- [ ] Green: hook `assets/hooks/pre-push-leak` e instalação segura no `private init`, branch neutra no `worktree`, leak-check no G4/G5
-- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: IT-04, IT-05, IT-06, IT-07
+- [x] Green: hook `assets/hooks/pre-push-leak` e instalação segura no `private init`, branch neutra no `worktree`, leak-check no G4/G5
+- [x] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e aprovação (H2)
-- [ ] Deploy: N/A — pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy: N/A — pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |
@@ -213,30 +213,50 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+`leak-check` que acha marcas do SDD (IDs de spec e dos ADRs do usuário, tags de teste, seções dos templates, caminho do `spec_root`, padrões do usuário) no diff staged, em intervalos de commits, mensagens e nome da branch; hook `pre-push` local; branches neutras no `worktree`; G4 e G5 reprovam com vazamento.
 
 ### Como foi feito
+`leak_findings` puro, chamado pelo comando e pelos gates; hook em `assets/hooks/pre-push-leak`, instalado só sem gerenciador de hooks do time. Emenda v2: ID de ADR só conta como marca se o ADR existir no `spec_root` (ADRs do time não são vazamento).
 
 ### Prova de Correção
+N/A
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Dado um texto com `SPEC-0003`, `ADR-0006` (existente no spec_root), `SPEC-0003:UT-01`, "Mapa de Comportamentos" e o caminho do `spec_root`,… | PASS | `test_private_mode.py::test_default_patterns_find_each_mark_with_its_line` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| UT-02 | Dado `leak_patterns: ["\\bProjetoFenix\\b"]` e `leak_allow: ["SPEC-0000-exemplo"]`, quando `leak_findings` roda sobre um texto com… | PASS | `test_private_mode.py::test_user_patterns_and_allowlist` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| UT-03 | Dado um trecho de código comum com `IT-01`, "spec" em minúscula e `ADR` sem número, quando `leak_findings` roda, então não há achados. | PASS | `test_private_mode.py::test_ordinary_code_is_clean` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-01 | Dado o modo privado ligado e um arquivo staged com `// ver SPEC-0003`, quando roda `leak-check --staged`, então sai com 1 e o achado cita… | PASS | `test_private_mode.py::test_staged_diff` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-02 | Dado um commit com `Refs: SPEC-0003` no intervalo, quando roda `leak-check --range main..HEAD`, então sai com 1 citando `commit <sha7>`. | PASS | `test_private_mode.py::test_commit_message_in_range` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-03 | Dado a branch atual `sdd/SPEC-0003-x`, quando roda `leak-check --branch sdd/SPEC-0003-x`, então sai com 1 citando `branch`. | PASS | `test_private_mode.py::test_branch_name` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-04 | Dado o modo privado ligado com o hook instalado e um remoto bare, quando faz `git push` de um commit com `SPEC-0003` na mensagem, então o… | PASS | `test_private_mode.py::test_pre_push_hook_blocks_marks_and_lets_clean_pushes_through` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-05 | Dado um repositório com `core.hooksPath` definido (e outro com `.husky/`), quando roda `private init`, então nenhum hook é escrito e a… | PASS | `test_private_mode.py::test_team_hook_manager_prevents_installing_the_hook` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-06 | Dado o modo privado ligado e uma spec com título "Múltiplos cartões" e `type: feature`, quando roda `worktree SPEC-0001 --create`, então a… | PASS | `test_private_mode.py::test_worktree_branch_and_folder_have_no_spec_id` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-07 | Dado o modo privado ligado e uma branch com um commit que cita `SPEC-0001`, quando roda `gate SPEC-0001 G4 --run`, então G4 = FAIL com… | PASS | `test_private_mode.py::test_gate_with_leaked_commit_fails` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-08 | Dado `leak_patterns: ["(quebrada"]`, quando roda `leak-check`, então sai com 2 citando o padrão. | PASS | `test_private_mode.py::test_wrong_regex_is_an_error` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-09 | Dado o modo completo, quando roda `leak-check`, então sai com 0 e informa "modo completo". | PASS | `test_private_mode.py::test_full_mode_has_nothing_to_check` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-10 | Dado um intervalo com 50 commits limpos, quando roda `leak-check --range`, então termina em menos de 2 s. | PASS | `test_private_mode.py::test_fifty_commits_in_under_two_seconds` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-11 | Dado o modo privado com `ADR-0001` criado no spec_root, quando um arquivo staged cita `ADR-0002` (ADR do time) e outro cita `ADR-0001`,… | PASS | `test_private_mode.py::test_team_adrs_are_not_leaks_but_mine_are` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| CT-01 | Dado um `Project` em modo privado criado pela API da SPEC-0003@1, quando os comandos desta spec leem `project.private`, `project.spec_root`… | PASS | `test_private_mode.py::test_reads_patterns_from_the_spec_root_config` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — modo solo (projeto de um mantenedor); merge aprovado por thomas (H2)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — conferidos pelos testes do plano e pela CI
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — rollback por revert do merge; ferramenta de linha de comando sem telemetria
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #3, pelo link simbólico `~/.claude/skills/sdd-management`. Versão da ferramenta 2026.10.8. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |

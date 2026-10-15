@@ -51,8 +51,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [x] Green: isolamento mínimo do módulo, seguindo `PrivateEnv`
 - [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 - [x] `SDD_TOOL_VERSION` e CHANGELOG: N/A — só testes mudam; o ADR-0005 exige versão e CHANGELOG apenas em mudança de comportamento do `spec_graph.py`
-- [ ] Review (G4), integração (G5, bypass local enquanto a CI estiver bloqueada) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Review (G4), integração (G5, bypass local enquanto a CI estiver bloqueada) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -78,28 +78,33 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+A suíte antiga (`test_spec_graph.py`) não lê mais o registro real do usuário: um `projects.json` inválido na máquina não quebra testes que nada têm a ver com o modo privado.
 
 ### Como foi feito
+`setUpModule`/`tearDownModule` apontam `SDD_CONFIG_HOME` para um diretório temporário vazio e restauram o ambiente, como o `PrivateEnv` dos testes do modo privado. Só arquivos de teste; sem nova versão da ferramenta (ADR-0005).
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+Red: commit c7e1b3a — `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (FAILED (failures=1, skipped=1)), registrado no G1. Green: commit 8decfd2 — suíte exit 0 (OK) no G2, e verde na CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Dado `XDG_CONFIG_HOME` e `HOME` apontando para um diretório cujo `sdd/projects.json` é JSON inválido (simulando o registro quebrado de quem… | PASS | `test_spec_graph.py::test_broken_user_registry_does_not_leak_into_the_suite` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4) — modo solo (projeto de um mantenedor); merge aprovado por thomas (H2)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #3, pelo link simbólico `~/.claude/skills/sdd-management`. Versão da ferramenta 2026.10.8. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

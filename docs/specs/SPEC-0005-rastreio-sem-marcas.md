@@ -166,24 +166,24 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 
 **Fase 1: Classificação e plano**
-- [ ] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0005:<ID>`; IT-09 (guarda) passando
-- [ ] Green: papel pelo arquivo, parse de `→ caminho::nome`, exemplo nos templates
+- [x] Red: UT-01, UT-02 e CT-01 com a tag `SPEC-0005:<ID>`; IT-09 (guarda) passando
+- [x] Green: papel pelo arquivo, parse de `→ caminho::nome`, exemplo nos templates
 
 **Fase 2: verify e G1 no commit red**
-- [ ] Red: IT-01, IT-02, IT-03, IT-04, IT-08
-- [ ] Green: coleta por branch no modo privado, avaliação comum, seção "Commits", `gate G1 --at` com worktree temporária, dica no modo completo
+- [x] Red: IT-01, IT-02, IT-03, IT-04, IT-08
+- [x] Green: coleta por branch no modo privado, avaliação comum, seção "Commits", `gate G1 --at` com worktree temporária, dica no modo completo
 
 **Fase 3: G7 por merge, squash e rebase**
-- [ ] Red: IT-05, IT-06, IT-07
-- [ ] Green: busca do merge na base por SHA e `patch-id`
-- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: IT-05, IT-06, IT-07
+- [x] Green: busca do merge na base por SHA e `patch-id`
+- [x] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e aprovação (H2)
-- [ ] Deploy: N/A — pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy: N/A — pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |
@@ -206,30 +206,47 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+Rastreio sem marcas no modo privado: commits da spec são os da branch, registrados no `spec_root` com papel, SHA e `patch-id`; red/green pelos arquivos; testes do plano por `→ caminho::nome`; G1 roda no commit red (`gate G1 --at`, também no modo completo); G7 acha a integração por merge, squash ou rebase.
 
 ### Como foi feito
+Classificação de papel por `test_paths`, leitura do plano por regex e busca de integração por `git patch-id` na base; o modo completo segue com mensagens e tags (IT-09 de guarda).
 
 ### Prova de Correção
+N/A
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Dado `test_paths` padrão e commits com arquivos `[tests/a_test.py]`, `[src/a.py, tests/a_test.py]` e `[src/a.py]`, quando o papel é… | PASS | `test_private_mode.py::test_role_comes_from_the_files` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| UT-02 | Dado linhas de plano com ` | PASS | `test_private_mode.py::test_plan_line_target` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-01 | Dado o modo privado e uma branch com um commit só de teste ("adiciona teste") seguido de um commit de código ("implementa"), sem `Refs:`… | PASS | `test_private_mode.py::test_red_before_green_without_marks` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-02 | Dado o modo privado e o commit de código antes do commit de teste, quando roda `verify`, então G1 = FAIL apontando o commit fora de ordem. | PASS | `test_private_mode.py::test_green_before_red_fails` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-03 | Dado o plano apontando `tests/a_test.py::test_inexistente`, quando roda `verify`, então G1 = FAIL citando o ID do teste. | PASS | `test_private_mode.py::test_missing_planned_test_fails` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-04 | Dado uma branch já verde com um commit red anterior, quando roda `gate G1 --run --at <red>` (modo privado e modo completo), então G1 = PASS… | PASS | `test_private_mode.py::test_g1_at_red_commit_in_private_and_full_modes` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-05 | Dado a spec integrada na base por squash (`git merge --squash` + commit), quando roda `gate G7 --run` em modo privado, então a evidência… | PASS | `test_private_mode.py::test_squash` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-06 | Dado a spec integrada por rebase (commits reaplicados na base), quando roda `gate G7 --run`, então a evidência cita "rebase" e o intervalo. | PASS | `test_private_mode.py::test_rebase` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-07 | Dado a spec integrada com `git merge --no-ff`, quando roda `gate G7 --run`, então a evidência cita "merge"; e numa spec não integrada, G7 =… | PASS | `test_private_mode.py::test_merge_commit_and_missing_merge` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-08 | Dado o modo privado, quando roda `gate G1 --run` e depois `gate G2 --run`, então a spec no `spec_root` tem a seção "Commits" com papel,… | PASS | `test_private_mode.py::test_commits_are_recorded_in_the_spec_root` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-09 | Dado o modo completo, quando roda `verify` com commits `test(...)`/`feat(...)` com `Refs:` e tags, então o resultado é o mesmo de hoje. | PASS | `test_private_mode.py::test_full_mode_verify_still_uses_messages_and_tags` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| CT-01 | Dado um `Project` em modo privado criado pela API da SPEC-0003@1, quando os comandos desta spec leem `project.private`, `project.spec_root`… | PASS | `test_private_mode.py::test_config_comes_from_the_spec_root` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — modo solo (projeto de um mantenedor); merge aprovado por thomas (H2)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — conferidos pelos testes do plano e pela CI
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — rollback por revert do merge; ferramenta de linha de comando sem telemetria
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #3, pelo link simbólico `~/.claude/skills/sdd-management`. Versão da ferramenta 2026.10.8. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |

@@ -153,23 +153,23 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 
 **Fase 1: Testes de arquitetura**
-- [ ] Red: escrever UT-01..UT-06 com a tag `SPEC-0001:<ID>`; UT-02, UT-04 e UT-06 (guardas) passam no código atual, UT-01, UT-03 e UT-05 falham pelo motivo certo
-- [ ] Green: implementar os checadores (`ast`) em `test_architecture.py` até tudo passar
-- [ ] Refactor mantendo tudo verde
+- [x] Red: escrever UT-01..UT-06 com a tag `SPEC-0001:<ID>`; UT-02, UT-04 e UT-06 (guardas) passam no código atual, UT-01, UT-03 e UT-05 falham pelo motivo certo
+- [x] Green: implementar os checadores (`ast`) em `test_architecture.py` até tudo passar
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Lint**
-- [ ] `ruff.toml` (py39, exclui `tools/`) e ajustes no `spec_graph.py` sem mudança de comportamento; motivo ao lado de cada regra ignorada
-- [ ] Validar: `uvx ruff check` limpo + suíte completa (G2) + `arch_test` (G3)
+- [x] `ruff.toml` (py39, exclui `tools/`) e ajustes no `spec_graph.py` sem mudança de comportamento; motivo ao lado de cada regra ignorada
+- [x] Validar: `uvx ruff check` limpo + suíte completa (G2) + `arch_test` (G3)
 
 **Fase 3: CI e documentação**
-- [ ] `.github/workflows/ci.yml` (matriz 3.9 + versão atual, actions fixadas por SHA) com a tag `SPEC-0001:IT-01` e `SPEC-0001:IT-02`
-- [ ] `lint` e `arch_test` no sdd-config; README e SKILL.md com Python 3.9+; `SDD_TOOL_VERSION` e CHANGELOG
+- [x] `.github/workflows/ci.yml` (matriz 3.9 + versão atual, actions fixadas por SHA) com a tag `SPEC-0001:IT-01` e `SPEC-0001:IT-02`
+- [x] `lint` e `arch_test` no sdd-config; README e SKILL.md com Python 3.9+; `SDD_TOOL_VERSION` e CHANGELOG
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (IT-01), CI vermelha no PR descartável (IT-02) (G5) e aprovação (H2)
-- [ ] Deploy: N/A — pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (IT-01), CI vermelha no PR descartável (IT-02) (G5) e aprovação (H2)
+- [x] Deploy: N/A — pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |
@@ -194,30 +194,43 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+Workflow `ci` (`.github/workflows/ci.yml`) que, em todo PR, roda o lint (Ruff 0.17), os testes de arquitetura das regras do ADR-0001 (só biblioteca padrão; processos só `git` e comandos do sdd-config; nada carrega `tools/sdd`) e a suíte completa em Python 3.9 e 3.15. Python mínimo da ferramenta passa a 3.9.
 
 ### Como foi feito
+Checadores AST em `tests/architecture_rules.py`, chamados por `tests/test_architecture.py` (padrão unittest da suíte); Ruff configurado em `ruff.toml` (ADR-0003) e o código ajustado num `refactor` sem mudança de comportamento (87de83a). Emenda v2: a regra da cópia do vendor proíbe carregar código de `tools/sdd`, não citar o caminho (IMP-01). A adoção do SDD foi separada no PR #4 para o `pr-check` julgar só esta spec.
 
 ### Prova de Correção
+N/A
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Dado um código-fonte sintético com `import yaml` e `from helpers import x` (módulo local), quando o checador de imports roda, então aponta… | PASS | `test_architecture.py::test_third_party_and_local_imports_are_reported` — CI do PR #1 em ea993f1 (run 38676625286, ci 3.9 e 3.15) |
+| UT-02 | Dado o `scripts/spec_graph.py` atual, quando o checador de imports roda, então não há import fora da biblioteca padrão nem de módulo local. | PASS | `test_architecture.py::test_script_imports_only_standard_library` — CI do PR #1 em ea993f1 (run 38676625286, ci 3.9 e 3.15) |
+| UT-03 | Dado um código-fonte sintético com `subprocess.run(["gh", "pr", "list"])` numa função fora da lista permitida, quando o checador de… | PASS | `test_architecture.py::test_process_outside_allowed_functions_is_reported` — CI do PR #1 em ea993f1 (run 38676625286, ci 3.9 e 3.15) |
+| UT-04 | Dado o `scripts/spec_graph.py` atual, quando o checador de processos roda, então toda chamada de `subprocess` está em `run_git` ou no… | PASS | `test_architecture.py::test_script_runs_only_git_and_configured_commands` — CI do PR #1 em ea993f1 (run 38676625286, ci 3.9 e 3.15) |
+| UT-05 | Dado um código-fonte sintético que faz `from tools.sdd import spec_graph` e outro que faz `sys.path.insert(0, "tools/sdd")`, quando o… | PASS | `test_architecture.py::test_loading_the_vendored_copy_is_reported_and_citing_its_path_is_not` — CI do PR #1 em ea993f1 (run 38676625286, ci 3.9 e 3.15) |
+| UT-06 | Dado todo arquivo `.py` em `skills/`, quando o checador da cópia do vendor roda, então nenhum importa de `tools/sdd` nem o põe no… | PASS | `test_architecture.py::test_skills_never_load_the_vendored_copy` — CI do PR #1 em ea993f1 (run 38676625286, ci 3.9 e 3.15) |
+| IT-01 | Dado um PR com o código desta spec, quando o workflow `ci` roda no GitHub Actions, então lint, arquitetura e suíte completa passam em… | PASS | run 38676625286 (ci 3.9 e 3.15 verdes) no PR #1 em ea993f1 |
+| IT-02 | Dado um commit descartável com um erro de lint e um teste falhando, num PR em rascunho aberto só para isso e fechado depois, quando o… | PASS | run 38650548527 vermelho pelo motivo certo no PR #2 (rascunho fechado): `import yaml` injetado reprovou em 3.9 e 3.15 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — modo solo (projeto de um mantenedor); merge aprovado por thomas (H2)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — conferidos pelos testes do plano e pela CI
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — rollback por revert do merge; ferramenta de linha de comando sem telemetria
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): vale na `main` desde o merge do PR #1 (95a107f), pelo link simbólico da skill. Versão da ferramenta 2026.10.1. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |

@@ -47,12 +47,12 @@ Nenhuma
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-- [ ] Red: UT-01 com a tag `SPEC-0009:UT-01`, falhando pelo motivo certo
-- [ ] Green: correção mínima, seguindo o padrão citado
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
-- [ ] Review (G4), integração (G5, bypass local enquanto a CI estiver bloqueada) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01 com a tag `SPEC-0009:UT-01`, falhando pelo motivo certo
+- [x] Green: correção mínima, seguindo o padrão citado
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
+- [x] Review (G4), integração (G5, bypass local enquanto a CI estiver bloqueada) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -78,28 +78,33 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+`gate --run --evidence` grava o texto como `nota:` na evidência, como a ajuda descreve.
 
 ### Como foi feito
+O texto de `--evidence` é anexado à evidência gerada pelo `--run`, antes do SHA.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+Red: commit fbce02b — `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (FAILED (failures=1, skipped=1)), registrado no G1. Green: commit 1388b43 — suíte exit 0 (OK) no G2, e verde na CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Dado uma spec com G0 pendente, quando roda `gate SPEC-0001 G0 --run --evidence "bypass até amanhã"`, então a linha do G0 tem a evidência… | PASS | `test_spec_graph.py::test_run_keeps_the_evidence_note` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4) — modo solo (projeto de um mantenedor); merge aprovado por thomas (H2)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #3, pelo link simbólico `~/.claude/skills/sdd-management`. Versão da ferramenta 2026.10.8. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

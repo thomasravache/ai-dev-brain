@@ -160,24 +160,24 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 
 **Fase 1: Convenções do time**
-- [ ] Red: UT-01 e CT-01 com a tag `SPEC-0006:<ID>`, IT-01
-- [ ] Green: `detect_team_conventions`, bloco `team:` no `private init` e `private detect`
+- [x] Red: UT-01 e CT-01 com a tag `SPEC-0006:<ID>`, IT-01
+- [x] Green: `detect_team_conventions`, bloco `team:` no `private init` e `private detect`
 
 **Fase 2: PR neutro**
-- [ ] Red: UT-02, IT-02, IT-03, IT-04; IT-06 (guarda) passando
-- [ ] Green: título e corpo no padrão do time, preenchimento do template, leak-check antes de imprimir
+- [x] Red: UT-02, IT-02, IT-03, IT-04; IT-06 (guarda) passando
+- [x] Green: título e corpo no padrão do time, preenchimento do template, leak-check antes de imprimir
 
 **Fase 3: Documentação e jornada**
-- [ ] Red: UT-03, IT-05
-- [ ] Green: `references/private-mode.md`, parágrafo no `SKILL.md`, README; jornada completa passando
-- [ ] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-03, IT-05
+- [x] Green: `references/private-mode.md`, parágrafo no `SKILL.md`, README; jornada completa passando
+- [x] Refactor mantendo tudo verde; validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e aprovação (H2)
-- [ ] Deploy: N/A — pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] `SDD_TOOL_VERSION` e CHANGELOG atualizados (ADR-0005)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy: N/A — pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 | Gate | Status | Evidência | Data |
@@ -200,30 +200,45 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+`private detect` (convenções do time: merge, mensagens, hooks, template de PR), `pr` no estilo do time e sem marcas (template do time ou corpo neutro, recusado se o `leak-check` achar algo), G5 com o comando `ci` e o guia `references/private-mode.md` citado no `SKILL.md`. A jornada completa (IT-05) prova o objetivo do épico.
 
 ### Como foi feito
+Detecção a partir do histórico e dos arquivos do repositório, gravada no bloco `team` do sdd-config do `spec_root`; o `pr` do modo completo ficou igual (IT-06 de guarda).
 
 ### Prova de Correção
+N/A
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Dado listas sintéticas de commits (pais e assuntos) e de arquivos, quando `detect_team_conventions` roda, então devolve… | PASS | `test_private_mode.py::test_detection_from_history_and_files` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| UT-02 | Dado uma spec `type: feature` com título "Suporte a múltiplos cartões", quando o título do PR é montado em modo privado, então dá `feat:… | PASS | `test_private_mode.py::test_pr_title_follows_the_team` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| UT-03 | Dado o `SKILL.md` e `references/private-mode.md`, quando lidos, então o `SKILL.md` cita `references/private-mode.md` e o arquivo tem as… | PASS | `test_private_mode.py::test_agent_instructions_cover_the_private_mode` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-01 | Dado um repositório temporário com 200 commits (merges `--no-ff`, assuntos Conventional), `.husky/` e `.github/pull_request_template.md`,… | PASS | `test_private_mode.py::test_init_detects_and_records_team_conventions` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-02 | Dado o modo privado e um template do time com "## Summary", "## How to test" e "## Checklist", quando roda `pr SPEC-0001 --out pr.md`,… | PASS | `test_private_mode.py::test_fills_the_team_template` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-03 | Dado o modo privado e nenhum template, quando roda `pr SPEC-0001`, então o corpo tem "O que muda", "Como testar", "Riscos e rollback" e… | PASS | `test_private_mode.py::test_neutral_body_without_template` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-04 | Dado o modo privado e uma spec cujo resumo cita `ADR-0006`, quando roda `pr SPEC-0001 --out pr.md`, então sai com 1, lista o achado e… | PASS | `test_private_mode.py::test_leaking_body_is_refused` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-05 | Dado um repositório "do time" com remoto bare, histórico livre e squash, quando o fluxo inteiro roda pela CLI em modo privado (`private… | PASS | `test_private_mode.py::test_whole_private_journey_leaves_no_mark` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| IT-06 | Dado o modo completo, quando roda `pr SPEC-0001`, então título e corpo são os de hoje (com `[SPEC-0001]`, marcador e tabela de gates). | PASS | `test_private_mode.py::test_full_mode_pr_is_unchanged` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
+| CT-01 | Dado um `Project` em modo privado criado pela API da SPEC-0003@1, quando os comandos desta spec leem `project.private`, `project.spec_root`… | PASS | `test_private_mode.py::test_pr_reads_team_block_from_the_spec_root_config` — CI do PR #3 em ee02ae2 (run 38677000910, ci 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — modo solo (projeto de um mantenedor); merge aprovado por thomas (H2)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — conferidos pelos testes do plano e pela CI
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — rollback por revert do merge; ferramenta de linha de comando sem telemetria
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #3, pelo link simbólico `~/.claude/skills/sdd-management`. Versão da ferramenta 2026.10.8. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 15. Emendas
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
