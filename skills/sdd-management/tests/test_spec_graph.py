@@ -431,6 +431,15 @@ class GateTest(ProjectTest):
         self.assertIn("build exit 0", evidence)
         self.assertIn("Ran 3 tests OK", evidence)
 
+    def test_run_keeps_the_evidence_note(self):
+        """SPEC-0009:UT-01"""
+        sid = self.committed_spec()
+        self.assertEqual(self.gate(sid, "G0", "--run", "--evidence", "bypass até amanhã").returncode, 0)
+        row = self.row(sid, "G0")
+        self.assertEqual(row["status"], "PASS")
+        self.assertIn("validate: 0 erro", row["evidence"])
+        self.assertRegex(row["evidence"], r"nota: bypass até amanhã — [0-9a-f]{7}")
+
     def test_pass_without_run_is_refused(self):
         sid = self.committed_spec()
         out = self.gate(sid, "G0")

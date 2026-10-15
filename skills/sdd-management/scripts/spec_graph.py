@@ -17,7 +17,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.10.7"
+SDD_TOOL_VERSION = "2026.10.8"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -2642,7 +2642,8 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
             die(f"git worktree add falhou: {err.strip()}")
         workdir = temp_dir / "wt"
     try:
-        return gate_run(project, doc, spec_id, gate, workdir, branch_dir, by, allow_dirty, expect_green, bool(at))
+        return gate_run(project, doc, spec_id, gate, workdir, branch_dir, by, allow_dirty, expect_green, bool(at),
+                        evidence)
     finally:
         if temp_dir:
             if run_git(branch_dir, "worktree", "remove", "--force", str(workdir))[0] != 0:
@@ -2651,7 +2652,7 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
 
 
 def gate_run(project: Project, doc: Doc, spec_id, gate, workdir: Path, branch_dir: Path, by, allow_dirty, expect_green,
-             at_red: bool):
+             at_red: bool, note=None):
     sha, dirty = head_ref(workdir)
     if dirty and not allow_dirty and gate != "G0":
         die(f"há alterações não commitadas em {workdir}: a evidência precisa apontar um commit (commite ou use --allow-dirty)")
@@ -2712,6 +2713,8 @@ def gate_run(project: Project, doc: Doc, spec_id, gate, workdir: Path, branch_di
             parts.append(f"vazamento: {len(leaks)} achado(s) (1º: {origin}:{number} — {label})")
         else:
             parts.append("leak-check: limpo")
+    if note:
+        parts.append(f"nota: {note}")
     evidence_text = "; ".join(parts) + f" — {sha}" + (" (árvore suja)" if dirty else "")
     set_gate_row(doc, gate, "PASS" if ok else "FAIL", evidence_text)
     if project.private and gate in ("G1", "G2", "G3", "G4", "G5"):
