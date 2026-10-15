@@ -8,6 +8,9 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+### Fixed
+- `pr` não aponta mais quebra só porque a spec teve emenda: o que quebra vem da chave opcional `breaking`; "Como foi feito" começa com maiúscula (SPEC-0007).
+
 ### Added
 - Modo privado, parte 4: detecção das convenções do time (`private detect`), `pr` no estilo do time sem marcas do SDD, G5 com o comando `ci` e guia `references/private-mode.md` (SPEC-0006).
 - Modo privado, parte 3: rastreio sem marcas — commits ligados à spec pela branch, red/green pelos arquivos, testes do plano por `→ caminho::nome`, seção Commits com SHA e patch-id, G7 acha o merge mesmo com squash ou rebase (SPEC-0005).
