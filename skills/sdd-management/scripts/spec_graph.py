@@ -737,6 +737,10 @@ def cmd_private(project: Project, action: str, spec_root, sync):
         default_root = Path(registry["default_root"]).expanduser() if registry.get("default_root") else data_home / "sdd"
         target = default_root.joinpath(*key.split("/")[-2:])
     target = target.resolve()
+    repo = Path(keys[-1])
+    if target == repo or repo in target.parents:
+        die(f"spec_root {target} fica dentro do repositório {repo}: as specs ficariam no clone do time; "
+            "use uma pasta fora dele (padrão: <default_root>/<org>/<repo>)")
     sync = sync or current.get("sync") or "none"
     for k in keys:
         projects.pop(k, None)
