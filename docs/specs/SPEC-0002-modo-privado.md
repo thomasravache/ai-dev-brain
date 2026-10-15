@@ -3,7 +3,7 @@ id: SPEC-0002
 title: "Modo privado: SDD fora do repositório do time"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-10-14
 depends_on: []
 adrs: [ADR-0006]
@@ -70,13 +70,13 @@ Todas alteram `spec_graph.py` e `test_spec_graph.py` (arquivo único, ADR-0001):
 - Dados do time num remoto pessoal — fora da ferramenta: `sync` desligado por padrão e a documentação diz que a escolha do remoto é do usuário com o time.
 
 ## 7. Critérios de Aceite do Épico
-- [ ] Sem entrada no registro, todos os comandos se comportam como hoje — SPEC-0003:IT-04
-- [ ] Com o modo privado ligado, nenhum comando escreve no repositório do time e o estado vive no `spec_root` versionado — SPEC-0003:IT-02
-- [ ] Um push com marca do SDD é bloqueado pelo hook local — SPEC-0004:IT-04
-- [ ] Red antes do green é provado sem `Refs:` nem tags — SPEC-0005:IT-01
-- [ ] O merge da spec é achado depois de um squash — SPEC-0005:IT-05
-- [ ] Jornada privada completa (init → spec → red → green → gates → pr) termina sem nenhuma marca do SDD no repositório nem no PR — SPEC-0006:IT-05
-- [ ] O código novo só executa `git` e comandos do sdd-config — SPEC-0001:UT-04
+- [x] Sem entrada no registro, todos os comandos se comportam como hoje — SPEC-0003:IT-04
+- [x] Com o modo privado ligado, nenhum comando escreve no repositório do time e o estado vive no `spec_root` versionado — SPEC-0003:IT-02
+- [x] Um push com marca do SDD é bloqueado pelo hook local — SPEC-0004:IT-04
+- [x] Red antes do green é provado sem `Refs:` nem tags — SPEC-0005:IT-01
+- [x] O merge da spec é achado depois de um squash — SPEC-0005:IT-05
+- [x] Jornada privada completa (init → spec → red → green → gates → pr) termina sem nenhuma marca do SDD no repositório nem no PR — SPEC-0006:IT-05
+- [x] O código novo só executa `git` e comandos do sdd-config — SPEC-0001:UT-04
 
 ## 8. Questões em Aberto
 - [x] Onde fica o `spec_root`? — Pasta local versionada por git próprio (opção A); remoto opcional e configurável (`sync: push`) (thomas, 2026-10-14)
@@ -95,6 +95,15 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico. -->
+**O que foi entregue:** modo privado do SDD na mesma skill — registro do usuário e `spec_root` externo com git próprio (SPEC-0003), `leak-check` com hook `pre-push` local e branches neutras (SPEC-0004), rastreio sem marcas com G1 no commit red e G7 achando merge, squash ou rebase (SPEC-0005), convenções do time, `pr` neutro e guia `references/private-mode.md` (SPEC-0006). Correções achadas no caminho: SPEC-0007 (`pr` sem quebra falsa), SPEC-0008 (`spec_root` fora do repositório), SPEC-0009 (nota do `--evidence`), SPEC-0010 (suíte antiga isolada do registro). O modo completo segue igual (guardas SPEC-0003:IT-04, SPEC-0005:IT-09, SPEC-0006:IT-06).
+
+**Como:** as filhas rodaram em sequência na branch `sdd/SPEC-0002`, com exceção de onda autorizada por thomas (IMP-01), cada uma red → green com G1–G4 e merge `--no-ff` na branch do épico; integração pelo PR #3, com merge commit. O GitHub Actions ficou bloqueado por cobrança em 2026-10-14 (IMP-02); o G5 foi regravado na CI do GitHub em 2026-10-15, depois que o repositório se tornou público. Versão da ferramenta 2026.10.8; sem deploy próprio (pilar entrega dispensado): vale na `main` pelo link simbólico da skill.
+
+**Critérios de aceite:** todos provados pelos testes citados na seção 7, verdes na CI do PR #3 (run 38677000910, Python 3.9 e 3.15); SPEC-0001:UT-04 verde na CI do PR #1 (run 38676625286).
+
+**Métricas pós-release:** N/A — ferramenta local de linha de comando, sem telemetria.
+
+**Pendências:** nenhuma spec nova. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005). A revisão (G4) de todas as filhas foi em modo solo.
 
 ## 12. Emendas
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |

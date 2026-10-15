@@ -4,16 +4,9 @@
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 10 aviso(s)** — rode `spec_graph.py validate`
-- Specs: in-progress 9
-- Impedimentos: **2 aberto(s)**, 7 resolvido(s)
-
-## Impedimentos Abertos
-
-| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
-|---|---|---|---|---|---|---|---|
-| SPEC-0001 | IMP-02 | externo | G5 | thomas | 2026-10-14 | 1d | GitHub Actions não inicia jobs no repositório: 'recent account payments have failed or your spending limit needs to be increased' (runs 38650532309 e 38650548527); IT-01 e IT-02 sem evidência |
-| SPEC-0002 | IMP-02 | externo | G5 | thomas | 2026-10-14 | 1d | G5 de todas as filhas depende da CI, e o GitHub Actions está bloqueado por cobrança (mesma causa do IMP-02 da SPEC-0001) |
+- Validação (G0): **0 erro(s), 11 aviso(s)** — rode `spec_graph.py validate`
+- Specs: implemented 9
+- Impedimentos: **0 aberto(s)**, 9 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -30,71 +23,28 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0003, SPEC-0004, SPEC-0005, SPEC-0006, SPEC-0007, SPEC-0008, SPEC-0009, SPEC-0010  
-**Paradas por impedimento:** SPEC-0001  
-**Próximo lote:** —
-
-| Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
-|---|---|---|---|---|---|---|
-| 1 | SPEC-0001 | CI da skill: testes, lint e arquitetura | full/M | in-progress | 🚧 parada por impedimento: IMP-02 (externo → thomas, 1d) |  |
-| 2 | SPEC-0003 | Registro do usuário e spec_root | full/M | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001 |
-| 3 | SPEC-0004 | Checagem de vazamento | full/M | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003 |
-| 4 | SPEC-0005 | Rastreio sem marcas no repositório | full/M | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004 |
-| 5 | SPEC-0006 | PR neutro, convenções do time e documentação do modo privado | full/M | in-progress | 🔄 em andamento |  |
-| 6 | SPEC-0007 | PR do modo completo: breaking changes falso e texto em minúscula | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006 |
-| 7 | SPEC-0008 | Recusar spec_root dentro do repositório | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007 |
-| 8 | SPEC-0009 | gate --run grava o complemento de --evidence | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007; saiu da onda 7: arquivos em comum com SPEC-0008 |
-| 9 | SPEC-0010 | Testes antigos isolados do registro do usuário | lite/S | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0001; saiu da onda 2: arquivos em comum com SPEC-0003; saiu da onda 3: arquivos em comum com SPEC-0004; saiu da onda 4: arquivos em comum com SPEC-0005; saiu da onda 5: arquivos em comum com SPEC-0006; saiu da onda 6: arquivos em comum com SPEC-0007; saiu da onda 7: arquivos em comum com SPEC-0008; saiu da onda 8: arquivos em comum com SPEC-0009 |
+Nenhuma spec aberta.
 
 ## Épicos
 
 | Épico | Título | Status | Progresso |
 |---|---|---|---|
-| SPEC-0002 | Modo privado: SDD fora do repositório do time | approved | 0/4 implementadas |
-
-## Grafo de Dependências
-
-Seta contínua: depende da implementação. Seta tracejada: consome contrato.
-
-```mermaid
-flowchart LR
-  S0001["SPEC-0001<br/>CI da skill: testes, lint e arquitetura"]:::inprogress
-  S0007["SPEC-0007<br/>PR do modo completo: breaking changes f…"]:::inprogress
-  S0008["SPEC-0008<br/>Recusar spec_root dentro do repositório"]:::inprogress
-  S0009["SPEC-0009<br/>gate --run grava o complemento de --evi…"]:::inprogress
-  S0010["SPEC-0010<br/>Testes antigos isolados do registro do …"]:::inprogress
-  subgraph E0002["SPEC-0002 · Modo privado: SDD fora do repositório do time"]
-    S0003["SPEC-0003<br/>Registro do usuário e spec_root"]:::inprogress
-    S0004["SPEC-0004<br/>Checagem de vazamento"]:::inprogress
-    S0005["SPEC-0005<br/>Rastreio sem marcas no repositório"]:::inprogress
-    S0006["SPEC-0006<br/>PR neutro, convenções do time e documen…"]:::inprogress
-  end
-  S0003 -. contrato v1 .-> S0004
-  S0003 -. contrato v1 .-> S0005
-  S0004 --> S0006
-  S0005 --> S0006
-  S0003 -. contrato v1 .-> S0006
-  classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
-  classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
-  classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
-  classDef implemented fill:#dcfce7,stroke:#16a34a,color:#111
-  classDef deprecated fill:#f3f4f6,stroke:#9ca3af,color:#6b7280
-```
+| SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 
 ## Todas as Specs
 
 | ID | Título | Tier | Tipo | Status | Criada | Épico | Depende de | Consome contrato |
 |---|---|---|---|---|---|---|---|---|
-| [SPEC-0001](SPEC-0001-ci-da-skill.md) | CI da skill: testes, lint e arquitetura | full | foundation | in-progress | 2026-10-14 | — | — | — |
-| [SPEC-0002](SPEC-0002-modo-privado.md) | Modo privado: SDD fora do repositório do time | epic | feature | approved | 2026-10-14 | — | — | — |
-| [SPEC-0003](SPEC-0003-registro-e-spec-root.md) | Registro do usuário e spec_root | full | feature | in-progress | 2026-10-14 | SPEC-0002 | — | — |
-| [SPEC-0004](SPEC-0004-leak-check.md) | Checagem de vazamento | full | feature | in-progress | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
-| [SPEC-0005](SPEC-0005-rastreio-sem-marcas.md) | Rastreio sem marcas no repositório | full | feature | in-progress | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
-| [SPEC-0006](SPEC-0006-pr-neutro-e-convencoes.md) | PR neutro, convenções do time e documentação do modo privado | full | feature | in-progress | 2026-10-14 | SPEC-0002 | SPEC-0004, SPEC-0005 | SPEC-0003@1 |
-| [SPEC-0007](SPEC-0007-pr-breaking-e-maiuscula.md) | PR do modo completo: breaking changes falso e texto em minúscula | lite | fix | in-progress | 2026-10-14 | — | — | — |
-| [SPEC-0008](SPEC-0008-spec-root-fora-do-repo.md) | Recusar spec_root dentro do repositório | lite | fix | in-progress | 2026-10-14 | — | — | — |
-| [SPEC-0009](SPEC-0009-gate-evidence-complemento.md) | gate --run grava o complemento de --evidence | lite | fix | in-progress | 2026-10-14 | — | — | — |
-| [SPEC-0010](SPEC-0010-isolamento-do-registro-nos-testes.md) | Testes antigos isolados do registro do usuário | lite | fix | in-progress | 2026-10-14 | — | — | — |
+| [SPEC-0001](SPEC-0001-ci-da-skill.md) | CI da skill: testes, lint e arquitetura | full | foundation | implemented | 2026-10-14 | — | — | — |
+| [SPEC-0002](SPEC-0002-modo-privado.md) | Modo privado: SDD fora do repositório do time | epic | feature | implemented | 2026-10-14 | — | — | — |
+| [SPEC-0003](SPEC-0003-registro-e-spec-root.md) | Registro do usuário e spec_root | full | feature | implemented | 2026-10-14 | SPEC-0002 | — | — |
+| [SPEC-0004](SPEC-0004-leak-check.md) | Checagem de vazamento | full | feature | implemented | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
+| [SPEC-0005](SPEC-0005-rastreio-sem-marcas.md) | Rastreio sem marcas no repositório | full | feature | implemented | 2026-10-14 | SPEC-0002 | — | SPEC-0003@1 |
+| [SPEC-0006](SPEC-0006-pr-neutro-e-convencoes.md) | PR neutro, convenções do time e documentação do modo privado | full | feature | implemented | 2026-10-14 | SPEC-0002 | SPEC-0004, SPEC-0005 | SPEC-0003@1 |
+| [SPEC-0007](SPEC-0007-pr-breaking-e-maiuscula.md) | PR do modo completo: breaking changes falso e texto em minúscula | lite | fix | implemented | 2026-10-14 | — | — | — |
+| [SPEC-0008](SPEC-0008-spec-root-fora-do-repo.md) | Recusar spec_root dentro do repositório | lite | fix | implemented | 2026-10-14 | — | — | — |
+| [SPEC-0009](SPEC-0009-gate-evidence-complemento.md) | gate --run grava o complemento de --evidence | lite | fix | implemented | 2026-10-14 | — | — | — |
+| [SPEC-0010](SPEC-0010-isolamento-do-registro-nos-testes.md) | Testes antigos isolados do registro do usuário | lite | fix | implemented | 2026-10-14 | — | — | — |
 
 ## ADRs
 

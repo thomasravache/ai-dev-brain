@@ -4,7 +4,7 @@ title: Registro do usuário e spec_root
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-10-14
 parent: SPEC-0002
 depends_on: []
