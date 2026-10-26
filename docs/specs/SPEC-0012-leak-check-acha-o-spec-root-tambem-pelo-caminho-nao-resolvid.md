@@ -69,7 +69,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | MANUAL: CI do GitHub no PR #7 em c7aed26 (run 40372988204): ruff check 'All checks passed!' e 140 testes OK em Python 3.9 e 3.15; local (macOS): 140 testes OK — só o lint não roda aqui (sem uv/ruff) | 2026-10-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — c267ff9 | 2026-10-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente) — 0 blocker/major; 4 minor aceitos sem mudança: Path.home() com RuntimeError sem HOME nem pwd (já existia), ramo /private só exercido no macOS, padrões sem limite à direita (já existia), spec_root editado à mão sem resolver — db1e206 | 2026-10-26 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #7 em 29cf972: ci 3.9 e 3.15 (run 40373434141) e sdd/pr-check (run 40373434590); PR mergeable — 29cf972 | 2026-10-26 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
