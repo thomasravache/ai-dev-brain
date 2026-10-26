@@ -4,7 +4,7 @@ title: "Documentos vivos: guia de jornadas e mapa do sistema"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-10-26
 parent:
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: [ADR-0001, ADR-0002, ADR-0006]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-26
 ---
 
 # SPEC-0011 — Documentos vivos: guia de jornadas e mapa do sistema
@@ -182,14 +182,35 @@ Instruções:
 ## 9. Questões em Aberto
 - [x] Quais documentos? — Só dois: guia de jornadas e mapa do sistema; documento por funcionalidade fica fora (thomas concordou com a recomendação, 2026-10-26)
 - [x] Aviso ou erro no validate? — Aviso: documentação de pessoas não bloqueia entrega (thomas concordou com a recomendação, 2026-10-26)
-- [x] Projetos existentes passam a receber avisos? — Não: chave ausente = desligado; só o template novo traz os caminhos, e o baseline do brownfield propõe ativar (proposta do Architect, a confirmar no H1 por thomas, 2026-10-26)
-- [x] Onde ficam no modo privado? — No `spec_root`, pois citam IDs de jornada e de ADR do SDD (proposta do Architect, a confirmar no H1 por thomas, 2026-10-26)
+- [x] Projetos existentes passam a receber avisos? — Não: chave ausente = desligado; só o template novo traz os caminhos, e o baseline do brownfield propõe ativar (proposta do Architect, confirmada no H1 por thomas, 2026-10-26)
+- [x] Onde ficam no modo privado? — No `spec_root`, pois citam IDs de jornada e de ADR do SDD (proposta do Architect, confirmada no H1 por thomas, 2026-10-26)
 
 ## 10. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Checagem e configuração**
+- [ ] Red: UT-01, UT-02, IT-01, IT-04 (guarda), IT-05 e CT-01 com a tag `SPEC-0011:<ID>`, falhando pelo motivo certo (IT-04 passando)
+- [ ] Green: `living_docs_paths`, `living_docs_findings`, `validate_living_docs` e `scope_exempt`, seguindo `validate_journeys`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Comando e templates**
+- [ ] Red: IT-02 e IT-03 falhando pelo motivo certo
+- [ ] Green: `cmd_living_docs` (`--init`), `references/template-journeys.md` e `references/template-system-map.md`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: Instruções**
+- [ ] Red: UT-03 falhando pelo motivo certo
+- [ ] Green: SKILL.md, gates.md, greenfield.md, brownfield.md, template-full.md, sdd-config.template.yml, private-mode.md e README
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
