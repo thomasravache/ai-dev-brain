@@ -218,7 +218,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — ffed129 | 2026-10-26 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=12, skipped=1)) — 0c1a819 | 2026-10-26 |
-| G2 Green | PENDING | | |
+| G2 Green | FAIL | test exit 1 (FAILED (failures=3, skipped=1)); lint exit 127 (/bin/sh: uvx: command not found) — 826e97a | 2026-10-26 |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
@@ -231,6 +231,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
 | IMP-01 | 2026-10-26 | G1 | spec | O IT-02 do plano cita o ID de exemplo E2E-01 (dado de teste da fixture), que o verify lê como teste do plano desta spec e cobra a tag SPEC-0011:E2E-01; o IT-05 pede touches [src/**], mas o commit red em tests/ ficaria fora do escopo na fixture | gate G1 --run (FAIL em 0c1a819) | thomas | Emenda v1 — IT-02 sem ID literal de E2E e IT-05 com touches [src/**, tests/**] na fixture; contrato inalterado (aprovada por thomas em 2026-10-26) | 2026-10-26 |
+| IMP-02 | 2026-10-26 | G2 | externo | G2 local reprova só por ambiente: este Mac não tem uv/ruff (lint exit 127) e os 3 testes de test_private_mode.py que já falhavam antes no macOS (/var vs /private/var); os 10 testes da spec, a arquitetura e o verify passam | gate G2 --run em 826e97a; suíte isolada: só as 3 falhas antigas | thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
