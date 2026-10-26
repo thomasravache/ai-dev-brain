@@ -217,7 +217,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — ffed129 | 2026-10-26 |
-| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0011:E2E-01 — 0c1a819 | 2026-10-26 |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=12, skipped=1)) — 0c1a819 | 2026-10-26 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
