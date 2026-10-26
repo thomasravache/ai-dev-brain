@@ -220,8 +220,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — bd7fe51 | 2026-10-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente, 3ª rodada) — 0 blocker/major; 1ª rodada: 6 minor + nit corrigidos (c0456f6/a072e1f); 2ª rodada: 1 major (filtro de comentários descartava explicações) corrigido (0e474ca/c5747d4); desempenho do status com 100 specs: -3,9% e +1,8% (ruído, limite 10%) — 9dcb304 | 2026-10-26 |
 | G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #10 em 37b4a9b: ci 3.9 e 3.15 (run 40394485597) e sdd/pr-check (run 40394485724) — 37b4a9b | 2026-10-26 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-26 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-26 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
