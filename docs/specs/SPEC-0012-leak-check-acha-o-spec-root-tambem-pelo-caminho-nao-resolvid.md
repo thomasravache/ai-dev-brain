@@ -4,7 +4,7 @@ title: leak-check acha o spec_root também pelo caminho não resolvido
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-26
 parent:
 depends_on: [SPEC-0011]
@@ -13,8 +13,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: [ADR-0006]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-26
 ---
 
 # SPEC-0012 — leak-check acha o spec_root também pelo caminho não resolvido
@@ -46,14 +46,19 @@ Não muda: o registro (continua gravando o caminho resolvido), a recusa de `spec
 
 ## 5. Questões em Aberto
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento (seção Registro de Impedimentos). -->
-- [x] Gravar no registro também o caminho como digitado, em vez de derivar as formas? — Não: mudaria o registro (contrato da SPEC-0003); derivar as formas a partir do caminho resolvido cobre o `HOME` com link e o `/private` do macOS sem mudar contrato (proposta do Architect, a confirmar no H1 por thomas, 2026-10-26)
+- [x] Gravar no registro também o caminho como digitado, em vez de derivar as formas? — Não: mudaria o registro (contrato da SPEC-0003); derivar as formas a partir do caminho resolvido cobre o `HOME` com link e o `/private` do macOS sem mudar contrato (proposta do Architect, confirmada no H1 por thomas, 2026-10-26)
 - [x] Depende da SPEC-0011? — Só para a ordem dos merges: a branch parte da `sdd/SPEC-0011` (IDs e `SDD_TOOL_VERSION` em sequência, 2026.10.10); o código não depende dela (Architect, 2026-10-26)
 
 ## 6. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 e IT-01 com a tag `SPEC-0012:<ID>`, falhando pelo motivo certo; UT-02 corrige os dois testes com defeito
+- [ ] Green: formas alternativas do caminho em `build_leak_patterns`, seguindo o padrão citado
+- [ ] Validar: suíte completa (agora verde também no macOS) + lint + arquitetura (G2/G3)
+- [ ] `SDD_TOOL_VERSION` 2026.10.10 e CHANGELOG (ADR-0005)
+- [ ] Review (G4), integração (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
