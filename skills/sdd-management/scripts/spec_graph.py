@@ -3108,6 +3108,7 @@ def status_body(project: Project, ids):
 
 VERSION_RE = re.compile(r"^\d+(?:\.\d+)+$")
 CHANGELOG_SECTION_RE = re.compile(r"^## \[([^\]]+)\]")
+TEMPLATE_NOISE_RE = re.compile(r"^#\s*(?:---|[a-z_][a-z0-9_]*\s*:)")
 
 
 def version_key(version: str) -> tuple:
@@ -3141,7 +3142,8 @@ def missing_config_keys(template_text: str, config: dict) -> list:
     out, comments = [], []
     for line in template_text.splitlines():
         if line.startswith("#"):
-            comments.append(line.lstrip("#").strip())
+            if not TEMPLATE_NOISE_RE.match(line):  # banner de seção e chave comentada não descrevem a chave
+                comments.append(line.lstrip("#").strip())
             continue
         m = re.match(r"^([A-Za-z_][\w-]*)\s*:", line)
         if m and m.group(1) not in config:
@@ -3183,28 +3185,42 @@ def status_news_line(project: Project) -> str:
     if not project.config_path.exists():
         return ""
     version, _, sections, keys = skill_news(project)
-    versions = len(sections or []) if is_older(version) else 0
-    if not is_older(version) and not keys:
+    older = is_older(version)
+    if not older and not keys:
         return ""
-    return f"Novidades da skill: {versions} versão(ões) e {len(keys)} configuração(ões) nova(s) — rode whats-new"
+    parts = []
+    if older and sections:
+        parts.append(f"{len(sections)} versão(ões)")
+    elif older:
+        parts.append(f"projeto na {version}")  # sem CHANGELOG (ou sem seções) não há como contar versões
+    if keys:
+        parts.append(f"{len(keys)} configuração(ões) nova(s)")
+    return f"Novidades da skill: {' e '.join(parts)} — rode whats-new"
 
 
 def write_config_key(path: Path, key: str, value: str):
-    """Cria ou troca a linha `key: "value"` de topo no sdd-config, sem mexer no resto."""
-    lines = path.read_text(encoding="utf-8").split("\n") if path.exists() else []
+    """Cria ou troca a linha `key: "value"` de topo no sdd-config; o resto do arquivo fica igual, byte a byte."""
+    with path.open(encoding="utf-8", newline="") as fh:
+        text = fh.read()
     rendered = f'{key}: "{value}"'
-    for i, line in enumerate(lines):
-        if re.match(rf"^{re.escape(key)}\s*:", line):
-            lines[i] = rendered
-            break
+    m = re.search(rf"^{re.escape(key)}\s*:[^\r\n]*", text, re.MULTILINE)
+    if m:
+        text = text[:m.start()] + rendered + text[m.end():]
     else:
-        lines = ("\n".join(lines).rstrip("\n") + "\n" + rendered).lstrip("\n").split("\n")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+        eol = "\r\n" if "\r\n" in text else "\n"
+        if text and not text.endswith(("\n", "\r")):
+            text += eol
+        text += rendered + eol
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        fh.write(text)
 
 
 def cmd_whats_new(project: Project, ack: bool):
     if ack:
+        if not project.config_path.exists():
+            print(f"aviso: {project.rel(project.config_path)} não existe — nada gravado; crie o sdd-config a partir de "
+                  "references/sdd-config.template.yml")
+            return 0
         write_config_key(project.config_path, "sdd_version", SDD_TOOL_VERSION)
         print(f"sdd_version = {SDD_TOOL_VERSION}")
         return 0
@@ -3213,7 +3229,10 @@ def cmd_whats_new(project: Project, ack: bool):
     older = is_older(version)
     if sections is None:
         print(f"CHANGELOG da skill não encontrado ({SKILL_DIR / 'CHANGELOG.md'})\n")
-    if version is None:
+    newer = bool(version) and version_key(version) > version_key(SDD_TOOL_VERSION)
+    if version is None and source == "tools/sdd":
+        print(f"{VENDORED_TOOL} sem versão legível — rode vendor --force\n")
+    elif version is None:
         print("Versão do projeto desconhecida — rode whats-new --ack depois de revisar\n")
     elif older:
         print(f"Novidades desde {version}:\n")
@@ -3221,7 +3240,7 @@ def cmd_whats_new(project: Project, ack: bool):
             print("\n\n".join(sections) + "\n")
         elif sections is not None:
             print("(nenhuma entrada no CHANGELOG da skill para essas versões)\n")
-    elif version_key(version) > version_key(SDD_TOOL_VERSION):
+    elif newer:
         print(f"A skill instalada ({SDD_TOOL_VERSION}) é mais antiga que o projeto ({version}) — atualize a cópia da skill.\n")
     if keys:
         print("Configurações novas (ausentes no seu sdd-config):")
@@ -3236,8 +3255,10 @@ def cmd_whats_new(project: Project, ack: bool):
     if keys:
         steps.append(f"- copie a chave do template references/sdd-config.template.yml para {project.rel(project.config_path)} "
                      "(ou deixe de fora para manter o comportamento atual)")
-    if source == "sdd_version" and version != SDD_TOOL_VERSION:
+    if source == "sdd_version" and (older or version is None):
         steps.append(f"- `spec_graph.py whats-new --ack` — registra sdd_version = {SDD_TOOL_VERSION} depois de revisar")
+    if newer:
+        steps.append(f"- atualize a cópia instalada da skill ({SKILL_DIR}) para a {version} ou mais nova")
     if steps:
         print("Para se atualizar:\n" + "\n".join(steps))
     else:
