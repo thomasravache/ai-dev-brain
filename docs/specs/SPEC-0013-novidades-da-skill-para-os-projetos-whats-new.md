@@ -189,26 +189,26 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: CHANGELOG da skill e funções puras**
-- [ ] Red: UT-01, UT-02, UT-03 com a tag `SPEC-0013:<ID>`, falhando pelo motivo certo
-- [ ] Green: CHANGELOG movido para a skill e agrupado por versão; `changelog_since`, `missing_config_keys` e comparação de versões
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03 com a tag `SPEC-0013:<ID>`, falhando pelo motivo certo
+- [x] Green: CHANGELOG movido para a skill e agrupado por versão; `changelog_since`, `missing_config_keys` e comparação de versões
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comando, status e ack**
-- [ ] Red: IT-01 a IT-05 e CT-01 falhando pelo motivo certo
-- [ ] Green: `cmd_whats_new` (`--ack`), linha do `status`, `sdd_version`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: IT-01 a IT-05 e CT-01 falhando pelo motivo certo
+- [x] Green: `cmd_whats_new` (`--ack`), linha do `status`, `sdd_version`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Instruções**
-- [ ] Red: UT-04 falhando pelo motivo certo
-- [ ] Green: SKILL.md, brownfield.md, sdd-config.template.yml, README; `changelog:` do sdd-config deste repositório
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `SDD_TOOL_VERSION` 2026.10.11 e seção no CHANGELOG da skill (ADR-0005)
+- [x] Red: UT-04 falhando pelo motivo certo
+- [x] Green: SKILL.md, brownfield.md, sdd-config.template.yml, README; `changelog:` do sdd-config deste repositório
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `SDD_TOOL_VERSION` 2026.10.11 e seção no CHANGELOG da skill (ADR-0005)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2 (política auto-on-green)
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2 (política auto-on-green)
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -234,37 +234,45 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Um projeto descobre o que há de novo na skill: `spec_graph.py whats-new` mostra as entradas do CHANGELOG da skill desde a versão do projeto, as chaves de topo do template do `sdd-config` que o projeto ainda não tem (com a explicação de cada uma) e os comandos para se atualizar; o `status` avisa numa linha quando há novidade. Projetos sem `tools/sdd` (modo privado, sem vendor) guardam a versão em `sdd_version`, gravada por `whats-new --ack`. O CHANGELOG passou a viajar com a skill (`skills/sdd-management/CHANGELOG.md`), agrupado por versão.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+`version_key`, `changelog_since`, `missing_config_keys` (filtra banners e chaves comentadas com valor YAML), `project_tool_version`, `skill_news`, `status_news_line`, `write_config_key` (preserva bytes: CRLF, linhas finais, BOM) e `cmd_whats_new` em `spec_graph.py`; `cmd_status` imprime a linha de novidade em todos os caminhos; `writes_records(args)` deixa explícito quando cada comando commita no `spec_root`. CHANGELOG movido com `git mv` e reagrupado pelas versões dos commits que as introduziram (2026.10.1 a 2026.10.10), sem perder nenhuma entrada; nova seção 2026.10.11. ADR-0005 com a regra do CHANGELOG por versão; `sdd-config` deste repositório aponta o CHANGELOG da skill; `sdd_version: ""` no template; instruções em SKILL.md, brownfield.md e README. Emenda do contrato v2 (IMP-01): `--ack` só sugerido sem `tools/sdd` e nunca para rebaixar. Revisão independente em 3 rodadas (7 casos de borda e um filtro de comentários que descartava explicações, corrigidos com teste red antes). Desempenho do `status` com 100 specs: −3,9% e +1,8% (ruído; limite 10%).
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Seções do CHANGELOG entre duas versões, em ordem, com comparação numérica | PASS | `test_whats_new.py::ChangelogSinceTest.test_sections_between_versions_in_file_order` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | Chaves de topo ausentes com o comentário do template, sem banners nem chaves comentadas, mantendo a explicação | PASS | `test_whats_new.py::MissingConfigKeysTest.test_top_level_keys_missing_with_template_comment`; `test_whats_new.py::MissingConfigKeysEdgeTest.test_banners_and_commented_keys_are_not_part_of_the_comment`; `test_whats_new.py::MissingConfigKeysEdgeTest.test_real_template_comments_keep_prose_with_colons` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | CHANGELOG da skill agrupado por versão, a mais nova primeiro, com a versão atual | PASS | `test_whats_new.py::SkillChangelogTest.test_skill_changelog_is_grouped_by_version_newest_first` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-04 | Instruções citam whats-new e sdd_version | PASS | `test_whats_new.py::InstructionsTest.test_instructions_mention_whats_new_and_sdd_version` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | Projeto antigo: novidades, chaves novas e passos; projeto mais novo que a skill não é "em dia" | PASS | `test_whats_new.py::WhatsNewTest.test_outdated_project_lists_news_new_keys_and_update_steps`; `test_whats_new.py::WhatsNewEdgeTest.test_project_newer_than_skill_is_not_up_to_date` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | Projeto em dia | PASS | `test_whats_new.py::WhatsNewTest.test_up_to_date_project` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | Linha do status só com novidade, nunca "0 versão(ões)" | PASS | `test_whats_new.py::WhatsNewTest.test_status_line_only_when_there_is_news`; `test_whats_new.py::WhatsNewEdgeTest.test_status_line_without_changelog_does_not_count_zero_versions` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | Sem tools/sdd: sdd_version e --ack; --ack preserva bytes, não cria config, não rebaixa; tools/sdd sem versão sugere vendor | PASS | `test_whats_new.py::WhatsNewTest.test_project_without_vendored_tool_uses_sdd_version_and_ack`; `test_whats_new.py::WhatsNewEdgeTest.test_ack_keeps_crlf_and_trailing_newlines`; `test_whats_new.py::WhatsNewEdgeTest.test_ack_without_config_creates_nothing`; `test_whats_new.py::WhatsNewEdgeTest.test_newer_sdd_version_does_not_suggest_ack`; `test_whats_new.py::WhatsNewEdgeTest.test_unreadable_vendored_version_suggests_vendor_not_ack` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-05 | Skill sem CHANGELOG ainda lista as chaves | PASS | `test_whats_new.py::WhatsNewTest.test_skill_without_changelog_still_lists_new_keys` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
+| CT-01 | Modo privado lê e grava sdd_version no spec_root, com commit só no --ack | PASS | `test_whats_new.py::PrivateWhatsNewTest.test_private_mode_reads_and_acks_in_spec_root` — CI do PR #10 em 37b4a9b (run 40394485597, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — desempenho −3,9%/+1,8%; segurança e privacidade por IT-04 e CT-01
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #10; as cópias instaladas da skill são sincronizadas depois. Versão da ferramenta 2026.10.11. Rollback: revert do merge.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0013`. -->
