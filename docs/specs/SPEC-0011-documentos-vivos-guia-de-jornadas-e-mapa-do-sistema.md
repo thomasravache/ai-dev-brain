@@ -82,14 +82,16 @@ sdd-config.yml:
     system_map: docs/arquitetura.md   # mapa do sistema; "" = desligado
   - chave ausente = desligado (projetos existentes não mudam); sdd-config.template.yml traz os dois caminhos preenchidos
   - caminhos relativos à raiz do repositório; em modo privado, relativos ao spec_root
-  - caminho absoluto ou com ".." que saia da base → erro de configuração no validate e no living-docs
+  - caminho absoluto, com ".." ou link simbólico que saia da base, ou que aponte para uma pasta → erro de configuração
+    (ERROR sdd-config no validate; exit 2 no living-docs e no --init, sem escrever nada)
   - os caminhos configurados entram em scope_exempt (nunca fora do escopo no G4)
 
 spec_graph.py living-docs:
   para cada documento configurado imprime: caminho, "existe" | "ausente", e
     guia: "✅ <id>" para jornada crítica citada com [jornada: <id>]; "⚠ <id>" para a que falta; "✖ <id>" para id desconhecido
     mapa: "✅ ADR-NNNN" para ADR accepted citado pelo ID; "⚠ ADR-NNNN" para o que falta
-  nenhum configurado → "Nenhum documento vivo em living_docs no sdd-config.yml."; exit 0 sempre
+  nenhum configurado → "Nenhum documento vivo em living_docs no sdd-config.yml."; exit 0 para qualquer cobertura
+  (caminho inválido é erro de configuração: ERROR sdd-config no validate, exit 2 no living-docs e no --init)
 
 spec_graph.py living-docs --init:
   cria cada documento configurado e ausente a partir de references/template-journeys.md / template-system-map.md
@@ -103,7 +105,7 @@ spec_graph.py living-docs --init:
   imprime "criado: <caminho>" para cada arquivo criado; exit 0
   em modo privado escreve no spec_root e registra o commit lá, como os demais comandos que escrevem registros
 
-validate (WARN, nunca ERROR; nenhum aviso com living_docs desligado):
+validate — achados de cobertura (WARN, nunca ERROR; nenhum aviso com living_docs desligado):
   "living_docs.<chave>: <caminho> não existe — rode living-docs --init"
   "guia de jornadas sem a jornada crítica <id> — adicione a seção com [jornada: <id>]"
   "guia de jornadas cita [jornada: <id>], que não está em critical_journeys"
@@ -273,3 +275,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 1 (emenda v1, contrato inalterado) | 2026-10-26 | IT-02 descreve o E2E da fixture sem ID literal; IT-05 usa `touches: [src/**, tests/**]` na fixture | o `verify` lia o `E2E-01` de exemplo como teste desta spec; sem `tests/**` o commit red da fixture caía fora do escopo (IMP-01) | Nenhuma | thomas, 2026-10-26 |
+| 1 (emenda v2, contrato inalterado) | 2026-10-26 | Explicita que "WARN, nunca ERROR" e "exit 0" valem para a cobertura; caminho inválido (absoluto, `..`, link simbólico para fora ou pasta) é erro de configuração: ERROR sdd-config no validate, exit 2 no living-docs | o texto se contradizia (revisão G4); a implementação seguiu a regra específica, como os demais erros de configuração | Nenhuma | thomas, 2026-10-26 ("pode seguir no piloto automático com o recomendado") |
