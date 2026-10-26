@@ -588,7 +588,8 @@ class Project:
     def scope_exempt(self):
         """Paths never out of scope: configured exemptions plus root docs, changelog and living docs updated at G7."""
         docs = self.cfg_list("root_docs", DEFAULT_ROOT_DOCS) + [self.cfg("changelog", "CHANGELOG.md")]
-        docs += [v.strip() for v in self.cfg_map("living_docs").values() if isinstance(v, str)]
+        if not self.private:
+            docs += [v.strip() for v in self.cfg_map("living_docs").values() if isinstance(v, str)]
         return self.cfg_list("scope_exempt", DEFAULT_SCOPE_EXEMPT) + [d for d in docs if d]
 
     def max_parallel(self) -> int:
@@ -1126,9 +1127,19 @@ def living_docs_paths(project: Project):
         if key not in LIVING_DOCS or not isinstance(value, str) or not value.strip():
             continue
         rel = Path(value.strip())
-        if rel.is_absolute() or os.path.normpath(rel.as_posix()).split("/")[0] == "..":
+        norm_rel = os.path.normpath(rel.as_posix())
+        path = Path(os.path.normpath(base / rel))
+        outside = rel.is_absolute() or norm_rel.split("/")[0] == ".."
+        if not outside:
+            try:
+                path.resolve().relative_to(base.resolve())
+            except ValueError:
+                outside = True
+        if outside:
             raise ValueError(f"living_docs.{key}: '{value.strip()}' sai da base ({base}) — use um caminho relativo dentro dela")
-        out[key] = Path(os.path.normpath(base / rel))
+        if norm_rel == "." or path.is_dir():
+            raise ValueError(f"living_docs.{key}: '{value.strip()}' é uma pasta — informe o arquivo Markdown do documento")
+        out[key] = path
     return out
 
 
@@ -1184,19 +1195,23 @@ def journey_proof(project: Project, jid: str, sids) -> str:
     return "— (sem E2E)"
 
 
+def fill_block(block: str, values) -> str:
+    """Substitui {{chave}} numa passada só: o texto inserido nunca é expandido de novo."""
+    return re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), block)
+
+
 def render_journeys(project: Project, template: str) -> str:
     m = JOURNEY_BLOCK_RE.search(template)
     block = m.group(1) if m else ""
     rows, _ = journey_coverage(project)
     if rows:
-        sections = [block.replace("{{title}}", title).replace("{{id}}", jid)
-                    .replace("{{proof}}", journey_proof(project, jid, sids) if state == "provada" else "— (sem E2E)")
+        sections = [fill_block(block, {"title": title, "id": jid,
+                                        "proof": journey_proof(project, jid, sids) if state == "provada" else "— (sem E2E)"})
                     for jid, title, state, sids in rows]
     else:
         sections = ["<!-- Nenhuma jornada em critical_journeys: declare-as no sdd-config.yml e troque o exemplo abaixo "
                     "por uma seção por jornada, com [jornada: <id>] no título. -->\n"
-                    + block.replace("{{title}}", "Nome da jornada").replace("[jornada: {{id}}]", "[jornada: <id>]")
-                    .replace("{{proof}}", "— (sem E2E)")]
+                    + fill_block(block, {"title": "Nome da jornada", "id": "<id>", "proof": "— (sem E2E)"})]
     return template[:m.start()] + "".join(sections) + template[m.end():] if m else template
 
 
@@ -1226,7 +1241,10 @@ def cmd_living_docs(project: Project, init: bool):
             path.write_text(renders[key](project, template), encoding="utf-8")
             print(f"criado: {rel}")
         return 0
-    journeys, guide, adrs, mapa = living_docs_inputs(project, paths)
+    journeys = project.cfg_map("critical_journeys")
+    adrs = {aid: doc.status for aid, doc in project.adrs.items()}
+    guide, mapa = (paths[k].read_text(encoding="utf-8") if k in paths and paths[k].is_file() else ""
+                   for k in ("journeys", "system_map"))
     findings = set(living_docs_findings(journeys, guide, adrs, mapa))
     for key, path in paths.items():
         print(f"{LIVING_DOCS[key][0]}: {path.relative_to(base).as_posix()} — {'existe' if path.is_file() else 'ausente'}")
@@ -4054,7 +4072,7 @@ def main(argv=None):
     try:
         return dispatch(args, project)
     finally:
-        if project.private and args.command in RECORD_COMMANDS and getattr(args, "init", True):
+        if project.private and args.command in RECORD_COMMANDS and not (args.command == "living-docs" and not args.init):
             ids = getattr(args, "ids", None) or [getattr(args, "id", None) or ""]
             commit_records(project, f"sdd: {args.command} {' '.join(i for i in ids if i)}".strip())
 
