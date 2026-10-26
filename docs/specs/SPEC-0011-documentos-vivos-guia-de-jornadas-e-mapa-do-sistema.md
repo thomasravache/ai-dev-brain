@@ -205,14 +205,14 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 **Fase 3: Instruções**
 - [x] Red: UT-03 falhando pelo motivo certo
 - [x] Green: SKILL.md, gates.md, greenfield.md, brownfield.md, template-full.md, sdd-config.template.yml, private-mode.md e README
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3) — local sem uv/ruff e com 3 falhas antigas do macOS (IMP-02); evidência pela CI
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3) — local sem uv/ruff e com 3 falhas antigas do macOS (IMP-02); evidência pela CI
 - [x] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e aprovação (H2)
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -224,8 +224,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 29acb3e | 2026-10-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente, 2ª rodada) — 0 blocker/major; 2 major e 6 minor da 1ª rodada corrigidos em 1599b21 (testes) e 4fe88d4 (correção); major de desempenho fechado com medição: validate com 100 specs e 30 ADRs aceitos, mediana de 9, +1,2% a +2,7% (limite 10%) — 86bec2f | 2026-10-26 |
 | G5 Integração & CI | PASS | MANUAL: CI do GitHub verde no PR #6 em ddfd328: ci 3.9 e 3.15 (run 40359499593; ruff All checks passed, 138 testes OK) e sdd/pr-check (run 40359499237); PR mergeable. Local: suíte com as 3 falhas antigas do macOS (SPEC-0012) | 2026-10-26 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | aprovado por thomas — 'aprovado, pode seguir no piloto automatico com o recomendado' (2026-10-26), com G5 verde no PR #6 | 2026-10-26 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-26 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -239,36 +239,44 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Cada projeto pode ter dois documentos vivos escritos para pessoas: o guia de jornadas e o mapa do sistema, configurados em `living_docs` no sdd-config. `spec_graph.py living-docs` mostra a cobertura (jornadas críticas e ADRs aceitos citados ou faltando); `--init` cria os documentos que faltam a partir de templates já preenchidos com as jornadas, a spec e o E2E que as provam, e os ADRs aceitos, sem sobrescrever nada. O `validate` avisa quando os documentos ficam para trás; caminho inválido é erro de configuração. A fundação (greenfield), o baseline (brownfield), o G7 e a Definição de Pronto passam a pedir os documentos. No modo privado eles ficam no `spec_root`.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+`living_docs_paths`, `living_docs_findings`, `validate_living_docs` e `cmd_living_docs` em `spec_graph.py`, seguindo `journey_coverage`/`validate_journeys`; caminhos checados lexicalmente e resolvidos (link simbólico para fora e pasta são recusados); preenchimento dos templates numa passada só (`fill_block`); caminhos isentos de escopo só fora do modo privado; `living-docs --init` em `RECORD_COMMANDS` (commit no `spec_root`). Templates novos `references/template-journeys.md` e `references/template-system-map.md`; instruções em SKILL.md, gates.md, greenfield.md, brownfield.md, template-full.md, sdd-config.template.yml, private-mode.md e README. `SDD_TOOL_VERSION` 2026.10.9 e CHANGELOG (ADR-0005). Emenda v1 (texto do plano sem ID literal de E2E; fixture do IT-05) e Emenda v2 (caminho inválido é erro de configuração), ambas sem mudar o contrato. A revisão independente pediu mudanças na 1ª rodada (2 major, 6 minor), corrigidas em 1599b21 (testes) e 4fe88d4; aprovada na 2ª. Desempenho medido: `validate` num projeto com 100 specs e 30 ADRs aceitos, mediana de 9 execuções, +1,2% e +2,7% com os documentos ligados (limite 10%).
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Achados de cobertura: jornada faltando, desconhecida e ADR accepted não citado | PASS | `FindingsTest.test_missing_unknown_and_uncited` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| UT-02 | Resolução dos caminhos: desligado, válido e erro de configuração (absoluto, `..`, link simbólico, pasta) | PASS | `PathsTest.test_disabled_inside_and_invalid_paths`; `PathEdgeCasesTest.test_symlink_leaving_the_base_is_a_config_error`; `PathEdgeCasesTest.test_directory_is_a_config_error` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| UT-03 | Instruções da skill carregam os trechos do contrato | PASS | `InstructionsTest.test_instructions_carry_the_contract_snippets` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| IT-01 | validate avisa sem mudar o exit; caminho de pasta vira ERROR sdd-config | PASS | `ValidateWarningsTest.test_warnings_do_not_change_the_exit_code`; `InvalidPathCliTest.test_directory_path_is_a_validate_error` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| IT-02 | living-docs mostra a cobertura; --init cria, preserva e respeita títulos; caminho inválido recusado sem escrever | PASS | `InitTest.test_init_creates_skeletons_and_keeps_existing_files`; `CoverageCommandTest.test_living_docs_prints_coverage`; `InitRenderingTest.test_title_with_placeholder_text_is_kept`; `InitRenderingTest.test_coverage_lists_everything_when_documents_are_absent`; `InvalidPathCliTest.test_path_leaving_the_base_is_refused_everywhere` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| IT-03 | Modo privado: --init escreve e commita só no spec_root; living-docs sem --init não commita | PASS | `PrivateLivingDocsTest.test_init_writes_only_to_the_spec_root`; `PrivateCoverageTest.test_plain_living_docs_does_not_commit` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| IT-04 | (guarda) sem living_docs o validate não muda | PASS | `DisabledGuardTest.test_without_living_docs_validate_is_unchanged` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| IT-05 | Documentos vivos nunca ficam fora do escopo no modo completo | PASS | `ScopeTest.test_living_docs_are_never_out_of_scope` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
+| CT-01 | Modo privado usa project.spec_root como base; caminho do repo não é isento | PASS | `PrivateLivingDocsTest.test_paths_are_resolved_against_the_spec_root`; `PrivateScopeTest.test_living_doc_path_is_not_exempt_in_the_team_repo` — CI do PR #6 em ddfd328 (run 40359499593, Python 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — desempenho +1,2% a +2,7% (limite 10%); segurança e privacidade pelos testes UT-02, IT-02 e IT-03
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #6, pelo link simbólico `~/.claude/skills/sdd-management` (as cópias instaladas em `~/.gemini/...` precisam ser sincronizadas). Versão da ferramenta 2026.10.9. Rollback: revert do merge.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+SPEC-0012 (leak-check e o caminho não resolvido do `spec_root`; as 3 falhas da suíte no macOS). A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0011`. -->
