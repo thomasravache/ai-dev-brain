@@ -4,7 +4,7 @@ title: "Documentos vivos: guia de jornadas e mapa do sistema"
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-10-26
 parent:
 depends_on: []
@@ -226,7 +226,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | MANUAL: CI do GitHub verde no PR #6 em ddfd328: ci 3.9 e 3.15 (run 40359499593; ruff All checks passed, 138 testes OK) e sdd/pr-check (run 40359499237); PR mergeable. Local: suíte com as 3 falhas antigas do macOS (SPEC-0012) | 2026-10-26 |
 | H2 Integração aprovada | PASS | aprovado por thomas — 'aprovado, pode seguir no piloto automatico com o recomendado' (2026-10-26), com G5 verde no PR #6 | 2026-10-26 |
 | G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-26 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — eca9c60 | 2026-10-26 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
