@@ -14,6 +14,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 - `pr` não aponta mais quebra só porque a spec teve emenda: o que quebra vem da chave opcional `breaking`; "Como foi feito" começa com maiúscula (SPEC-0007).
 
 ### Added
+- Documentos vivos: guia de jornadas e mapa do sistema (`living_docs` no sdd-config), comando `living-docs [--init]` com templates agnósticos de stack, avisos do `validate` quando ficam para trás das jornadas críticas e dos ADRs aceitos, e item no G7; `SDD_TOOL_VERSION` 2026.10.9 (SPEC-0011).
 - Modo privado, parte 4: detecção das convenções do time (`private detect`), `pr` no estilo do time sem marcas do SDD, G5 com o comando `ci` e guia `references/private-mode.md` (SPEC-0006).
 - Modo privado, parte 3: rastreio sem marcas — commits ligados à spec pela branch, red/green pelos arquivos, testes do plano por `→ caminho::nome`, seção Commits com SHA e patch-id, G7 acha o merge mesmo com squash ou rebase (SPEC-0005).
 - `gate G1 --run --at <sha>`: grava o G1 no commit red mesmo com o HEAD já verde; sem `--at`, o G1 aponta o último red (SPEC-0005).
