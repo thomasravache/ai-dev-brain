@@ -17,7 +17,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.10.8"
+SDD_TOOL_VERSION = "2026.10.10"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -460,7 +460,7 @@ def plan_test_ids(doc: Doc):
 
 PRIVATE_BANNER = "MODO PRIVADO"
 # Comandos que gravam registros: em modo privado, cada um termina com um commit no git do spec_root.
-RECORD_COMMANDS = {"new", "new-adr", "set", "gate", "impede", "resolve", "index", "upgrade"}
+RECORD_COMMANDS = {"new", "new-adr", "set", "gate", "impede", "resolve", "index", "upgrade", "living-docs"}
 
 
 def normalize_remote(url: str) -> str:
@@ -586,8 +586,10 @@ class Project:
         return next((e for e in doc.list("external") if e.startswith(provider + ":")), "")
 
     def scope_exempt(self):
-        """Paths never out of scope: configured exemptions plus root docs and changelog updated at G7."""
+        """Paths never out of scope: configured exemptions plus root docs, changelog and living docs updated at G7."""
         docs = self.cfg_list("root_docs", DEFAULT_ROOT_DOCS) + [self.cfg("changelog", "CHANGELOG.md")]
+        if not self.private:
+            docs += [v.strip() for v in self.cfg_map("living_docs").values() if isinstance(v, str)]
         return self.cfg_list("scope_exempt", DEFAULT_SCOPE_EXEMPT) + [d for d in docs if d]
 
     def max_parallel(self) -> int:
@@ -768,6 +770,30 @@ TEAM_HOOK_MARKERS = ((".husky", "husky"), ("lefthook.yml", "lefthook"), (".lefth
                      (".pre-commit-config.yaml", "pre-commit"))
 
 
+def spec_root_forms(spec_root):
+    """Formas conhecidas do mesmo spec_root, sem repetição: o caminho resolvido, a forma sob o HOME literal e
+    sob o resolvido (absoluta e ~/) e, no macOS, o caminho sem o prefixo /private quando aponta para a mesma pasta."""
+    root = Path(spec_root)
+    forms = [str(root)]
+    homes = []
+    for home in (Path.home(), Path.home().resolve()):
+        if home not in homes:
+            homes.append(home)
+    for base in homes:
+        try:
+            rel = root.relative_to(base)
+        except ValueError:
+            continue
+        for home in homes:
+            forms.append(str(home / rel))
+        forms.append("~/" + rel.as_posix())
+    if root.as_posix().startswith("/private/"):
+        bare = Path(root.as_posix()[len("/private"):])
+        if bare.resolve() == root.resolve():
+            forms.append(str(bare))
+    return list(dict.fromkeys(forms))
+
+
 def build_leak_patterns(spec_root, extra, adr_ids=()):
     """Padrões do leak-check: [(rótulo, regex compilada)] — padrões padrão, caminho do spec_root e extras do usuário.
 
@@ -780,12 +806,7 @@ def build_leak_patterns(spec_root, extra, adr_ids=()):
         patterns.append(("ID de ADR", re.compile(r"\b(?:" + "|".join(re.escape(a) for a in sorted(adr_ids)) + r")\b")))
     patterns += [("seção do SDD", re.compile(re.escape(title))) for title in LEAK_SECTION_TITLES]
     if spec_root:
-        root = Path(spec_root)
-        patterns.append(("caminho do spec_root", re.compile(re.escape(str(root)))))
-        try:
-            patterns.append(("caminho do spec_root", re.compile(re.escape("~/" + root.relative_to(Path.home()).as_posix()))))
-        except ValueError:
-            pass
+        patterns += [("caminho do spec_root", re.compile(re.escape(form))) for form in spec_root_forms(spec_root)]
     for pattern in extra or []:
         try:
             patterns.append(("leak_patterns", re.compile(pattern)))
@@ -937,6 +958,7 @@ def validate(project: Project, only=None):
         validate_change_flow(project, add)
         validate_pillars(project, add)
         validate_journeys(project, add)
+        validate_living_docs(project, add)
         validate_worktrees(project, add)
         validate_test_tooling(project, add)
         seen = defaultdict(list)
@@ -1103,6 +1125,159 @@ def cmd_journeys(project: Project):
         print(f"{icons[state]} {title} [{jid}] — {state}" + (f": {', '.join(sids)}" if sids else ""))
     for sid, jid in unknown:
         print(f"✖ {sid} marca jornada desconhecida '{jid}'")
+    return 0
+
+
+LIVING_DOCS = {"journeys": ("guia de jornadas", "template-journeys.md"),
+               "system_map": ("mapa do sistema", "template-system-map.md")}
+JOURNEY_BLOCK_RE = re.compile(r"<!-- jornada:inicio -->\n(.*?)<!-- jornada:fim -->\n", re.DOTALL)
+
+
+def living_docs_base(project: Project) -> Path:
+    """Base dos documentos vivos: spec_root no modo privado (SPEC-0003@1), raiz do repositório no completo."""
+    return project.spec_root if project.private else project.root
+
+
+def living_docs_paths(project: Project):
+    """{chave: caminho absoluto} dos documentos vivos ligados; caminho fora da base → ValueError."""
+    base = living_docs_base(project)
+    out = {}
+    for key, value in project.cfg_map("living_docs").items():
+        if key not in LIVING_DOCS or not isinstance(value, str) or not value.strip():
+            continue
+        rel = Path(value.strip())
+        norm_rel = os.path.normpath(rel.as_posix())
+        path = Path(os.path.normpath(base / rel))
+        outside = rel.is_absolute() or norm_rel.split("/")[0] == ".."
+        if not outside:
+            try:
+                path.resolve().relative_to(base.resolve())
+            except ValueError:
+                outside = True
+        if outside:
+            raise ValueError(f"living_docs.{key}: '{value.strip()}' sai da base ({base}) — use um caminho relativo dentro dela")
+        if norm_rel == "." or path.is_dir():
+            raise ValueError(f"living_docs.{key}: '{value.strip()}' é uma pasta — informe o arquivo Markdown do documento")
+        out[key] = path
+    return out
+
+
+def living_docs_findings(journeys, guide_text: str, adrs, map_text: str):
+    """Cobertura dos documentos vivos: jornadas críticas no guia e ADRs accepted no mapa."""
+    cited = set(JOURNEY_TAG_RE.findall(guide_text))
+    out = [("journey_missing", jid) for jid in journeys if jid not in cited]
+    out += [("journey_unknown", jid) for jid in sorted(cited) if jid not in journeys]
+    out += [("adr_uncited", aid) for aid, status in sorted(adrs.items())
+            if status == "accepted" and not re.search(rf"\b{re.escape(aid)}\b", map_text)]
+    return out
+
+
+def living_docs_inputs(project: Project, paths):
+    """Entradas de living_docs_findings só para os documentos que existem."""
+    guide, mapa = paths.get("journeys"), paths.get("system_map")
+    has_guide, has_map = bool(guide and guide.is_file()), bool(mapa and mapa.is_file())
+    journeys = project.cfg_map("critical_journeys") if has_guide else {}
+    adrs = {aid: doc.status for aid, doc in project.adrs.items()} if has_map else {}
+    return (journeys, guide.read_text(encoding="utf-8") if has_guide else "",
+            adrs, mapa.read_text(encoding="utf-8") if has_map else "")
+
+
+def validate_living_docs(project: Project, add):
+    try:
+        paths = living_docs_paths(project)
+    except ValueError as e:
+        add("ERROR", "sdd-config", str(e))
+        return
+    base = living_docs_base(project)
+    for key, path in paths.items():
+        if not path.is_file():
+            add("WARN", f"living_docs.{key}", f"{path.relative_to(base).as_posix()} não existe — rode living-docs --init")
+    messages = {
+        "journey_missing": ("journeys", "guia de jornadas sem a jornada crítica {0} — adicione a seção com [jornada: {0}]"),
+        "journey_unknown": ("journeys", "guia de jornadas cita [jornada: {0}], que não está em critical_journeys"),
+        "adr_uncited": ("system_map", "mapa do sistema não cita {0} (accepted) — diga onde a decisão aparece no sistema"),
+    }
+    for kind, value in living_docs_findings(*living_docs_inputs(project, paths)):
+        key, msg = messages[kind]
+        add("WARN", f"living_docs.{key}", msg.format(value))
+
+
+def journey_proof(project: Project, jid: str, sids) -> str:
+    """'SPEC-NNNN (E2E-xx)' da primeira spec implementada que prova a jornada."""
+    for sid in sids:
+        plan = COMMENT_RE.sub("", project.specs[sid].section("Plano de Testes") or "")
+        for line in plan.split("\n"):
+            if jid in JOURNEY_TAG_RE.findall(line):
+                e2e = next((t for t in TEST_ID_RE.findall(line) if t.startswith("E2E-")), "")
+                if e2e:
+                    return f"{sid} ({e2e})"
+    return "— (sem E2E)"
+
+
+def fill_block(block: str, values) -> str:
+    """Substitui {{chave}} numa passada só: o texto inserido nunca é expandido de novo."""
+    return re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), block)
+
+
+def render_journeys(project: Project, template: str) -> str:
+    m = JOURNEY_BLOCK_RE.search(template)
+    block = m.group(1) if m else ""
+    rows, _ = journey_coverage(project)
+    if rows:
+        sections = [fill_block(block, {"title": title, "id": jid,
+                                        "proof": journey_proof(project, jid, sids) if state == "provada" else "— (sem E2E)"})
+                    for jid, title, state, sids in rows]
+    else:
+        sections = ["<!-- Nenhuma jornada em critical_journeys: declare-as no sdd-config.yml e troque o exemplo abaixo "
+                    "por uma seção por jornada, com [jornada: <id>] no título. -->\n"
+                    + fill_block(block, {"title": "Nome da jornada", "id": "<id>", "proof": "— (sem E2E)"})]
+    return template[:m.start()] + "".join(sections) + template[m.end():] if m else template
+
+
+def render_system_map(project: Project, template: str) -> str:
+    accepted = [f"- {aid} — {doc.title}" for aid, doc in sorted(project.adrs.items()) if doc.status == "accepted"]
+    return template.replace("{{decisions}}", "\n".join(accepted) or "- Nenhum ADR aceito ainda.")
+
+
+def cmd_living_docs(project: Project, init: bool):
+    try:
+        paths = living_docs_paths(project)
+    except ValueError as e:
+        die(str(e))
+    if not paths:
+        print("Nenhum documento vivo em living_docs no sdd-config.yml.")
+        return 0
+    base = living_docs_base(project)
+    if init:
+        renders = {"journeys": render_journeys, "system_map": render_system_map}
+        for key, path in paths.items():
+            rel = path.relative_to(base).as_posix()
+            if path.exists():
+                print(f"mantido: {rel}")
+                continue
+            template = (TEMPLATES_DIR / LIVING_DOCS[key][1]).read_text(encoding="utf-8")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(renders[key](project, template), encoding="utf-8")
+            print(f"criado: {rel}")
+        return 0
+    journeys = project.cfg_map("critical_journeys")
+    adrs = {aid: doc.status for aid, doc in project.adrs.items()}
+    guide, mapa = (paths[k].read_text(encoding="utf-8") if k in paths and paths[k].is_file() else ""
+                   for k in ("journeys", "system_map"))
+    findings = set(living_docs_findings(journeys, guide, adrs, mapa))
+    for key, path in paths.items():
+        print(f"{LIVING_DOCS[key][0]}: {path.relative_to(base).as_posix()} — {'existe' if path.is_file() else 'ausente'}")
+        if key == "journeys":
+            for jid, title in journeys.items():
+                print(f"  {'⚠' if ('journey_missing', jid) in findings else '✅'} {jid} — {title}")
+            for kind, jid in sorted(findings):
+                if kind == "journey_unknown":
+                    print(f"  ✖ {jid} — fora de critical_journeys")
+        else:
+            for aid, status in sorted(adrs.items()):
+                if status == "accepted":
+                    mark = "⚠" if ("adr_uncited", aid) in findings else "✅"
+                    print(f"  {mark} {aid} — {project.adrs[aid].title}")
     return 0
 
 
@@ -3888,6 +4063,8 @@ def main(argv=None):
     p.add_argument("--create", action="store_true")
     p.add_argument("--base", help="branch de partida (padrão: integração do épico ou base_branch)")
     sub.add_parser("journeys", help="cobertura das jornadas críticas (critical_journeys) por testes E2E")
+    p = sub.add_parser("living-docs", help="cobertura do guia de jornadas e do mapa do sistema (living_docs); --init cria os ausentes")
+    p.add_argument("--init", action="store_true")
     sub.add_parser("pillars", help="cobertura dos pilares de entrega (perfil do sdd-config) e N/A recorrente")
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
@@ -3914,7 +4091,7 @@ def main(argv=None):
     try:
         return dispatch(args, project)
     finally:
-        if project.private and args.command in RECORD_COMMANDS:
+        if project.private and args.command in RECORD_COMMANDS and not (args.command == "living-docs" and not args.init):
             ids = getattr(args, "ids", None) or [getattr(args, "id", None) or ""]
             commit_records(project, f"sdd: {args.command} {' '.join(i for i in ids if i)}".strip())
 
@@ -3966,6 +4143,8 @@ def dispatch(args, project: Project):
         return cmd_worktree(project, args.id, args.create, args.base)
     if args.command == "journeys":
         return cmd_journeys(project)
+    if args.command == "living-docs":
+        return cmd_living_docs(project, args.init)
     if args.command == "pillars":
         return cmd_pillars(project)
     if args.command == "upgrade":
