@@ -176,6 +176,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
 - [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
 - [ ] Documentação raiz e CHANGELOG atualizados (G7)
+- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
 - [ ] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy

@@ -16,6 +16,7 @@ The first time SDD runs in an existing repository, as part of DISCOVER:
 8. **Enforcement:** propose `vendor --agents --ci <provider> --pr-template <provider> --hooks --changelog --codeowners <provider> --owner <@owner>`, respecting what already exists (existing PR template, CI, hook manager, changelog format — adapt instead of replacing).
 
 9. **Pillars (opt-in):** if the user wants the project to meet the delivery pillars, set `pillars.profile`, add `pillars: [...]` to the as-is ADRs that already answer a pillar, and run `pillars`: each gap becomes a target ADR (`new-adr --baseline <id>`) plus a spec that closes it.
+10. **Living docs:** propose enabling `living_docs` in `sdd-config.yml` (off by default in existing projects), run `living-docs --init`, write the architecture mapping of step 1 into the system map (components per layer, environments, path to production, the as-is ADRs) and describe the critical journeys in the journey guide.
 
 The baseline doesn't block the first feature: it runs in parallel or right before it, and the gaps are explicit N/As with pointers.
 

@@ -1,12 +1,12 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-10-15 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-10-26 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 11 aviso(s)** — rode `spec_graph.py validate`
-- Specs: implemented 9
-- Impedimentos: **0 aberto(s)**, 9 resolvido(s)
+- Validação (G0): **0 erro(s), 3 aviso(s)** — rode `spec_graph.py validate`
+- Specs: implemented 10
+- Impedimentos: **0 aberto(s)**, 11 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -45,6 +45,7 @@ Nenhuma spec aberta.
 | [SPEC-0008](SPEC-0008-spec-root-fora-do-repo.md) | Recusar spec_root dentro do repositório | lite | fix | implemented | 2026-10-14 | — | — | — |
 | [SPEC-0009](SPEC-0009-gate-evidence-complemento.md) | gate --run grava o complemento de --evidence | lite | fix | implemented | 2026-10-14 | — | — | — |
 | [SPEC-0010](SPEC-0010-isolamento-do-registro-nos-testes.md) | Testes antigos isolados do registro do usuário | lite | fix | implemented | 2026-10-14 | — | — | — |
+| [SPEC-0011](SPEC-0011-documentos-vivos-guia-de-jornadas-e-mapa-do-sistema.md) | Documentos vivos: guia de jornadas e mapa do sistema | full | feature | implemented | 2026-10-26 | — | — | SPEC-0003@1 |
 
 ## ADRs
 

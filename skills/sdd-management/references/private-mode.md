@@ -25,6 +25,7 @@ python3 <skill-dir>/scripts/spec_graph.py private off        # back to full mode
 | Specs, INDEX | `docs/specs/` | `<spec_root>/specs/` |
 | ADRs | `docs/adr/` | `<spec_root>/adr/` |
 | sdd-config | `docs/specs/sdd-config.yml` | `<spec_root>/sdd-config.yml` |
+| Documentos vivos (`living_docs`) | `<caminho>` in the repository | `<spec_root>/<caminho>` — `living-docs --init` writes and commits there |
 | History of the records | the repository's git | the `spec_root`'s own git: every command that writes records commits there |
 | Sync between machines | the repository's remote | `sync: push` in the registry (default `none`); add a remote to the `spec_root` yourself |
 

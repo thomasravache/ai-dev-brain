@@ -135,5 +135,6 @@ The Definition of Done is the checklist in each spec's Relatório de Entrega, pl
   - *Deploy* — environments, version, date, strategy, flag state.
   - *Pendências* — new specs for anything left out, or "Nenhuma".
 - Root docs (`root_docs`) reflect the delivered behavior, architecture and any new conventions; backlog items moved; `changelog` entry added (use `spec_graph.py report SPEC-X` as the base).
+- Living docs (`living_docs`): the journey guide and the system map reflect the delivery when it changes a journey or a component; `validate` has no `living_docs` warnings for the spec's journeys and ADRs.
 - ADR statuses correct; `validate` clean for the spec; `index` regenerated.
 - Evidence: docs commit SHA + `validate` result.
