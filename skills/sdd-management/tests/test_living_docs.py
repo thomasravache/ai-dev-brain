@@ -37,6 +37,7 @@ REFS = SKILL / "references"
 sys.path.insert(0, str(SCRIPT.parent))
 sys.path.insert(0, str(TESTS))
 import spec_graph as sg
+import test_private_mode as tpm
 from test_private_mode import PrivateEnv
 from test_spec_graph import Project, git
 
@@ -379,6 +380,141 @@ class PrivateLivingDocsTest(unittest.TestCase):
 
 def git_out(env, cwd, *args):
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env=env.env).stdout
+
+
+# ---------------------------------------------------------------- achados da revisão (G4, rodada 2)
+
+class PathEdgeCasesTest(unittest.TestCase):
+    def project(self, extra, base=None):
+        tmp = base or Path(tempfile.mkdtemp()).resolve()
+        if base is None:
+            self.addCleanup(shutil.rmtree, tmp, True)
+        Project(tmp, extra)
+        return sg.Project(tmp)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "os.symlink indisponível")
+    def test_symlink_leaving_the_base_is_a_config_error(self):
+        """SPEC-0011:UT-02"""
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        outside = tmp / "fora"
+        outside.mkdir()
+        repo = tmp / "repo"
+        repo.mkdir()
+        try:
+            os.symlink(str(outside), str(repo / "out"), target_is_directory=True)
+        except (OSError, NotImplementedError) as e:
+            self.skipTest(f"symlink não suportado: {e}")
+        project = self.project("living_docs:\n  journeys: out/j.md\n", base=repo)
+        with self.assertRaises(ValueError):
+            fn("living_docs_paths")(project)
+
+    def test_directory_is_a_config_error(self):
+        """SPEC-0011:UT-02"""
+        paths = fn("living_docs_paths")
+        for value in ('"."', "docs"):
+            with self.assertRaises(ValueError, msg=value):
+                paths(self.project(f"living_docs:\n  journeys: {value}\n"))
+
+
+class InvalidPathCliTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp()).resolve()
+        self.repo = self.tmp / "repo"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def files_on_disk(self):
+        return sorted(str(p.relative_to(self.tmp)) for p in self.tmp.rglob("*")
+                      if p.is_file() and ".git" not in p.relative_to(self.tmp).parts)
+
+    def test_directory_path_is_a_validate_error(self):
+        """SPEC-0011:IT-01"""
+        for value in ('"."', "docs"):
+            shutil.rmtree(self.repo, ignore_errors=True)
+            p = Project(self.repo, f"living_docs:\n  journeys: {value}\n")
+            out = p.validate()
+            error = [line for line in out.stdout.splitlines()
+                     if line.startswith("ERROR") and "sdd-config" in line and "living_docs.journeys" in line]
+            self.assertTrue(error, (value, out.stdout))
+            self.assertNotIn("não existe — rode living-docs --init", out.stdout, value)
+            self.assertEqual(out.returncode, 1, out.stdout)
+
+    def test_path_leaving_the_base_is_refused_everywhere(self):
+        """SPEC-0011:IT-02"""
+        for value in ("../fora.md", "docs/../../x.md"):
+            shutil.rmtree(self.repo, ignore_errors=True)
+            p = Project(self.repo, f"living_docs:\n  journeys: {value}\n  system_map: docs/arquitetura.md\n")
+            before = self.files_on_disk()
+            out = p.validate()
+            self.assertTrue([line for line in out.stdout.splitlines() if line.startswith("ERROR")
+                             and "sdd-config" in line and "living_docs.journeys" in line], (value, out.stdout))
+            for args in (("living-docs",), ("living-docs", "--init")):
+                res = p.run(*args)
+                self.assertEqual(res.returncode, 2, (value, args, res.stdout, res.stderr))
+            self.assertEqual(self.files_on_disk(), before, value)
+            self.assertFalse((self.tmp / "fora.md").exists())
+            self.assertFalse((self.tmp / "x.md").exists())
+            self.assertFalse((self.repo / "docs/arquitetura.md").exists())
+
+
+class InitRenderingTest(LivingProject):
+    def test_title_with_placeholder_text_is_kept(self):
+        """SPEC-0011:IT-02"""
+        self.add_config('critical_journeys:\n  agenda: "Fã vê {{id}} na agenda"\n' + CONFIG)
+        out = self.p.run("living-docs", "--init")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        guide = (self.tmp / "docs/jornadas.md").read_text(encoding="utf-8")
+        self.assertIn("Fã vê {{id}} na agenda", guide)
+        self.assertNotIn("Fã vê agenda na agenda", guide)
+
+    def test_coverage_lists_everything_when_documents_are_absent(self):
+        """SPEC-0011:IT-02"""
+        self.add_config(JOURNEYS + CONFIG)
+        self.adr("Banco de dados", "accepted")
+        self.adr("Fila de mensagens", "accepted")
+        out = self.p.run("living-docs")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("ausente", line_with(out.stdout, "docs/jornadas.md"))
+        self.assertIn("ausente", line_with(out.stdout, "docs/arquitetura.md"))
+        for mark in ("⚠ agenda", "⚠ moderacao", "⚠ ADR-0001", "⚠ ADR-0002"):
+            self.assertIn(mark, out.stdout)
+
+
+class PrivateCoverageTest(unittest.TestCase):
+    setUp = PrivateLivingDocsTest.setUp
+    tearDown = PrivateLivingDocsTest.tearDown
+
+    def test_plain_living_docs_does_not_commit(self):
+        """SPEC-0011:IT-03"""
+        (self.e.spec_root / "rascunho.md").write_text("x\n", encoding="utf-8")
+        def count():
+            return git_out(self.e, self.e.spec_root, "rev-list", "--count", "HEAD").strip()
+
+        before = count()
+        out = self.e.run("living-docs")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual(count(), before)
+        self.assertIn("rascunho.md", git_out(self.e, self.e.spec_root, "status", "--porcelain"))
+
+
+class PrivateScopeTest(tpm.TraceTestCase):
+    def test_living_doc_path_is_not_exempt_in_the_team_repo(self):
+        """SPEC-0011:CT-01"""
+        config = self.e.spec_root / "sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8") + "\n" + CONFIG, encoding="utf-8")
+        self.red()
+        for rel, text in (("src/soma.py", "def soma(a, b):\n    return a + b\n"),
+                          ("docs/jornadas.md", "## Agendar [jornada: agenda]\n")):
+            path = self.e.repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        git_out(self.e, self.e.repo, "add", "-A")
+        git_out(self.e, self.e.repo, "commit", "-qm", "implementa a soma")
+        out = self.e.run("verify", "SPEC-0001")
+        self.assertIn("docs/jornadas.md", line_with(out.stdout, "fora de touches"), out.stdout)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
 
 
 if __name__ == "__main__":
