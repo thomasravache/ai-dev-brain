@@ -362,7 +362,7 @@ SECTIONED_TEMPLATE = """base_branch: main
 
 # --- Build e testes (G2, G5) ---
 # Suíte completa.
-# old_key: x
+# old_key: "x"
 # Exemplos: "pytest" | "go test ./..."
 test: ""
 """
@@ -374,6 +374,20 @@ class MissingConfigKeysEdgeTest(unittest.TestCase):
         missing_config_keys = fn("missing_config_keys")
         self.assertEqual(missing_config_keys(SECTIONED_TEMPLATE, {"base_branch": "main"}),
                          [("test", 'Suíte completa. Exemplos: "pytest" | "go test ./..."')])
+
+
+    def test_real_template_comments_keep_prose_with_colons(self):
+        """SPEC-0013:UT-02 (revisão: prosa com "palavra:" no template real continua no comentário)"""
+        missing_config_keys = fn("missing_config_keys")
+        comments = dict(missing_config_keys(TEMPLATE.read_text(encoding="utf-8"), {}))
+        for key, fragments in (("change_flow", ("pr:", "direct:")), ("pr_title_policy", ("fail:",)),
+                               ("pillars", ("profile:",)), ("h1_policy", ("chat:",))):
+            self.assertIn(key, comments)
+            for fragment in fragments:
+                self.assertIn(fragment, comments[key], key)
+        for key, comment in comments.items():
+            self.assertNotIn("---", comment, key)
+            self.assertNotIn("pr_merge_pattern:", comment, key)
 
 
 class WhatsNewEdgeTest(TempProjectTest):
