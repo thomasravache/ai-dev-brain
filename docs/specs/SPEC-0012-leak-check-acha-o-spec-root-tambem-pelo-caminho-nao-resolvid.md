@@ -68,7 +68,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=3, skipped=1)) — 0de32ae | 2026-10-26 |
 | G2 Green | PASS | MANUAL: CI do GitHub no PR #7 em c7aed26 (run 40372988204): ruff check 'All checks passed!' e 140 testes OK em Python 3.9 e 3.15; local (macOS): 140 testes OK — só o lint não roda aqui (sem uv/ruff) | 2026-10-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — c267ff9 | 2026-10-26 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente) — 0 blocker/major; 4 minor aceitos sem mudança: Path.home() com RuntimeError sem HOME nem pwd (já existia), ramo /private só exercido no macOS, padrões sem limite à direita (já existia), spec_root editado à mão sem resolver — db1e206 | 2026-10-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
