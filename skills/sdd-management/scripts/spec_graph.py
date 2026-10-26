@@ -17,7 +17,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.10.11"
+SDD_TOOL_VERSION = "2026.10.12"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -1496,17 +1496,19 @@ def validate_config(project: Project, add):
             if doc.status in APPROVED_PLUS and not doc.legacy and not doc.scalar("approved_via"):
                 add("WARN", sid, "h1_policy pr-approval: registre approved_via (ex: \"PR #12\") com o revisor em approved_by")
     policy = project.cfg("h2_policy", "per-wave")
+    policy_approved = bool(project.cfg("h2_policy_approved_by") and valid_date(project.cfg("h2_policy_approved_at")))
     if policy not in ("per-wave", "auto-on-green"):
         add("ERROR", "sdd-config", f"h2_policy '{policy}' inválida (per-wave | auto-on-green)")
-    elif policy == "auto-on-green" and not (project.cfg("h2_policy_approved_by") and valid_date(project.cfg("h2_policy_approved_at"))):
+    elif policy == "auto-on-green" and not policy_approved:
         add("ERROR", "sdd-config", "h2_policy auto-on-green exige h2_policy_approved_by e h2_policy_approved_at (decisão humana registrada)")
     h2_texts = defaultdict(list)
     for sid, doc in sorted(project.specs.items()):
         evidence = ((gate_table(doc) or {}).get("H2") or {}).get("evidence", "")
         if evidence and not evidence.startswith("política auto-on-green") and not doc.legacy:
             h2_texts[re.sub(r"\s+", " ", evidence.lower())].append(sid)
+    policy_declared = policy == "auto-on-green" and policy_approved
     for evidence, sids in h2_texts.items():
-        if len(sids) >= 3:
+        if len(sids) >= 3 and not policy_declared:
             add("WARN", "sdd-config", f"H2 com o mesmo texto em {len(sids)} specs ('{evidence[:50]}') — se é uma autorização "
                                       "permanente, declare h2_policy: auto-on-green no sdd-config.yml em vez de repeti-la")
     fields = set(re.findall(r"\{(\w+)\}", project.cfg("pr_title", PR_TITLE_DEFAULT)))
