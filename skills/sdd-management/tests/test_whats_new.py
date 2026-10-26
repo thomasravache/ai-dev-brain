@@ -358,5 +358,94 @@ class PrivateWhatsNewTest(PrivateTestCase):
         self.assertIn(f"Projeto: {VERSION} · skill: {VERSION}", res.stdout)
 
 
+SECTIONED_TEMPLATE = """base_branch: main
+
+# --- Build e testes (G2, G5) ---
+# Suíte completa.
+# old_key: x
+# Exemplos: "pytest" | "go test ./..."
+test: ""
+"""
+
+
+class MissingConfigKeysEdgeTest(unittest.TestCase):
+    def test_banners_and_commented_keys_are_not_part_of_the_comment(self):
+        """SPEC-0013:UT-02 (revisão: banner de seção e chave comentada acima da chave não entram no comentário)"""
+        missing_config_keys = fn("missing_config_keys")
+        self.assertEqual(missing_config_keys(SECTIONED_TEMPLATE, {"base_branch": "main"}),
+                         [("test", 'Suíte completa. Exemplos: "pytest" | "go test ./..."')])
+
+
+class WhatsNewEdgeTest(TempProjectTest):
+    def skill_without_changelog(self) -> Path:
+        skill_copy = self.tmp / "skill"
+        shutil.copytree(SKILL, skill_copy, ignore=shutil.ignore_patterns("__pycache__", "tests"))
+        (skill_copy / "CHANGELOG.md").unlink(missing_ok=True)
+        return skill_copy / "scripts" / "spec_graph.py"
+
+    def test_project_newer_than_skill_is_not_up_to_date(self):
+        """SPEC-0013:IT-01 (revisão: projeto mais novo que a skill)"""
+        p = self.current()
+        vendor_tool(p.root, "2026.99.1")
+        res = p.run("whats-new")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertIn("Projeto: 2026.99.1", res.stdout)
+        self.assertIn("mais antiga", res.stdout)
+        self.assertNotIn("Projeto em dia com a skill", res.stdout)
+
+    def test_newer_sdd_version_does_not_suggest_ack(self):
+        """SPEC-0013:IT-04 (revisão: --ack com sdd_version mais nova faria downgrade)"""
+        p = Project(self.tmp / "sdd-version-nova")
+        config = p.root / "docs/specs/sdd-config.yml"
+        config.write_text(config.read_text(encoding="utf-8") + 'sdd_version: "2026.99.1"\n', encoding="utf-8")
+        res = p.run("whats-new")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertIn("Projeto: 2026.99.1", res.stdout)
+        self.assertNotIn("whats-new --ack", res.stdout)
+
+    def test_unreadable_vendored_version_suggests_vendor_not_ack(self):
+        """SPEC-0013:IT-04 (revisão: com tools/sdd, sdd_version é ignorada e --ack não resolve)"""
+        p = Project(self.tmp / "vendor-ilegivel")
+        tool = p.root / "tools/sdd/spec_graph.py"
+        tool.parent.mkdir(parents=True)
+        tool.write_text("# sem versão\n", encoding="utf-8")
+        res = p.run("whats-new")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertNotIn("whats-new --ack", res.stdout)
+        self.assertTrue(after(res.stdout, "Para se atualizar:", "vendor --force"), res.stdout)
+
+    def test_ack_keeps_crlf_and_trailing_newlines(self):
+        """SPEC-0013:IT-04 (revisão: --ack só troca a linha sdd_version, byte a byte)"""
+        p = Project(self.tmp / "crlf")
+        config = p.root / "docs/specs/sdd-config.yml"
+        before = (b'base_branch: main\r\nsdd_version: "2026.10.8"\r\ntest_paths:\r\n'
+                  b'  - "tests/**"\r\n\r\n')
+        config.write_bytes(before)
+        res = p.run("whats-new", "--ack")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        expected = before.replace(b'sdd_version: "2026.10.8"', f'sdd_version: "{VERSION}"'.encode("utf-8"))
+        self.assertEqual(config.read_bytes(), expected)
+
+    def test_ack_without_config_creates_nothing(self):
+        """SPEC-0013:IT-04 (revisão: --ack sem sdd-config não cria o arquivo)"""
+        p = Project(self.tmp / "sem-config")
+        config = p.root / "docs/specs/sdd-config.yml"
+        config.unlink()
+        res = p.run("whats-new", "--ack")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertTrue((res.stdout + res.stderr).strip(), "nenhum aviso impresso")
+        self.assertFalse(config.exists(), "sdd-config.yml foi criado pelo --ack")
+
+    def test_status_line_without_changelog_does_not_count_zero_versions(self):
+        """SPEC-0013:IT-03 (revisão: skill sem CHANGELOG não vira "0 versão(ões)")"""
+        script = self.skill_without_changelog()
+        p = self.outdated()
+        res = subprocess.run([sys.executable, str(script), "status"], cwd=p.root, capture_output=True, text=True,
+                             check=False)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertIn("Novidades da skill", res.stdout)
+        self.assertNotIn("0 versão", res.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
