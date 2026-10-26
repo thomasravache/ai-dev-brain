@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 4 aviso(s)** — rode `spec_graph.py validate`
-- Specs: in-progress 1, implemented 12
+- Validação (G0): **0 erro(s), 5 aviso(s)** — rode `spec_graph.py validate`
+- Specs: implemented 13
 - Impedimentos: **0 aberto(s)**, 12 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,33 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0014  
-**Paradas por impedimento:** —  
-**Próximo lote:** —
-
-| Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
-|---|---|---|---|---|---|---|
-| 1 | SPEC-0014 | validate não sugere a política de H2 já declarada | lite/S | in-progress | 🔄 em andamento |  |
+Nenhuma spec aberta.
 
 ## Épicos
 
 | Épico | Título | Status | Progresso |
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
-
-## Grafo de Dependências
-
-Seta contínua: depende da implementação. Seta tracejada: consome contrato.
-
-```mermaid
-flowchart LR
-  S0014["SPEC-0014<br/>validate não sugere a política de H2 já…"]:::inprogress
-  classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
-  classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
-  classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
-  classDef implemented fill:#dcfce7,stroke:#16a34a,color:#111
-  classDef deprecated fill:#f3f4f6,stroke:#9ca3af,color:#6b7280
-```
 
 ## Todas as Specs
 
@@ -68,7 +48,7 @@ flowchart LR
 | [SPEC-0011](SPEC-0011-documentos-vivos-guia-de-jornadas-e-mapa-do-sistema.md) | Documentos vivos: guia de jornadas e mapa do sistema | full | feature | implemented | 2026-10-26 | — | — | SPEC-0003@1 |
 | [SPEC-0012](SPEC-0012-leak-check-acha-o-spec-root-tambem-pelo-caminho-nao-resolvid.md) | leak-check acha o spec_root também pelo caminho não resolvido | lite | fix | implemented | 2026-10-26 | — | SPEC-0011 | — |
 | [SPEC-0013](SPEC-0013-novidades-da-skill-para-os-projetos-whats-new.md) | Novidades da skill para os projetos (whats-new) | full | feature | implemented | 2026-10-26 | — | — | SPEC-0003@1 |
-| [SPEC-0014](SPEC-0014-validate-nao-sugere-a-politica-de-h2-ja-declarada.md) | validate não sugere a política de H2 já declarada | lite | fix | in-progress | 2026-10-26 | — | — | — |
+| [SPEC-0014](SPEC-0014-validate-nao-sugere-a-politica-de-h2-ja-declarada.md) | validate não sugere a política de H2 já declarada | lite | fix | implemented | 2026-10-26 | — | — | — |
 
 ## ADRs
 

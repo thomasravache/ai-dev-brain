@@ -4,7 +4,7 @@ title: validate não sugere a política de H2 já declarada
 tier: lite
 type: fix
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-10-26
 parent:
 depends_on: []
@@ -68,7 +68,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #12 em 83698b3: ci 3.9 e 3.15 (run 40399136640) e sdd/pr-check (run 40399136609); a reprovação anterior foi o teste de tempo SPEC-0004:IT-10 sob carga (load ~14) — 79cc2fc | 2026-10-26 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-26 |
 | G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-26 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 9ba962b | 2026-10-26 |
 
 ## 9. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
