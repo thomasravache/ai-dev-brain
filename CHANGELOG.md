@@ -9,6 +9,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 ## [Unreleased]
 
 ### Fixed
+- `leak-check` acha o `spec_root` também pelo caminho não resolvido: `HOME` que é link simbólico (absoluto e `~/`) e, no macOS, a forma sem `/private`; `SDD_TOOL_VERSION` 2026.10.10 (SPEC-0012).
 - `gate --run --evidence` grava o texto como `nota:` na evidência, como a ajuda descreve; antes era descartado (SPEC-0009).
 - `private init` recusa um `spec_root` dentro do próprio repositório, onde as specs ficariam no clone do time (SPEC-0008).
 - `pr` não aponta mais quebra só porque a spec teve emenda: o que quebra vem da chave opcional `breaking`; "Como foi feito" começa com maiúscula (SPEC-0007).

@@ -17,7 +17,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.10.9"
+SDD_TOOL_VERSION = "2026.10.10"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -770,6 +770,30 @@ TEAM_HOOK_MARKERS = ((".husky", "husky"), ("lefthook.yml", "lefthook"), (".lefth
                      (".pre-commit-config.yaml", "pre-commit"))
 
 
+def spec_root_forms(spec_root):
+    """Formas conhecidas do mesmo spec_root, sem repetição: o caminho resolvido, a forma sob o HOME literal e
+    sob o resolvido (absoluta e ~/) e, no macOS, o caminho sem o prefixo /private quando aponta para a mesma pasta."""
+    root = Path(spec_root)
+    forms = [str(root)]
+    homes = []
+    for home in (Path.home(), Path.home().resolve()):
+        if home not in homes:
+            homes.append(home)
+    for base in homes:
+        try:
+            rel = root.relative_to(base)
+        except ValueError:
+            continue
+        for home in homes:
+            forms.append(str(home / rel))
+        forms.append("~/" + rel.as_posix())
+    if root.as_posix().startswith("/private/"):
+        bare = Path(root.as_posix()[len("/private"):])
+        if bare.resolve() == root.resolve():
+            forms.append(str(bare))
+    return list(dict.fromkeys(forms))
+
+
 def build_leak_patterns(spec_root, extra, adr_ids=()):
     """Padrões do leak-check: [(rótulo, regex compilada)] — padrões padrão, caminho do spec_root e extras do usuário.
 
@@ -782,12 +806,7 @@ def build_leak_patterns(spec_root, extra, adr_ids=()):
         patterns.append(("ID de ADR", re.compile(r"\b(?:" + "|".join(re.escape(a) for a in sorted(adr_ids)) + r")\b")))
     patterns += [("seção do SDD", re.compile(re.escape(title))) for title in LEAK_SECTION_TITLES]
     if spec_root:
-        root = Path(spec_root)
-        patterns.append(("caminho do spec_root", re.compile(re.escape(str(root)))))
-        try:
-            patterns.append(("caminho do spec_root", re.compile(re.escape("~/" + root.relative_to(Path.home()).as_posix()))))
-        except ValueError:
-            pass
+        patterns += [("caminho do spec_root", re.compile(re.escape(form))) for form in spec_root_forms(spec_root)]
     for pattern in extra or []:
         try:
             patterns.append(("leak_patterns", re.compile(pattern)))

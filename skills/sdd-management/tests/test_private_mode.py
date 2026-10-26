@@ -126,11 +126,12 @@ class ModeContractTest(PrivateTestCase):
         with mock.patch.dict(os.environ, self.e.env, clear=True):
             private = sg.Project(self.e.repo)
             self.assertTrue(private.private)
-            self.assertEqual(private.spec_root, self.e.spec_root)
+            root = self.e.spec_root.resolve()
+            self.assertEqual(private.spec_root, root)
             self.assertEqual(private.sync, "none")
-            self.assertEqual(private.specs_dir, self.e.spec_root / "specs")
-            self.assertEqual(private.adr_dir, self.e.spec_root / "adr")
-            self.assertEqual(private.config_path, self.e.spec_root / "sdd-config.yml")
+            self.assertEqual(private.specs_dir, root / "specs")
+            self.assertEqual(private.adr_dir, root / "adr")
+            self.assertEqual(private.config_path, root / "sdd-config.yml")
             (private.specs_dir / "nota.md").write_text("x\n", encoding="utf-8")
             before = len(self.e.root_log())
             sg.commit_records(private, "sdd: teste")
@@ -139,11 +140,14 @@ class ModeContractTest(PrivateTestCase):
 
 class PrivateInitTest(PrivateTestCase):
     def test_init_registers_and_creates_versioned_spec_root(self):
-        """SPEC-0003:IT-01"""
+        """SPEC-0003:IT-01
+        SPEC-0012:UT-02 (o esperado é o caminho resolvido, como o private init grava)
+        """
         out = self.e.init()
         self.assertIn("modo privado ativado para github.com/Org/Repo", out.stdout)
         entry = json.loads(self.e.registry.read_text(encoding="utf-8"))["projects"]["github.com/Org/Repo"]
-        self.assertEqual((entry["mode"], Path(entry["spec_root"]), entry["sync"]), ("private", self.e.spec_root, "none"))
+        self.assertEqual((entry["mode"], Path(entry["spec_root"]), entry["sync"]),
+                         ("private", self.e.spec_root.resolve(), "none"))
         for name in ("specs", "adr", "sdd-config.yml", ".git"):
             self.assertTrue((self.e.spec_root / name).exists(), name)
         self.assertEqual(len(self.e.root_log()), 1)
@@ -311,6 +315,24 @@ class LeakPatternsTest(unittest.TestCase):
                 "UT-01 = 'código de erro'\n")
         self.assertEqual(sg.leak_findings(text, "c.py", sg.build_leak_patterns(self.SPEC_ROOT, []), []), [])
 
+    def test_spec_root_is_found_through_a_symlinked_home(self):
+        """SPEC-0012:UT-01"""
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        real_home, home_link = tmp / "realhome", tmp / "homelink"
+        spec_root = real_home / "sdd" / "org" / "repo"
+        spec_root.mkdir(parents=True)
+        try:
+            home_link.symlink_to(real_home, target_is_directory=True)
+        except (OSError, NotImplementedError) as e:
+            self.skipTest(f"links simbólicos indisponíveis: {e}")
+        text = (f"specs em {home_link}/sdd/org/repo/specs\n"
+                "ver ~/sdd/org/repo\n")
+        with mock.patch.dict(os.environ, {"HOME": str(home_link)}):
+            found = sg.leak_findings(text, "d.py", sg.build_leak_patterns(spec_root, []), [])
+        self.assertEqual([(line, label) for _, line, label, _ in found],
+                         [(1, "caminho do spec_root"), (2, "caminho do spec_root")], found)
+
 
 class LeakCheckCommandTest(PrivateTestCase):
     def setUp(self):
@@ -327,6 +349,26 @@ class LeakCheckCommandTest(PrivateTestCase):
         self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
         self.assertIn("a.py:1", out.stdout)
         self.assertIn("a.py:2", out.stdout)
+
+    def test_staged_file_citing_the_spec_root_through_a_symlinked_home(self):
+        """SPEC-0012:IT-01"""
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        real_home, home_link = tmp / "realhome", tmp / "homelink"
+        real_home.mkdir()
+        try:
+            home_link.symlink_to(real_home, target_is_directory=True)
+        except (OSError, NotImplementedError) as e:
+            self.skipTest(f"links simbólicos indisponíveis: {e}")
+        e = PrivateEnv(tmp / "env")
+        e.env["HOME"] = str(home_link)
+        e.spec_root = home_link / "sdd" / "Org" / "Repo"
+        e.init()
+        (e.repo / "notas.txt").write_text(f"ok\nspecs em {e.spec_root}/specs\n", encoding="utf-8")
+        git(e.repo, "add", "notas.txt", env=e.env)
+        out = e.run("leak-check", "--staged")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("notas.txt:2", out.stdout)
 
     def test_staged_diff(self):
         """SPEC-0004:IT-01"""
