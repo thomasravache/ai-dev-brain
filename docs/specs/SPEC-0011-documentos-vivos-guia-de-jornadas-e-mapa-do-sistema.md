@@ -153,10 +153,10 @@ Instruções:
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um repositório temporário com `living_docs` configurado, duas jornadas críticas, um guia sem uma delas, um mapa sem um ADR accepted e o arquivo do mapa ausente numa segunda rodada, quando roda `validate`, então a saída tem os WARN do contrato, o exit é o mesmo de antes (avisos não reprovam) e o tempo fica dentro do RNF de desempenho.
-- **IT-02** — Dado um repositório temporário com duas jornadas críticas (uma provada por spec implementada com `E2E-01 [jornada: agenda]`) e dois ADRs accepted, quando roda `living-docs --init`, então cria os dois documentos com "## … [jornada: agenda]", "Provada por: SPEC-0001 (E2E-01)", "Provada por: — (sem E2E)" para a outra e "- ADR-0001 — …"; em seguida `validate` não tem aviso de living_docs; e uma segunda rodada imprime "mantido" com os arquivos byte a byte iguais.
+- **IT-02** — Dado um repositório temporário com duas jornadas críticas (uma provada por spec implementada com um E2E marcado `[jornada: agenda]`) e dois ADRs accepted, quando roda `living-docs --init`, então cria os dois documentos com "## … [jornada: agenda]", "Provada por: SPEC-0001 (<ID do E2E>)", "Provada por: — (sem E2E)" para a outra e "- ADR-0001 — …"; em seguida `validate` não tem aviso de living_docs; e uma segunda rodada imprime "mantido" com os arquivos byte a byte iguais.
 - **IT-03** — Dado o modo privado (registro de teste, `spec_root` fora do repositório) com `living_docs` no sdd-config do `spec_root`, quando roda `living-docs --init`, então os arquivos são criados no `spec_root` (e commitados lá), o repositório do time continua sem eles e `leak-check` sobre o repositório não acha nada.
 - **IT-04** — (guarda: passa antes da mudança) Dado um projeto sem `living_docs` no sdd-config, quando roda `validate`, então a saída não tem nenhum aviso de documentos vivos e o exit é o de hoje.
-- **IT-05** — Dado uma spec com `touches: [src/**]` e um commit dela que também altera `docs/jornadas.md` (configurado em `living_docs`), quando roda `verify SPEC-0001`, então `docs/jornadas.md` não aparece como fora do escopo.
+- **IT-05** — Dado uma spec com `touches: [src/**, tests/**]` e um commit dela que também altera `docs/jornadas.md` (configurado em `living_docs`), quando roda `verify SPEC-0001`, então `docs/jornadas.md` não aparece como fora do escopo.
 
 ### 7.4 Testes de Contrato
 - **CT-01** — Dado um `Project` em modo privado criado pela API da SPEC-0003@1, quando `living-docs` e `validate` resolvem os caminhos, então usam `project.spec_root` como base (e não a raiz do repositório) — verificado com um registro de teste e um `spec_root` fora do repositório.
@@ -230,7 +230,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
-| IMP-01 | 2026-10-26 | G1 | spec | O IT-02 do plano cita o ID de exemplo E2E-01 (dado de teste da fixture), que o verify lê como teste do plano desta spec e cobra a tag SPEC-0011:E2E-01; o IT-05 pede touches [src/**], mas o commit red em tests/ ficaria fora do escopo na fixture | gate G1 --run (FAIL em 0c1a819) | thomas |  |  |
+| IMP-01 | 2026-10-26 | G1 | spec | O IT-02 do plano cita o ID de exemplo E2E-01 (dado de teste da fixture), que o verify lê como teste do plano desta spec e cobra a tag SPEC-0011:E2E-01; o IT-05 pede touches [src/**], mas o commit red em tests/ ficaria fora do escopo na fixture | gate G1 --run (FAIL em 0c1a819) | thomas | Emenda v1 — IT-02 sem ID literal de E2E e IT-05 com touches [src/**, tests/**] na fixture; contrato inalterado (aprovada por thomas em 2026-10-26) | 2026-10-26 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -271,3 +271,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0011`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (emenda v1, contrato inalterado) | 2026-10-26 | IT-02 descreve o E2E da fixture sem ID literal; IT-05 usa `touches: [src/**, tests/**]` na fixture | o `verify` lia o `E2E-01` de exemplo como teste desta spec; sem `tests/**` o commit red da fixture caía fora do escopo (IMP-01) | Nenhuma | thomas, 2026-10-26 |
