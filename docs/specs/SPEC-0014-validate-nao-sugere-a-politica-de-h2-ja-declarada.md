@@ -64,7 +64,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=2, skipped=1)) — c22b6bd | 2026-10-26 |
 | G2 Green | PASS | MANUAL: CI do GitHub no PR #12 em 96d612f (run 40398202620): ruff check 'All checks passed!' e 159 testes OK em Python 3.9 e 3.15; local (macOS) 159 testes OK — só o lint não roda aqui (sem uv/ruff) | 2026-10-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 1fbdaa0 | 2026-10-26 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente) — 0 blocker/major; 2 minor aceitos: falta teste de H2 repetido com auto-on-green sem aprovação (já gera ERROR), e o teste de tempo do leak-check (SPEC-0004:IT-10) oscila sob carga (fora desta spec) — ed05463 | 2026-10-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
