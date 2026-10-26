@@ -305,7 +305,7 @@ class WhatsNewTest(TempProjectTest):
         self.assertIn(f"sdd_version = {VERSION}", res.stdout)
         text = config.read_text(encoding="utf-8")
         self.assertEqual(sg.parse_yaml_subset(text).get("sdd_version"), VERSION)
-        self.assertEqual(len(re.findall(r"^sdd_version\s*:", text, re.M)), 1, "linha sdd_version duplicada")
+        self.assertEqual(len(re.findall(r"^sdd_version\s*:", text, re.MULTILINE)), 1, "linha sdd_version duplicada")
         self.assertIn("base_branch: main", text)
         res = p.run("whats-new")
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
@@ -334,7 +334,7 @@ class PrivateWhatsNewTest(PrivateTestCase):
         with mock.patch.dict(os.environ, self.e.env, clear=True):
             config_path = sg.Project(self.e.repo).config_path
         self.assertEqual(config_path, self.e.spec_root.resolve() / "sdd-config.yml")
-        text = re.sub(r"^sdd_version\s*:.*\n?", "", config_path.read_text(encoding="utf-8"), flags=re.M)
+        text = re.sub(r"^sdd_version\s*:.*\n?", "", config_path.read_text(encoding="utf-8"), flags=re.MULTILINE)
         config_path.write_text(text.rstrip("\n") + f'\nsdd_version: "{OLD}"\n', encoding="utf-8")
         git(self.e.spec_root, "add", "-A", env=self.e.env)
         git(self.e.spec_root, "commit", "-qm", "teste: sdd_version antiga", env=self.e.env)
