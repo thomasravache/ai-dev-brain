@@ -513,6 +513,17 @@ class H2PolicyTest(ProjectTest):
             self.p.path(sid).write_text(text, encoding="utf-8")
         self.assertIn("declare h2_policy: auto-on-green", self.p.validate().stdout)
 
+    def test_repeated_h2_text_does_not_suggest_declared_policy(self):
+        """SPEC-0014:UT-01"""
+        for name in ("A", "B", "C"):
+            sid = self.full(name)
+            text = self.p.path(sid).read_text(encoding="utf-8")
+            text = re.sub(r"\| (H2 [^|]*)\| PENDING \| \| \|", r"| \1| PASS | Autorização permanente do usuário | 2026-01-01 |", text)
+            self.p.path(sid).write_text(text, encoding="utf-8")
+        cfg = self.tmp / "docs/specs/sdd-config.yml"
+        cfg.write_text(cfg.read_text() + "h2_policy: auto-on-green\nh2_policy_approved_by: thomas\nh2_policy_approved_at: 2026-09-29\n", encoding="utf-8")
+        self.assertNotIn("declare h2_policy: auto-on-green", self.p.validate().stdout)
+
 
 class ChangeFlowTest(ProjectTest):
     def commit(self, name, content, message):

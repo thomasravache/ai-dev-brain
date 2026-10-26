@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.10.12] - 2026-10-26
+
+### Fixed
+- `validate` não sugere declarar `h2_policy: auto-on-green` por H2 com o mesmo texto em várias specs quando a política já está declarada e aprovada (`h2_policy_approved_by` e `h2_policy_approved_at` válidos); `SDD_TOOL_VERSION` 2026.10.12 (SPEC-0014).
+
 ## [2026.10.11] - 2026-10-26
 
 ### Added
