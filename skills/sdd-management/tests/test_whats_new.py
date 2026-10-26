@@ -375,7 +375,6 @@ class MissingConfigKeysEdgeTest(unittest.TestCase):
         self.assertEqual(missing_config_keys(SECTIONED_TEMPLATE, {"base_branch": "main"}),
                          [("test", 'Suíte completa. Exemplos: "pytest" | "go test ./..."')])
 
-
     def test_real_template_comments_keep_prose_with_colons(self):
         """SPEC-0013:UT-02 (revisão: prosa com "palavra:" no template real continua no comentário)"""
         missing_config_keys = fn("missing_config_keys")
@@ -437,7 +436,7 @@ class WhatsNewEdgeTest(TempProjectTest):
         config.write_bytes(before)
         res = p.run("whats-new", "--ack")
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
-        expected = before.replace(b'sdd_version: "2026.10.8"', f'sdd_version: "{VERSION}"'.encode("utf-8"))
+        expected = before.replace(b'sdd_version: "2026.10.8"', f'sdd_version: "{VERSION}"'.encode())
         self.assertEqual(config.read_bytes(), expected)
 
     def test_ack_without_config_creates_nothing(self):
