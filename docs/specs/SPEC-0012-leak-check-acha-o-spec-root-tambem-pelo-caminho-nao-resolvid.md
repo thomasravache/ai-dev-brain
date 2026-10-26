@@ -4,7 +4,7 @@ title: leak-check acha o spec_root também pelo caminho não resolvido
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-26
 parent:
 depends_on: [SPEC-0011]
