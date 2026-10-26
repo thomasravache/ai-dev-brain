@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 6 aviso(s)** — rode `spec_graph.py validate`
-- Specs: implemented 11
+- Validação (G0): **0 erro(s), 3 aviso(s)** — rode `spec_graph.py validate`
+- Specs: in-progress 1, implemented 11
 - Impedimentos: **0 aberto(s)**, 11 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,37 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-Nenhuma spec aberta.
+**Em andamento:** SPEC-0013  
+**Paradas por impedimento:** —  
+**Próximo lote:** —
+
+| Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
+|---|---|---|---|---|---|---|
+| 1 | SPEC-0013 | Novidades da skill para os projetos (whats-new) | full/M | in-progress | 🔄 em andamento |  |
 
 ## Épicos
 
 | Épico | Título | Status | Progresso |
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
+
+## Grafo de Dependências
+
+Seta contínua: depende da implementação. Seta tracejada: consome contrato.
+
+```mermaid
+flowchart LR
+  S0013["SPEC-0013<br/>Novidades da skill para os projetos (wh…"]:::inprogress
+  subgraph E0002["SPEC-0002 · Modo privado: SDD fora do repositório do time"]
+    S0003["SPEC-0003<br/>Registro do usuário e spec_root"]:::implemented
+  end
+  S0003 -. contrato v1 .-> S0013
+  classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
+  classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
+  classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
+  classDef implemented fill:#dcfce7,stroke:#16a34a,color:#111
+  classDef deprecated fill:#f3f4f6,stroke:#9ca3af,color:#6b7280
+```
 
 ## Todas as Specs
 
@@ -47,6 +71,7 @@ Nenhuma spec aberta.
 | [SPEC-0010](SPEC-0010-isolamento-do-registro-nos-testes.md) | Testes antigos isolados do registro do usuário | lite | fix | implemented | 2026-10-14 | — | — | — |
 | [SPEC-0011](SPEC-0011-documentos-vivos-guia-de-jornadas-e-mapa-do-sistema.md) | Documentos vivos: guia de jornadas e mapa do sistema | full | feature | implemented | 2026-10-26 | — | — | SPEC-0003@1 |
 | [SPEC-0012](SPEC-0012-leak-check-acha-o-spec-root-tambem-pelo-caminho-nao-resolvid.md) | leak-check acha o spec_root também pelo caminho não resolvido | lite | fix | implemented | 2026-10-26 | — | SPEC-0011 | — |
+| [SPEC-0013](SPEC-0013-novidades-da-skill-para-os-projetos-whats-new.md) | Novidades da skill para os projetos (whats-new) | full | feature | in-progress | 2026-10-26 | — | — | SPEC-0003@1 |
 
 ## ADRs
 

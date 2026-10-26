@@ -4,7 +4,7 @@ title: Novidades da skill para os projetos (whats-new)
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-10-26
 parent:
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: [ADR-0001, ADR-0005, ADR-0006]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-26
 ---
 
 # SPEC-0013 — Novidades da skill para os projetos (whats-new)
@@ -176,15 +176,36 @@ Instruções: SKILL.md (linha de whats-new na tabela; DISCOVER: rodar whats-new 
 
 ## 9. Questões em Aberto
 - [x] Checar se há skill mais nova no GitHub? — Não: comparação só local, com a skill instalada; atualizar a cópia instalada continua manual (thomas concordou com a proposta, 2026-10-26)
-- [x] Onde fica o CHANGELOG? — Dentro da pasta da skill, que é o que se copia para as ferramentas; a raiz deixa de ter CHANGELOG próprio (proposta do Architect, a confirmar no H1 por thomas, 2026-10-26)
-- [x] Como o projeto sem `tools/sdd` sabe sua versão? — Chave `sdd_version` gravada por `whats-new --ack` depois de revisar (proposta do Architect, a confirmar no H1 por thomas, 2026-10-26)
-- [x] O `whats-new` aplica as chaves novas? — Não: só sugere; o humano copia do template (proposta do Architect, a confirmar no H1 por thomas, 2026-10-26)
+- [x] Onde fica o CHANGELOG? — Dentro da pasta da skill, que é o que se copia para as ferramentas; a raiz deixa de ter CHANGELOG próprio (proposta do Architect, confirmada no H1 por thomas, 2026-10-26)
+- [x] Como o projeto sem `tools/sdd` sabe sua versão? — Chave `sdd_version` gravada por `whats-new --ack` depois de revisar (proposta do Architect, confirmada no H1 por thomas, 2026-10-26)
+- [x] O `whats-new` aplica as chaves novas? — Não: só sugere; o humano copia do template (proposta do Architect, confirmada no H1 por thomas, 2026-10-26)
 
 ## 10. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: CHANGELOG da skill e funções puras**
+- [ ] Red: UT-01, UT-02, UT-03 com a tag `SPEC-0013:<ID>`, falhando pelo motivo certo
+- [ ] Green: CHANGELOG movido para a skill e agrupado por versão; `changelog_since`, `missing_config_keys` e comparação de versões
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Comando, status e ack**
+- [ ] Red: IT-01 a IT-05 e CT-01 falhando pelo motivo certo
+- [ ] Green: `cmd_whats_new` (`--ack`), linha do `status`, `sdd_version`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: Instruções**
+- [ ] Red: UT-04 falhando pelo motivo certo
+- [ ] Green: SKILL.md, brownfield.md, sdd-config.template.yml, README; `changelog:` do sdd-config deste repositório
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `SDD_TOOL_VERSION` 2026.10.11 e seção no CHANGELOG da skill (ADR-0005)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2 (política auto-on-green)
+- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
