@@ -17,7 +17,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.10.10"
+SDD_TOOL_VERSION = "2026.10.11"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -460,7 +460,8 @@ def plan_test_ids(doc: Doc):
 
 PRIVATE_BANNER = "MODO PRIVADO"
 # Comandos que gravam registros: em modo privado, cada um termina com um commit no git do spec_root.
-RECORD_COMMANDS = {"new", "new-adr", "set", "gate", "impede", "resolve", "index", "upgrade", "living-docs"}
+RECORD_COMMANDS = {"new", "new-adr", "set", "gate", "impede", "resolve", "index", "upgrade", "living-docs",
+                   "whats-new"}
 
 
 def normalize_remote(url: str) -> str:
@@ -3063,6 +3064,14 @@ def progress_panel(doc: Doc, done) -> str:
 
 
 def cmd_status(project: Project, ids):
+    code = status_body(project, ids)
+    news = status_news_line(project)  # também quando não há spec aberta (status_body retorna cedo)
+    if news:
+        print(news)
+    return code
+
+
+def status_body(project: Project, ids):
     if project.private:
         for warning in spec_root_pending(project.spec_root, project.sync):
             print(f"⚠ {warning}")
@@ -3092,6 +3101,147 @@ def cmd_status(project: Project, ids):
         phase = next((PHASES[i] for i, ok in enumerate(done) if not ok), "—")
         print(f"{doc.id}  {doc.status:<11} {phase:<20} {doc.title}")
         print(f"             → {step.splitlines()[0]}")
+    return 0
+
+
+# ---------------------------------------------------------------- novidades da skill (whats-new)
+
+VERSION_RE = re.compile(r"^\d+(?:\.\d+)+$")
+CHANGELOG_SECTION_RE = re.compile(r"^## \[([^\]]+)\]")
+
+
+def version_key(version: str) -> tuple:
+    """"2026.10.10" -> (2026, 10, 10): versões comparadas numericamente, não como texto."""
+    return tuple(int(part) for part in version.strip().split("."))
+
+
+def changelog_since(text: str, since, until: str) -> list:
+    """Seções de versão do CHANGELOG com since < versão <= until, na ordem do arquivo ([Unreleased] nunca entra)."""
+    if not since or not VERSION_RE.match(since) or not VERSION_RE.match(until):
+        return []
+    low, high = version_key(since), version_key(until)
+    sections, current = [], None
+    for line in text.splitlines():
+        if line.startswith("## "):
+            if current is not None:
+                sections.append("\n".join(current).rstrip("\n"))
+            m = CHANGELOG_SECTION_RE.match(line)
+            version = m.group(1).strip() if m else ""
+            keep = bool(VERSION_RE.match(version)) and low < version_key(version) <= high
+            current = [line] if keep else None
+        elif current is not None:
+            current.append(line)
+    if current is not None:
+        sections.append("\n".join(current).rstrip("\n"))
+    return sections
+
+
+def missing_config_keys(template_text: str, config: dict) -> list:
+    """(chave, comentário) das chaves de topo do template ausentes no config, na ordem do template."""
+    out, comments = [], []
+    for line in template_text.splitlines():
+        if line.startswith("#"):
+            comments.append(line.lstrip("#").strip())
+            continue
+        m = re.match(r"^([A-Za-z_][\w-]*)\s*:", line)
+        if m and m.group(1) not in config:
+            out.append((m.group(1), " ".join(c for c in comments if c)))
+        comments = []
+    return out
+
+
+def project_tool_version(project: Project):
+    """Versão do projeto: tools/sdd (se existir), senão sdd_version do sdd-config; None = desconhecida."""
+    vendored = project.root / VENDORED_TOOL
+    if vendored.exists():
+        m = re.search(r'SDD_TOOL_VERSION = "([^"]+)"', vendored.read_text(encoding="utf-8"))
+        version = m.group(1) if m else ""
+        return (version if VERSION_RE.match(version) else None), "tools/sdd"
+    version = project.config.get("sdd_version")
+    version = version.strip() if isinstance(version, str) else ""
+    return (version if VERSION_RE.match(version) else None), "sdd_version"
+
+
+def skill_news(project: Project):
+    """(versão do projeto, origem, seções novas do CHANGELOG ou None sem CHANGELOG, chaves novas do template)."""
+    version, source = project_tool_version(project)
+    changelog = SKILL_DIR / "CHANGELOG.md"
+    sections = changelog_since(changelog.read_text(encoding="utf-8"), version, SDD_TOOL_VERSION) \
+        if changelog.exists() else None
+    template = TEMPLATES_DIR / "sdd-config.template.yml"
+    keys = [(k, c) for k, c in missing_config_keys(template.read_text(encoding="utf-8"), project.config)
+            if k != "sdd_version"] if template.exists() else []
+    return version, source, sections, keys
+
+
+def is_older(version) -> bool:
+    return bool(version) and version_key(version) < version_key(SDD_TOOL_VERSION)
+
+
+def status_news_line(project: Project) -> str:
+    """Linha do `status` quando a skill tem novidade para o projeto; "" quando em dia."""
+    if not project.config_path.exists():
+        return ""
+    version, _, sections, keys = skill_news(project)
+    versions = len(sections or []) if is_older(version) else 0
+    if not is_older(version) and not keys:
+        return ""
+    return f"Novidades da skill: {versions} versão(ões) e {len(keys)} configuração(ões) nova(s) — rode whats-new"
+
+
+def write_config_key(path: Path, key: str, value: str):
+    """Cria ou troca a linha `key: "value"` de topo no sdd-config, sem mexer no resto."""
+    lines = path.read_text(encoding="utf-8").split("\n") if path.exists() else []
+    rendered = f'{key}: "{value}"'
+    for i, line in enumerate(lines):
+        if re.match(rf"^{re.escape(key)}\s*:", line):
+            lines[i] = rendered
+            break
+    else:
+        lines = ("\n".join(lines).rstrip("\n") + "\n" + rendered).lstrip("\n").split("\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+
+
+def cmd_whats_new(project: Project, ack: bool):
+    if ack:
+        write_config_key(project.config_path, "sdd_version", SDD_TOOL_VERSION)
+        print(f"sdd_version = {SDD_TOOL_VERSION}")
+        return 0
+    version, source, sections, keys = skill_news(project)
+    print(f"Projeto: {version or 'desconhecida'} · skill: {SDD_TOOL_VERSION}\n")
+    older = is_older(version)
+    if sections is None:
+        print(f"CHANGELOG da skill não encontrado ({SKILL_DIR / 'CHANGELOG.md'})\n")
+    if version is None:
+        print("Versão do projeto desconhecida — rode whats-new --ack depois de revisar\n")
+    elif older:
+        print(f"Novidades desde {version}:\n")
+        if sections:
+            print("\n\n".join(sections) + "\n")
+        elif sections is not None:
+            print("(nenhuma entrada no CHANGELOG da skill para essas versões)\n")
+    elif version_key(version) > version_key(SDD_TOOL_VERSION):
+        print(f"A skill instalada ({SDD_TOOL_VERSION}) é mais antiga que o projeto ({version}) — atualize a cópia da skill.\n")
+    if keys:
+        print("Configurações novas (ausentes no seu sdd-config):")
+        for key, comment in keys:
+            print(f"- {key}: {comment}" if comment else f"- {key}:")
+        print()
+    steps = []
+    if source == "tools/sdd" and (older or version is None):
+        steps.append(f"- `spec_graph.py vendor --force` — atualiza {VENDORED_TOOL} para a {SDD_TOOL_VERSION}")
+    if older:
+        steps.append("- `spec_graph.py upgrade` (simulação) e `upgrade --apply` — leva as specs aos templates atuais")
+    if keys:
+        steps.append(f"- copie a chave do template references/sdd-config.template.yml para {project.rel(project.config_path)} "
+                     "(ou deixe de fora para manter o comportamento atual)")
+    if source == "sdd_version" and version != SDD_TOOL_VERSION:
+        steps.append(f"- `spec_graph.py whats-new --ack` — registra sdd_version = {SDD_TOOL_VERSION} depois de revisar")
+    if steps:
+        print("Para se atualizar:\n" + "\n".join(steps))
+    else:
+        print(f"Projeto em dia com a skill ({SDD_TOOL_VERSION}).")
     return 0
 
 
@@ -4065,6 +4215,9 @@ def main(argv=None):
     sub.add_parser("journeys", help="cobertura das jornadas críticas (critical_journeys) por testes E2E")
     p = sub.add_parser("living-docs", help="cobertura do guia de jornadas e do mapa do sistema (living_docs); --init cria os ausentes")
     p.add_argument("--init", action="store_true")
+    p = sub.add_parser("whats-new", help="novidades da skill desde a versão do projeto e chaves novas do sdd-config; "
+                                         "--ack grava sdd_version")
+    p.add_argument("--ack", action="store_true", help="grava sdd_version = versão da skill no sdd-config (depois de revisar)")
     sub.add_parser("pillars", help="cobertura dos pilares de entrega (perfil do sdd-config) e N/A recorrente")
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
@@ -4091,9 +4244,18 @@ def main(argv=None):
     try:
         return dispatch(args, project)
     finally:
-        if project.private and args.command in RECORD_COMMANDS and not (args.command == "living-docs" and not args.init):
+        if project.private and writes_records(args):
             ids = getattr(args, "ids", None) or [getattr(args, "id", None) or ""]
             commit_records(project, f"sdd: {args.command} {' '.join(i for i in ids if i)}".strip())
+
+
+def writes_records(args) -> bool:
+    """Comando que grava registros: `living-docs` só com --init e `whats-new` só com --ack (sem eles, só leem)."""
+    if args.command == "living-docs":
+        return args.init
+    if args.command == "whats-new":
+        return args.ack
+    return args.command in RECORD_COMMANDS
 
 
 def dispatch(args, project: Project):
@@ -4145,6 +4307,8 @@ def dispatch(args, project: Project):
         return cmd_journeys(project)
     if args.command == "living-docs":
         return cmd_living_docs(project, args.init)
+    if args.command == "whats-new":
+        return cmd_whats_new(project, args.ack)
     if args.command == "pillars":
         return cmd_pillars(project)
     if args.command == "upgrade":
