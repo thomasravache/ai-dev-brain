@@ -216,7 +216,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — ea39027 | 2026-10-26 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=10, skipped=1)) — cc9001c | 2026-10-26 |
-| G2 Green | PASS | MANUAL: CI do GitHub no PR #10 em ac34488 (run 40383737770): ruff check 'All checks passed!' e 150 testes OK em Python 3.9 e 3.15; local (macOS) 150 testes OK — só o lint não roda aqui (sem uv/ruff) | 2026-10-26 |
+| G2 Green | PASS | MANUAL: CI do GitHub no PR #10 em b7e5535 (run 40386292100): ruff check 'All checks passed!' e 158 testes OK em Python 3.9 e 3.15; local (macOS) 158 testes OK — só o lint não roda aqui (sem uv/ruff) | 2026-10-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 1cae0b3 | 2026-10-26 |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
