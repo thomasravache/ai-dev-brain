@@ -221,7 +221,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — ffed129 | 2026-10-26 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (red: FAILED (failures=12, skipped=1)) — 0c1a819 | 2026-10-26 |
 | G2 Green | PASS | MANUAL: CI do GitHub no PR #6 em 9e14114 (run 40359165197): ruff check 'All checks passed!'; unittest 138 testes OK (skipped=1) em Python 3.9 e 3.15. Local sem uv/ruff e com 3 falhas antigas do macOS (IMP-02, SPEC-0012) | 2026-10-26 |
-| G3 Arquitetura | PENDING | | |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 29acb3e | 2026-10-26 |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
