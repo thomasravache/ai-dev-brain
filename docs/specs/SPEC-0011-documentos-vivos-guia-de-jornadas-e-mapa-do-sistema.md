@@ -223,7 +223,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | MANUAL: CI do GitHub no PR #6 em 9e14114 (run 40359165197): ruff check 'All checks passed!'; unittest 138 testes OK (skipped=1) em Python 3.9 e 3.15. Local sem uv/ruff e com 3 falhas antigas do macOS (IMP-02, SPEC-0012) | 2026-10-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 29acb3e | 2026-10-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente, 2ª rodada) — 0 blocker/major; 2 major e 6 minor da 1ª rodada corrigidos em 1599b21 (testes) e 4fe88d4 (correção); major de desempenho fechado com medição: validate com 100 specs e 30 ADRs aceitos, mediana de 9, +1,2% a +2,7% (limite 10%) — 86bec2f | 2026-10-26 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | MANUAL: CI do GitHub verde no PR #6 em ddfd328: ci 3.9 e 3.15 (run 40359499593; ruff All checks passed, 138 testes OK) e sdd/pr-check (run 40359499237); PR mergeable. Local: suíte com as 3 falhas antigas do macOS (SPEC-0012) | 2026-10-26 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
