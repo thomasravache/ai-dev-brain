@@ -49,12 +49,12 @@ Nenhuma
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-- [ ] Red: UT-01 com a tag `SPEC-0014:UT-01`, falhando pelo motivo certo
-- [ ] Green: correção mínima, seguindo o padrão citado
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `SDD_TOOL_VERSION` 2026.10.12 e seção no CHANGELOG da skill (ADR-0005)
-- [ ] Review (G4), integração (G5) e H2 (política auto-on-green)
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01 com a tag `SPEC-0014:UT-01`, falhando pelo motivo certo
+- [x] Green: correção mínima, seguindo o padrão citado
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `SDD_TOOL_VERSION` 2026.10.12 e seção no CHANGELOG da skill (ADR-0005)
+- [x] Review (G4), integração (G5) e H2 (política auto-on-green)
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -79,28 +79,33 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+Com `h2_policy: auto-on-green` declarada e aprovada, o `validate` deixa de sugerir declarar a política por causa de specs antigas que repetem a mesma autorização de H2. Sem a política, o aviso continua.
 
 ### Como foi feito
+Em `validate_config` (`spec_graph.py`), a condição da política aprovada virou `policy_approved` e a sugestão só é emitida quando a política não está declarada e aprovada; os erros de política inválida ou sem aprovação não mudaram. `SDD_TOOL_VERSION` 2026.10.12 e seção no CHANGELOG da skill (ADR-0005). Minors aceitos na revisão: falta teste de H2 repetido com `auto-on-green` sem aprovação (esse caso já gera ERROR) e o teste de tempo do leak-check (SPEC-0004:IT-10), que oscila sob carga.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+Red: commit c22b6bd — `python3 -m unittest discover -s skills/sdd-management/tests` exit 1, com UT-01 vendo a sugestão mesmo com a política declarada (registrado no G1). Green: commit b746e4c — suíte OK local (G5 em 79cc2fc) e na CI do PR #12 em 83698b3 (run 40399136640, Python 3.9 e 3.15); `validate` deste repositório sem o aviso das 9 specs.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Três specs com o mesmo H2 e a política declarada e aprovada não geram a sugestão | PASS | `test_spec_graph.py::H2PolicyTest.test_repeated_h2_text_does_not_suggest_declared_policy` — CI do PR #12 em 83698b3 (run 40399136640) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #12; as cópias instaladas da skill são sincronizadas depois. Versão da ferramenta 2026.10.12. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
