@@ -9,7 +9,7 @@ created: 2026-10-26
 parent:
 depends_on: []
 consumes_contract: [SPEC-0003@1]
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tests/**, skills/sdd-management/CHANGELOG.md, CHANGELOG.md, skills/sdd-management/SKILL.md, skills/sdd-management/references/brownfield.md, skills/sdd-management/references/sdd-config.template.yml, README.md]
 adrs: [ADR-0001, ADR-0005, ADR-0006]
@@ -92,11 +92,14 @@ spec_graph.py whats-new:
   cabeçalho: "Projeto: <versão do projeto> · skill: <SDD_TOOL_VERSION>"
   projeto mais antigo: "Novidades desde <versão do projeto>:" + as seções do CHANGELOG da skill com versão
     > projeto e <= skill, na ordem do arquivo
-  versão desconhecida: "Versão do projeto desconhecida — rode whats-new --ack depois de revisar"; não lista novidades
+  versão desconhecida sem tools/sdd: "Versão do projeto desconhecida — rode whats-new --ack depois de revisar"; não lista novidades
+  tools/sdd sem versão legível: avisa e sugere "vendor --force" (sdd_version é ignorada quando tools/sdd existe)
+  projeto mais novo que a skill: avisa que a skill instalada é mais antiga e sugere atualizá-la; não diz "em dia"
   chaves de topo do template ausentes no sdd-config: "Configurações novas (ausentes no seu sdd-config):" e, para
     cada uma, "- <chave>: <comentário logo acima da chave no template>"; chave presente com valor vazio conta como presente
   "Para se atualizar:" com, conforme o caso: "vendor --force" (tools/sdd mais antigo), "upgrade" (specs),
-    "copie a chave do template references/sdd-config.template.yml" (chaves novas), "whats-new --ack" (sem tools/sdd)
+    "copie a chave do template references/sdd-config.template.yml" (chaves novas), "whats-new --ack" (sem tools/sdd e
+    sdd_version ausente ou mais antiga que a skill — nunca para rebaixar)
   nada novo: "Projeto em dia com a skill (<versão>)."
   skill sem CHANGELOG: "CHANGELOG da skill não encontrado" e segue com as chaves
   exit 0 sempre
@@ -225,7 +228,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
-| IMP-01 | 2026-10-26 | G4 | spec | Revisão achou casos de borda que o contrato manda fazer errado: 'Versão do projeto desconhecida — rode whats-new --ack' também quando tools/sdd existe (onde sdd_version é ignorado), e sugestão de --ack quando sdd_version é mais nova que a skill (rebaixaria a versão) | testes red da 2ª rodada em c0456f6 | thomas |  |  |
+| IMP-01 | 2026-10-26 | G4 | spec | Revisão achou casos de borda que o contrato manda fazer errado: 'Versão do projeto desconhecida — rode whats-new --ack' também quando tools/sdd existe (onde sdd_version é ignorado), e sugestão de --ack quando sdd_version é mais nova que a skill (rebaixaria a versão) | testes red da 2ª rodada em c0456f6 | thomas | Emenda v2 do contrato (aprovada por thomas em 2026-10-26) — --ack só sem tools/sdd e nunca para rebaixar; implementada em a072e1f e testada em c0456f6 | 2026-10-26 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -267,3 +270,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0013`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-10-26 | "Versão desconhecida — rode whats-new --ack" só sem tools/sdd (com tools/sdd sem versão: vendor --force); --ack nunca sugerido quando sdd_version é mais nova que a skill; projeto mais novo que a skill não é "em dia" | revisão G4: o contrato mandava sugerir um --ack inútil (tools/sdd presente) ou que rebaixaria a versão (IMP-01) | Nenhuma | thomas, 2026-10-26 |
