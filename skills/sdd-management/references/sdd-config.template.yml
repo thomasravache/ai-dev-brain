@@ -134,5 +134,12 @@ root_docs:
   - CLAUDE.md
   - README.md
 changelog: CHANGELOG.md
+# Documentos vivos (SPEC-0011): guia de jornadas e mapa do sistema, escritos para pessoas e atualizados no G7.
+# `living-docs --init` cria os ausentes a partir dos templates; validate avisa (WARN) quando ficam para trás das
+# jornadas críticas e dos ADRs aceitos. "" desliga um documento; sem a chave, nada é checado. Caminhos relativos à
+# raiz do repositório (modo privado: ao spec_root); nunca contam como fora do escopo.
+living_docs:
+  journeys: docs/jornadas.md        # guia de jornadas: uma seção por jornada crítica com [jornada: <id>]
+  system_map: docs/arquitetura.md   # mapa do sistema: componentes por camada, ambientes, caminho até produção, ADRs
 # Itens extras de Definição de Pronto do projeto, anexados a cada spec no PLAN.
 dod_extra: []

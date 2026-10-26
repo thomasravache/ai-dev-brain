@@ -77,6 +77,8 @@ Set `pillars.profile` in `sdd-config.yml` from the framing and create one ADR pe
 | 6 | Observability baseline | structured logs, metrics, traces, error tracking, health checks, an alert on the skeleton journey |
 | 7 | Security baseline | authentication/authorization skeleton, HTTPS, security headers, dependency policy, no secrets in the repo |
 
+Together with the walking skeleton, the foundation creates the two living docs — the journey guide and the system map (`living_docs` in `sdd-config.yml`) — with `living-docs --init`, and fills them with the skeleton journey and the stack per layer, pointing to the foundation ADRs. From then on, every CLOSE keeps them current (G7).
+
 Typical dependencies: 2 and 3 depend on 1; 4 consumes 3's contract; 5 depends on 2, 3 and 4; 6 and 7 consume 5's contract. Declare them in the frontmatter and let `waves` compute the order. Feature epics start only after the foundation epic is implemented.
 
 ## 5. Path to production

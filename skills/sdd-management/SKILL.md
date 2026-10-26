@@ -58,6 +58,7 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 | `impacted SPEC-X` | Specs affected by a change in SPEC-X |
 | `index` | Regenerate `docs/specs/INDEX.md` (status, waves, Mermaid graph, ADRs) |
 | `pillars` | Coverage of the delivery pillars required by `pillars.profile` (covered, proposed, waived, **without decision**) and recurring N/A — see `references/pillars.md` |
+| `living-docs [--init]` | Coverage of the living docs in `living_docs` (journey guide, system map): critical journeys and accepted ADRs cited or missing; `--init` creates the missing ones from the templates (never overwrites) |
 | `new-adr --baseline <pillar>` | Creates a pillar's ADR with verifiable rules already written and blanks for the project's tool choices (always `proposed`) |
 | `worktree SPEC-X [--create]` | Standard worktree path (`worktree_dir`, default `../{repo}.worktrees/<spec>`, outside the repo) and branch for a spec; `--create` creates it from the integration branch. `status`/`validate` flag worktrees left behind |
 | `upgrade [ID ...] [--apply]` | Brings specs written with older templates to the current ones: adds missing sections (in the right place), frontmatter keys and gate rows; dry run by default. Run it after updating the skill |
@@ -221,6 +222,7 @@ Release deploys through the pipeline to staging, runs smoke + E2E against it, an
 
 ### 8. CLOSE (G7)
 - Fill each spec's **Relatório de Entrega** from the gate evidence: what was delivered, how it was done, proof of fix (`type: fix`), **Verificação** with one row per test ID (PASS + evidence), Deploy, Pendências as new specs. Check every item of the Definição de Pronto — an item that isn't true stays unchecked and the spec stays open.
+- When the delivery changes a journey or a component, update the journey guide and the system map (`living_docs`; `living-docs` shows what is missing).
 - Update the root docs (delivered features out of the backlog, architecture, new conventions or instructions) and the `CHANGELOG.md` in Keep a Changelog format with Semantic Versioning (`report SPEC-X --changelog` gives the entry).
 - Record G7, `set <ids> status=implemented`. Close the epic when all children are `implemented`/`deprecated`, its acceptance criteria are checked (each proven by its test) and its Relatório de Entrega is written.
 - `validate` must be clean for the closed specs; run `index`.
