@@ -53,12 +53,12 @@ Não muda: o registro (continua gravando o caminho resolvido), a recusa de `spec
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-- [ ] Red: UT-01 e IT-01 com a tag `SPEC-0012:<ID>`, falhando pelo motivo certo; UT-02 corrige os dois testes com defeito
-- [ ] Green: formas alternativas do caminho em `build_leak_patterns`, seguindo o padrão citado
-- [ ] Validar: suíte completa (agora verde também no macOS) + lint + arquitetura (G2/G3)
-- [ ] `SDD_TOOL_VERSION` 2026.10.10 e CHANGELOG (ADR-0005)
-- [ ] Review (G4), integração (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01 e IT-01 com a tag `SPEC-0012:<ID>`, falhando pelo motivo certo; UT-02 corrige os dois testes com defeito
+- [x] Green: formas alternativas do caminho em `build_leak_patterns`, seguindo o padrão citado
+- [x] Validar: suíte completa (agora verde também no macOS) + lint + arquitetura (G2/G3)
+- [x] `SDD_TOOL_VERSION` 2026.10.10 e CHANGELOG (ADR-0005)
+- [x] Review (G4), integração (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -70,8 +70,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — c267ff9 | 2026-10-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente) — 0 blocker/major; 4 minor aceitos sem mudança: Path.home() com RuntimeError sem HOME nem pwd (já existia), ramo /private só exercido no macOS, padrões sem limite à direita (já existia), spec_root editado à mão sem resolver — db1e206 | 2026-10-26 |
 | G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do GitHub verde no PR #7 em 29cf972: ci 3.9 e 3.15 (run 40373434141) e sdd/pr-check (run 40373434590); PR mergeable — 29cf972 | 2026-10-26 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | aprovado por thomas — 'Aprovado' (2026-10-26), com G5 verde no PR #7 | 2026-10-26 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-26 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -83,28 +83,35 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+O `leak-check` acha o caminho do `spec_root` também nas formas que passam por link simbólico: sob o `HOME` literal e o resolvido (absoluto e `~/`) e, no macOS, sem o prefixo `/private` (`/var`, `/tmp`). A suíte passa inteira no macOS.
 
 ### Como foi feito
+`spec_root_forms` em `spec_graph.py` gera as formas do mesmo `spec_root` (sem repetição) e `build_leak_patterns` cria um padrão "caminho do spec_root" por forma; o registro continua gravando o caminho resolvido. Os dois testes da SPEC-0003 que comparavam com o caminho não resolvido passam a comparar com o resolvido. `SDD_TOOL_VERSION` 2026.10.10 e CHANGELOG (ADR-0005). Minors aceitos na revisão: `Path.home()` sem `HOME` nem pwd, ramo `/private` exercido só no macOS, padrões sem limite à direita (já existia), `spec_root` editado à mão sem resolver.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+Red: commit 0de32ae — `python3 -m unittest discover -s skills/sdd-management/tests` exit 1 (FAILED (failures=3, skipped=1)): UT-01 e IT-01 sem o achado e `test_reads_patterns_from_the_spec_root_config` no macOS, registrado no G1. Green: commit a998e4a — 140 testes OK no macOS (G5 local em 29cf972) e na CI do PR #7 (run 40373434141, Python 3.9 e 3.15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | `spec_root` citado pelo `HOME` com link simbólico (absoluto e `~/`) é achado | PASS | `test_private_mode.py::LeakPatternsTest.test_spec_root_is_found_through_a_symlinked_home` — CI do PR #7 em 29cf972 (run 40373434141, Python 3.9 e 3.15) e suíte local no macOS (G5) |
+| IT-01 | `leak-check --staged` reprova arquivo que cita o `spec_root` pelo link | PASS | `test_private_mode.py::LeakCheckCommandTest.test_staged_file_citing_the_spec_root_through_a_symlinked_home` — CI do PR #7 em 29cf972 (run 40373434141, Python 3.9 e 3.15) e suíte local no macOS (G5) |
+| UT-02 | Testes da SPEC-0003 comparam com o caminho resolvido e passam no macOS e no Linux | PASS | `test_private_mode.py::PrivateInitTest.test_init_registers_and_creates_versioned_spec_root` e `ModeContractTest.test_project_exposes_the_mode_api` — CI do PR #7 em 29cf972 (run 40373434141, Python 3.9 e 3.15) e suíte local no macOS (G5) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #7; as cópias instaladas da skill são sincronizadas depois. Versão da ferramenta 2026.10.10. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. A cópia `tools/sdd` é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
