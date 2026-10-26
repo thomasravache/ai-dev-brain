@@ -3108,7 +3108,8 @@ def status_body(project: Project, ids):
 
 VERSION_RE = re.compile(r"^\d+(?:\.\d+)+$")
 CHANGELOG_SECTION_RE = re.compile(r"^## \[([^\]]+)\]")
-TEMPLATE_NOISE_RE = re.compile(r"^#\s*(?:---|[a-z_][a-z0-9_]*\s*:)")
+# Banner de seção ou chave comentada (só quando o valor parece YAML; "# pr: toda mudança…" é prosa e fica).
+TEMPLATE_NOISE_RE = re.compile(r"^#\s*(?:---|[a-z_][a-z0-9_]*:\s*(?:$|[\"'\[{]|-?\d|true\b|false\b))")
 
 
 def version_key(version: str) -> tuple:
