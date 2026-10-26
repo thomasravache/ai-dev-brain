@@ -136,6 +136,6 @@ pr_title_max: 100
 root_docs:
   - README.md
   - AGENTS.md
-changelog: CHANGELOG.md
+changelog: skills/sdd-management/CHANGELOG.md
 # Itens extras de Definição de Pronto do projeto, anexados a cada spec no PLAN.
 dod_extra: []

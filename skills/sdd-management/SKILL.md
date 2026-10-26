@@ -62,6 +62,7 @@ Everything deterministic is done by `scripts/spec_graph.py` (stdlib only) in thi
 | `new-adr --baseline <pillar>` | Creates a pillar's ADR with verifiable rules already written and blanks for the project's tool choices (always `proposed`) |
 | `worktree SPEC-X [--create]` | Standard worktree path (`worktree_dir`, default `../{repo}.worktrees/<spec>`, outside the repo) and branch for a spec; `--create` creates it from the integration branch. `status`/`validate` flag worktrees left behind |
 | `upgrade [ID ...] [--apply]` | Brings specs written with older templates to the current ones: adds missing sections (in the right place), frontmatter keys and gate rows; dry run by default. Run it after updating the skill |
+| `whats-new [--ack]` | What's new in the installed skill since the project's version (`tools/sdd`, else `sdd_version` in `sdd-config.yml`): CHANGELOG sections, top-level keys of the config template the project lacks (with their comment) and the update commands; never changes config by itself. `--ack` records `sdd_version` after the review (private mode: in the `spec_root`, committed) |
 | `migrate [--apply]` | Convert the legacy layout (status folders + date-prefixed names) |
 | `next-id spec\|adr` | Next free ID |
 
@@ -155,7 +156,7 @@ Start or end every response **to the user** with this panel (subagents don't pri
 ## Workflow
 
 ### 1. DISCOVER
-- Run `status` (if `docs/specs` exists) to resume from the files, not from memory.
+- Run `status` (if `docs/specs` exists) to resume from the files, not from memory. When it reports "Novidades da skill", run `whats-new` and show the user what changed and which new config keys to consider.
 - Decide **greenfield or brownfield** and follow its guide.
 - **Board:** if `tracker` isn't configured, ask where work is tracked (repository only, Jira, GitHub, Linear, other) and record it in `sdd-config.yml`; brownfield: look for signs first (issue keys in commits/branches/PR templates) and confirm.
 - **Pillars:** set `pillars.profile` (greenfield: from the framing; brownfield: only if the user opts in) and run `pillars`. Every required pillar gets an ADR (`new-adr --baseline <id>`) or a waiver with reason — say plainly what is missing and why it matters (e.g. "falta decidir segredos e dados sensíveis: credenciais em código são a falha mais comum"). Details: `references/pillars.md`.

@@ -5,6 +5,9 @@
 
 base_branch: main
 max_parallel: 3
+# Versão da skill que o projeto já revisou (projetos sem tools/sdd, como no modo privado). "" = desconhecida.
+# Gravada por `spec_graph.py whats-new --ack`; ignorada quando existe tools/sdd (vale a versão de lá).
+sdd_version: ""
 
 # --- Build e testes (G2, G5) ---
 # Exemplos: "dotnet build" | "npm run build" | "./gradlew build" | "go build ./..."

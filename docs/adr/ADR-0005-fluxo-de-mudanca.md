@@ -37,7 +37,7 @@ Push direto e merges locais tiram a revisão e os checks do caminho, e a rastrea
 - Sem push direto nem force-push na `main`.
 - Merge com merge commit (sem squash), para as evidências dos gates continuarem válidas.
 - Correção urgente segue o mesmo caminho, com spec lite criada na hora e revisão acelerada.
-- **Versão da ferramenta:** toda mudança de comportamento do `spec_graph.py` atualiza `SDD_TOOL_VERSION` e o `CHANGELOG.md` no mesmo PR.
+- **Versão da ferramenta:** toda mudança de comportamento do `spec_graph.py` atualiza `SDD_TOOL_VERSION` e o CHANGELOG da skill (`skills/sdd-management/CHANGELOG.md`) no mesmo PR, com as entradas sob `## [<versão>] - <data>` — é o que o `whats-new` mostra aos projetos (SPEC-0013).
 - **Cópia julgadora:** `tools/sdd/spec_graph.py` (usada pela CI) só é atualizada por `vendor` num PR próprio (`chore: atualiza tools/sdd para <versão>`), depois do merge da mudança. Um PR que muda o script nunca é julgado pela própria versão alterada.
 - **Rollback:** `git revert` do merge na `main`; o link simbólico passa a usar a versão anterior imediatamente.
 

@@ -22,6 +22,10 @@ Num repositório compartilhado com um time que não usa SDD, ative o **modo priv
 
 Cada projeto ganha dois **documentos vivos** escritos para pessoas — o guia de jornadas e o mapa do sistema (`living_docs` no `sdd-config.yml`, criados com `spec_graph.py living-docs --init` e checados pelo `validate`).
 
+## Novidades e CHANGELOG
+
+O CHANGELOG da skill fica em [`skills/sdd-management/CHANGELOG.md`](skills/sdd-management/CHANGELOG.md), dentro da pasta que se copia para as ferramentas, com uma seção por versão (`SDD_TOOL_VERSION`). Depois de atualizar a skill, rode `spec_graph.py whats-new` no projeto: mostra as novidades desde a versão do projeto, as chaves novas do `sdd-config` e os comandos para se atualizar (`whats-new --ack` registra a versão revisada em projetos sem `tools/sdd`). O `status` avisa quando há novidade.
+
 ## Testes
 
 ```bash
