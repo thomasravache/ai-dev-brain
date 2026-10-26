@@ -191,20 +191,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Checagem e configuração**
-- [ ] Red: UT-01, UT-02, IT-01, IT-04 (guarda), IT-05 e CT-01 com a tag `SPEC-0011:<ID>`, falhando pelo motivo certo (IT-04 passando)
-- [ ] Green: `living_docs_paths`, `living_docs_findings`, `validate_living_docs` e `scope_exempt`, seguindo `validate_journeys`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, IT-01, IT-04 (guarda), IT-05 e CT-01 com a tag `SPEC-0011:<ID>`, falhando pelo motivo certo (IT-04 passando)
+- [x] Green: `living_docs_paths`, `living_docs_findings`, `validate_living_docs` e `scope_exempt`, seguindo `validate_journeys`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comando e templates**
-- [ ] Red: IT-02 e IT-03 falhando pelo motivo certo
-- [ ] Green: `cmd_living_docs` (`--init`), `references/template-journeys.md` e `references/template-system-map.md`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: IT-02 e IT-03 falhando pelo motivo certo
+- [x] Green: `cmd_living_docs` (`--init`), `references/template-journeys.md` e `references/template-system-map.md`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Instruções**
-- [ ] Red: UT-03 falhando pelo motivo certo
-- [ ] Green: SKILL.md, gates.md, greenfield.md, brownfield.md, template-full.md, sdd-config.template.yml, private-mode.md e README
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
+- [x] Red: UT-03 falhando pelo motivo certo
+- [x] Green: SKILL.md, gates.md, greenfield.md, brownfield.md, template-full.md, sdd-config.template.yml, private-mode.md e README
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3) — local sem uv/ruff e com 3 falhas antigas do macOS (IMP-02); evidência pela CI
+- [x] `SDD_TOOL_VERSION` e CHANGELOG (ADR-0005)
 
 **Fase final: Integração, entrega e documentação**
 - [ ] Review independente (G4)
