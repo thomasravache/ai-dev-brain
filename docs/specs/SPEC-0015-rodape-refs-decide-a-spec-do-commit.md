@@ -4,7 +4,7 @@ title: Rodapé Refs decide a spec do commit
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: implemented
 created: 2026-10-27
 parent:
 depends_on: []
@@ -56,12 +56,12 @@ Nenhuma
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-- [ ] Red: UT-01 com a tag `SPEC-0015:UT-01`, falhando pelo motivo certo
-- [ ] Green: correção mínima, seguindo o padrão citado
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `SDD_TOOL_VERSION` 2026.10.13 e seção no CHANGELOG da skill (ADR-0005)
-- [ ] Review (G4), integração (G5) e H2 (política auto-on-green)
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01 com a tag `SPEC-0015:UT-01`, falhando pelo motivo certo
+- [x] Green: correção mínima, seguindo o padrão citado
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `SDD_TOOL_VERSION` 2026.10.13 e seção no CHANGELOG da skill (ADR-0005)
+- [x] Review (G4), integração (G5) e H2 (política auto-on-green)
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -75,7 +75,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK) — b5d77a6 | 2026-10-27 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-27 |
 | G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-27 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 704e957 (árvore suja) | 2026-10-27 |
 
 ## 9. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -86,28 +86,35 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+O `verify` (G1/G4) e o `pr-check` passam a atribuir um commit só às specs do rodapé `Refs:` quando ele cita alguma. Um commit de outra spec que menciona a primeira no corpo (ex.: "Consome o contrato SPEC-0005@1.") deixa de entrar nela, com falso "fora de touches" e ordem red/green errada. Sem rodapé com spec (ou com `Refs: #12`), vale qualquer menção no assunto ou no corpo, como antes; o modo privado não muda.
 
 ### Como foi feito
+Nova função `commit_spec_refs(subject, body)` em `spec_graph.py`, usada por `spec_commits` no modo normal, seguindo `SPEC_REF_RE` e o parsing de mensagens existente. `SDD_TOOL_VERSION` 2026.10.13 e seção no CHANGELOG da skill (ADR-0005). Minors aceitos na revisão: `REFS_TRAILER_RE` não aceita espaço antes de `Refs` nem de `:` (o regex do corpo do PR no `pr-check` aceita); a constante fica longe das outras do topo; qualquer linha `Refs:` do corpo conta, não só o bloco final de trailers.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+Red: commit 06190c1 — `python3 -m unittest discover -s skills/sdd-management/tests` exit 1, com UT-01 vendo `[G4] FAIL arquivos alterados fora de touches: src/b/b.py` (registrado no G1; a segunda falha é o mesmo teste herdado por `PrTitleTest`). Green: commit 32aa65a — suíte OK local (G2 em 40ad050, G5 em b5d77a6) e na CI do PR #14 em 704e957 (run 40581017025, Python 3.9 e 3.15; sdd run 40581017142).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Commit de outra spec com `Refs:` próprio e corpo citando a spec não entra no `verify` dela; sem rodapé com spec, a menção continua valendo | PASS | `test_spec_graph.py::GitChecksTest.test_refs_trailer_decides_commit_owner_over_body_mentions` — CI do PR #14 em 704e957 (run 40581017025) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: pilar entrega dispensado; vale na `main` pelo link simbólico
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado): passa a valer na `main` com o merge do PR #14; as cópias instaladas da skill são sincronizadas depois. Versão da ferramenta 2026.10.13. Rollback: revert do merge.
 
 ### Pendências
+- Minors do G4 (espaços no regex do rodapé, posição da constante), candidatos a uma spec lite futura.
+- Fora desta spec: o `whats-new` rodado da cópia `tools/sdd` de um projeto procura o CHANGELOG em `tools/CHANGELOG.md` e mostra "CHANGELOG da skill não encontrado" — candidato a spec lite.
+- A cópia `tools/sdd` deste repositório é atualizada em PR próprio depois do merge (ADR-0005).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

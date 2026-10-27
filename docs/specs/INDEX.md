@@ -1,11 +1,11 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-10-26 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-10-27 — não edite manualmente.
 
 ## Saúde
 
 - Validação (G0): **0 erro(s), 5 aviso(s)** — rode `spec_graph.py validate`
-- Specs: implemented 13
+- Specs: implemented 14
 - Impedimentos: **0 aberto(s)**, 12 resolvido(s)
 
 ## Cobertura de Pilares
@@ -49,6 +49,7 @@ Nenhuma spec aberta.
 | [SPEC-0012](SPEC-0012-leak-check-acha-o-spec-root-tambem-pelo-caminho-nao-resolvid.md) | leak-check acha o spec_root também pelo caminho não resolvido | lite | fix | implemented | 2026-10-26 | — | SPEC-0011 | — |
 | [SPEC-0013](SPEC-0013-novidades-da-skill-para-os-projetos-whats-new.md) | Novidades da skill para os projetos (whats-new) | full | feature | implemented | 2026-10-26 | — | — | SPEC-0003@1 |
 | [SPEC-0014](SPEC-0014-validate-nao-sugere-a-politica-de-h2-ja-declarada.md) | validate não sugere a política de H2 já declarada | lite | fix | implemented | 2026-10-26 | — | — | — |
+| [SPEC-0015](SPEC-0015-rodape-refs-decide-a-spec-do-commit.md) | Rodapé Refs decide a spec do commit | lite | fix | implemented | 2026-10-27 | — | — | — |
 
 ## ADRs
 
