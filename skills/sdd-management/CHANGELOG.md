@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.10.13] - 2026-10-27
+
+### Fixed
+- `verify` e `pr-check` atribuem o commit só às specs do rodapé `Refs:` quando ele cita alguma; menções no corpo (ex.: "consome SPEC-0005@1") deixam de pôr o commit na spec citada, com falso "fora de touches" e ordem red/green errada. Sem rodapé com spec, vale qualquer menção, como antes; `SDD_TOOL_VERSION` 2026.10.13 (SPEC-0015).
+
 ## [2026.10.12] - 2026-10-26
 
 ### Fixed
