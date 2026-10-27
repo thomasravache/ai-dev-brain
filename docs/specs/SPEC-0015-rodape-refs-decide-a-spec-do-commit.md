@@ -73,8 +73,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — f924585 | 2026-10-27 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente) — 0 blocker/major; 3 minor aceitos: REFS_TRAILER_RE não aceita espaço antes de 'Refs' nem de ':' (o pr-check aceita); constante longe das outras do topo; qualquer linha 'Refs:' do corpo conta, não só o bloco final de trailers — 1039cea | 2026-10-27 |
 | G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK) — b5d77a6 | 2026-10-27 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-27 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): a skill vale na main pelo link simbólico | 2026-10-27 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
