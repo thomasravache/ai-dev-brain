@@ -72,7 +72,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 40ad050 | 2026-10-27 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — f924585 | 2026-10-27 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: APPROVED (Reviewer independente) — 0 blocker/major; 3 minor aceitos: REFS_TRAILER_RE não aceita espaço antes de 'Refs' nem de ':' (o pr-check aceita); constante longe das outras do topo; qualquer linha 'Refs:' do corpo conta, não só o bloco final de trailers — 1039cea | 2026-10-27 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK) — b5d77a6 | 2026-10-27 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
