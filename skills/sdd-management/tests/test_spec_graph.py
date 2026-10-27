@@ -312,6 +312,19 @@ class GitChecksTest(ProjectTest):
         self.assertEqual(out.returncode, 0, out.stdout)
         self.assertNotIn(other + ":", out.stdout)
 
+    def test_refs_trailer_decides_commit_owner_over_body_mentions(self):
+        """SPEC-0015:UT-01"""
+        other = self.full("Outra", touches="[src/b/**, tests/b/**]")
+        sid = self.prepare()
+        self.commit({"tests/a/test_a.py": self.tags(sid)}, f"test(a): red\n\nRefs: {sid}")
+        self.commit({"src/a/a.py": "x = 1"}, f"feat(a): green\n\nRefs: {sid}")
+        self.commit({"src/b/b.py": "y = 1"}, f"feat(b): uses a\n\nConsome o contrato {sid}@1.\n\nRefs: {other}")
+        out = self.p.run("verify", sid, "--base", "main")
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertNotIn("fora de touches", out.stdout)
+        self.assertEqual(sg.commit_spec_refs("feat: x", f"cita {sid}"), {sid})
+        self.assertEqual(sg.commit_spec_refs(f"feat: x [{sid}]", "Refs: #12"), {sid})
+
 
 class PrTitleTest(GitChecksTest):
     def ready_pr(self):
