@@ -2433,8 +2433,19 @@ def spec_commits(project: Project, spec_id: str, root: Path, base: str):
         commits.append({"sha": sha, "subject": subject, "body": body, "kind": kind, "files": files})
     if project.private:
         return merge_base, commits, commits
-    ref_re = re.compile(rf"\b{re.escape(spec_id)}\b")
-    return merge_base, commits, [c for c in commits if ref_re.search(c["subject"] + "\n" + c["body"])]
+    return merge_base, commits, [c for c in commits if spec_id in commit_spec_refs(c["subject"], c["body"])]
+
+
+REFS_TRAILER_RE = re.compile(r"^Refs:\s*(.+)$", re.MULTILINE | re.IGNORECASE)
+
+
+def commit_spec_refs(subject: str, body: str) -> set:
+    """Specs a que o commit pertence. Com rodapé `Refs:`, só ele conta (o corpo pode citar outras specs como
+    contexto, ex.: "consome SPEC-0005@2"); sem rodapé, vale qualquer menção no assunto ou no corpo."""
+    from_trailer = set(SPEC_REF_RE.findall("\n".join(REFS_TRAILER_RE.findall(body))))
+    if from_trailer:  # um `Refs: #12` sem spec não esconde o commit: cai na regra das menções
+        return from_trailer
+    return set(SPEC_REF_RE.findall(subject + "\n" + body))
 
 
 def write_commit_ledger(project: Project, doc: Doc, root: Path):
