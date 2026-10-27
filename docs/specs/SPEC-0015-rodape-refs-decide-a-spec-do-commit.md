@@ -4,7 +4,7 @@ title: Rodapé Refs decide a spec do commit
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-27
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/sdd-management/scripts/spec_graph.py, skills/sdd-management/tes
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-27
 ---
 
 # SPEC-0015 — Rodapé Refs decide a spec do commit
@@ -56,7 +56,12 @@ Nenhuma
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
 
 ## 7. Checklist de Implementação
-<!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 com a tag `SPEC-0015:UT-01`, falhando pelo motivo certo
+- [ ] Green: correção mínima, seguindo o padrão citado
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `SDD_TOOL_VERSION` 2026.10.13 e seção no CHANGELOG da skill (ADR-0005)
+- [ ] Review (G4), integração (G5) e H2 (política auto-on-green)
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
