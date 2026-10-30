@@ -25,6 +25,7 @@ import posixpath
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -2387,10 +2388,29 @@ def processor_text(item: dict, output: Path, output_dir: Path, stdout: str):
     return stdout, f".{ext}" if ext else ""
 
 
+def kill_process_group(proc) -> None:
+    """Kills the processor and everything it started (its process group, POSIX; on Windows only the process),
+    then reaps it. Signals only, never runs a process."""
+    try:
+        if os.name != "nt":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.communicate(timeout=5)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+
 def run_processor(kind: str, source: str, processors: dict, timestamps: bool = False, check: bool = False) -> str:
     """The only place of brain.py that runs an external process (ADR-0009): the command of processors[kind] (or,
     with check, its check command, by default "<executable> --version") as a list of arguments, without a shell,
-    in a temporary folder, with a timeout (killed when it expires) and the output captured. Returns the text
+    in a temporary folder and its own process group, with a timeout (the whole group is killed when it expires) and the output captured. Returns the text
     (with check, the first line of the check output). No processor = BrainError (code 2); failure = ProcessorError
     (code 1) "processador <kind> falhou: <reason>" with the stderr cut to STDERR_MAX characters."""
     item = processor_of(kind, processors)
@@ -2418,21 +2438,29 @@ def run_processor(kind: str, source: str, processors: dict, timestamps: bool = F
         if not args:
             raise ProcessorError(kind, "command vazio")
         try:
-            done = subprocess.run(args, check=False, cwd=tmp, stdin=subprocess.DEVNULL, capture_output=True,
-                                  timeout=timeout, encoding="utf-8", errors="replace")
+            # Own session/process group: on timeout (or any error) the whole group dies, grandchildren included.
+            proc = subprocess.Popen(args, cwd=tmp, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
+                                    start_new_session=os.name != "nt")
         except FileNotFoundError as e:
             raise ProcessorError(kind, f"executável não encontrado: {args[0]}") from e
-        except subprocess.TimeoutExpired as e:  # subprocess.run kills the process before raising
-            raise ProcessorError(kind, f"tempo esgotado ({timeout} s); processo encerrado") from e
         except OSError as e:
             raise ProcessorError(kind, f"não consegui executar {args[0]}: {e.strerror or e}") from e
-        stderr = short_stderr(done.stderr)
-        if done.returncode != 0:
-            raise ProcessorError(kind, f"saiu com {done.returncode}" + (f": {stderr}" if stderr else ""))
+        try:
+            stdout, stderr_text = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            kill_process_group(proc)
+            raise ProcessorError(kind, f"tempo esgotado ({timeout} s); processo encerrado") from e
+        except BaseException:
+            kill_process_group(proc)
+            raise
+        stderr = short_stderr(stderr_text)
+        if proc.returncode != 0:
+            raise ProcessorError(kind, f"saiu com {proc.returncode}" + (f": {stderr}" if stderr else ""))
         if check:
-            lines = [line.strip() for line in (done.stdout or done.stderr or "").splitlines() if line.strip()]
+            lines = [line.strip() for line in (stdout or stderr_text or "").splitlines() if line.strip()]
             return lines[0] if lines else "sem saída"
-        text, suffix = processor_text(item, output, output_dir, done.stdout or "")
+        text, suffix = processor_text(item, output, output_dir, stdout or "")
     if suffix in SUBTITLE_SUFFIXES:
         text = subtitles_to_text(text, timestamps, source.strip() if kind == "youtube" and is_url else None)
     text = text.strip()
@@ -2449,10 +2477,19 @@ def cmd_process(args, config_home=None) -> int:
     kind = args.kind or detect_kind(source)
     if not kind:
         raise BrainError(f"tipo não reconhecido: {args.source} — use --kind (youtube, video, audio, pdf...)")
+    out = Path(args.out).expanduser().resolve() if args.out else None
+    if out is not None:  # never overwrites and never writes into the vault (checked before running)
+        if out.exists() or out.is_symlink():
+            raise BrainError(f"já existe: {args.out}")
+        if values["vault"] and is_inside(str(out), str(Path(values["vault"]).expanduser().resolve())):
+            raise BrainError(f"--out dentro do vault: {args.out} — o process não escreve no vault")
     text = run_processor(kind, source, values["processors"], args.timestamps)
-    if args.out:
+    if out is not None:
         try:
-            Path(args.out).write_text(text + "\n", encoding="utf-8")
+            with open(out, "x", encoding="utf-8") as f:
+                f.write(text + "\n")
+        except FileExistsError as e:
+            raise BrainError(f"já existe: {args.out}") from e
         except OSError as e:
             raise BrainError(f"não consegui gravar {args.out}: {e.strerror or e}", 1) from e
         print(f"Texto ({kind}): {one_line(args.out)}", file=sys.stderr)
@@ -2531,7 +2568,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("process", help="roda o processador do tipo da fonte e devolve o texto (references/processors.md)")
     p.add_argument("source", metavar="ENTRADA", help="arquivo local ou URL http(s)")
     p.add_argument("--kind", help="tipo da fonte (padrão: detectado; youtube, video, audio, pdf)")
-    p.add_argument("--out", metavar="ARQ", help="grava o texto neste arquivo em vez do stdout")
+    p.add_argument("--out", metavar="ARQ", help="grava o texto neste arquivo novo (fora do vault) em vez do stdout")
     p.add_argument("--timestamps", action="store_true", help="legendas com '[mm:ss]' (no YouTube, link para o trecho)")
     p = sub.add_parser("new-note", help="cria uma nota a partir do modelo do tipo; nunca sobrescreve")
     p.add_argument("--type", required=True, help=" | ".join(NOTE_TYPES))
