@@ -9,6 +9,13 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.2] - 2026-10-30
+
+### Added
+- Comandos de só leitura `search QUERY [--context] [--type] [--tag] [--limit] [--json]` (TF-IDF com peso 3 no título, 2 nas tags e 1 no corpo, sem acentos e sem stopwords pt/en, trecho de até 160 caracteres), `related (--note | --text) [--limit] [--json]` (cosseno TF-IDF, tags em comum, mesmo contexto e vizinhança de links, com os motivos) e `links NOTA [--json]` (saída, backlinks e quebrados) no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.2) (SPEC-0018).
+- Leitura de notas (`parse_note`, `scan_vault`) com frontmatter, título, tags (frontmatter e `#tag` fora de código) e wikilinks, e resolução de links como o Obsidian (`resolve_link`: nome sem diferenciar maiúsculas, caminho com `/`, o mais curto nos empates); ignora `.obsidian/`, `.trash/`, a pasta de templates e o que não é `.md`; frontmatter inválido ou arquivo que não é UTF-8 vira aviso em `warnings` sem derrubar o comando (SPEC-0018).
+- `SKILL.md`: quando usar `search`, `related` e `links` nos fluxos de guardar e de consultar; `references/search.md` com a pontuação e os filtros (SPEC-0018).
+
 ## [2026.10.1] - 2026-10-30
 
 ### Added
