@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **1 erro(s), 8 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **4 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 1, implemented 25
 - Impedimentos: **0 aberto(s)**, 13 resolvido(s)
 
@@ -37,6 +37,9 @@ Perfil: **minimo**
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
+| SPEC-0029 | org-atlas: mapa da organização para agentes | proposed | 0/0 implementadas |
+| SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
+| SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/0 implementadas |
 
 ## Grafo de Dependências
 
@@ -88,6 +91,9 @@ flowchart LR
 | [SPEC-0026](SPEC-0026-second-brain-ajustes-da-busca-apontados-na-revisao-da-spec-0.md) | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
 | [SPEC-0027](SPEC-0027-second-brain-padroes-de-conflito-reais-e-ajustes-do-lint.md) | second-brain: ajustes do lint, da busca e da exportação | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0023, SPEC-0024, SPEC-0026 | — |
 | [SPEC-0028](SPEC-0028-second-brain-padroes-de-copia-de-conflito-reais-por-provedor.md) | second-brain: padrões de cópia de conflito reais por provedor | lite | feature | proposed | 2026-10-30 | — | SPEC-0023 | — |
+| [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | proposed | 2026-10-30 | — | — | — |
+| [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | org-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | proposed | 2026-10-30 | — | SPEC-0029 | — |
+| [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | proposed | 2026-10-30 | — | — | — |
 
 ## ADRs
 
@@ -101,3 +107,4 @@ flowchart LR
 | [ADR-0007](../adr/ADR-0007-fronteiras-da-skill-second-brain.md) | Fronteiras da skill second-brain | accepted | SPEC-0017 |
 | [ADR-0008](../adr/ADR-0008-armazenamento-do-vault-e-sincronizacao-entre-dispositivos.md) | Armazenamento do vault e sincronização entre dispositivos | accepted | SPEC-0017 |
 | [ADR-0009](../adr/ADR-0009-processadores-externos-de-arquivos.md) | Processadores externos de arquivos | accepted | SPEC-0022 |
+| [ADR-0010](../adr/ADR-0010-fronteiras-da-skill-org-atlas.md) | Fronteiras da skill org-atlas | proposed | SPEC-0029 |
