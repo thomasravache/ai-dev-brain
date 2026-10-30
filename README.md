@@ -7,6 +7,7 @@ Skills e materiais de apoio para desenvolvimento com agentes de IA (Claude Code,
 | Skill | O que faz |
 |---|---|
 | [`sdd-management`](skills/sdd-management/SKILL.md) | Spec-Driven Development de ponta a ponta: specs com dependências, aprovação humana antes do código, execução multiagente em ondas, TDD verificado no git, gates de qualidade até o deploy, pilares de entrega e relatório de entrega. Agnóstica de tecnologia e de ferramenta. |
+| [`second-brain`](skills/second-brain/SKILL.md) | Segundo cérebro num vault do Obsidian mantido com uma LLM: onboarding de vault novo ou existente, configuração em duas camadas (por máquina e no vault) para usar em várias máquinas e no celular, contextos com MOC e `doctor`. Agnóstica de provedor (Google Drive, OneDrive, iCloud ou pasta local). |
 
 ## Instalação
 
@@ -14,9 +15,10 @@ Copie a pasta da skill para o diretório de skills da sua ferramenta, por exempl
 
 ```bash
 cp -R skills/sdd-management ~/.claude/skills/
+cp -R skills/second-brain ~/.claude/skills/
 ```
 
-A ferramenta da skill (`scripts/spec_graph.py`) só precisa de Python 3.9+ e git.
+A ferramenta da `sdd-management` (`scripts/spec_graph.py`) só precisa de Python 3.9+ e git; a da `second-brain` (`scripts/brain.py`), só de Python 3.9+. O CHANGELOG da `second-brain` fica em [`skills/second-brain/CHANGELOG.md`](skills/second-brain/CHANGELOG.md).
 
 Num repositório compartilhado com um time que não usa SDD, ative o **modo privado** (`spec_graph.py private init`): specs e registros ficam numa pasta fora do repositório, e o time só vê código, commits e PRs normais. Detalhes em [`references/private-mode.md`](skills/sdd-management/references/private-mode.md).
 
@@ -30,7 +32,8 @@ O CHANGELOG da skill fica em [`skills/sdd-management/CHANGELOG.md`](skills/sdd-m
 
 ```bash
 python3 -m unittest discover -s skills/sdd-management/tests   # suíte completa, inclui os testes de arquitetura
+python3 -m unittest discover -s skills/second-brain/tests     # suíte da second-brain, inclui os testes de arquitetura
 uvx ruff check                                                 # lint (Ruff 0.17, configurado em ruff.toml)
 ```
 
-A CI (`.github/workflows/ci.yml`) roda os dois em todo PR, em Python 3.9 e 3.15.
+A CI (`.github/workflows/ci.yml`) roda tudo isso em todo PR, em Python 3.9 e 3.15.
