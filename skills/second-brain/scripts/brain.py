@@ -90,7 +90,7 @@ REASON_TERMS = 5  # shared terms listed in the "termos:" reason
 FRONTMATTER_END_RE = re.compile(r"^(?:---|\.\.\.)[ \t\r]*$", re.MULTILINE)
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 CLOSING_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})\s*$")  # CommonMark: only spaces after a closing fence
-INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+INLINE_CODE_RE = re.compile(r"(?<!`)(`+)(?!`)[^\n]*?(?<!`)\1(?!`)")  # a run of N backticks closed by N
 WIKILINK_RE = re.compile(r"!?\[\[([^\[\]\n]+?)\]\]")
 HEADING_RE = re.compile(r"^#[ \t]+(.+?)[ \t#]*$")
 TAG_RE = re.compile(r"(?<!\S)#([\w/-]+)")
@@ -356,6 +356,22 @@ def is_inside(child: str, parent: str) -> bool:
     if isinstance(a, PureWindowsPath):
         parts_a, parts_b = tuple(p.lower() for p in parts_a), tuple(p.lower() for p in parts_b)
     return parts_a[:len(parts_b)] == parts_b
+
+
+def inside_on_disk(child, parent) -> bool:
+    """is_inside of the resolved paths, or child (or its nearest existing ancestor) is the same folder as parent or
+    below it on disk (os.path.samefile): catches another case of the vault path on file systems that do not tell
+    case apart (macOS, Windows)."""
+    child, parent = Path(child).expanduser().resolve(), Path(parent).expanduser().resolve()
+    if is_inside(str(child), str(parent)):
+        return True
+    with contextlib.suppress(OSError):
+        if not parent.is_dir():
+            return False
+        for folder in (child, *child.parents):
+            if folder.exists() and os.path.samefile(folder, parent):
+                return True
+    return False
 
 
 def is_absolute(path: str) -> bool:
@@ -954,10 +970,15 @@ def is_note(rel: str) -> bool:
     return rel.lower().endswith(".md")
 
 
+def hidden_note(rel: str) -> bool:
+    """A .md file whose name starts with ".": Obsidian does not index it, so it is not a note."""
+    return is_note(rel) and posixpath.basename(rel).startswith(".")
+
+
 def walk_notes(values: dict):
-    """(absolute path, path relative to the vault) of every .md note of walk_vault, except hidden files (name
-    starting with "."), which Obsidian does not index."""
-    return ((path, rel) for path, rel in walk_vault(values) if is_note(rel) and not path.name.startswith("."))
+    """(absolute path, path relative to the vault) of every .md note of walk_vault, except hidden ones
+    (hidden_note)."""
+    return ((path, rel) for path, rel in walk_vault(values) if is_note(rel) and not hidden_note(rel))
 
 
 def scan_vault(config: dict) -> list:
@@ -1194,7 +1215,7 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
 def flatten_links(text: str) -> str:
     """Wikilinks as plain text ([[Nota]] -> "Nota", [[Nota|apelido]] -> "apelido", [[Nota#seção]] -> "Nota >
     seção") and attachment embeds as "(anexo: nome)" (![[grafico.png]]); code (fenced blocks of fenced_lines and
-    inline `code`) and the rest of the text do not change."""
+    inline `code` or ``code``) and the rest of the text do not change."""
     def plain(match) -> str:
         target, _, alias = match.group(1).partition("|")
         target = target.rstrip("\\").strip()
@@ -1208,8 +1229,11 @@ def flatten_links(text: str) -> str:
         return f"{page} > {section}" if page and section else page or section
 
     def outside_code(line: str) -> str:
-        parts = re.split(f"({INLINE_CODE_RE.pattern})", line)  # odd items: inline code, kept as is
-        return "".join(part if i % 2 else WIKILINK_RE.sub(plain, part) for i, part in enumerate(parts))
+        parts, start = [], 0
+        for code in INLINE_CODE_RE.finditer(line):  # inline code (any backtick run) is kept as is
+            parts += [WIKILINK_RE.sub(plain, line[start:code.start()]), code.group(0)]
+            start = code.end()
+        return "".join(parts) + WIKILINK_RE.sub(plain, line[start:])
     return "".join(line if code else outside_code(line) for line, code in fenced_lines(text.splitlines(True)))
 
 
@@ -1561,7 +1585,7 @@ def check_user_files(vault: Path, layout: dict):
 def cmd_init(args, config_home=None) -> int:
     vault_s, files_s = absolute(args.vault), absolute(args.files)
     error = validate_init_args(vault_s, files_s, args.provider)
-    if error is None and is_inside(str(Path(files_s).resolve()), str(Path(vault_s).resolve())):
+    if error is None and inside_on_disk(files_s, vault_s):
         error = "files precisa ficar fora do vault"
     if error:
         raise BrainError(error)
@@ -1687,7 +1711,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
         rows.append(("ERRO", "vault", (f"pasta não encontrada: {vault or '(sem vault na configuração local)'} — "
                                        "o app do provedor já sincronizou? (references/providers.md)")))
     if files and Path(files).is_dir():
-        inside = vault and is_inside(str(Path(files).resolve()), str(Path(vault).resolve()))
+        inside = vault and inside_on_disk(files, vault)
         rows.append(("ERRO", "files", "precisa ficar fora do vault") if inside else ("OK", "files", files))
     else:
         rows.append(("ERRO", "files", f"pasta não encontrada: {files or '(sem files na configuração local)'}"))
@@ -1932,7 +1956,7 @@ def find_moc(ref: str, values: dict, index: LinkIndex) -> str:
 def export_folder(out: str, vault: Path) -> Path:
     """--out resolved: inside the vault or already with files = BrainError(code 2), before anything is written."""
     folder = Path(out).expanduser().resolve()
-    if is_inside(str(folder), str(vault.expanduser().resolve())):
+    if inside_on_disk(folder, vault):
         raise BrainError(f"--out dentro do vault: {out} — o export-notebooklm não escreve no vault")
     if folder.exists() and not folder.is_dir():
         raise BrainError(f"--out não é uma pasta: {out}")
@@ -1955,7 +1979,9 @@ def export_staging(folder: Path) -> Path:
 
 def write_export(folder: Path, files: dict):
     """Write the package into a temporary folder next to --out and move it into --out at the end: a failure
-    leaves nothing in --out (an existing empty --out stays usable) = BrainError (code 1), without a traceback."""
+    leaves nothing in --out (an existing empty --out stays usable) = BrainError (code 1), without a traceback. Any
+    other exception (KeyboardInterrupt included) cleans up the same way and propagates; only a SIGKILL can leave the
+    hidden folder behind."""
     staging, moved = None, []
     try:
         staging = export_staging(folder)
@@ -1971,12 +1997,14 @@ def write_export(folder: Path, files: dict):
             staging.rmdir()
         else:
             os.replace(staging, folder)
-    except OSError as e:
+    except BaseException as e:
         for path in moved:
             with contextlib.suppress(OSError):
                 path.unlink()
         if staging is not None:
             shutil.rmtree(staging, ignore_errors=True)
+        if not isinstance(e, OSError):
+            raise
         where = Path(os.fsdecode(e.filename)).name if e.filename else folder.name
         raise BrainError(f"não consegui gravar {one_line(str(where))} em {one_line(str(folder))}: "
                          f"{e.strerror or e} — nada ficou em --out", 1) from e
@@ -2749,7 +2777,7 @@ def cmd_process(args, config_home=None) -> int:
     if out is not None:  # never overwrites and never writes into the vault (checked before running)
         if out.exists() or out.is_symlink():
             raise BrainError(f"já existe: {args.out}")
-        if values["vault"] and is_inside(str(out), str(Path(values["vault"]).expanduser().resolve())):
+        if values["vault"] and inside_on_disk(out, values["vault"]):
             raise BrainError(f"--out dentro do vault: {args.out} — o process não escreve no vault")
     text = run_processor(kind, source, values["processors"], args.timestamps)
     if out is not None:
@@ -2856,7 +2884,7 @@ def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
         if targets:
             linked |= targets | {note.path}
     return [Finding("orphan", note.path, "sem links de entrada nem de saída e fora de qualquer MOC",
-                    "relacione com relate, ponha no MOC com index ou ligue a uma nota nova")
+                    "relacione com relate ou ligue a uma nota nova; se a nota tem contexto, index a põe no MOC dele")
             for note in notes if note.path not in linked and note.path not in generated
             and not _link_key(note.path).startswith(tuple(folders))]
 
@@ -2891,10 +2919,23 @@ def check_frontmatter(notes: list) -> list:
     return found
 
 
+def _repeats_group(pattern: str, i: int) -> bool:
+    """True when the text at i repeats the group before it: "+", "*", "{n,}" or a count whose maximum is 2 or more
+    ({n}, {n,m}); "?", {0,1}, {1} and anything that is not a quantifier do not."""
+    if pattern.startswith(("+", "*"), i):
+        return True
+    m = re.compile(r"\{(\d*)(,(\d*))?\}").match(pattern, i)
+    if not m or (m.group(2) is None and not m.group(1)):
+        return False
+    top = m.group(3) if m.group(2) is not None else m.group(1)
+    return not top or int(top) >= 2
+
+
 def nested_quantifier(pattern: str) -> bool:
-    """True when a group with a repeated item inside ("+", "*" or "{n,}") is itself repeated: (a+)+, (a*)*, (a+)*,
-    (?:a+)+, (\\w+\\s?)+... the shapes that backtrack catastrophically. Read on the text, before compiling:
-    escapes and [classes] are skipped."""
+    """True when a group with a repeated item inside ("+", "*" or "{n,}") is itself repeated (_repeats_group):
+    (a+)+, (a*)*, (?:a+)+, (\\w+\\s?)+, (a+){20}, (a*){2,5}... the shapes that backtrack catastrophically. Read on
+    the text, before compiling: escapes and [classes] are skipped. Best effort: overlapping alternatives such as
+    (a|aa)+ are not detected."""
     repeat = re.compile(r"[+*]|\{\d*,\d*\}")
     stack, i, n = [], 0, len(pattern)
     while i < n:
@@ -2912,7 +2953,7 @@ def nested_quantifier(pattern: str) -> bool:
             stack.append(False)
         elif char == ")" and stack:
             inner = stack.pop()
-            if inner and repeat.match(pattern, i + 1):
+            if inner and _repeats_group(pattern, i + 1):
                 return True
             if stack:
                 stack[-1] = stack[-1] or inner
@@ -2965,7 +3006,7 @@ class LintVault:
         self.values, self.paths, self.notes, self.config = values, [], [], []
         attachments, inbox_items = [], []
         for path, rel in walk_vault(values):
-            if is_note(rel) and path.name.startswith("."):  # hidden .md: not a note (walk_notes), not judged
+            if hidden_note(rel):  # not a note (walk_notes), not judged
                 continue
             self.paths.append(rel)
             if is_note(rel):
