@@ -56,4 +56,4 @@ conflict_patterns:
   - '(?i)(?P<base>.+)[ _-]conflict.*\.md$'
 ```
 
-Regex inválido, ou sem o grupo `base`, vira um achado `config` (erro) no `lint`; os outros padrões e as outras regras continuam rodando. Um padrão com quantificador aninhado (`(a+)+`, `(a*)*`, `(a+)*`, `(?:a+)+`, `(\w+\s?)+` e variações) ou com mais de 500 caracteres também vira um achado `config` e nunca é usado: um padrão assim pode travar o `lint` e o `doctor` em todas as máquinas, porque o `brain-config.yml` sincroniza.
+Regex inválido, ou sem o grupo `base`, vira um achado `config` (erro) no `lint`; os outros padrões e as outras regras continuam rodando. Um padrão com quantificador aninhado (`(a+)+`, `(a*)*`, `(a+)*`, `(?:a+)+`, `(\w+\s?)+`, `(a+){20}`, `(a*){2,5}` e variações) ou com mais de 500 caracteres também vira um achado `config` e nunca é usado: um padrão assim pode travar o `lint` e o `doctor` em todas as máquinas, porque o `brain-config.yml` sincroniza. A verificação é de melhor esforço: alternativas sobrepostas, como `(a|aa)+`, não são detectadas. Prefira padrões simples (um `.+` para o nome e o sufixo literal da cópia).
