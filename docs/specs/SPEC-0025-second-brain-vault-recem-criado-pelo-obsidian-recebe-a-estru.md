@@ -2,7 +2,7 @@
 id: SPEC-0025
 title: "second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão"
 tier: lite
-type: feature
+type: fix
 user_facing: false
 status: in-progress
 created: 2026-10-30
@@ -67,7 +67,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=2)) — 608f572 | 2026-10-30 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — c9ca851 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — c9ca851 | 2026-10-30 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (c9ca851; 3 minor, sem bloqueio) — c9ca851 | 2026-10-30 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
