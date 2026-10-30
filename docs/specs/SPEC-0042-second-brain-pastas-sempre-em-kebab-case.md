@@ -61,15 +61,15 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01, IT-01 e IT-02 com a tag `SPEC-0042:<ID>`, falhando pelo motivo certo
-- [ ] Green: `kebab`, contextos e pastas ajustados com aviso, AVISOs no `doctor`, docs
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega e CHANGELOG (G7)
+- [x] Red: UT-01, IT-01 e IT-02 com a tag `SPEC-0042:<ID>`, falhando pelo motivo certo
+- [x] Green: `kebab`, contextos e pastas ajustados com aviso, AVISOs no `doctor`, docs
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -80,9 +80,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 960ebac | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ceb01a8 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na revisão de 22c1598 (mesma árvore, só renumerada de SPEC-0032 para SPEC-0042 em ecb45f8); 4 achados da 1ª rodada corrigidos — fc6af9a | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 1e80841 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -95,28 +95,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+As pastas criadas pela skill ficam sempre em kebab-case. Nomes e pastas de contexto em `init --context` e `context add` passam por `kebab`, com aviso quando o nome muda, e o título do MOC fica como foi escrito. Um nome que colide com outro em kebab-case, inclusive um contexto já gravado, é recusado. Pastas que já existem no vault (`--adopt --map` e as partes iniciais mapeadas) mantêm o nome. O `doctor` avisa quando a pasta do vault, a de `files`, a pasta-mãe de cada uma ou um contexto antigo está fora do padrão, sem renomear nada. O onboarding sugere `~/second-brain/vault`.
 
 ### Como foi feito
+`brain.py` (versão 2026.10.12) ganhou `kebab`, `is_kebab`, `kebab_name`, `kebab_folder`, `layout_folders`, `kebab_path_items` e `kebab_context_items`. Foram duas emendas aprovadas: a v2 (o `doctor` olha também a pasta-mãe, IMP-01) e a v3 (colisões, pastas mapeadas e a mensagem sobre a–z e 0–9). A 1ª revisão G4 pediu mudanças, os testes de regressão vieram antes da correção e a 2ª revisão aprovou sem achados. A spec nasceu como SPEC-0032 e foi renumerada para SPEC-0042, porque o ID colidiu com a SPEC-0032 do org-atlas, que entrou na `main` em paralelo. Os commits da branch foram reescritos numa branch nova (`sdd/SPEC-0042`, sem force-push), o PR #18 foi fechado e trocado pelo PR #19, e os gates rodaram de novo sobre os commits novos. A pasta do usuário foi renomeada de `~/SecondBrain` para `~/second-brain` com `init --join`.
 
 ### Prova de Correção
 <!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | kebab converte nomes para kebab-case | PASS | `test_kebab.py::KebabTest.test_kebab_lowercases_folds_and_joins_with_dashes` — CI do PR #19 em 1e80841 (run 41130236967, Python 3.9 e 3.15; pr-check no run 41130236928) e suíte local (G5) |
+| IT-01 | init --context e context add criam pastas e contextos em kebab-case, com aviso e título preservado | PASS | `test_kebab.py::KebabContextCliTest.test_init_and_context_add_adjust_names_and_folders_to_kebab_case` — CI do PR #19 em 1e80841 (run 41130236967, Python 3.9 e 3.15; pr-check no run 41130236928) e suíte local (G5) |
+| IT-03 | Colisão de nomes, contexto que só difere na caixa, pastas mapeadas preservadas e nomes sem letras a–z | PASS | `test_kebab.py::KebabAmendmentV3Test.test_init_with_two_contexts_with_the_same_kebab_name_exits_2_without_writing; test_kebab.py::KebabAmendmentV3Test.test_context_add_colliding_with_a_stored_context_exits_2_and_cites_it; test_kebab.py::KebabAmendmentV3Test.test_context_add_keeps_leading_folder_parts_already_mapped_in_the_layout; test_kebab.py::KebabAmendmentV3Test.test_context_add_with_only_non_latin_letters_exits_2_asking_for_a_z_or_digits; test_kebab.py::KebabAmendmentV3Test.test_config_reference_documents_that_non_latin_names_are_not_accepted` — CI do PR #19 em 1e80841 (run 41130236967, Python 3.9 e 3.15; pr-check no run 41130236928) e suíte local (G5) |
+| IT-02 | --adopt --map intocado; doctor avisa pastas e contextos fora do padrão sem renomear | PASS | `test_kebab.py::KebabAdoptAndDoctorTest.test_adopt_keeps_mapped_folders_as_they_are; test_kebab.py::KebabAdoptAndDoctorTest.test_doctor_warns_about_folders_and_contexts_outside_kebab_case_without_renaming` — CI do PR #19 em 1e80841 (run 41130236967, Python 3.9 e 3.15; pr-check no run 41130236928) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6)
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #19; depois, copiar a skill de novo para `~/.claude/skills/`. Versão da skill: 2026.10.12. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. Observações: o `init --adopt` não cria as pastas nem os MOCs de `--context` (comportamento anterior); e duas sessões criando specs em paralelo podem gerar o mesmo ID, o que vale uma checagem de colisão na `sdd-management`.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
