@@ -32,7 +32,7 @@ Melhoria pequena. `check_context_name` (`CONTEXT_NAME_RE = ^[\w][\w-]*$`) e `rel
 - Nova função `kebab(name)`: minúsculas, sem acento (`fold`), e cada sequência fora de `[a-z0-9]` vira um `-`, sem traço no começo nem no fim. Exemplos: `Faculdade` → `faculdade`, `Trabalho Novo` → `trabalho-novo`, `Cálculo_II` → `calculo-ii`.
 - **Nomes de contexto** (`init --context`, `context add`) e **cada parte da pasta** de um contexto passam por `kebab`. Se o nome mudar, o comando segue e avisa "nome ajustado para kebab-case: `<de>` → `<para>`". Um nome que fica vazio depois do ajuste (só símbolos) sai com 2. O título do MOC (`--title` ou `:título`) mantém o que o usuário escreveu.
 - **Pastas do vault com `--adopt --map`** não mudam: são pastas que já existem, e o ADR-0007 proíbe renomear o que é do usuário.
-- **Caminhos do vault e de `files`** são escolha do usuário. O onboarding do `SKILL.md` passa a sugerir nomes em kebab-case (ex.: `~/second-brain/vault` e `~/second-brain/files`), e o `doctor` mostra AVISO quando a última pasta do vault ou de `files` não está em kebab-case.
+- **Caminhos do vault e de `files`** são escolha do usuário. O onboarding do `SKILL.md` passa a sugerir nomes em kebab-case (ex.: `~/second-brain/vault` e `~/second-brain/files`), e o `doctor` mostra AVISO quando a pasta do vault, a de `files` ou a pasta que contém cada uma delas não está em kebab-case (ex.: `.../SecondBrain/vault` avisa sobre `SecondBrain`; v2). O aviso é uma linha AVISO própria, que não muda as linhas `OK vault` e `OK files` nem vira ERRO.
 - `references/config.md` e `references/vault-layout.md` documentam a regra.
 
 NÃO muda: nomes de arquivos de nota (seguem o título, SPEC-0019), a estrutura padrão (já em kebab-case: `inbox`, `raw`, `projects`…), contextos já gravados no `brain-config.yml` (o `doctor` mostra AVISO para nome ou pasta fora do padrão, sem renomear).
@@ -85,6 +85,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-30 | G1 | spec | Contradição: §3 manda avisar quando a última pasta do vault ou de files não está em kebab-case, mas o IT-02 usa .../SecondBrain/vault (última pasta 'vault' já é kebab) e espera aviso sobre SecondBrain | Test-writer seguiu o IT-02 (aviso cita SecondBrain) | Architect + thomas (Emenda) | Emenda v2 — o doctor olha a pasta e a pasta-mãe do vault e de files; aprovada por thomas em 2026-10-30 | 2026-10-30 |
 
 ## 10. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
@@ -117,3 +118,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-10-30 | O AVISO do `doctor` olha a pasta do vault e de `files` e também a pasta que contém cada uma; é uma linha AVISO própria | IMP-01: a §3 falava só da última pasta, mas o IT-02 (`.../SecondBrain/vault`) espera o aviso sobre `SecondBrain` | Nenhuma | thomas (2026-10-30) |
