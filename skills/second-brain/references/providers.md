@@ -43,17 +43,17 @@ Sem `conflict_patterns` no `brain-config.yml`, valem os padrões do `provider` d
 
 | Provedor | Padrões da v1 | Conferência |
 |---|---|---|
-| Google Drive (`google-drive`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
-| OneDrive (`onedrive`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
-| iCloud (`icloud`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
-| Pasta local (`local`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico (vale para outro programa que sincronize a pasta); nomes reais não conferidos nesta máquina em 2026-10-30 |
+| Google Drive (`google-drive`) | `(?P<base>.+) \(\d+\)\.md$` e `(?i)(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
+| OneDrive (`onedrive`) | `(?P<base>.+) \(\d+\)\.md$` e `(?i)(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
+| iCloud (`icloud`) | `(?P<base>.+) \(\d+\)\.md$` e `(?i)(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
+| Pasta local (`local`) | `(?P<base>.+) \(\d+\)\.md$` e `(?i)(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico (vale para outro programa que sincronize a pasta); nomes reais não conferidos nesta máquina em 2026-10-30 |
 
-Os quatro provedores usam, por enquanto, os mesmos padrões genéricos: `Aula (1).md` (número entre parênteses) e `Plano conflict 2026-10-30.md` (a palavra `conflict` depois de espaço, `_` ou `-`). Os nomes que cada app grava de verdade não foram conferidos com cópias reais nesta máquina; se o seu provedor usa outro formato, ponha o padrão em `conflict_patterns` no `brain-config.yml` (ele sincroniza e vale para todas as máquinas):
+Os quatro provedores usam, por enquanto, os mesmos padrões genéricos: `Aula (1).md` (número entre parênteses) e `Plano conflict 2026-10-30.md` (a palavra `conflict`, em qualquer caixa, depois de espaço, `_` ou `-`). Os nomes que cada app grava de verdade não foram conferidos com cópias reais nesta máquina; se o seu provedor usa outro formato, ponha o padrão em `conflict_patterns` no `brain-config.yml` (ele sincroniza e vale para todas as máquinas):
 
 ```yaml
 conflict_patterns:
   - '(?P<base>.+) \(\d+\)\.md$'
-  - '(?P<base>.+)[ _-]conflict.*\.md$'
+  - '(?i)(?P<base>.+)[ _-]conflict.*\.md$'
 ```
 
-Regex inválido, ou sem o grupo `base`, vira um achado `config` (erro) no `lint`; os outros padrões e as outras regras continuam rodando.
+Regex inválido, ou sem o grupo `base`, vira um achado `config` (erro) no `lint`; os outros padrões e as outras regras continuam rodando. Um padrão com quantificador aninhado (`(a+)+`, `(a*)*`, `(a+)*`, `(?:a+)+`, `(\w+\s?)+`, `(a+){20}`, `(a*){2,5}` e variações) ou com mais de 500 caracteres também vira um achado `config` e nunca é usado: um padrão assim pode travar o `lint` e o `doctor` em todas as máquinas, porque o `brain-config.yml` sincroniza. A verificação é de melhor esforço: alternativas sobrepostas, como `(a|aa)+`, não são detectadas. Prefira padrões simples (um `.+` para o nome e o sufixo literal da cópia).

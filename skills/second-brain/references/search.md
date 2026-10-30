@@ -59,9 +59,10 @@ Pontuação, de 0 a 1:
 | 0,1 | mesmo contexto | `mesmo contexto` |
 | 0,2 | vizinhança de links, em qualquer sentido: 1 se link direto, 0,5 se a dois passos | `link direto` ou `link a dois passos` |
 
-A própria nota não aparece, nem o `index.md` e o `log.md` (`layout.index` e `layout.log`), que também não contam na
-vizinhança de links; o `search` continua achando os dois. Com `--text`, as tags (`#tag`) e os `[[links]]` do texto também contam, e não há
-contexto. `--note` aceita o caminho ou o nome da nota; inexistente sai com 2 (`nota não encontrada: CAMINHO`).
+A própria nota não aparece, nem o `index.md` e o `log.md` (`layout.index` e `layout.log`, comparados sem caixa e
+em NFC: `Index.md` também fica de fora), que também não contam na vizinhança de links; o `search` continua achando os
+dois. Com `--text`, as tags (`#tag`) e os `[[links]]` do texto também contam, e não há contexto. `--note` aceita o
+caminho ou o nome da nota; inexistente sai com 2 (`nota não encontrada: CAMINHO`).
 
 ## links
 

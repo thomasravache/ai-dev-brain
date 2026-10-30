@@ -9,6 +9,15 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.11] - 2026-10-30
+
+### Fixed
+- `lint` e `doctor` (`scripts/brain.py`, `BRAIN_VERSION` 2026.10.11): padrão de `conflict_patterns` com quantificador aninhado (`(a+)+`, `(a*)*`, `(?:a+)+`, `(\w+\s?)+`...) ou com mais de 500 caracteres vira achado `config` e nunca é usado, em vez de travar; o padrão genérico de `conflict` ignora maiúsculas (`Plano Conflict.md`); `missing-file` diz "fora da pasta files" para caminho absoluto ou com `..`; `--only` vazio sai com 2 e "nenhuma regra em --only"; `.md` ocultos não são notas do `lint` (SPEC-0027).
+- `SKILL.md`: o `index` só resolve a órfã que tem contexto; nas demais, `relate` ou uma nota nova (SPEC-0027).
+- `export-notebooklm`: grava numa pasta temporária ao lado de `--out` e move no final (uma falha não deixa nada em `--out`); nomes comparados em NFC e sem caixa (`casefold`); `flatten_links` não mexe em código (cercas e inline); todo MOC de `layout.mocs` é bloqueado como caminho; `index` e `log` são recusados como MOC, com exit 2 (SPEC-0027).
+- Revisão G4 da SPEC-0027 (`scripts/brain.py`): `conflict_patterns` também recusa um grupo com repetição dentro repetido por contagem (`(a+){20}`, `(a*){2,5}`), e `(x){2}` e `(?:ab){3}` continuam aceitos; `references/config.md`, `providers.md` e `maintenance.md` dizem que a verificação é de melhor esforço (`(a|aa)+` não é detectado) e recomendam padrões simples; `export-notebooklm` apaga a pasta temporária e desfaz os arquivos movidos também numa interrupção (`KeyboardInterrupt`), e recusa `--out` dentro do vault escrito com outra caixa em discos que não diferenciam maiúsculas (o mesmo vale para `files` no `init` e no `doctor` e para `process --out`); `flatten_links` e a busca preservam código inline com sequências de crases de qualquer tamanho (` ``[[x]]`` `); a sugestão do achado `orphan` e `references/maintenance.md` dizem que o `index` só resolve a órfã com contexto; um link para um `.md` oculto é reportado como `broken-link` no `lint`, já que ele não é nota (SPEC-0027).
+- Busca: uma cerca de fechamento só aceita espaços depois da marca (```` ```python ```` dentro de um bloco não o fecha); `index.md` e `log.md` (`layout.index` e `layout.log`) e as pastas do layout são comparados sem caixa e em NFC; `references/query-flow.md` diz que o `context` não expande pelo `index.md` nem pelo `log.md` (SPEC-0027).
+
 ## [2026.10.10] - 2026-10-30
 
 ### Fixed
