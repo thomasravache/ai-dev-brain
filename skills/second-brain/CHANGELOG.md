@@ -9,6 +9,16 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.3] - 2026-10-30
+
+### Added
+- Fluxo de guardar no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.3): `ingest FONTE` (arquivo copiado para `<files>/<contexto ou inbox>/<AAAA>/` sem sobrescrever, URL sem cópia, nota de fonte `raw/AAAA-MM-DD-<slug>.md` com `## Extracted text` de `--text-file` ou `_(pending)_`), `new-note` (modelo do tipo, do vault ou da skill, na pasta do contexto ou em `resources/`), `relate DE PARA --why [--both]` (linha `- [[Nota]] — motivo` na seção `## Relations`) e `index [--context]` (regiões `notes` dos MOCs e `contexts`/`recent` do `index.md`) (SPEC-0019).
+- Escrita segura: `note_path` (título sanitizado, caminho fora do vault recusado com exit 2), `write_new_file` (nunca sobrescreve: "nota já existe"), `append_relation` e `replace_region` (só a região muda; ausente é acrescentada no fim); toda escrita com uma linha no `log.md` (SPEC-0019).
+- `SKILL.md`: fluxo de guardar em seis passos (classificar, guardar o bruto, buscar relações, escrever, ligar e indexar, reportar) e o formato da seção `Relations`; `references/store-flow.md` e `references/note-types.md` com os sete tipos e o frontmatter comum (SPEC-0019).
+
+### Fixed
+- Revisão do fluxo de guardar: `replace_region`/`index` recusam marcadores de região órfãos, invertidos ou duplicados e o `index` valida tudo antes de escrever; nomes de contexto do `brain-config.yml` validados (nada fora de `files` nem do vault; `doctor` aponta); título com `{date}`, aspas ou ` #` mantido literal e legível no frontmatter; nome de arquivo de título longo cortado em 200 bytes; relação com apelido não se repete; CRLF mantido; `ingest` com `raw/` sem permissão diz onde ficou a cópia; `created` inválido fora dos recentes; nota ou MOC que é link simbólico nunca vira arquivo comum; `store-flow.md` com o limite garantido (< 3 s para 5.000 notas) (SPEC-0019).
+
 ## [2026.10.2] - 2026-10-30
 
 ### Added

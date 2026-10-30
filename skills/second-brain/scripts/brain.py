@@ -5,6 +5,8 @@ Two configuration layers (ADR-0008): the local one, per machine, in $BRAIN_CONFI
 provider) and the shared one, synced with the vault, in <vault>/brain-config.yml (layout, contexts, processors).
 Writes to the vault only create files or append to them (ADR-0007); every write adds a line to log.md.
 search, related and links only read the vault: an in-memory scan of the notes, without an index (SPEC-0018).
+ingest, new-note, relate and index write only through write_new_file and the text of append_relation and
+replace_region, always with a log.md line (SPEC-0019).
 """
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ import unicodedata
 from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-BRAIN_VERSION = "2026.10.2"
+BRAIN_VERSION = "2026.10.3"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -87,6 +89,22 @@ whom when where why how all any each both few more most other some such only own
 """
 STOPWORDS = frozenset(STOPWORDS_TEXT.split())
 
+# store flow: ingest, new-note, relate and index (SPEC-0019; note types in references/note-types.md)
+NOTE_TYPES = ("note", "lecture", "source", "video", "document", "link", "moc")
+TITLE_FORBIDDEN = frozenset('/\\:*?"<>|#^[]')  # characters a note title cannot keep in its file name
+RELATIONS_HEADING = "## Relations"
+RELATION_LINE_RE = re.compile(r"^[-*][ \t]+\[\[([^\[\]\n]+?)\]\][ \t]*—[ \t]*(.*?)[ \t]*$")
+SECTION_END_RE = re.compile(r"^#{1,2}[ \t]")  # a "## " (or "# ") heading ends the Relations section
+URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
+DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
+PLACEHOLDER_LINE_RE = re.compile(r"""^([^\s:#][^:]*:[ \t]*)(["']?)\{(\w+)\}\2[ \t]*$""")
+MARKER_RE = re.compile(r"\{(\w+)\}")
+SLUG_MAX = 60
+NAME_MAX_BYTES = 200  # UTF-8 bytes of a note's file name before ".md" (file systems allow 255)
+INBOX_FILES = "inbox"  # folder of <files> for an ingest without context
+RECENT_LIMIT = 20
+PENDING_TEXT = "_(pending)_"
+
 
 class BrainError(Exception):
     """Erro previsto: a CLI imprime a mensagem e sai com o código, sem traceback."""
@@ -99,11 +117,17 @@ class BrainError(Exception):
 # ---------------------------------------------------------------- yaml subset
 
 def strip_comment(line: str) -> str:
-    """Remove the ` # ...` comment outside quotes (a whole-line comment becomes empty)."""
-    quote, previous = None, ""
+    """Remove the ` # ...` comment outside quotes (a whole-line comment becomes empty). Inside quotes, `\\"` of a
+    double-quoted value and `''` of a single-quoted one do not close the quote."""
+    quote, previous, skip = None, "", False
     for i, char in enumerate(line):
-        if quote:
-            if char == quote:
+        if skip:
+            skip = False
+        elif quote:
+            escape = '\\' if quote == '"' else "'"  # \" inside "...", '' inside '...'
+            if char == escape and (quote == '"' or line[i + 1:i + 2] == "'"):
+                skip = True
+            elif char == quote:
                 quote = None
         elif char in "\"'" and previous in ("", ":", "[", "{", ",", "-"):  # a quote opens only a value
             quote = char
@@ -439,8 +463,9 @@ def now() -> str:
     return dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-def write_new_file(path: Path, text: str) -> bool:
-    """Create path with text; an existing file is never touched (False)."""
+def create_file(path: Path, text: str) -> bool:
+    """Create path with text (and the missing folders); an existing file is never touched (False). Used by init,
+    which skips what already exists."""
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(path, "x", encoding="utf-8") as handle:
@@ -450,11 +475,18 @@ def write_new_file(path: Path, text: str) -> bool:
     return True
 
 
+def write_new_file(path: Path, text: str):
+    """Create path with text; an existing file is never overwritten: BrainError(code 2) "nota já existe: <path>"."""
+    if not create_file(path, text):
+        raise BrainError(f"nota já existe: {path}")
+
+
 def append_log(vault: Path, layout: dict, command: str, summary: str):
-    """One line at the end of log.md per write in the vault: "- AAAA-MM-DD HH:MM <comando> <resumo>"."""
+    """One line at the end of log.md per write in the vault: "- AAAA-MM-DD HH:MM <comando> <resumo>"; the store
+    commands start the summary with the path written (relative to the vault)."""
     log = vault / layout["log"]
     if not log.exists():
-        write_new_file(log, render_log())
+        create_file(log, render_log())
     with open(log, "a", encoding="utf-8") as handle:
         handle.write(f"- {now()} {command} {summary}\n")
 
@@ -473,9 +505,8 @@ def render_log() -> str:
 
 
 def fill_template(text: str, **fields) -> str:
-    for key, value in fields.items():
-        text = text.replace("{" + key + "}", value)
-    return text
+    """The {key} markers of fields replaced in a single pass: a value that holds "{date}" stays literal."""
+    return MARKER_RE.sub(lambda m: str(fields[m.group(1)]) if m.group(1) in fields else m.group(0), text)
 
 
 def moc_text(vault: Path, layout: dict, name: str, title: str) -> str:
@@ -483,8 +514,8 @@ def moc_text(vault: Path, layout: dict, name: str, title: str) -> str:
     template = vault / layout["templates"] / "moc.md"
     if not template.is_file():
         template = TEMPLATES_DIR / "moc.md"
-    return fill_template(template.read_text(encoding="utf-8"), title=title, context=name,
-                         date=dt.date.today().isoformat(), source="")
+    return render_note(template.read_text(encoding="utf-8"), title=title, context=name,
+                       date=dt.date.today().isoformat(), source="")
 
 
 def backup_path(path: Path) -> Path:
@@ -509,10 +540,10 @@ def create_structure(vault: Path, shared: dict, adopt: bool) -> list:
             created.append(f"{folder}/")
     for template in sorted(TEMPLATES_DIR.glob("*.md")):
         rel = f"{layout['templates']}/{template.name}"
-        if write_new_file(vault / rel, template.read_text(encoding="utf-8")):
+        if create_file(vault / rel, template.read_text(encoding="utf-8")):
             created.append(rel)
     for key, text in (("index", render_index()), ("log", render_log())):
-        if write_new_file(vault / layout[key], text):
+        if create_file(vault / layout[key], text):
             created.append(layout[key])
     if not adopt:
         for name, item in shared["contexts"].items():
@@ -527,7 +558,7 @@ def create_context(vault: Path, layout: dict, name: str, item: dict) -> list:
         folder.mkdir(parents=True)
         created.append(f"{item['folder']}/")
     moc = f"{layout['mocs']}/{name}.md"
-    if write_new_file(vault / moc, moc_text(vault, layout, name, item.get("title") or name)):
+    if create_file(vault / moc, moc_text(vault, layout, name, item.get("title") or name)):
         created.append(moc)
     return created
 
@@ -704,16 +735,21 @@ def note_context(path: str, frontmatter: dict, contexts) -> str:
     return best
 
 
+def note_title(path: str, frontmatter: dict, plain: str) -> str:
+    """frontmatter.title, else the first "# Título" of the prose, else the file name without .md."""
+    title = frontmatter.get("title")
+    if not isinstance(title, str) or not title.strip():
+        heading = next((m.group(1) for m in map(HEADING_RE.match, plain.splitlines()) if m), "")
+        title = heading or posixpath.splitext(posixpath.basename(path))[0]
+    return title.strip()
+
+
 def parse_note(path: str, text: str, contexts=None) -> Note:
     """Note of `text` (already decoded) at `path` (relative to the vault), without I/O. contexts is the
     values["contexts"] of load_config(); an invalid frontmatter becomes {} and a warning, never an exception."""
     frontmatter, body, problem = read_frontmatter(text)
     plain = prose(body)
-    title = frontmatter.get("title")
-    if not isinstance(title, str) or not title.strip():
-        heading = next((m.group(1) for m in map(HEADING_RE.match, plain.splitlines()) if m), "")
-        title = heading or posixpath.splitext(posixpath.basename(path))[0]
-    title = title.strip()
+    title = note_title(path, frontmatter, plain)
     links = unique(target for target in (link_target(m) for m in WIKILINK_RE.findall(plain)) if target)
     tags = unique(frontmatter_tags(frontmatter.get("tags")) + text_tags(WIKILINK_RE.sub(" ", plain)))
     title_terms, tag_terms, body_terms = tokenize(title), tokenize(" ".join(tags)), tokenize(body)
@@ -785,24 +821,34 @@ def read_note(path: Path, rel: str, contexts) -> Note:
     return note
 
 
-def scan_vault(config: dict) -> list:
-    """Every .md note of the vault of load_config(), in path order, except .obsidian/, .trash/ and the
-    layout.templates folder. Only reads; the problems of each note are in Note.warnings."""
-    values = config["values"]
+def vault_dir(values: dict) -> Path:
+    """The configured vault folder; missing = BrainError (exit 1)."""
     vault = Path(values["vault"]) if values["vault"] else None
     if vault is None or not vault.is_dir():
         raise BrainError(f"vault não encontrado: {values['vault'] or '(sem vault na configuração local)'}", 1)
+    return vault
+
+
+def walk_notes(values: dict):
+    """(absolute path, path relative to the vault) of every .md note, in path order, except .obsidian/, .trash/
+    and the layout.templates folder."""
+    vault = vault_dir(values)
     templates = posixpath.normpath(str(values["layout"]["templates"]).replace("\\", "/"))
-    contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
-    notes = []
     for root, dirs, files in os.walk(vault):
         base = Path(root).relative_to(vault).as_posix()
         prefix = "" if base == "." else base + "/"
         dirs[:] = sorted(d for d in dirs if not ignored_dir(prefix + d, templates))
         for name in sorted(files):
             if name.lower().endswith(".md"):
-                notes.append(read_note(Path(root) / name, prefix + name, contexts))
-    return notes
+                yield Path(root) / name, prefix + name
+
+
+def scan_vault(config: dict) -> list:
+    """Every .md note of the vault of load_config(), in path order, except .obsidian/, .trash/ and the
+    layout.templates folder. Only reads; the problems of each note are in Note.warnings."""
+    values = config["values"]
+    contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
+    return [read_note(path, rel, contexts) for path, rel in walk_notes(values)]
 
 
 def inverse_frequency(df: int, total: int) -> float:
@@ -946,6 +992,239 @@ def note_links(notes: list, path: str, index: LinkIndex) -> dict:
             "broken": [item["target"] for item in outgoing if item["path"] is None]}
 
 
+# ---------------------------------------------------------------- store: note paths, relations, regions (pure)
+
+def inside_vault(folder, what: str) -> str:
+    """Folder relative to the vault, with "/" ("" = the vault root); absolute or climbing out with ".." =
+    BrainError(code 2) "<what> fora do vault"."""
+    text = str(folder or "").strip().replace("\\", "/")
+    rel = posixpath.normpath(text) if text else "."
+    if is_absolute(text) or rel == ".." or rel.startswith("../"):
+        raise BrainError(f"{what} fora do vault: {folder}")
+    return "" if rel == "." else rel
+
+
+def check_context(context: str, values: dict) -> dict:
+    """The contexts.<context> item; unknown context = BrainError(code 2) with the valid ones."""
+    contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
+    if context not in contexts:
+        valid = ", ".join(contexts) if contexts else "nenhum configurado (crie com brain.py context add)"
+        raise BrainError(f"contexto inexistente: {context} — contextos válidos: {valid}")
+    check_context_name(context)  # a hand-edited brain-config.yml may hold a name like "../x"
+    item = contexts[context]
+    return item if isinstance(item, dict) else {}
+
+
+def sanitize_title(title: str) -> str:
+    """File name of a title: each forbidden character (and control character) becomes a space, repeated spaces
+    become one and the ends lose spaces and dots ("Aula 1: Limites/Derivadas" -> "Aula 1 Limites Derivadas").
+    Longer than NAME_MAX_BYTES in UTF-8 = cut there, never in the middle of a character."""
+    name = "".join(" " if char in TITLE_FORBIDDEN or char < " " else char for char in title)
+    name = " ".join(name.split()).strip(" .")
+    name = name.encode("utf-8")[:NAME_MAX_BYTES].decode("utf-8", errors="ignore").strip(" .")
+    if not name:
+        raise BrainError(f"título sem caracteres válidos para o nome do arquivo: {title!r}")
+    return name
+
+
+def note_path(title: str, context, values: dict) -> str:
+    """Path of a new note, relative to the vault: <contexts.<c>.folder or para.resources>/<sanitized title>.md.
+    No I/O; a folder outside the vault or an unknown context = BrainError(code 2)."""
+    if context:
+        folder = inside_vault(check_context(context, values).get("folder"), f"contexts.{context}.folder")
+    else:
+        folder = inside_vault(values["para"]["resources"], "para.resources")
+    return posixpath.join(folder, sanitize_title(title) + ".md")
+
+
+def relation_line(target: str, why: str) -> str:
+    return f"- [[{target}]] — {why}"
+
+
+def newline_of(text: str) -> str:
+    """The line ending of a text: "\\r\\n" when it has one, else "\\n"."""
+    return "\r\n" if "\r\n" in text else "\n"
+
+
+def same_relation(line: str, target: str, why: str) -> bool:
+    """True when line is "- [[X]] — why" and X resolves like target (alias and section ignored, any case)."""
+    m = RELATION_LINE_RE.match(line.strip())
+    return bool(m) and (_link_key(link_target(m.group(1))) == _link_key(link_target(target))
+                        and " ".join(m.group(2).split()) == " ".join(why.split()))
+
+
+def append_relation(text: str, target: str, why: str) -> str:
+    """Text with "- [[target]] — why" at the end of the "## Relations" section (before the next "## " heading or
+    the end of the file); without the section, it is created at the end. A line of the section already linking to
+    the same note (alias or section aside, any case) with the same reason = the text unchanged. The inserted lines
+    use the text's line ending. Pure; the rest of the text never changes."""
+    line, nl = relation_line(target, why), newline_of(text)
+    lines = text.splitlines(keepends=True)
+    start = next((i for i, item in enumerate(lines) if item.rstrip() == RELATIONS_HEADING), None)
+    if start is None:
+        base = text.rstrip("\r\n")
+        return f"{base}{nl}{nl}{RELATIONS_HEADING}{nl}{nl}{line}{nl}" if base else f"{RELATIONS_HEADING}{nl}{nl}{line}{nl}"
+    end = next((i for i in range(start + 1, len(lines)) if SECTION_END_RE.match(lines[i])), len(lines))
+    if any(same_relation(item, target, why) for item in lines[start + 1:end]):
+        return text
+    last = max(i for i in range(start, end) if lines[i].strip())
+    if not lines[last].endswith("\n"):
+        lines[last] += nl
+    lines.insert(last + 1, (nl if last == start else "") + line + nl)
+    return "".join(lines)
+
+
+def region_markers(name: str):
+    return f"<!-- brain:begin {name} -->", f"<!-- brain:end {name} -->"
+
+
+def replace_region(text: str, name: str, content: str) -> str:
+    """Text with only what is between "<!-- brain:begin <name> -->" and "<!-- brain:end <name> -->" replaced by
+    content; without the region, it is appended at the end with both markers. Exactly one begin before exactly one
+    end, or neither; anything else (orphan begin or end, end before begin, duplicated region) = BrainError (code 2)
+    naming the region, so nothing of the user is ever swallowed. Uses the text's line ending. Pure; the text
+    outside the region (other regions included) never changes."""
+    begin, end = region_markers(name)
+    nl = newline_of(text)
+    body = nl.join(content.strip("\n").split("\n")) if content.strip("\n") else ""
+    block = f"{begin}{nl}{body}{nl}{end}" if body else f"{begin}{nl}{end}"
+    begins, ends = text.count(begin), text.count(end)
+    if begins == 0 and ends == 0:
+        separator = "" if not text else nl if text.endswith("\n") else nl + nl
+        return text + separator + block + nl
+    start, stop = text.find(begin), text.find(end)
+    if begins != 1 or ends != 1 or stop < start + len(begin):
+        raise BrainError(f"região {name} com marcadores inválidos ({begins} begin, {ends} end"
+                         + (", end antes do begin" if begins == ends == 1 else "")
+                         + f") — corrija {begin} … {end} à mão; nada foi alterado")
+    return text[:start] + block + text[stop + len(end):]
+
+
+def slugify(title: str) -> str:
+    """Lowercase ASCII slug of a title for the name of a source note ("Aula 1: Limites" -> "aula-1-limites")."""
+    slug = re.sub(r"[^a-z0-9]+", "-", fold(title)).strip("-")
+    return slug[:SLUG_MAX].strip("-") or "fonte"
+
+
+def render_note(template: str, tags=(), **fields) -> str:
+    """Note from a template: the {title}, {date}, {context} and {source} markers filled. In the frontmatter a line
+    whose value is only a marker gets a YAML-safe value (a quoted marker stays quoted) or disappears when the value
+    is empty (absent key); `tags` are merged into the tags key."""
+    first, sep, rest = template.partition("\n")
+    end = FRONTMATTER_END_RE.search(rest) if first.rstrip() == "---" and sep else None
+    if end is None:
+        return fill_template(template, **fields)
+    lines, has_tags = [], False
+    for line in rest[:end.start()].splitlines():
+        m = PLACEHOLDER_LINE_RE.match(line)
+        if m and m.group(3) in fields:
+            value = fields[m.group(3)]
+            if value:
+                lines.append(m.group(1) + (json.dumps(value, ensure_ascii=False) if m.group(2) else fmt_scalar(value)))
+            continue
+        line = fill_template(line, **fields)
+        if tags and re.match(r"^tags\s*:", line):
+            has_tags = True
+            given = frontmatter_tags(parse_scalar(line.split(":", 1)[1]))
+            line = f"tags: {fmt_flow(unique(given + list(tags)))}"
+        lines.append(line)
+    if tags and not has_tags:
+        lines.append(f"tags: {fmt_flow(list(tags))}")
+    head = first + "\n" + "".join(f"{line}\n" for line in lines)
+    return head + fill_template(rest[end.start():], **fields)
+
+
+def render_source_note(title: str, date: str, context, file_rel, url, extracted: str) -> str:
+    """Source note of ingest: frontmatter type: source, title, context, created, tags, source_url or files, and
+    the extracted text (or _(pending)_) under "## Extracted text"."""
+    frontmatter = {"type": "source", "title": title}
+    if context:
+        frontmatter["context"] = context
+    frontmatter.update(created=date, tags=[])
+    if url:
+        frontmatter["source_url"] = url
+    else:
+        frontmatter["files"] = [file_rel]
+    text = extracted.strip("\n").rstrip() or PENDING_TEXT
+    return (f"---\n{dump_yaml(frontmatter)}---\n\n# {title}\n\n## Summary\n\n## Extracted text\n\n{text}\n\n"
+            f"{RELATIONS_HEADING}\n")
+
+
+def link_name(path: str, index: LinkIndex) -> str:
+    """How a [[link]] names the note: the file name without .md, or the path without .md when the name alone would
+    resolve to another note."""
+    stem = posixpath.splitext(posixpath.basename(path))[0]
+    return stem if index.resolve(stem) == path else posixpath.splitext(path)[0]
+
+
+def wikilink(path: str, title: str, index: LinkIndex) -> str:
+    target = link_name(path, index)
+    if target == title or any(char in title for char in "[]|"):
+        return f"[[{target}]]"
+    return f"[[{target}|{title}]]"
+
+
+class IndexEntry:
+    """What index needs of a note: path, title, type, context and created (AAAA-MM-DD or "")."""
+    __slots__ = ("context", "created", "note_type", "path", "title")
+
+    def __init__(self, path, title, note_type, context, created):
+        self.path, self.title, self.note_type, self.context, self.created = path, title, note_type, context, created
+
+
+def index_entry(rel: str, text: str, contexts) -> IndexEntry:
+    """IndexEntry of a note (only the frontmatter and the title are read: no terms, so index stays fast)."""
+    frontmatter, body, _ = read_frontmatter(text)
+    title = note_title(rel, frontmatter, "" if isinstance(frontmatter.get("title"), str) else prose(body))
+    note_type = frontmatter.get("type")
+    return IndexEntry(rel, title, note_type.strip() if isinstance(note_type, str) else "",
+                      note_context(rel, frontmatter, contexts), created_date(frontmatter.get("created")))
+
+
+def created_date(value) -> str:
+    """AAAA-MM-DD of frontmatter.created when it starts with a real date (2026-13-45 is not one), else ""."""
+    m = DATE_PREFIX_RE.match(str(value or "").strip())
+    if not m:
+        return ""
+    try:
+        return dt.date.fromisoformat(m.group(1)).isoformat()
+    except ValueError:
+        return ""
+
+
+def moc_notes_content(entries: list, index: LinkIndex) -> str:
+    """Region "notes" of a MOC: a "### <type>" label per type (v1 order, then the others), the notes of the group
+    as "- [[Título]]" ordered by title."""
+    groups = {}
+    for entry in entries:
+        groups.setdefault(entry.note_type or "(sem type)", []).append(entry)
+    order = [t for t in NOTE_TYPES if t in groups] + sorted(t for t in groups if t not in NOTE_TYPES)
+    lines = []
+    for note_type in order:
+        lines += [f"### {note_type}", ""]
+        for entry in sorted(groups[note_type], key=lambda e: (fold(e.title), e.title, e.path)):
+            lines.append(f"- {wikilink(entry.path, entry.title, index)}")
+        lines.append("")
+    return "\n".join(lines).strip("\n") or "_(nenhuma nota)_"
+
+
+def index_contexts_content(contexts: dict, counts: dict, mocs: str) -> str:
+    """Region "contexts" of index.md: one line per context with the link to its MOC and the number of notes."""
+    lines = []
+    for name, item in contexts.items():
+        title = (item.get("title") if isinstance(item, dict) else None) or name
+        lines.append(f"- [[{posixpath.join(mocs, name)}|{title}]] — {counts.get(name, 0)} nota(s)")
+    return "\n".join(lines) or "_(nenhum contexto)_"
+
+
+def index_recent_content(entries: list, index: LinkIndex) -> str:
+    """Region "recent" of index.md: the RECENT_LIMIT notes with the newest created, newest first."""
+    dated = sorted((e for e in entries if e.created), key=lambda e: e.path)
+    dated.sort(key=lambda e: e.created, reverse=True)
+    lines = [f"- {wikilink(e.path, e.title, index)} — {e.created}" for e in dated[:RECENT_LIMIT]]
+    return "\n".join(lines) or "_(nenhuma nota com created)_"
+
+
 # ---------------------------------------------------------------- commands
 
 def parse_pairs(values, flag: str) -> list:
@@ -1029,7 +1308,7 @@ def cmd_init(args, config_home=None) -> int:
     created = create_structure(vault, parse_yaml(rendered), args.adopt)
     if backup:
         shared_path.write_text(rendered, encoding="utf-8")  # the only overwrite: --force, previous kept in .bak
-    elif write_new_file(shared_path, rendered):
+    elif create_file(shared_path, rendered):
         created.append("brain-config.yml")
     mode = "--adopt" if args.adopt else "--force" if backup else "vault novo" if new_vault else "vault vazio"
     detail = f"{len(created)} item(ns) criado(s)" + (f", anterior em {backup.name}" if backup else "")
@@ -1063,6 +1342,8 @@ def cmd_config(as_json: bool, config_home=None) -> int:
         print(f"{section}: {len(items)}  ({origins[section]})")
         for name, item in items.items():
             print(f"  {name}: {fmt_flow(item)}")
+            if section == "contexts" and not CONTEXT_NAME_RE.match(str(name)):
+                print(f"aviso: nome de contexto inválido: {name} — os comandos o recusam", file=sys.stderr)
     if not values["vault"] or not shared_config_path(values["vault"]).is_file():
         print(f"aviso: brain-config.yml não encontrado no vault {values['vault']} — valores padrão", file=sys.stderr)
     return 0
@@ -1149,7 +1430,9 @@ def doctor_items(config: dict, local_path: Path) -> list:
     for name, item in contexts.items():
         folder = item.get("folder", "") if isinstance(item, dict) else ""
         moc = root / values["layout"]["mocs"] / f"{name}.md"
-        if f"contexts.{name}.folder" in problems:
+        if not CONTEXT_NAME_RE.match(str(name)):
+            rows.append(("ERRO", f"contexto {name}", "nome de contexto inválido (use letras, números, '_' ou '-')"))
+        elif f"contexts.{name}.folder" in problems:
             rows.append(("ERRO", f"contexto {name}", f"contexts.{name}.folder fora do vault: {folder}"))
         elif "layout.mocs" in problems:
             rows.append(("AVISO", f"contexto {name}", f"{folder}; MOC não conferido (layout.mocs fora do vault)"))
@@ -1290,12 +1573,262 @@ def cmd_links(args, config_home=None) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- store commands (create, append, regions)
+
+def today() -> str:
+    return dt.date.today().isoformat()
+
+
+def store_config(config_home=None):
+    """(values, vault, layout) of the configured vault for the store commands."""
+    values = load_config(config_home)["values"]
+    return values, vault_dir(values), values["layout"]
+
+
+def read_exact(path: Path, rel: str) -> str:
+    """Text of a note exactly as on disk (line endings and BOM kept), so a rewrite only changes what it adds."""
+    try:
+        return path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise BrainError(f"{rel} não é UTF-8 — não foi alterado", 1) from e
+
+
+def write_target(vault: Path, rel: str) -> Path:
+    """The file to rewrite for the note rel: itself, or the file its symbolic link points to when that file is
+    inside the vault; a link to outside the vault = BrainError (code 2), nothing written."""
+    path = vault / rel
+    if not path.is_symlink():
+        return path
+    real = path.resolve()
+    if not is_inside(str(real), str(vault.resolve())) or real.is_symlink() or not real.is_file():
+        raise BrainError(f"{rel} é um link simbólico para fora do vault ({real}) — não foi alterado")
+    return real
+
+
+def rewrite_file(path: Path, text: str):
+    """Replace path with text through a hidden temporary file in the same folder (no half-written note); used only
+    for the text of append_relation and replace_region, on the path given by write_target (never a link)."""
+    if path.is_symlink():
+        raise BrainError(f"{path} é um link simbólico — não foi alterado")
+    tmp = path.with_name(f".{path.name}.brain-tmp")
+    tmp.write_bytes(text.encode("utf-8"))
+    shutil.copymode(path, tmp)
+    os.replace(tmp, path)
+
+
+def copy_to_files(source: Path, values: dict, context) -> str:
+    """Copy of source into <files>/<context or inbox>/<AAAA>/<name>, never overwriting (<stem>-1<ext>, -2...);
+    returns the path relative to files. Files folder missing or not writable = BrainError (exit 1)."""
+    files = values["files"]
+    if not files or not Path(files).is_dir():
+        raise BrainError(f"pasta files não encontrada: {files or '(sem files na configuração local)'}", 1)
+    if context:
+        check_context_name(context)
+    folder = f"{context or INBOX_FILES}/{dt.date.today().year}"
+    if posixpath.normpath(folder) != folder or folder.startswith(("/", "..")):
+        raise BrainError(f"contexto fora da pasta files: {context}")
+    target, stem, suffix = Path(files) / folder, source.stem, source.suffix
+    name, n, created = source.name, 0, None
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        while True:
+            try:
+                with open(source, "rb") as src, open(target / name, "xb") as dest:
+                    created = target / name
+                    shutil.copyfileobj(src, dest)
+                return f"{folder}/{name}"
+            except FileExistsError:
+                n += 1
+                name = f"{stem}-{n}{suffix}"
+    except OSError as e:
+        if created is not None and created.exists():
+            created.unlink()  # only the incomplete copy this call created; nothing else is ever removed
+        raise BrainError(f"não consegui copiar para a pasta files ({target}): {e.strerror or e}", 1) from e
+
+
+def free_raw_path(vault: Path, layout: dict, title: str) -> str:
+    """raw/AAAA-MM-DD-<slug>.md, or -1, -2... so a source note of the same day is never overwritten."""
+    base = posixpath.join(inside_vault(layout["raw"], "layout.raw"), f"{today()}-{slugify(title)}")
+    candidate, n = f"{base}.md", 0
+    while (vault / candidate).exists():
+        n += 1
+        candidate = f"{base}-{n}.md"
+    return candidate
+
+
+def cmd_ingest(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    source = args.source.strip()
+    url = source if URL_RE.match(source) else None
+    if args.context:
+        check_context(args.context, values)
+    if url is None and not Path(source).is_file():
+        raise BrainError(f"fonte não encontrada: {args.source}")
+    extracted = ""
+    if args.text_file:
+        if not Path(args.text_file).is_file():
+            raise BrainError(f"arquivo de texto não encontrado: {args.text_file}")
+        try:
+            extracted = Path(args.text_file).read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError as e:
+            raise BrainError(f"--text-file não é UTF-8: {args.text_file}") from e
+    default_title = re.sub(r"^https?://", "", url, flags=re.IGNORECASE).rstrip("/") if url else Path(source).stem
+    title = " ".join((args.title or default_title).split()) or "fonte"
+
+    file_rel = None if url else copy_to_files(Path(source), values, args.context)  # the copy comes first
+    raw_rel = free_raw_path(vault, layout, title)
+    try:
+        write_new_file(vault / raw_rel, render_source_note(title, today(), args.context, file_rel, url, extracted))
+    except OSError as e:
+        kept = f"; a cópia ficou em {file_rel} (na pasta files)" if file_rel else ""
+        raise BrainError(f"não consegui criar a nota de fonte {raw_rel}: {e.strerror or e}{kept}", 1) from e
+    append_log(vault, layout, "ingest", f"{raw_rel} — {url or file_rel}")
+    if args.json:
+        print_json({"raw": raw_rel, "file": file_rel, "url": url})
+        return 0
+    print(f"Nota de fonte: {raw_rel}")
+    print(f"Link: {url}" if url else f"Arquivo copiado: {file_rel} (na pasta files)")
+    return 0
+
+
+def source_value(source, vault: Path) -> str:
+    """frontmatter.source of new-note: a URL as is, a note of the vault as "[[<path without .md>]]"."""
+    text = (source or "").strip()
+    if not text or URL_RE.match(text) or (text.startswith("[[") and text.endswith("]]")):
+        return text
+    if is_absolute(text):
+        if not is_inside(text, str(vault)):
+            raise BrainError(f"--source fora do vault: {text}")
+        text = _pure(text).relative_to(_pure(str(vault))).as_posix()
+    rel = inside_vault(text, "--source")
+    return f"[[{rel[:-3] if rel.lower().endswith('.md') else rel}]]"
+
+
+def cmd_new_note(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    if args.type not in NOTE_TYPES:
+        raise BrainError(f"tipo desconhecido: {args.type} — use um de: {', '.join(NOTE_TYPES)}")
+    title = " ".join(args.title.split())
+    rel = note_path(title, args.context, values)
+    tags = unique(frontmatter_tags(args.tags or ""))
+    template = vault / layout["templates"] / f"{args.type}.md"
+    if not template.is_file():
+        template = TEMPLATES_DIR / f"{args.type}.md"
+    text = render_note(template.read_text(encoding="utf-8"), tags=tags, title=title, date=today(),
+                       context=args.context or "", source=source_value(args.source, vault))
+    write_new_file(vault / rel, text)
+    append_log(vault, layout, "new-note", f"{rel} — {args.type}")
+    if args.json:
+        print_json({"path": rel})
+    else:
+        print(rel)
+    return 0
+
+
+def cmd_relate(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    why = " ".join(args.why.split())
+    if not why:
+        raise BrainError("--why precisa do motivo da relação")
+    index = LinkIndex(rel for _, rel in walk_notes(values))
+    source, target = find_note(args.source, index), find_note(args.target, index)
+    if source == target:
+        raise BrainError(f"uma nota não se relaciona com ela mesma: {source}")
+    pairs = [(source, target)] + ([(target, source)] if args.both else [])
+    changes = []
+    for note, other in pairs:  # everything is read and checked before the first write
+        text = read_exact(vault / note, note)
+        name = link_name(other, index)
+        new = append_relation(text, name, why)
+        changes.append((note, name, text, new, write_target(vault, note) if new != text else None))
+    for note, name, text, new, path in changes:
+        line = relation_line(name, why)
+        if new == text:
+            print(f"relação já existe: {note} {line}")
+            continue
+        rewrite_file(path, new)
+        append_log(vault, layout, "relate", f"{note} → [[{name}]] — {why}")
+        print(f"{note}: {line}")
+    return 0
+
+
+def plan_region_file(vault: Path, rel: str, regions: dict, new_text, detail: str):
+    """(path to write, new text, created, detail) of the regions of rel (created from new_text() when missing), or
+    None when nothing changes. Only reads: invalid markers or a link out of the vault = BrainError naming rel."""
+    path = vault / rel
+    target = write_target(vault, rel)  # a link out of the vault is refused before anything is read
+    exists = target.exists()
+    text = read_exact(target, rel) if exists else new_text()
+    result = text
+    try:
+        for name, content in regions.items():
+            result = replace_region(result, name, content)
+    except BrainError as e:
+        raise BrainError(f"{rel}: {e}", e.code) from e
+    if not exists:
+        return path, result, True, detail + " (criado)"
+    if result == text:
+        return None
+    return target, result, False, detail
+
+
+def cmd_index(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
+    if args.context:
+        check_context(args.context, values)
+    for name in contexts:  # every name is checked before anything is written
+        check_context_name(name)
+    mocs = inside_vault(layout["mocs"], "layout.mocs")
+    own = {posixpath.normpath(layout["index"]), posixpath.normpath(layout["log"])}
+    paths, entries = [], []
+    for path, rel in walk_notes(values):
+        paths.append(rel)
+        if rel in own or (mocs and rel.startswith(mocs + "/")):
+            continue
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        entries.append(index_entry(rel, text, contexts))
+    links = LinkIndex(paths)
+    by_context = {name: [e for e in entries if e.context == name] for name in contexts}
+
+    plans = []  # every file is read and checked before the first write
+    for name in ([args.context] if args.context else list(contexts)):
+        rel, notes = inside_vault(posixpath.join(mocs, f"{name}.md"), f"MOC de {name}"), by_context[name]
+        title = (contexts[name].get("title") if isinstance(contexts[name], dict) else None) or name
+        plans.append((rel, plan_region_file(vault, rel, {"notes": moc_notes_content(notes, links)},
+                                            lambda n=name, t=title: moc_text(vault, layout, n, t),
+                                            f"{len(notes)} nota(s)")))
+    regions = {"contexts": index_contexts_content(contexts, {k: len(v) for k, v in by_context.items()}, mocs),
+               "recent": index_recent_content(entries, links)}
+    index_rel = inside_vault(layout["index"], "layout.index")
+    plans.append((index_rel, plan_region_file(vault, index_rel, regions, render_index,
+                                              f"{len(contexts)} contexto(s), "
+                                              f"{min(len(entries), RECENT_LIMIT)} recente(s)")))
+    written = []
+    for rel, plan in plans:
+        if plan is None:
+            continue
+        path, text, created, detail = plan
+        if created:
+            write_new_file(path, text)
+        else:
+            rewrite_file(path, text)
+        append_log(vault, layout, "index", f"{rel} — {detail}")
+        written.append(rel)
+    for rel in written:
+        print(f"atualizado: {rel}")
+    if not written:
+        print("Índices já atualizados.")
+    return 0
+
+
 # ---------------------------------------------------------------- cli
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="brain.py",
-        description="Ferramentas determinísticas do second-brain: onboarding do vault, configuração e diagnóstico.")
+        description=("Ferramentas determinísticas do second-brain: onboarding do vault, configuração, diagnóstico, "
+                     "busca e fluxo de guardar."))
     parser.add_argument("--version", action="version", version=f"second-brain {BRAIN_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("init", help="cria um vault novo, adota um existente (--adopt) ou só liga esta máquina (--join)")
@@ -1333,6 +1866,26 @@ def main(argv=None) -> int:
     p = sub.add_parser("links", help="links de saída, backlinks e links quebrados de uma nota; só leitura")
     p.add_argument("note", metavar="NOTA", help="caminho ou nome da nota")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("ingest", help="guarda uma fonte (arquivo ou URL): cópia em files e nota de fonte em raw/")
+    p.add_argument("source", metavar="FONTE", help="arquivo local ou URL http(s)")
+    p.add_argument("--context", help="contexto da fonte (sem ele, a cópia vai para <files>/inbox)")
+    p.add_argument("--title", help="título da nota de fonte (padrão: o nome do arquivo ou a URL)")
+    p.add_argument("--text-file", metavar="ARQ", help="texto extraído da fonte (UTF-8), sob '## Extracted text'")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("new-note", help="cria uma nota a partir do modelo do tipo; nunca sobrescreve")
+    p.add_argument("--type", required=True, help=" | ".join(NOTE_TYPES))
+    p.add_argument("--title", required=True)
+    p.add_argument("--context", help="contexto (sem ele, a nota vai para para.resources)")
+    p.add_argument("--source", metavar="CAMINHO_OU_URL", help="nota de fonte (raw/...) ou URL")
+    p.add_argument("--tags", metavar="A,B", help="tags separadas por vírgula")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("relate", help="acrescenta '- [[PARA]] — motivo' na seção Relations de DE")
+    p.add_argument("source", metavar="DE", help="caminho ou nome da nota")
+    p.add_argument("target", metavar="PARA", help="caminho ou nome da nota")
+    p.add_argument("--why", required=True, help="motivo da relação (ex.: aplica, contradiz, exemplo de)")
+    p.add_argument("--both", action="store_true", help="também em PARA, apontando para DE")
+    p = sub.add_parser("index", help="regenera as regiões geradas dos MOCs e do index.md")
+    p.add_argument("--context", help="só o MOC deste contexto (e o index.md)")
     args = parser.parse_args(argv)
 
     try:
@@ -1350,6 +1903,14 @@ def main(argv=None) -> int:
             return cmd_related(args)
         if args.command == "links":
             return cmd_links(args)
+        if args.command == "ingest":
+            return cmd_ingest(args)
+        if args.command == "new-note":
+            return cmd_new_note(args)
+        if args.command == "relate":
+            return cmd_relate(args)
+        if args.command == "index":
+            return cmd_index(args)
     except BrainError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
