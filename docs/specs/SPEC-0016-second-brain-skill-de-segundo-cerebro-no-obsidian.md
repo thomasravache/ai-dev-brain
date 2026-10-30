@@ -3,7 +3,7 @@ id: SPEC-0016
 title: "Second brain: skill de segundo cérebro no Obsidian"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-10-30
 depends_on: []
 adrs: [ADR-0007, ADR-0008, ADR-0009]
@@ -90,12 +90,12 @@ Todas as filhas mexem no `brain.py` (arquivo único, ADR-0007), então rodam uma
 
 ## 7. Critérios de Aceite do Épico
 <!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-- [ ] Guardar o material de uma aula gera uma nota sintetizada ligada às notas relacionadas, com o MOC, o `index.md` e o `log.md` atualizados — SPEC-0019:IT-07
-- [ ] Um vídeo ou PDF com processador configurado chega à nota de fonte com o texto extraído, e sem processador o bruto fica guardado — SPEC-0022:IT-01, SPEC-0022:IT-03
-- [ ] Uma consulta entrega ao agente as notas certas para responder citando o vault, e a resposta pode ser salva e ligada — SPEC-0020:IT-01, SPEC-0020:IT-03
-- [ ] Um item jogado na inbox numa máquina é processado por outra com o mesmo resultado do fluxo de guardar — SPEC-0021:IT-05
-- [ ] O mesmo vault funciona em duas máquinas com caminhos diferentes, mudando só a configuração local — SPEC-0017:IT-04
-- [ ] Sem configuração, o onboarding cria um vault novo ou adota um existente sem alterar nada do usuário — SPEC-0017:IT-01, SPEC-0017:IT-02
+- [x] Guardar o material de uma aula gera uma nota sintetizada ligada às notas relacionadas, com o MOC, o `index.md` e o `log.md` atualizados — SPEC-0019:IT-07
+- [x] Um vídeo ou PDF com processador configurado chega à nota de fonte com o texto extraído, e sem processador o bruto fica guardado — SPEC-0022:IT-01, SPEC-0022:IT-03
+- [x] Uma consulta entrega ao agente as notas certas para responder citando o vault, e a resposta pode ser salva e ligada — SPEC-0020:IT-01, SPEC-0020:IT-03
+- [x] Um item jogado na inbox numa máquina é processado por outra com o mesmo resultado do fluxo de guardar — SPEC-0021:IT-05
+- [x] O mesmo vault funciona em duas máquinas com caminhos diferentes, mudando só a configuração local — SPEC-0017:IT-04
+- [x] Sem configuração, o onboarding cria um vault novo ou adota um existente sem alterar nada do usuário — SPEC-0017:IT-01, SPEC-0017:IT-02
 
 ## 8. Questões em Aberto
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
@@ -122,6 +122,30 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico: o que foi entregue, como (ondas e deploys com versão/data), resultado dos critérios de aceite com os testes que os provam, métricas pós-release, pendências como novas specs. `spec_graph.py report SPEC-0016` ajuda a montar. -->
+
+**O que foi entregue.** A skill `second-brain` (`skills/second-brain/`, versão 2026.10.11) é um segundo cérebro num vault do Obsidian mantido por uma LLM.
+- **Configurar:** onboarding agnóstico (`init`, `--adopt`, `--join`), com configuração em duas camadas e `doctor`.
+- **Guardar:** `ingest`, `new-note`, `relate` e `index`, com processadores de vídeo e documento (yt-dlp, Whisper, pdftotext).
+- **Consultar:** `context`, com resposta citando as notas e tipo `answer`.
+- **Capturar pelo celular:** `capture`, `inbox` e `ingest --move`.
+- **Manter:** `lint`.
+- **Exportar:** `export-notebooklm`.
+
+São três ADRs: ADR-0007 (fronteiras), ADR-0008 (armazenamento) e ADR-0009 (processadores).
+
+**Como.** Foram 11 specs executadas uma por onda, cada uma com Test-writer, Implementer e Reviewer independentes:
+- as filhas SPEC-0017 a SPEC-0024;
+- as correções SPEC-0025 a SPEC-0027, que saíram das revisões.
+
+As emendas aprovadas foram a v2 da SPEC-0017 e a v2 da SPEC-0023. Cada onda foi integrada na branch `sdd/SPEC-0016` e no PR #15, com CI verde (Python 3.9 e 3.15, mais o `pr-check`) e H2 pela política auto-on-green. Não há deploy: o pilar entrega é dispensado e a skill é distribuída por cópia da pasta. A suíte da skill tem 220 testes, e os de desempenho com 5.000 notas ficam abaixo das metas (0,1 a 0,8 s).
+
+**Critérios de aceite.** Todos passaram, com os testes citados em cada critério, na CI do PR #15 no run 41110986589 (11849fb).
+
+**Métricas pós-release.** A combinada na seção 5 é uso real por duas semanas com o fluxo da faculdade. Ela começa depois do merge do PR #15, acompanhada pelo `doctor` e pelo `lint`.
+
+**Pendências.**
+- SPEC-0028 (avulsa): padrões de cópia de conflito conferidos com cópias reais de cada provedor. Depende de o usuário gerar as cópias.
+- Fora do épico: o `verify` da `sdd-management` trata como teste da spec uma citação a outra spec no texto do plano (visto nas SPEC-0022 e SPEC-0025). É candidato a uma correção lite da `sdd-management`.
 
 ## 12. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
