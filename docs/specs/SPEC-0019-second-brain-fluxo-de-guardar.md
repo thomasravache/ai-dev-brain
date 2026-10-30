@@ -246,8 +246,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — dbf5614 (árvore suja) | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=21)) — b7dbec2 | 2026-10-30 |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — d11f17f | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — d11f17f | 2026-10-30 |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
