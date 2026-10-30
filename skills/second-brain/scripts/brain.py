@@ -41,7 +41,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.11"
+BRAIN_VERSION = "2026.10.12"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -1423,6 +1423,39 @@ def slugify(title: str, fallback: str = "fonte") -> str:
     return slug[:SLUG_MAX].strip("-") or fallback
 
 
+def kebab(name: str) -> str:
+    """Folder name in kebab-case: lowercase without accents, each run outside [a-z0-9] becomes "-", no dash at the
+    ends; only symbols = "" ("Cálculo_II" -> "calculo-ii")."""
+    return re.sub(r"[^a-z0-9]+", "-", fold(name)).strip("-")
+
+
+def is_kebab(name: str) -> bool:
+    return bool(name) and kebab(name) == name
+
+
+def kebab_name(name: str) -> str:
+    """Context name passed through kebab: changed = notice on stdout; empty after the change = BrainError (exit 2)."""
+    adjusted = kebab(name)
+    if not adjusted:
+        raise BrainError(f"nome de contexto inválido: {name} (sem letras nem números para o kebab-case)")
+    if adjusted != name:
+        print(f"nome ajustado para kebab-case: `{name}` → `{adjusted}`")
+    return adjusted
+
+
+def kebab_folder(vault: str, folder: str) -> str:
+    """Context folder relative to the vault with each part passed through kebab; changed = notice on stdout; a part
+    that becomes empty = BrainError (exit 2)."""
+    rel = relative_folder(vault, folder)
+    parts = [kebab(part) for part in rel.split("/")]
+    if not all(parts):
+        raise BrainError(f"pasta inválida: {folder} (parte sem letras nem números para o kebab-case)")
+    adjusted = "/".join(parts)
+    if adjusted != rel:
+        print(f"nome ajustado para kebab-case: `{rel}` → `{adjusted}`")
+    return adjusted
+
+
 def render_note(template: str, tags=(), **fields) -> str:
     """Note from a template: the {title}, {date}, {context} and {source} markers filled. In the frontmatter a line
     whose value is only a marker gets a YAML-safe value (a quoted marker stays quoted) or disappears when the value
@@ -1554,13 +1587,13 @@ def parse_pairs(values, flag: str) -> list:
     return pairs
 
 
-def parse_contexts(values) -> dict:
-    """--context nome=pasta[:título] → {nome: {folder, title}}."""
+def parse_contexts(values, vault: str) -> dict:
+    """--context nome=pasta[:título] → {nome: {folder, title}}; name and folder in kebab-case, title as typed."""
     contexts = {}
     for name, rest in parse_pairs(values, "--context"):
         folder, _, title = rest.partition(":")
-        check_context_name(name)
-        contexts[name] = {"folder": folder.strip(), "title": title.strip() or name}
+        key = kebab_name(name)
+        contexts[key] = {"folder": kebab_folder(vault, folder), "title": title.strip() or name}
     return contexts
 
 
@@ -1607,7 +1640,7 @@ def cmd_init(args, config_home=None) -> int:
     if args.adopt and not vault.is_dir():
         raise BrainError(f"vault não encontrado: {vault_s}")
     layout = dict(parse_pairs(args.map, "--map"))
-    rendered = render_brain_config(vault_s, layout=layout, contexts=parse_contexts(args.context))
+    rendered = render_brain_config(vault_s, layout=layout, contexts=parse_contexts(args.context, vault_s))
     backup = None
     if shared_path.exists():
         if read_yaml(shared_path) == parse_yaml(rendered):
@@ -1681,20 +1714,20 @@ def cmd_context_add(args, config_home=None) -> int:
         raise BrainError(f"vault não encontrado: {vault}", 1)
     if not shared_path.is_file():
         raise BrainError("vault sem brain-config.yml — rode init", 1)
-    check_context_name(args.name)
+    name = kebab_name(args.name)
     contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
-    if args.name in contexts:
-        raise BrainError(f"contexto já existe: {args.name}")
-    item = {"folder": relative_folder(str(vault), args.folder), "title": args.title or args.name}
-    text = add_context_text(shared_path.read_text(encoding="utf-8"), args.name, item)
-    if parse_yaml(text).get("contexts", {}).get(args.name) != item:
+    if name in contexts:
+        raise BrainError(f"contexto já existe: {name}")
+    item = {"folder": kebab_folder(str(vault), args.folder), "title": args.title or args.name}
+    text = add_context_text(shared_path.read_text(encoding="utf-8"), name, item)
+    if parse_yaml(text).get("contexts", {}).get(name) != item:
         raise BrainError(f"não consegui acrescentar o contexto em {shared_path}", 1)
     shared_path.write_text(text, encoding="utf-8")
     layout = values["layout"]
-    created = create_context(vault, layout, args.name, item)
-    append_log(vault, layout, "context add", f"{args.name} → {item['folder']}"
+    created = create_context(vault, layout, name, item)
+    append_log(vault, layout, "context add", f"{name} → {item['folder']}"
                + (f" (criado: {', '.join(created)})" if created else ""))
-    print(f"Contexto {args.name} → {item['folder']} ({item['title']})")
+    print(f"Contexto {name} → {item['folder']} ({item['title']})")
     for path in created:
         print(f"  criado: {path}")
     return 0
@@ -1715,6 +1748,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
         rows.append(("ERRO", "files", "precisa ficar fora do vault") if inside else ("OK", "files", files))
     else:
         rows.append(("ERRO", "files", f"pasta não encontrada: {files or '(sem files na configuração local)'}"))
+    rows += kebab_path_items("vault", vault) + kebab_path_items("files", files)
     if not vault_ok:
         return rows + provider_items(values)
 
@@ -1766,9 +1800,37 @@ def doctor_items(config: dict, local_path: Path) -> list:
         else:
             rows.append(("OK" if moc.is_file() else "AVISO", f"contexto {name}",
                          folder + ("" if moc.is_file() else f"; MOC ausente: {moc.relative_to(root).as_posix()}")))
+        rows += kebab_context_items(str(name), folder, f"contexts.{name}.folder" in problems)
     rows += processor_items(values["processors"])
     rows.append(lint_item(values, problems))
     return rows + provider_items(values)
+
+
+def kebab_path_items(key: str, path: str) -> list:
+    """AVISO for the folder (and the folder that holds it) of the vault or of files outside kebab-case; the paths
+    are the user's choice, so nothing is renamed."""
+    if not path:
+        return []
+    pure = _pure(path)
+    rows = []
+    for label, part in ((key, pure.name), (f"{key} (pasta-mãe)", pure.parent.name)):
+        if part and not is_kebab(part):
+            detail = (f"pasta fora do kebab-case: {part} (sugestão: {kebab(part) or '?'}) — "
+                      "renomeie no provedor se quiser; o brain.py não renomeia")
+            rows.append(("AVISO", label, detail))
+    return rows
+
+
+def kebab_context_items(name: str, folder: str, outside: bool) -> list:
+    """AVISO for a stored context whose name or folder is outside kebab-case; nothing is renamed."""
+    rows = []
+    if CONTEXT_NAME_RE.match(name) and not is_kebab(name):
+        rows.append(("AVISO", f"contexto {name}", f"nome fora do kebab-case: {name} (sugestão: {kebab(name) or '?'})"))
+    parts = posixpath.normpath(str(folder)).split("/") if folder else []
+    if parts and not outside and not all(is_kebab(part) for part in parts):
+        suggestion = "/".join(kebab(part) or "?" for part in parts)
+        rows.append(("AVISO", f"contexto {name}", f"pasta fora do kebab-case: {folder} (sugestão: {suggestion})"))
+    return rows
 
 
 def processor_items(processors) -> list:
