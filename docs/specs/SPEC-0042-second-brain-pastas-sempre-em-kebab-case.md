@@ -75,8 +75,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PASS | validate: 0 erro(s) — 2e6ace1 | 2026-10-30 |
-| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=3)) — 56a7836 | 2026-10-30 |
+| G0 Spec | PASS | validate: 0 erro(s) — 2107dcd | 2026-10-30 |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=5)) — ac2ea18 | 2026-10-30 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 22c1598 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 22c1598 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (22c1598; 4 achados da 1ª rodada corrigidos, sem achados novos) — 22c1598 | 2026-10-30 |
