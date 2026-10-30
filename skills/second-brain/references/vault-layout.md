@@ -25,6 +25,7 @@ Arquivos pesados (PDFs, vídeos) ficam na pasta `files`, fora do vault (configur
 - `init --adopt` não move nem altera nada que existe e não cria as pastas de PARA que a pessoa não tem: cria só `inbox/`, `raw/`, `templates/`, `index.md`, `log.md` e `brain-config.yml` que faltarem (as pastas mapeadas com `--map` que já existem contam como presentes). O `doctor` mostra como AVISO o que ficou faltando.
 - `index.md` ou `log.md` que já existem sem os marcadores `<!-- brain:begin` são da pessoa: o `init --adopt` sai com 2 e não escreve nada. Use `--map log=<outro>` (ou `--map index=<outro>`) para a skill usar outro arquivo.
 - `init` sem `--adopt` numa pasta que já tem conteúdo e não tem `brain-config.yml` sai com 2 (`vault não está vazio — use --adopt`) e não cria nada.
+- Uma pasta que só tem `.obsidian/` (o vault que o app do Obsidian cria) e arquivos do sistema (`.DS_Store`, `Thumbs.db`, `desktop.ini`) conta como vazia: o `init` sem `--adopt` cria a estrutura padrão completa e não altera nada dentro de `.obsidian/`.
 
 ## Regiões geradas
 

@@ -55,7 +55,7 @@ Converse com a pessoa; o `brain.py init` não é interativo e recebe tudo por fl
 2. **Vault novo ou existente:** pergunte se ela já tem um vault.
    - Já tem e ele tem `brain-config.yml` (configurado em outra máquina) → vá para **Máquina nova** abaixo.
    - Já tem, sem `brain-config.yml` → é uma adoção (`--adopt`): pergunte quais pastas ela já usa para inbox, projetos, áreas, recursos e arquivo, e passe cada uma com `--map` (ex.: `--map inbox=Inbox`). Nada existente é movido ou alterado. Se ela já tem um `log.md` ou `index.md` próprio, o `init` sai com 2: passe `--map log=<outro>` (ou `--map index=<outro>`).
-   - Não tem → vault novo.
+   - Não tem → vault novo. Uma pasta que só tem `.obsidian/` (vault recém-criado no app do Obsidian) conta como vazia: o `init` sem `--adopt` cria a estrutura padrão e não mexe em `.obsidian/`.
 3. **Caminhos:** pergunte onde ficam o vault (dentro da pasta sincronizada do provedor) e a pasta de arquivos pesados (`files`, fora do vault, no mesmo provedor).
 4. **Contextos iniciais:** pergunte os assuntos principais (ex.: faculdade, trabalho) e passe cada um com `--context nome=pasta[:título]` (ex.: `--context college=projects/college:College`).
 5. **Processadores:** pergunte quais tipos ela quer converter em texto (vídeos do YouTube, vídeos e áudios, PDFs) e ofereça os modelos de `references/processors.md` (yt-dlp, Whisper, pdftotext). A skill não instala nada: confira com ela se a ferramenta já existe; depois do `init`, copie os modelos escolhidos para `processors` no `brain-config.yml` do vault e avise que o yt-dlp acessa a rede. O `doctor` (passo 7) testa cada processador.
