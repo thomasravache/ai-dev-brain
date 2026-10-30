@@ -9,7 +9,7 @@ created: 2026-10-30
 parent: SPEC-0016
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/second-brain/SKILL.md, skills/second-brain/scripts/brain.py, skills/second-brain/references/config.md, skills/second-brain/references/providers.md, skills/second-brain/references/vault-layout.md, skills/second-brain/assets/**, skills/second-brain/tests/**, skills/second-brain/CHANGELOG.md, .github/workflows/ci.yml, README.md, CHANGELOG.md]
 adrs: [ADR-0007, ADR-0008, ADR-0002, ADR-0003, ADR-0005]
 external: []
@@ -117,7 +117,12 @@ brain.py init --vault P --files F --provider X [--adopt [--map chave=pasta ...]]
   vault ou files inexistentes: cria files; vault inexistente com --adopt → exit 2 "vault não encontrado: P"
   files dentro do vault: exit 2 "files precisa ficar fora do vault"
   provider fora da lista: exit 2 com a lista
-  toda escrita no vault: linha em log.md "AAAA-MM-DD HH:MM init <resumo>"
+  pasta do vault com conteúdo e sem brain-config.yml, sem --adopt: exit 2 "vault não está vazio — use --adopt" (v2)
+  --adopt com log.md ou index.md do usuário (sem marcadores brain:begin): exit 2
+    "<arquivo> já existe — use --map log=<outro> (ou --map index=<outro>)"; nada é escrito (v2)
+  brain-config.yml gerado a partir de assets/brain-config.yml, mantendo os comentários; só os valores de --map e
+    --context mudam (v2)
+  toda escrita no vault: linha no fim de log.md "- AAAA-MM-DD HH:MM init <resumo>" (formato da SPEC-0019; v2)
 
 brain.py init --join --vault P --files F --provider X
   exige <vault>/brain-config.yml; grava só a configuração local; exit 2 "vault sem brain-config.yml — rode init" se faltar
@@ -128,12 +133,22 @@ brain.py config [--json]
 
 brain.py context add NOME --folder PASTA [--title T]
   acrescenta em contexts no brain-config.yml, cria PASTA e mocs/NOME.md se faltarem; contexto existente: exit 2
+  só insere linhas em contexts, com a indentação das entradas existentes; nunca reescreve o resto do arquivo (v2)
+  contexts escrito em forma inline com itens: exit 2 "contexts está em forma inline — converta para bloco" (v2)
 
 brain.py doctor [--json]
   uma linha por item: "OK|AVISO|ERRO <item> — <detalhe>"
   itens: configuração local, vault, files, brain-config.yml (versão e chaves), pastas do layout, contextos,
          processadores (executável no PATH), provider (aviso sobre celular do providers.md)
   exit 0 sem ERRO; 1 com ERRO; 3 sem configuração local (mesma mensagem do config)
+
+Validação do brain-config.yml (v2): todo valor de layout, para e contexts.<c>.folder é relativo e fica dentro do
+  vault (sem caminho absoluto nem ".."); violação → os comandos saem com 1 "brain-config.yml: <chave> fora do vault"
+  e o doctor mostra ERRO nessa chave. brain-config.yml que não é lido → doctor mostra "ERRO brain-config.yml —
+  <erro de leitura>" e continua os demais itens.
+
+references/providers.md (v2): só afirma o que está na fonte verificada do ADR-0008; o resto é marcado como
+  orientação geral não verificada.
 
 BRAIN_CONFIG_HOME (variável de ambiente) troca a pasta da configuração local; usada nos testes.
 
@@ -172,6 +187,11 @@ SKILL.md (instruções para o agente):
 | Parser YAML | mapas aninhados, listas inline, comentários, strings com `:` | lido igual ao esperado | UT-04 |
 | Instruções | `SKILL.md`, `references/` | onboarding, `--join` e "configurado → direto" descritos | UT-05 |
 | Arquitetura | código de `skills/second-brain/` | regras do ADR-0007 | UT-06 |
+| Caminho fora do vault (v2) | `layout.log: ../x.md`, `/abs`, contexto com `..` | exit 1 com a chave; nada escrito fora | UT-07, IT-11 |
+| Adopt com log do usuário (v2) | vault com `log.md` próprio | exit 2; `log.md` intacto | IT-08 |
+| Pasta não vazia sem adopt (v2) | `init` em pasta com notas | exit 2 sugerindo `--adopt` | IT-09 |
+| Comentários preservados (v2) | `context add` em arquivo comentado, indentação de 4, contexts inline | comentários intactos; indentação seguida; inline → exit 2 | IT-10 |
+| Config malformado (v2) | aspas não fechadas no `brain-config.yml` | doctor com ERRO nessa linha e os outros itens | IT-11 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 
@@ -186,6 +206,8 @@ SKILL.md (instruções para o agente):
 - **UT-05** — Dado `SKILL.md`, `references/config.md` e `references/providers.md`, quando lidos, então o `SKILL.md` manda rodar `brain.py config` antes de qualquer fluxo, descreve o onboarding (exit 3), o `init --join` e o uso direto quando configurado; `providers.md` tem uma seção por provedor da v1 com o aviso sobre iOS e Android.
 - **UT-06** — Dado o código de `skills/second-brain/scripts/brain.py`, quando os checadores de arquitetura rodam, então não há import fora da biblioteca padrão, nem import de `skills/sdd-management` ou `tools`, nem chamada de processo fora da função de processadores, nem caminho pessoal absoluto em `skills/second-brain/` (fora de `tests/`).
 
+- **UT-07** — (v2) Dado um `brain-config.yml` com `layout.log: ../x.md`, outro com `layout.inbox: /abs/inbox` e outro com `contexts.c.folder: ../../fora`, quando `load_config` roda, então falha nomeando a chave; com valores relativos válidos, passa.
+
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um diretório temporário vazio e `BRAIN_CONFIG_HOME` isolado, quando roda `brain.py init --vault V --files F --provider google-drive --context college=projects/college:College`, então V tem toda a estrutura do contrato, `brain-config.yml` tem o contexto, a configuração local tem os caminhos, `log.md` tem a linha de `init` e o exit é 0.
 - **IT-02** — Dado um vault com `Inbox/a.md`, `Notas/b.md` e `.obsidian/`, quando roda `init --adopt --map inbox=Inbox`, então o conteúdo e a data de modificação de `a.md`, `b.md` e `.obsidian/` não mudam, nenhuma pasta de PARA é criada, `layout.inbox` é `Inbox` e são criados só `raw/`, `templates/`, `index.md`, `log.md` e `brain-config.yml`.
@@ -194,6 +216,11 @@ SKILL.md (instruções para o agente):
 - **IT-05** — Dado `BRAIN_CONFIG_HOME` vazio, quando roda `config` e `doctor`, então os dois saem com 3 e a mensagem "second-brain não configurado nesta máquina — rode init (ou init --join)".
 - **IT-06** — Dado o vault do IT-01 com um processador `pdf` cujo executável não existe, quando roda `doctor`, então os itens de configuração são OK, o processador é AVISO e o exit é 0; depois de remover a pasta do vault, `doctor` mostra ERRO no vault, sai com 1 e não imprime traceback.
 - **IT-07** — Dado o vault do IT-01, quando roda `context add work --folder areas/work --title Work`, então o contexto entra no `brain-config.yml`, `areas/work/` e `mocs/work.md` existem e `log.md` registra; repetir o comando sai com 2.
+
+- **IT-08** — (v2) Dado um vault com `log.md` escrito pelo usuário e sem `brain-config.yml`, quando roda `init --adopt`, então sai com 2 com a mensagem do contrato e `log.md` e o resto do vault não mudam; com `--map log=brain-log.md`, conclui e cria `brain-log.md`.
+- **IT-09** — (v2) Dado uma pasta com notas e sem `brain-config.yml`, quando roda `init` sem `--adopt`, então sai com 2 sugerindo `--adopt` e nada é criado.
+- **IT-10** — (v2) Dado um `brain-config.yml` com comentários e entradas de `contexts` indentadas com 4 espaços, quando roda `context add work --folder areas/work`, então os comentários continuam iguais e a entrada nova usa 4 espaços; com `contexts: {college: {folder: projects/college}}`, sai com 2 e o arquivo não muda. O `brain-config.yml` gerado pelo `init` mantém os comentários do modelo da skill.
+- **IT-11** — (v2) Dado um `brain-config.yml` com `layout.log: ../escaped.md`, quando roda `context add` e `doctor`, então `context add` sai com 1 e nada é criado fora do vault, e o `doctor` mostra ERRO em `layout.log`; com aspas não fechadas, o `doctor` mostra "ERRO brain-config.yml — …" e ainda lista os itens de configuração local e vault.
 
 ### 7.4 Testes de Contrato
 - N/A — esta spec não consome contrato de outra. As filhas seguintes dependem da implementação (`depends_on`), e o contrato delas é coberto pelos próprios testes.
@@ -259,7 +286,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — dbf5614 (árvore suja) | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=25)) — 08d9ab7 | 2026-10-30 |
-| G2 Green | PENDING | | |
+| G2 Green | FAIL | test exit 0 (OK); lint exit 127 (/bin/sh: uvx: command not found) — 581a324 | 2026-10-30 |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
@@ -271,6 +298,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-30 | G4 | spec | Contrato não cobre: init sem --adopt em pasta não vazia; --adopt com log.md/index.md do usuário; valores de layout/para/contexts fora do vault vindos do brain-config.yml; context add com contexts inline; doctor com brain-config.yml malformado; formato da linha de log diverge da SPEC-0019 | Review G4 (CHANGES_REQUESTED) reproduziu escrita fora do vault, append em log.md do usuário e perda de comentários | Architect + thomas (Emenda v2) | Emenda v2 — contrato cobre os casos do review G4; aprovada por thomas em 2026-10-30 | 2026-10-30 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -312,3 +340,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0017`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-10-30 | `init` recusa pasta não vazia sem `--adopt` e `log`/`index` do usuário no `--adopt`; validação de `layout`/`para`/`contexts` dentro do vault; `context add` nunca reescreve o arquivo e segue a indentação; `doctor` continua com config malformado; log com `- ` (como na SPEC-0019); `brain-config.yml` gerado com comentários; `providers.md` só com fatos verificados. Testes UT-07, IT-08 a IT-11. | Review G4 (IMP-01): escrita fora do vault, append no `log.md` do usuário e perda de comentários reproduzidos; contrato não cobria esses casos | Nenhuma (nenhuma spec consome o contrato da SPEC-0017) | thomas (2026-10-30) |
