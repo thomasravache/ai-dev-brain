@@ -4,7 +4,7 @@ title: "second-brain: ajustes do lint, da busca e da exportação"
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0023, SPEC-0024, SPEC-0026]
@@ -13,8 +13,8 @@ touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, sk
 adrs: [ADR-0007, ADR-0008]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0027 — second-brain: ajustes do lint, da busca e da exportação
@@ -93,6 +93,15 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 a UT-04 e IT-01 a IT-03 com a tag `SPEC-0027:<ID>`, falhando pelo motivo certo
+- [ ] Green: ajustes do lint, da busca e da exportação da seção 3
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
