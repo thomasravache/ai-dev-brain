@@ -25,7 +25,7 @@ import unicodedata
 from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-BRAIN_VERSION = "2026.10.3"
+BRAIN_VERSION = "2026.10.4"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -65,6 +65,7 @@ PROVIDER_NOTES = {  # only the facts of the verified source of ADR-0008 (https:/
 # search, related and links (SPEC-0018; scoring explained in references/search.md)
 SEARCH_WEIGHTS = {"title": 3, "tags": 2, "body": 1}
 RELATED_WEIGHTS = {"terms": 0.5, "tags": 0.2, "context": 0.1, "links": 0.2}
+MAX_HOPS = 2  # context: link steps from the search results
 TWO_HOPS = 0.5  # neighborhood of a note two links away (a direct link is 1)
 SNIPPET_WIDTH, SNIPPET_LEAD = 160, 40  # snippet length and how much of it comes before the term
 REASON_TERMS = 5  # shared terms listed in the "termos:" reason
@@ -90,7 +91,7 @@ whom when where why how all any each both few more most other some such only own
 STOPWORDS = frozenset(STOPWORDS_TEXT.split())
 
 # store flow: ingest, new-note, relate and index (SPEC-0019; note types in references/note-types.md)
-NOTE_TYPES = ("note", "lecture", "source", "video", "document", "link", "moc")
+NOTE_TYPES = ("note", "lecture", "source", "video", "document", "link", "moc", "answer")
 TITLE_FORBIDDEN = frozenset('/\\:*?"<>|#^[]')  # characters a note title cannot keep in its file name
 RELATIONS_HEADING = "## Relations"
 RELATION_LINE_RE = re.compile(r"^[-*][ \t]+\[\[([^\[\]\n]+?)\]\][ \t]*—[ \t]*(.*?)[ \t]*$")
@@ -648,10 +649,11 @@ def unique(items) -> list:
 
 class Note:
     """A note of the vault as parse_note reads it (path relative to the vault, with "/"). `terms` counts every term
-    (title, tags and body: the vector of related); title_terms, tag_terms and body_terms are the fields of search.
-    A plain class, not a dataclass: the tests load brain.py by path, outside sys.modules."""
+    (title, tags and body: the vector of related); title_terms, tag_terms and body_terms are the fields of search;
+    `text` is the whole note (frontmatter included), the content of the context package. A plain class, not a
+    dataclass: the tests load brain.py by path, outside sys.modules."""
     __slots__ = ("body", "body_terms", "context", "frontmatter", "links", "path", "tag_terms", "tags", "terms",
-                 "title", "title_terms", "warnings")
+                 "text", "title", "title_terms", "warnings")
 
     def __init__(self, **fields):
         for name in self.__slots__:
@@ -755,7 +757,7 @@ def parse_note(path: str, text: str, contexts=None) -> Note:
     title_terms, tag_terms, body_terms = tokenize(title), tokenize(" ".join(tags)), tokenize(body)
     return Note(path=path, title=title, frontmatter=frontmatter, tags=tags, links=links,
                 context=note_context(path, frontmatter, contexts), terms=Counter(title_terms + tag_terms + body_terms),
-                body=body, title_terms=Counter(title_terms), tag_terms=Counter(tag_terms),
+                body=body, text=text, title_terms=Counter(title_terms), tag_terms=Counter(tag_terms),
                 body_terms=Counter(body_terms), warnings=[f"{path}: {problem} — lida sem frontmatter"] if problem else [])
 
 
@@ -990,6 +992,63 @@ def note_links(notes: list, path: str, index: LinkIndex) -> dict:
                        if n.path != path and any(index.resolve(target) == path for target in n.links))
     return {"outgoing": outgoing, "backlinks": backlinks,
             "broken": [item["target"] for item in outgoing if item["path"] is None]}
+
+
+# ---------------------------------------------------------------- query: context package (pure)
+
+def moc_path(context: str, values=None) -> str:
+    """Path of the MOC of a context: <layout.mocs>/<context>.md ("mocs" when values is None)."""
+    mocs = values["layout"]["mocs"] if values else "mocs"
+    return f"{posixpath.normpath(str(mocs).replace(chr(92), '/'))}/{context}.md"
+
+
+def neighbors(seeds: list, graph: dict, hops: int, blocked=()) -> dict:
+    """Distance (1..hops) of every note reached from the seeds by the undirected link graph (breadth first); the
+    blocked notes are neither reached nor walked through."""
+    seen, frontier, found = set(seeds) | set(blocked), list(seeds), {}
+    for distance in range(1, hops + 1):
+        reached = []
+        for path in frontier:
+            for nxt in graph.get(path, ()):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    found[nxt] = distance
+                    reached.append(nxt)
+        frontier = reached
+    return found
+
+
+def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_chars=40000, values=None) -> dict:
+    """Package of notes that answer the query: the MOC of `context` (when given), the search results by score and
+    their link neighbors (outgoing links and backlinks) up to `hops` steps, by distance and title; no note repeats.
+    The MOC is never walked through (it would bring the whole context): notes reached only through it stay out;
+    without `context` the MOC is an ordinary note. In that priority order each note goes in whole when it still
+    fits max_chars (sum of len(content)); one that does not fit goes to "omitted" (path, title, reason) and the
+    next ones are still tried. "broken" lists the broken links of the notes in the package. Nothing found by
+    the search = empty package (no MOC alone)."""
+    by_path = {note.path: note for note in notes}
+    index = LinkIndex(by_path)
+    results = search(notes, query, context=context, limit=limit)
+    moc = moc_path(context, values) if context and results else None
+    picked = [(moc, "moc")] if moc in by_path else []  # (path, reason) in the contract order
+    seeds = [r["path"] for r in results if r["path"] != moc]
+    picked += [(r["path"], f"search:{r['score']}") for r in results if r["path"] != moc]
+    blocked = [moc] if moc else []  # with context the MOC comes first but is never walked through
+    found = neighbors(seeds, link_graph(notes, index), hops, blocked) if seeds and hops > 0 else {}
+    picked += [(path, f"link:{distance}")
+               for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
+                                                                              item[0]))]
+    package, omitted, broken, size = [], [], [], 0
+    for path, reason in picked:
+        note = by_path[path]
+        content = note.text or ""
+        if size + len(content) <= max_chars:
+            size += len(content)
+            package.append({"path": path, "title": note.title, "reason": reason, "content": content})
+        else:
+            omitted.append({"path": path, "title": note.title, "reason": reason})
+        broken += [{"note": path, "target": target} for target in note.links if index.resolve(target) is None]
+    return {"query": query, "notes": package, "omitted": omitted, "broken": broken}
 
 
 # ---------------------------------------------------------------- store: note paths, relations, regions (pure)
@@ -1491,10 +1550,16 @@ def check_limit(limit: int):
         raise BrainError(f"--limit precisa ser maior que zero: {limit}")
 
 
+def load_vault(config_home=None):
+    """(values, notes, warnings) of the configured vault; not configured locally = BrainError(NOT_CONFIGURED, 3)."""
+    config = load_config(config_home)
+    notes = scan_vault(config)
+    return config["values"], notes, [warning for note in notes for warning in note.warnings]
+
+
 def load_notes(config_home=None):
-    """(notes, warnings) of the configured vault; without local configuration, BrainError(NOT_CONFIGURED, 3)."""
-    notes = scan_vault(load_config(config_home))
-    return notes, [warning for note in notes for warning in note.warnings]
+    """(notes, warnings) of the configured vault (load_vault without the configuration values)."""
+    return load_vault(config_home)[1:]
 
 
 def print_json(data: dict):
@@ -1570,6 +1635,38 @@ def cmd_links(args, config_home=None) -> int:
     print(f"Quebrados ({len(data['broken'])}):")
     for target in data["broken"]:
         print(f"  {target}")
+    return 0
+
+
+def cmd_context(args, config_home=None) -> int:
+    check_limit(args.limit)
+    if not 0 <= args.hops <= MAX_HOPS:
+        raise BrainError(f"--hops precisa estar entre 0 e {MAX_HOPS}: {args.hops}")
+    if args.max_chars < 1:
+        raise BrainError(f"--max-chars precisa ser maior que zero: {args.max_chars}")
+    query = " ".join(args.query)
+    values, notes, warnings = load_vault(config_home)
+    data = build_context(notes, query, context=args.context, hops=args.hops, limit=args.limit,
+                         max_chars=args.max_chars, values=values)
+    if args.json:
+        print_json(dict(data, warnings=warnings))
+        return 0
+    print_warnings(warnings)
+    if not data["notes"] and not data["omitted"]:
+        print(f"Nenhuma nota encontrada para: {query}")
+        return 0
+    for item in data["notes"]:
+        print(f"=== {item['path']} ({item['reason']}) ===")
+        print(item["content"].rstrip("\n"))
+        print()
+    if data["omitted"]:
+        print("Omitidas:")
+        for item in data["omitted"]:
+            print(f"  {item['path']} — {item['title']} ({item['reason']})")
+    if data["broken"]:
+        print("Links quebrados:")
+        for item in data["broken"]:
+            print(f"  {item['note']} → {item['target']}")
     return 0
 
 
@@ -1824,6 +1921,15 @@ def cmd_index(args, config_home=None) -> int:
 
 # ---------------------------------------------------------------- cli
 
+def context_add_parser() -> argparse.ArgumentParser:
+    """`context add` (exactly "add" right after "context"); any other text after "context" is a query."""
+    p = argparse.ArgumentParser(prog="brain.py context add", description="registra um contexto, cria a pasta e o MOC")
+    p.add_argument("name")
+    p.add_argument("--folder", required=True, help="pasta relativa ao vault")
+    p.add_argument("--title", help="título do MOC (padrão: o nome)")
+    return p
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="brain.py",
@@ -1842,12 +1948,16 @@ def main(argv=None) -> int:
     p.add_argument("--join", action="store_true", help="vault já configurado: grava só a configuração local")
     p = sub.add_parser("config", help="configuração efetiva e a origem de cada valor (local | vault | padrão)")
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("context", help="contextos do vault")
-    csub = p.add_subparsers(dest="action", required=True)
-    p = csub.add_parser("add", help="registra um contexto, cria a pasta e o MOC")
-    p.add_argument("name")
-    p.add_argument("--folder", required=True, help="pasta relativa ao vault")
-    p.add_argument("--title", help="título do MOC (padrão: o nome)")
+    p = sub.add_parser("context", help="pacote de notas para uma pergunta (só leitura); 'context add' cria um contexto",
+                       description=("context QUERY: MOC do contexto, resultados da busca e vizinhos por link, até "
+                                    "--max-chars. Se o primeiro argumento é exatamente 'add', é o 'context add' "
+                                    "(cria um contexto); para buscar a palavra add, use 'context -- add' (depois do -- tudo é consulta)."))
+    p.add_argument("query", nargs="+", metavar="QUERY")
+    p.add_argument("--context", help="só notas deste contexto na busca; o MOC dele entra primeiro")
+    p.add_argument("--hops", type=int, default=1, help=f"passos de link a partir da busca (0..{MAX_HOPS}, padrão 1)")
+    p.add_argument("--limit", type=int, default=8, help="resultados da busca (padrão 8)")
+    p.add_argument("--max-chars", type=int, default=40000, help="soma máxima do conteúdo das notas (padrão 40000)")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("search", help="busca por termos, com pontuação (título 3, tags 2, corpo 1); só leitura")
@@ -1886,15 +1996,22 @@ def main(argv=None) -> int:
     p.add_argument("--both", action="store_true", help="também em PARA, apontando para DE")
     p = sub.add_parser("index", help="regenera as regiões geradas dos MOCs e do index.md")
     p.add_argument("--context", help="só o MOC deste contexto (e o index.md)")
-    args = parser.parse_args(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:2] == ["context", "add"]:
+        args = context_add_parser().parse_args(argv[2:])
+        args.command = "context add"
+    else:
+        args = parser.parse_args(argv)
 
     try:
         if args.command == "init":
             return cmd_init(args)
         if args.command == "config":
             return cmd_config(args.json)
-        if args.command == "context":
+        if args.command == "context add":
             return cmd_context_add(args)
+        if args.command == "context":
+            return cmd_context(args)
         if args.command == "doctor":
             return cmd_doctor(args.json)
         if args.command == "search":

@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: >-
-  Segundo cérebro num vault do Obsidian mantido junto com uma LLM — notas em Markdown organizadas por PARA, contextos com MOC, inbox, índice e log, num vault sincronizado pelo provedor que a pessoa escolher (Google Drive, OneDrive, iCloud ou pasta local) e usado em várias máquinas e no celular. Use quando o usuário quiser configurar o segundo cérebro (onboarding de vault novo ou existente, ligar uma máquina nova), ver a configuração, criar um contexto, diagnosticar o vault (doctor), buscar notas, notas relacionadas e links (search, related, links) ou guardar qualquer coisa no segundo cérebro — uma anotação, uma aula, um PDF, um vídeo ou um link (ingest, new-note, relate, index). Os fluxos de consultar e manter chegam nas próximas versões.
+  Segundo cérebro num vault do Obsidian mantido junto com uma LLM — notas em Markdown organizadas por PARA, contextos com MOC, inbox, índice e log, num vault sincronizado pelo provedor que a pessoa escolher (Google Drive, OneDrive, iCloud ou pasta local) e usado em várias máquinas e no celular. Use quando o usuário quiser configurar o segundo cérebro (onboarding de vault novo ou existente, ligar uma máquina nova), ver a configuração, criar um contexto, diagnosticar o vault (doctor), buscar notas, notas relacionadas e links (search, related, links) guardar qualquer coisa no segundo cérebro — uma anotação, uma aula, um PDF, um vídeo ou um link (ingest, new-note, relate, index) — ou perguntar ao segundo cérebro ("o que eu sei sobre X", "me prepara para a prova": context, resposta citando as notas, nota answer). O fluxo de manter chega numa próxima versão.
 ---
 
 # Second Brain
@@ -20,6 +20,7 @@ Rode `python3 <skill-dir>/scripts/brain.py <comando>`, onde `<skill-dir>` é a p
 | `init --vault P --files F --provider X [--adopt [--map chave=pasta ...]] [--context nome=pasta[:título] ...] [--force]` | Cria um vault novo ou adota um existente sem mover nem alterar arquivos; grava as duas configurações |
 | `init --join --vault P --files F --provider X` | Máquina nova para um vault que já tem `brain-config.yml`: grava só a configuração local |
 | `context add NOME --folder PASTA [--title T]` | Registra um contexto, cria a pasta e o MOC `mocs/NOME.md` |
+| `context QUERY [--context C] [--hops N] [--limit N] [--max-chars N] [--json]` | Pacote de notas para uma pergunta, só leitura: o MOC do contexto (com `--context`), os resultados da busca (até `--limit`, padrão 8) e os vizinhos por link até `--hops` passos (0 a 2, padrão 1), notas inteiras até `--max-chars` (padrão 40000; a que não cabe vai para `omitted` e as seguintes continuam sendo tentadas; o MOC nunca é atravessado), links quebrados em `broken`. Sem resultado imprime "Nenhuma nota encontrada para: …" e sai com 0; `--hops` fora de 0..2 sai com 2. Se a primeira palavra é exatamente `add`, é o `context add` acima (para buscar a palavra add: `context --json add`) |
 | `doctor [--json]` | Uma linha `OK\|AVISO\|ERRO <item> — <detalhe>` por item; exit 0 sem ERRO, 1 com ERRO, 3 sem configuração |
 | `search QUERY [--context C] [--type T] [--tag G] [--limit N] [--json]` | Busca por termos, com pontuação e um trecho de cada nota; sem resultado imprime "Nenhuma nota encontrada para: …" e sai com 0 |
 | `related (--note CAMINHO \| --text TEXTO) [--limit N] [--json]` | Notas parecidas com uma nota ou com um texto, cada uma com os motivos; nota inexistente sai com 2 |
@@ -29,7 +30,7 @@ Rode `python3 <skill-dir>/scripts/brain.py <comando>`, onde `<skill-dir>` é a p
 | `relate DE PARA --why "motivo" [--both]` | Acrescenta `- [[PARA]] — motivo` na seção `## Relations` de DE (e de PARA com `--both`); repetida = "relação já existe" |
 | `index [--context C]` | Regenera as regiões geradas dos MOCs (`notes`) e do `index.md` (`contexts`, `recent`), sem tocar no texto da pessoa |
 
-Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`.
+Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de consultar e o pacote do `context`: `references/query-flow.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`.
 
 ## Antes de qualquer fluxo
 
@@ -68,14 +69,14 @@ Vault com `brain-config.yml` e máquina sem configuração local: pergunte só o
 
 ## Contextos
 
-Para um assunto novo, rode `brain.py context add NOME --folder PASTA --title T` (pasta relativa ao vault). Contexto que já existe sai com 2: não crie outro com o mesmo nome.
+Para um assunto novo, rode `brain.py context add NOME --folder PASTA --title T` (pasta relativa ao vault). Contexto que já existe sai com 2: não crie outro com o mesmo nome. O `context add` só vale quando `add` é a primeira palavra depois de `context`; qualquer outro texto depois de `context` é uma consulta (seção **Consultar o segundo cérebro**).
 
 ## Buscar e relacionar notas
 
 `search`, `related` e `links` só leem o vault (nada é escrito) e não usam rede nem índice: leem as notas a cada execução. Use sempre `--json` para ler os resultados; avisos de notas com frontmatter inválido ou que não são UTF-8 vêm em `warnings` e não impedem o comando — mencione-os à pessoa se forem relevantes.
 
 - **Fluxo de guardar** (seção abaixo; nota nova a partir da inbox, de uma fonte ou de uma conversa): antes de escrever, rode `brain.py related --text "<resumo do conteúdo novo>" --json` e `brain.py search "<termos principais>" --json` para buscar relações. Leia as notas mais bem pontuadas e use os motivos (`tags:`, `mesmo contexto`, `link direto`, `termos:`) para decidir os `[[links]]`, as tags e o contexto da nota nova — e se o conteúdo já existe numa nota que deveria ser complementada em vez de duplicada.
-- **Fluxo de consultar** (responder uma pergunta com base no vault): rode `brain.py search "<termos da pergunta>" --json`, filtrando com `--context`, `--type` ou `--tag` quando a pergunta indicar; leia as notas encontradas e rode `brain.py links NOTA --json` para seguir os links de saída e os backlinks até as notas vizinhas. Use `brain.py related --note CAMINHO --json` quando quiser ampliar a partir de uma nota central. Responda citando o caminho de cada nota usada.
+- **Fluxo de consultar** (responder uma pergunta com base no vault; passos na seção **Consultar o segundo cérebro**): o `brain.py context` já faz o `search` e segue os links até as vizinhas. Quando faltar algo, rode `brain.py search "<outros termos>" --json` (com `--context`, `--type` ou `--tag`), `brain.py links NOTA --json` para seguir os links de saída e os backlinks de uma nota central, e `brain.py related --note CAMINHO --json` para ampliar a partir dela.
 - **Links quebrados:** `links` lista em `broken` os alvos que não existem; mostre-os à pessoa, sem criar nem corrigir notas por conta própria.
 
 A busca é por termos (sem acentos e sem diferenciar maiúsculas), não semântica: se nada vier, tente sinônimos e termos mais curtos antes de concluir que o vault não tem a informação.
@@ -101,9 +102,18 @@ A seção `## Relations` de cada nota tem uma linha por relação, sempre neste 
 
 Regras de síntese: a nota é uma síntese, não uma cópia — o texto bruto fica na nota de fonte em `raw/`; uma ideia por nota quando der; `[[links]]` só para notas que existem (ou que você acabou de criar).
 
+## Consultar o segundo cérebro
+
+Para responder uma pergunta com base no vault ("o que eu sei sobre X", "me prepara para a P2 de Cálculo II"), siga sempre estes quatro passos, nesta ordem. A resposta vem das notas da pessoa, não da sua memória. Detalhes e exemplo: `references/query-flow.md`.
+
+1. **Buscar:** rode `brain.py context "<termos da pergunta>" --json`, com `--context C` quando a pergunta é de um contexto (o MOC dele vem primeiro). Se nada vier, tente sinônimos e termos mais curtos.
+2. **Ler e seguir links:** leia o pacote (`notes`; `omitted` traz só o título do que não coube, e `broken` os links quebrados). Se faltar algo, rode `brain.py related --note CAMINHO --json` e `brain.py links CAMINHO --json` nas notas centrais e leia as que importarem.
+3. **Responder:** cada afirmação vinda do vault cita a nota de onde veio, como `[[Integrais por partes]]`; o que vier de conhecimento geral (fora do vault) é marcado como tal; aponte as lacunas — o que a pergunta pede e o vault não tem.
+4. **Oferecer salvar:** pergunte se a pessoa quer guardar a resposta. Só com o sim dela: `brain.py new-note --type answer --title "<pergunta curta>" --context C --json`, escreva a pergunta, a resposta e as lacunas nas seções do modelo (e `question`/`cites` no frontmatter), rode `brain.py relate "<answer>" "<nota citada>" --why "cita" --both` para cada nota citada e depois `brain.py index --context C`.
+
 ## Próximas versões
 
-Os fluxos de **consultar** (respostas com citação das notas), **captura rápida e inbox** e **manter** (lint de links, conflitos de sincronização e órfãs) chegam nas próximas versões da skill. O fluxo de guardar já existe (seção acima) e é o único jeito de escrever notas no vault: sempre pelos comandos do `brain.py`, nunca criando arquivos à mão.
+Os fluxos de **captura rápida e inbox** e **manter** (lint de links, conflitos de sincronização e órfãs) chegam nas próximas versões da skill. Os fluxos de guardar e de consultar já existem (seções acima); o de guardar é o único jeito de escrever notas no vault: sempre pelos comandos do `brain.py`, nunca criando arquivos à mão.
 
 ## Regras
 

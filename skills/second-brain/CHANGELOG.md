@@ -9,6 +9,16 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.4] - 2026-10-30
+
+### Added
+- Fluxo de consultar no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.4): `context QUERY [--context] [--hops 0..2] [--limit] [--max-chars] [--json]` monta, só lendo o vault, o pacote de notas da pergunta — o MOC do contexto primeiro, os resultados da busca pela pontuação e os vizinhos por link (saída e backlinks) por distância e título, sem repetir nota; notas inteiras até `--max-chars` (padrão 40.000), pulando para `omitted` a que não cabe e continuando com as seguintes; o MOC nunca é atravessado na expansão; links quebrados em `broken`. `context add` continua igual: vale quando `add` é a primeira palavra depois de `context` (SPEC-0020).
+- Tipo de nota `answer` (`assets/templates/answer.md`, com `question`, `cites` e as seções `Question`, `Answer`, `Gaps` e `Relations`), aceito pelo `new-note --type answer` (SPEC-0020).
+- `SKILL.md`: fluxo de consultar em quatro passos (buscar com `context`, ler e seguir links, responder citando `[[nota]]` e apontando lacunas, oferecer salvar como `answer` com o sim da pessoa); `references/query-flow.md`; `references/note-types.md` com o tipo `answer` (SPEC-0020).
+
+### Fixed
+- Revisão do fluxo de consultar: com `--context` o MOC entra primeiro mas não é atravessado (notas alcançáveis só por ele ficam fora); o corte por `--max-chars` pula a nota que não cabe e continua tentando as seguintes; `context` reaproveita a leitura do vault dos outros comandos; `query-flow.md` explica que vaults já configurados usam o modelo `answer` da skill até copiá-lo para `templates/` (SPEC-0020).
+
 ## [2026.10.3] - 2026-10-30
 
 ### Added
