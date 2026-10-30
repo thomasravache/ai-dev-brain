@@ -9,6 +9,13 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.3] - 2026-10-30
+
+### Added
+- Fluxo de guardar no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.3): `ingest FONTE` (arquivo copiado para `<files>/<contexto ou inbox>/<AAAA>/` sem sobrescrever, URL sem cópia, nota de fonte `raw/AAAA-MM-DD-<slug>.md` com `## Extracted text` de `--text-file` ou `_(pending)_`), `new-note` (modelo do tipo, do vault ou da skill, na pasta do contexto ou em `resources/`), `relate DE PARA --why [--both]` (linha `- [[Nota]] — motivo` na seção `## Relations`) e `index [--context]` (regiões `notes` dos MOCs e `contexts`/`recent` do `index.md`) (SPEC-0019).
+- Escrita segura: `note_path` (título sanitizado, caminho fora do vault recusado com exit 2), `write_new_file` (nunca sobrescreve: "nota já existe"), `append_relation` e `replace_region` (só a região muda; ausente é acrescentada no fim); toda escrita com uma linha no `log.md` (SPEC-0019).
+- `SKILL.md`: fluxo de guardar em seis passos (classificar, guardar o bruto, buscar relações, escrever, ligar e indexar, reportar) e o formato da seção `Relations`; `references/store-flow.md` e `references/note-types.md` com os sete tipos e o frontmatter comum (SPEC-0019).
+
 ## [2026.10.2] - 2026-10-30
 
 ### Added
