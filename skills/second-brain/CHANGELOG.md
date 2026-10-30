@@ -17,6 +17,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 - `inbox_stale_days` no `brain-config.yml` (padrão 7 quando ausente), visível no `config` (SPEC-0021).
 - `SKILL.md`: fluxo de processar a inbox em quatro passos; `references/inbox.md`; `references/mobile-capture.md` com a captura pelo celular em cada provedor da v1 (iOS e Android) e pelo Obsidian mobile, só com os fatos verificados do ADR-0008 (SPEC-0021).
 
+### Fixed
+- Revisão da inbox: `inbox done --note` com caminho absoluto dentro do vault grava o caminho relativo ao vault, e fora do vault sai com 2 sem mover nada (o `log.md` nunca tem caminho absoluto) (SPEC-0021).
+- `ingest --move` e `inbox done` recusam com 2 item que é link simbólico ou que está numa subpasta oculta da inbox (como o `inbox list`, que não os mostra); nada se move e o log não muda (SPEC-0021).
+- Caracteres de controle no nome de um item saem escapados (`\n`, `\t`, `\x1b`) no `log.md` e na saída: um registro por linha (SPEC-0021).
+- `.md`/`.txt` com bytes NUL é `file`; a prévia do `inbox list` não tem caracteres de controle; a prévia de `.webloc` resolve as entidades XML (`&amp;` → `&`) (SPEC-0021).
+- `inbox_stale_days` inválido (negativo, decimal, texto) usa 7 com aviso na lista `warnings` do `config --json` e `AVISO inbox_stale_days` no `doctor` (SPEC-0021).
+- Documentação: `mobile-capture.md` sem "pago" entre os fatos verificados e com a linha do iCloud no Android como orientação não verificada; `config.md` documenta `inbox_stale_days`; `inbox.md` diz que o `ingest --move` falha com segurança quando `files` fica em outro volume (sem cópia automática na v1) e descreve a janela teórica entre a reserva do destino e o `os.replace` (SPEC-0021).
+
 ## [2026.10.4] - 2026-10-30
 
 ### Added

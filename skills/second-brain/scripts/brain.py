@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import html
 import json
 import math
 import ntpath
@@ -119,6 +120,7 @@ INBOX_READ_BYTES = 8192  # enough to classify and preview a text item (a longer 
 PREVIEW_MAX = 120
 STALE_DAYS_DEFAULT = 7
 PROCESSED_DIR = "processed"  # <layout.raw>/processed/AAAA-MM/: text items taken out of the inbox
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")  # control characters: escaped in log.md and the output
 LINK_IN_FILE_RE = re.compile(r"^URL=(\S+)|<string>(https?://[^<]+)</string>", re.MULTILINE | re.IGNORECASE)
 
 
@@ -393,7 +395,7 @@ def read_config(config_home=None) -> dict:
     if not local_path.is_file():
         raise BrainError(NOT_CONFIGURED, 3)
     local = read_yaml(local_path)
-    values, origins, problems = {}, {}, []
+    values, origins, problems, warnings = {}, {}, [], []
     for key in LOCAL_KEYS:
         present = isinstance(local.get(key), str) and local.get(key) != ""
         values[key] = local[key] if present else ""
@@ -417,11 +419,17 @@ def read_config(config_home=None) -> dict:
             given = stale_days(shared.get(key))
             values[key] = given if given is not None else stale_days(defaults.get(key)) or STALE_DAYS_DEFAULT
             origins[key] = ORIGIN_VAULT if given is not None else ORIGIN_DEFAULT
+            if given is None and key in shared:
+                warnings.append({"key": key, "message": (f"brain-config.yml: {key} inválido: {shared[key]} — use um "
+                                                         f"número inteiro de dias >= 0; usando {values[key]}")})
         else:
             found = key in shared
             values[key] = shared[key] if found else defaults.get(key, {})
             origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
-    return {"values": values, "origins": origins, "problems": problems + check_shared(values)}
+    config = {"values": values, "origins": origins, "problems": problems + check_shared(values)}
+    if warnings:  # invalid values that fell back to the default (shown by config --json and doctor)
+        config["warnings"] = warnings
+    return config
 
 
 def stale_days(value):
@@ -517,7 +525,14 @@ def append_log(vault: Path, layout: dict, command: str, summary: str):
     if not log.exists():
         create_file(log, render_log())
     with open(log, "a", encoding="utf-8") as handle:
-        handle.write(f"- {now()} {command} {summary}\n")
+        handle.write(f"- {now()} {one_line(command)} {one_line(summary)}\n")
+
+
+def one_line(text: str) -> str:
+    """text with each control character escaped ("\\n", "\\t", "\\x1b"): one line in log.md and in the output, and
+    nothing the terminal interprets."""
+    names = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    return CONTROL_RE.sub(lambda m: names.get(m.group(), f"\\x{ord(m.group()):02x}"), str(text))
 
 
 def render_index() -> str:
@@ -1418,6 +1433,8 @@ def cmd_config(as_json: bool, config_home=None) -> int:
         print(json.dumps(config, ensure_ascii=False, indent=2))
         return 0
     values, origins = config["values"], config["origins"]
+    for warning in config.get("warnings", []):
+        print(f"aviso: {warning['message']}", file=sys.stderr)
     print(f"second-brain {BRAIN_VERSION} — configuração local: {local_config_path(config_home)}")
     for key in ("vault", "files", "provider", "version", "language", "inbox_stale_days"):
         print(f"{key}: {values[key]}  ({origins[key]})")
@@ -1500,6 +1517,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
         missing = [key for key in SHARED_KEYS if key not in shared]
         rows.append(("OK", "brain-config.yml", f"versão {version}"
                      + (f"; padrão para: {', '.join(missing)}" if missing else "")))
+    rows += [("AVISO", warning["key"], warning["message"]) for warning in config.get("warnings", [])]
 
     root = Path(vault)
     for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
@@ -1831,11 +1849,11 @@ def cmd_ingest(args, config_home=None) -> int:
     if args.json:
         print_json({"raw": raw_rel, "file": file_rel, "url": url})
         return 0
-    print(f"Nota de fonte: {raw_rel}")
+    print(f"Nota de fonte: {one_line(raw_rel)}")
     if url:
         print(f"Link: {url}")
     else:
-        print(f"Arquivo {'movido da inbox' if args.move else 'copiado'}: {file_rel} (na pasta files)")
+        print(f"Arquivo {'movido da inbox' if args.move else 'copiado'}: {one_line(file_rel)} (na pasta files)")
     return 0
 
 
@@ -2000,9 +2018,19 @@ def inbox_dir(vault: Path, layout: dict) -> Path:
 
 def in_inbox(path: Path, vault: Path, layout: dict) -> bool:
     """True when path is a file below the inbox, with the folders resolved ("inbox/../raw/x" is outside; a vault
-    reached through a symbolic link is the same vault). The item itself is not resolved: it is what moves."""
+    reached through a symbolic link is the same vault). The item itself is not resolved: it is what moves, and a
+    symbolic link is never an item."""
     folder = Path(os.path.realpath(path.parent))
-    return is_inside(str(folder), os.path.realpath(inbox_dir(vault, layout))) and path.is_file()
+    return (is_inside(str(folder), os.path.realpath(inbox_dir(vault, layout))) and path.is_file()
+            and not path.is_symlink())
+
+
+def hidden_in_inbox(path: Path, vault: Path, layout: dict) -> bool:
+    """True when `inbox list` hides path: a hidden subfolder of the inbox (any part starting with "."), OS metadata
+    or a hidden file that is not an iCloud placeholder."""
+    folder = _pure(os.path.realpath(path.parent)).relative_to(_pure(os.path.realpath(inbox_dir(vault, layout))))
+    hidden_name = path.name.startswith(".") and not path.name.lower().endswith(ICLOUD_SUFFIX)
+    return any(part.startswith(".") for part in folder.parts) or hidden_name or path.name in OS_METADATA
 
 
 def inbox_item(item: str, vault: Path, layout: dict, outside: str = "item fora da inbox") -> Path:
@@ -2012,9 +2040,13 @@ def inbox_item(item: str, vault: Path, layout: dict, outside: str = "item fora d
     candidates = [given] if given.is_absolute() else [Path.cwd() / given, vault / given]
     path = next((c for c in candidates if c.exists() or c.is_symlink()), None)
     if path is None:
-        raise BrainError(f"item não encontrado: {item}")
+        raise BrainError(f"item não encontrado: {one_line(item)}")
+    if path.is_symlink():
+        raise BrainError(f"item é um link simbólico (não é processado): {one_line(item)}")
     if not in_inbox(path, vault, layout):
-        raise BrainError(f"{outside}: {item}")
+        raise BrainError(f"{outside}: {one_line(item)}")
+    if hidden_in_inbox(path, vault, layout):
+        raise BrainError(f"item numa pasta ou arquivo oculto da inbox (o inbox list não o mostra): {one_line(item)}")
     return path
 
 
@@ -2037,7 +2069,7 @@ def move_out_of_inbox(item: Path, dest: Path, vault: Path, layout: dict, command
     that empty reservation; when it cannot be renamed (another disk) only the reservation goes and the item stays."""
     item, dest = Path(item), Path(dest)
     if not in_inbox(item, vault, layout):
-        raise BrainError(f"item fora da inbox: {item}")
+        raise BrainError(f"item fora da inbox: {one_line(item)}")
     origin = shown_path(item, vault, files)
     dest.parent.mkdir(parents=True, exist_ok=True)
     candidate, n = dest, 0
@@ -2075,7 +2107,9 @@ def item_text(path: Path) -> str:
     suffix, text = path.suffix.lower(), read_head(path)
     if suffix in INBOX_LINK_SUFFIXES:
         m = LINK_IN_FILE_RE.search(text)
-        return (m.group(1) or m.group(2)).strip() if m else ""
+        if not m:
+            return ""
+        return (m.group(1) or html.unescape(m.group(2))).strip()  # .webloc is XML: "&amp;" is "&"
     return read_frontmatter(text)[1].strip() if suffix == ".md" else text.strip()
 
 
@@ -2093,6 +2127,8 @@ def classify_inbox_item(path: Path, now=None) -> str:
     if suffix in INBOX_LINK_SUFFIXES:
         return "link"
     if suffix in INBOX_TEXT_SUFFIXES:
+        if "\x00" in read_head(path):  # NUL bytes: binary content with a text name
+            return "file"
         return "link" if URL_RE.match(item_text(path)) else "text"
     return "file"
 
@@ -2123,7 +2159,7 @@ def inbox_entries(vault: Path, layout: dict, stale_after: int, now=None) -> list
         except OSError:
             continue  # vanished while listing (the provider moved it)
         age = max(0.0, (now - stat.st_mtime) / 86400)
-        preview = " ".join(item_text(path).split()) if kind in ("text", "link") else ""
+        preview = " ".join(CONTROL_RE.sub(" ", item_text(path)).split()) if kind in ("text", "link") else ""
         if len(preview) > PREVIEW_MAX:
             preview = preview[:PREVIEW_MAX - 1] + "…"
         rows.append((stat.st_mtime, rel, {"path": rel, "kind": kind, "size": stat.st_size,
@@ -2162,7 +2198,7 @@ def cmd_inbox_list(args, config_home=None) -> int:
         return 0
     for item in items:
         flag = " (parado)" if item["stale"] else ""
-        print(f"{item['kind']:<7} {item['age_days']:>6.1f}d {item['size']:>9}  {item['path']}{flag}")
+        print(f"{item['kind']:<7} {item['age_days']:>6.1f}d {item['size']:>9}  {one_line(item['path'])}{flag}")
         if item["preview"]:
             print(f"    {item['preview']}")
     syncing = sum(1 for item in items if item["kind"] == "syncing")
@@ -2180,14 +2216,27 @@ def cmd_inbox_done(args, config_home=None) -> int:
         raise BrainError(f"ainda sincronizando: {args.item} — espere o app do provedor baixar o arquivo")
     note = None
     if args.note:
-        found = LinkIndex(rel for _, rel in walk_notes(values)).resolve(args.note)
-        note = found or " ".join(args.note.split())
+        ref = note_ref(args.note, vault)
+        found = LinkIndex(rel for _, rel in walk_notes(values)).resolve(ref)
+        note = found or " ".join(ref.split())
     raw = inside_vault(layout["raw"], "layout.raw")
     dest = vault / raw / PROCESSED_DIR / dt.date.today().strftime("%Y-%m") / item.name
     origin = shown_path(item, vault)
     final = move_out_of_inbox(item, dest, vault, layout, command="inbox-done", note=note)
-    print(f"{origin} → {shown_path(final, vault)}" + (f" (nota: {note})" if note else ""))
+    print(one_line(f"{origin} → {shown_path(final, vault)}" + (f" (nota: {note})" if note else "")))
     return 0
+
+
+def note_ref(note: str, vault: Path) -> str:
+    """--note of inbox done as log.md records it: an absolute path inside the vault becomes relative to the vault;
+    outside the vault = BrainError(2), before anything moves (log.md never holds an absolute path)."""
+    text = note.strip()
+    if not is_absolute(text):
+        return text
+    real, root = os.path.realpath(os.path.expanduser(text)), os.path.realpath(vault)
+    if not is_inside(real, root):
+        raise BrainError("--note fora do vault: use uma nota do vault (caminho relativo ao vault ou nome)")
+    return Path(real).relative_to(root).as_posix()
 
 
 # ---------------------------------------------------------------- cli
