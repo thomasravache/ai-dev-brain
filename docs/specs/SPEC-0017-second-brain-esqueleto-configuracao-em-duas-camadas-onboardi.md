@@ -252,33 +252,33 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Arquitetura e parser**
-- [ ] Red: UT-06, UT-04 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
-- [ ] Green: `tests/test_architecture.py` com as regras do ADR-0007; `brain.py` com `argparse` e parser/escritor de YAML
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-06, UT-04 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
+- [x] Green: `tests/test_architecture.py` com as regras do ADR-0007; `brain.py` com `argparse` e parser/escritor de YAML
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Configuração em duas camadas**
-- [ ] Red: UT-01, UT-02, UT-03, IT-05 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
-- [ ] Green: `load_config` com origem dos valores; validação de `init`; `config`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, IT-05 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
+- [x] Green: `load_config` com origem dos valores; validação de `init`; `config`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Onboarding e doctor**
-- [ ] Red: IT-01, IT-02, IT-03, IT-04, IT-06, IT-07 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
-- [ ] Green: `init` (novo, `--adopt`, `--force`, `--join`), `context add`, `doctor`, modelos em `assets/`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: IT-01, IT-02, IT-03, IT-04, IT-06, IT-07 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
+- [x] Green: `init` (novo, `--adopt`, `--force`, `--join`), `context add`, `doctor`, modelos em `assets/`
+- [x] Refactor mantendo tudo verde
 
 **Fase 4: Instruções, CI e docs**
-- [ ] Red: UT-05 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
-- [ ] Green: `SKILL.md`, `references/config.md`, `providers.md`, `vault-layout.md`; passo da suíte nova em `.github/workflows/ci.yml`; README e CHANGELOG raiz
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
-- [ ] Architect: `test` e `arch_test` do `docs/specs/sdd-config.yml` passam a incluir `skills/second-brain/tests`
+- [x] Red: UT-05 com a tag `SPEC-0017:<ID>`, falhando pelo motivo certo
+- [x] Green: `SKILL.md`, `references/config.md`, `providers.md`, `vault-layout.md`; passo da suíte nova em `.github/workflows/ci.yml`; README e CHANGELOG raiz
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Architect: `test` e `arch_test` do `docs/specs/sdd-config.yml` passam a incluir `skills/second-brain/tests`
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7) — CHANGELOG da skill; não há CHANGELOG na raiz do repositório
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -289,9 +289,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 1dc7044 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 1dc7044 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (1dc7044; 3 minor: vault só com .obsidian recusado sem --adopt; mensagem do IT-08 cita só a chave em colisão; brain.py executável) — 1dc7044 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 70bac4d | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -305,36 +305,75 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+A skill `second-brain` existe, com a base para as outras filhas do épico SPEC-0016:
+- estrutura do vault em inglês;
+- configuração em duas camadas: `brain-config.yml` no vault e `config.yml` local por máquina, com `BRAIN_CONFIG_HOME`;
+- onboarding não interativo (`init`, com vault novo, `--adopt`, `--map`, `--context`, `--force` e `--join`);
+- `config`, `context add` e `doctor`.
+
+O `SKILL.md` manda o agente rodar `brain.py config` antes de qualquer fluxo. Sem configuração, ele conduz o onboarding; com configuração, segue direto. A CI roda a suíte nova, e o README lista a skill.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `skills/second-brain/scripts/brain.py`: arquivo único só com a biblioteca padrão (ADR-0007), com `BRAIN_VERSION` 2026.10.1. Tem parser e escritor de YAML próprios (`parse_yaml`, `dump_yaml`), `read_config`/`load_config` com a origem de cada valor e validação de caminhos dentro do vault (Emenda v2). Toda escrita passa por funções que nunca sobrescrevem e acrescentam uma linha `- AAAA-MM-DD HH:MM …` no `log.md`.
+- O `brain-config.yml` é gerado a partir do texto de `assets/brain-config.yml`, mantendo os comentários. O `context add` só insere linhas, com a indentação existente.
+- Também foram criados `assets/templates/` (7 tipos), `SKILL.md`, `references/config.md`, `references/providers.md` (só fatos verificados do ADR-0008, com o resto marcado como não verificado), `references/vault-layout.md`, `CHANGELOG.md` da skill, o passo na CI e a linha no README.
+- **Emenda v2 (IMP-01):** a primeira revisão G4 reproduziu três problemas: escrita fora do vault, linha acrescentada no `log.md` do usuário e perda de comentários. O contrato ganhou as regras e os testes UT-07 e IT-08 a IT-11. Uma nova rodada de red (ce9c634) veio antes da correção (25ceba8, 1dc7044), e a revisão seguinte aprovou.
+- **Desvios aceitos na revisão:**
+  - `.DS_Store`, `Thumbs.db` e `desktop.ini` não contam como conteúdo;
+  - qualquer `..` é recusado;
+  - a recusa de `log.md` ou `index.md` do usuário vale também para `init` comum e `--force`;
+  - a mensagem do IT-08 cita só a chave em colisão (`--map log=…` ou `--map index=…`);
+  - `brain.py` é executável, como o `spec_graph.py`.
+- O lint passou a rodar localmente com o uv, instalado pelo Homebrew por decisão do usuário.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Configuração efetiva com a origem de cada valor | PASS | `test_config.py::LoadConfigTest.test_effective_config_reports_the_origin_of_each_value` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | Validação de files e provider no init | PASS | `test_config.py::ValidateInitArgsTest (3 testes); test_cli.py::InitArgsCliTest.test_invalid_init_arguments_exit_2_with_the_message` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | brain-config.yml sem caminho absoluto | PASS | `test_config.py::BrainConfigWithoutAbsolutePathsTest.test_generated_brain_config_has_no_absolute_path` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-04 | Parser e escritor de YAML | PASS | `test_config.py::YamlTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-05 | Instruções de onboarding, configuração e provedores | PASS | `test_instructions.py::InstructionsTest (3 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-06 | Regras de arquitetura do ADR-0007 | PASS | `test_architecture.py::ImportRulesTest, ProcessRulesTest, PersonalPathRulesTest (7 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-07 | Valores do brain-config.yml fora do vault recusados (v2) | PASS | `test_amendment_v2.py::OutsideVaultLoadConfigTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | Vault novo com estrutura, duas configurações e log | PASS | `test_cli.py::NewVaultTest.test_init_creates_the_full_structure_and_both_configs` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | Adotar vault sem alterar arquivos | PASS | `test_cli.py::AdoptVaultTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | init repetido, config diferente e --force com backup | PASS | `test_cli.py::ReinitTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | init --join numa máquina nova | PASS | `test_cli.py::JoinTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-05 | Sem configuração local: exit 3 | PASS | `test_cli.py::NotConfiguredTest.test_config_and_doctor_without_local_config_exit_3` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-06 | doctor saudável e com erro, sem traceback | PASS | `test_cli.py::DoctorTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-07 | context add e contexto repetido | PASS | `test_cli.py::ContextAddTest.test_context_add_registers_creates_folder_and_moc_and_logs` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-08 | Adopt recusa log.md/index.md do usuário (v2) | PASS | `test_amendment_v2.py::AdoptWithUserLogTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-09 | Pasta não vazia sem --adopt recusada (v2) | PASS | `test_amendment_v2.py::NotEmptyWithoutAdoptTest.test_init_in_a_folder_with_notes_suggests_adopt_and_creates_nothing` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-10 | Comentários e indentação preservados; contexts inline recusado (v2) | PASS | `test_amendment_v2.py::CommentsPreservedTest (3 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-11 | Caminho fora do vault e config malformado no doctor (v2) | PASS | `test_amendment_v2.py::ValidationAndMalformedTest (2 testes)` — CI do PR #15 em 70bac4d (run 41043522848, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — `doctor` e `config` em 0,08–0,13 s com 5.000 notas (meta: menos de 1 s); segurança e privacidade por UT-03, UT-07, IT-08 a IT-11
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` com o merge do PR #15
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` configurado
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15; quem usa copia `skills/second-brain/` para o diretório de skills. Versão da skill: 2026.10.1. Rollback: revert do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+SPEC-0025 — vault criado pelo app do Obsidian, só com `.obsidian/`, deve receber a estrutura padrão (achado minor 1 da revisão G4). A spec está proposta e aguarda aprovação.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0017`. -->
