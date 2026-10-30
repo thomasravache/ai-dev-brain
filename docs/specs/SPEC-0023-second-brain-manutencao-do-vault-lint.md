@@ -9,7 +9,7 @@ created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0021]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/maintenance.md, skills/second-brain/references/providers.md, skills/second-brain/references/config.md, skills/second-brain/assets/brain-config.yml, skills/second-brain/CHANGELOG.md]
 adrs: [ADR-0007, ADR-0008, ADR-0002]
 external: []
@@ -93,8 +93,9 @@ brain.py lint [--json] [--only regra1,regra2]
 brain-config.yml:
   conflict_patterns: [<regex sobre o nome do arquivo, com um grupo "base">]
   padrão quando ausente: os padrões do provider da configuração local, documentados em references/providers.md
-  (ex.: genéricos "(?P<base>.+) \(\d+\)\.md$" e "(?P<base>.+)[ _-]conflict.*\.md$"); os padrões de cada provedor
-  são conferidos com cópias reais na implementação, com a data registrada no providers.md
+  (ex.: genéricos "(?P<base>.+) \(\d+\)\.md$" e "(?P<base>.+)[ _-]conflict.*\.md$"); na v1 os quatro provedores
+  usam os padrões genéricos, marcados em providers.md como não conferidos com cópias reais (v2); a conferência com
+  cópias reais de cada provedor fica para a SPEC-0027
 
 doctor: linha "OK|AVISO|ERRO lint — N erros, M avisos (rode lint)"
 
@@ -208,9 +209,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 5556f65 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 5556f65 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (5556f65; 6 minor; padrões de conflito genéricos = desvio do contrato a registrar em emenda) — 5556f65 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 84241ab | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -258,3 +259,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0023`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-10-30 | Padrão de conflito por provedor: na v1, genéricos para os quatro provedores, marcados como não conferidos; a conferência com cópias reais passa para a SPEC-0027 | Revisão G4: não dá para gerar cópias de conflito reais dos provedores nesta máquina; precisa de aparelhos do usuário | Nenhuma (nenhuma spec consome o contrato da SPEC-0023) | |
