@@ -37,7 +37,7 @@ NÃO muda: o `--adopt`, a recusa de `log.md` e `index.md` do usuário e as demai
 **Outras ocorrências:** Nenhuma.
 
 ## 4. Plano de Testes (TDD)
-- Caracterização: N/A — o IT-09 da SPEC-0017 fixa a recusa para pastas com notas e continua valendo.
+- Caracterização: N/A — o teste de pasta com notas da Emenda v2 da SPEC-0017 fixa a recusa e continua valendo.
 - **UT-01** — Dado uma pasta com `.obsidian/app.json` e `.DS_Store`, quando a checagem de pasta vazia roda, então a pasta conta como vazia; com mais um `nota.md`, deixa de contar.
 - **IT-01** — Dado uma pasta com só `.obsidian/` (com arquivos dentro), quando roda `init --vault P --files F --provider icloud`, então a estrutura padrão é criada, o conteúdo e a data de modificação de `.obsidian/` não mudam e o exit é 0.
 
@@ -64,7 +64,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 1304494 | 2026-10-30 |
-| G1 Red | PENDING | | |
+| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0025:IT-09 — 608f572 | 2026-10-30 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
