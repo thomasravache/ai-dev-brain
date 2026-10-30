@@ -154,22 +154,22 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Pacote de contexto**
-- [ ] Red: UT-01, UT-02, IT-01, IT-02, IT-04 com a tag `SPEC-0020:<ID>`, falhando pelo motivo certo
-- [ ] Green: `build_context` e comando `context`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, IT-01, IT-02, IT-04 com a tag `SPEC-0020:<ID>`, falhando pelo motivo certo
+- [x] Green: `build_context` e comando `context`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Tipo answer e instruções**
-- [ ] Red: IT-03, UT-03 com a tag `SPEC-0020:<ID>`, falhando pelo motivo certo
-- [ ] Green: modelo `answer`, fluxo de consultar no `SKILL.md`, `query-flow.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: IT-03, UT-03 com a tag `SPEC-0020:<ID>`, falhando pelo motivo certo
+- [x] Green: modelo `answer`, fluxo de consultar no `SKILL.md`, `query-flow.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -180,9 +180,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 529a285 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 529a285 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (529a285; achados 1, 2 e 4 corrigidos; 3 tratado no relatório) — 529a285 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 97c6b95 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -195,36 +195,59 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+A consulta ao segundo cérebro tem um fluxo fixo:
+- `brain.py context PERGUNTA` monta o pacote de notas que respondem: primeiro o MOC do contexto, depois os resultados da busca e os vizinhos por link até `--hops`, com limite de tamanho (`--max-chars`);
+- o tipo de nota `answer` guarda uma resposta com pergunta, resposta, notas citadas e lacunas.
+
+O `SKILL.md` traz os quatro passos: buscar, ler e seguir links, responder citando `[[nota]]` e apontando lacunas, e oferecer salvar a resposta.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `brain.py` (versão 2026.10.4) ganhou `build_context`, `neighbors` (busca em largura com notas bloqueadas), `moc_path` e `load_vault`.
+- `context add` continua criando contexto: o comando só cria contexto quando a primeira palavra é exatamente `add`; qualquer outra coisa é consulta.
+- Também foram criados o modelo `assets/templates/answer.md` e `references/query-flow.md`.
+- A 1ª revisão G4 pediu mudanças: 1 major (a expansão passava pelo MOC e trazia o contexto inteiro como `link:2`) e 3 minor. Decisões do Architect, com testes de regressão vindo antes (red 8e4b275, fix af99c7c e 529a285):
+  - com `--context`, o MOC nunca é atravessado;
+  - o corte por tamanho pula a nota que não cabe e continua.
+- A 2ª revisão aprovou sem achados.
+- Correção do Plano de Rollout (§8): vaults que já estão configurados não recebem o modelo `answer` pelo `init`. O `new-note` usa o modelo da skill até o usuário copiar `assets/templates/answer.md` para `templates/` (documentado em `query-flow.md`).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Pacote com busca e vizinhos até hops, sem repetir, com links quebrados; MOC não atravessado com --context | PASS | `test_query.py::BuildContextExpansionTest.test_neighbors_up_to_hops_without_repeats_and_broken_links; test_query.py::BuildContextExpansionTest.test_default_hops_is_one; test_query.py::BuildContextMocNotTraversedTest.test_moc_comes_first_but_is_not_traversed_with_context; test_query.py::BuildContextMocNotTraversedTest.test_without_context_the_moc_is_an_ordinary_note` — CI do PR #15 em 97c6b95 (run 41062877378, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | Corte por --max-chars pula a nota que não cabe e continua | PASS | `test_query.py::BuildContextSizeLimitTest.test_notes_that_do_not_fit_max_chars_go_to_omitted; test_query.py::BuildContextSizeLimitTest.test_a_big_top_note_that_does_not_fit_does_not_push_small_ones_out` — CI do PR #15 em 97c6b95 (run 41062877378, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | SKILL.md com os quatro passos de consultar; modelo answer com as seções | PASS | `test_query_instructions.py::QueryFlowInstructionsTest.test_skill_md_has_the_four_query_steps_in_order_with_citation_rules; test_query_instructions.py::QueryFlowInstructionsTest.test_answer_template_has_the_contract_frontmatter_and_sections_in_order; test_query_instructions.py::QueryFlowInstructionsTest.test_note_types_reference_describes_answer` — CI do PR #15 em 97c6b95 (run 41062877378, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | context com MOC primeiro, busca, vizinhos e JSON do contrato | PASS | `test_query_cli.py::ContextCliTest.test_context_puts_the_moc_first_then_search_results_then_neighbors; test_query_cli.py::ContextCliTest.test_context_moc_is_not_traversed_with_two_hops` — CI do PR #15 em 97c6b95 (run 41062877378, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | Sem resultado e --hops fora de 0..2 | PASS | `test_query_cli.py::ContextCliTest.test_context_without_results_and_invalid_hops` — CI do PR #15 em 97c6b95 (run 41062877378, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | Salvar a resposta como nota answer ligada e no MOC | PASS | `test_query_cli.py::AnswerCliTest.test_answer_note_is_saved_related_to_cited_notes_and_indexed` — CI do PR #15 em 97c6b95 (run 41062877378, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | context --hops 2 com 5.000 notas abaixo de 2 s | PASS | `test_query_cli.py::ContextPerformanceCliTest.test_context_with_two_hops_takes_under_2_seconds_on_5000_notes` — CI do PR #15 em 97c6b95 (run 41062877378, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — `context --hops 2` em 0,61–0,67 s com 5.000 notas (meta: menos de 2 s), no IT-04; custo limitado por `--max-chars` (padrão 40.000)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` com o merge do PR #15
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` configurado
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.4. Rollback: revert do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+SPEC-0026 — o `index.md` e o `log.md` também funcionam como atalho na expansão do `context`. Esse caso entrou na SPEC-0026 (proposta, aguardando aprovação).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0020`. -->
