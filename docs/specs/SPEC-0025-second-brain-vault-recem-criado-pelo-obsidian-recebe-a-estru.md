@@ -4,7 +4,7 @@ title: "second-brain: vault recém-criado pelo Obsidian recebe a estrutura padr�
 tier: lite
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0017]
@@ -13,8 +13,8 @@ touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, sk
 adrs: [ADR-0007]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0025 — second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão
@@ -49,6 +49,15 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 e IT-01 com a tag `SPEC-0025:<ID>`, falhando pelo motivo certo
+- [ ] Green: pasta só com `.obsidian/` conta como vazia; `SKILL.md` e `vault-layout.md` citam o caso
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
