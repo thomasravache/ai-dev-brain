@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 7 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 6, in-progress 1, implemented 16
+- Validação (G0): **0 erro(s), 8 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 6, implemented 17
 - Impedimentos: **0 aberto(s)**, 13 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,27 +23,26 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0019  
+**Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** —
+**Próximo lote:** SPEC-0020
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0019 | second-brain: fluxo de guardar | full/M | in-progress | 🔄 em andamento |  |
-| 2 | SPEC-0020 | second-brain: fluxo de consultar | full/S | approved | ⛔ aguarda implementação de SPEC-0019 |  |
-| 3 | SPEC-0021 | second-brain: inbox e captura pelo celular | full/S | approved | ⛔ aguarda implementação de SPEC-0019 | saiu da onda 2: arquivos em comum com SPEC-0020 |
-| 4 | SPEC-0022 | second-brain: processadores de vídeo e documento | full/M | approved | ⛔ aguarda implementação de SPEC-0021 |  |
-| 5 | SPEC-0023 | second-brain: manutenção do vault (lint) | full/S | approved | ⛔ aguarda implementação de SPEC-0021 | saiu da onda 4: arquivos em comum com SPEC-0022 |
-| 6 | SPEC-0024 | second-brain: exportação para o NotebookLM | lite/S | approved | ⛔ aguarda implementação de SPEC-0020 | saiu da onda 3: arquivos em comum com SPEC-0021; saiu da onda 4: arquivos em comum com SPEC-0022; saiu da onda 5: arquivos em comum com SPEC-0023 |
-| 7 | SPEC-0025 | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0019; saiu da onda 2: arquivos em comum com SPEC-0020; saiu da onda 3: arquivos em comum com SPEC-0021; saiu da onda 4: arquivos em comum com SPEC-0022; saiu da onda 5: arquivos em comum com SPEC-0023; saiu da onda 6: arquivos em comum com SPEC-0024 |
-| 8 | SPEC-0026 | second-brain: ajustes da busca apontados na revisão da SPEC-0018 | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0019; saiu da onda 2: arquivos em comum com SPEC-0020; saiu da onda 3: arquivos em comum com SPEC-0021; saiu da onda 4: arquivos em comum com SPEC-0022; saiu da onda 5: arquivos em comum com SPEC-0023; saiu da onda 6: arquivos em comum com SPEC-0024; saiu da onda 7: arquivos em comum com SPEC-0025 |
+| 1 | SPEC-0020 | second-brain: fluxo de consultar | full/S | approved | ✅ pronta |  |
+| 2 | SPEC-0021 | second-brain: inbox e captura pelo celular | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0020 |
+| 3 | SPEC-0022 | second-brain: processadores de vídeo e documento | full/M | approved | ⛔ aguarda implementação de SPEC-0021 |  |
+| 4 | SPEC-0023 | second-brain: manutenção do vault (lint) | full/S | approved | ⛔ aguarda implementação de SPEC-0021 | saiu da onda 3: arquivos em comum com SPEC-0022 |
+| 5 | SPEC-0024 | second-brain: exportação para o NotebookLM | lite/S | approved | ⛔ aguarda implementação de SPEC-0020 | saiu da onda 2: arquivos em comum com SPEC-0021; saiu da onda 3: arquivos em comum com SPEC-0022; saiu da onda 4: arquivos em comum com SPEC-0023 |
+| 6 | SPEC-0025 | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0020; saiu da onda 2: arquivos em comum com SPEC-0021; saiu da onda 3: arquivos em comum com SPEC-0022; saiu da onda 4: arquivos em comum com SPEC-0023; saiu da onda 5: arquivos em comum com SPEC-0024 |
+| 7 | SPEC-0026 | second-brain: ajustes da busca apontados na revisão da SPEC-0018 | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0020; saiu da onda 2: arquivos em comum com SPEC-0021; saiu da onda 3: arquivos em comum com SPEC-0022; saiu da onda 4: arquivos em comum com SPEC-0023; saiu da onda 5: arquivos em comum com SPEC-0024; saiu da onda 6: arquivos em comum com SPEC-0025 |
 
 ## Épicos
 
 | Épico | Título | Status | Progresso |
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
-| SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | approved | 2/10 implementadas |
+| SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | approved | 3/10 implementadas |
 
 ## Grafo de Dependências
 
@@ -54,7 +53,7 @@ flowchart LR
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0017["SPEC-0017<br/>second-brain: esqueleto, configuração e…"]:::implemented
     S0018["SPEC-0018<br/>second-brain: busca e relações entre no…"]:::implemented
-    S0019["SPEC-0019<br/>second-brain: fluxo de guardar"]:::inprogress
+    S0019["SPEC-0019<br/>second-brain: fluxo de guardar"]:::implemented
     S0020["SPEC-0020<br/>second-brain: fluxo de consultar"]:::approved
     S0021["SPEC-0021<br/>second-brain: inbox e captura pelo celu…"]:::approved
     S0022["SPEC-0022<br/>second-brain: processadores de vídeo e …"]:::approved
@@ -101,7 +100,7 @@ flowchart LR
 | [SPEC-0016](SPEC-0016-second-brain-skill-de-segundo-cerebro-no-obsidian.md) | Second brain: skill de segundo cérebro no Obsidian | epic | feature | approved | 2026-10-30 | — | — | — |
 | [SPEC-0017](SPEC-0017-second-brain-esqueleto-configuracao-em-duas-camadas-onboardi.md) | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full | feature | implemented | 2026-10-30 | SPEC-0016 | — | — |
 | [SPEC-0018](SPEC-0018-second-brain-busca-e-relacoes-entre-notas.md) | second-brain: busca e relações entre notas | full | feature | implemented | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
-| [SPEC-0019](SPEC-0019-second-brain-fluxo-de-guardar.md) | second-brain: fluxo de guardar | full | feature | in-progress | 2026-10-30 | SPEC-0016 | SPEC-0018 | — |
+| [SPEC-0019](SPEC-0019-second-brain-fluxo-de-guardar.md) | second-brain: fluxo de guardar | full | feature | implemented | 2026-10-30 | SPEC-0016 | SPEC-0018 | — |
 | [SPEC-0020](SPEC-0020-second-brain-fluxo-de-consultar.md) | second-brain: fluxo de consultar | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0019 | — |
 | [SPEC-0021](SPEC-0021-second-brain-inbox-e-captura-pelo-celular.md) | second-brain: inbox e captura pelo celular | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0019 | — |
 | [SPEC-0022](SPEC-0022-second-brain-processadores-de-video-e-documento.md) | second-brain: processadores de vídeo e documento | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0021 | — |
