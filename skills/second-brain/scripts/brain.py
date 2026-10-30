@@ -38,22 +38,22 @@ ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders
 ORIGIN_LOCAL, ORIGIN_VAULT, ORIGIN_DEFAULT = "local", "vault", "padrão"
 NOT_CONFIGURED = "second-brain não configurado nesta máquina — rode init (ou init --join)"
 LOCAL_HEADER = "# second-brain — configuração local desta máquina (references/config.md). Não vai para o vault.\n"
-SHARED_HEADER = ("# second-brain — configuração compartilhada do vault (references/config.md).\n"
-                 "# Sincroniza com o vault; só caminhos relativos ao vault.\n")
 CONTEXT_NAME_RE = re.compile(r"^[\w][\w-]*$")
 KEY_RE = re.compile(r"^([^\s'\"#{}\[\],:][^:]*?)\s*:(?:\s+(.*))?$")
 NEEDS_QUOTES_RE = re.compile(r":\s|:$|\s#|^[\[\]{}&*!|>'\"%@`,#?:-]|^\s|\s$|\"|\\")
 FLOW_SPECIAL = ",[]{}"
 DOCTOR_STATUSES = ("OK", "AVISO", "ERRO")
-PROVIDER_NOTES = {
-    "google-drive": ("AVISO", "no iOS o Obsidian não suporta oficialmente o Google Drive; no celular, prefira o "
-                              "Obsidian Sync (references/providers.md)"),
-    "onedrive": ("AVISO", "o OneDrive não é suportado oficialmente no iOS e pode não funcionar bem no Android "
-                          "(Dropsync/FolderSync); veja references/providers.md"),
-    "icloud": ("AVISO", "recomendado no iPhone e no iPad, só entre aparelhos Apple; no Android use o Obsidian "
-                        "Sync (references/providers.md)"),
-    "local": ("AVISO", "pasta local não sincroniza com o celular sozinha; use o Obsidian Sync ou outro app "
-                       "(references/providers.md)"),
+BRAIN_MARKER = "<!-- brain:begin"  # generated regions of index.md and log.md: the file is the skill's
+OS_METADATA = (".DS_Store", "Thumbs.db", "desktop.ini")  # not content: an "empty" vault may have them
+PROVIDER_NOTES = {  # only the facts of the verified source of ADR-0008 (https://obsidian.md/help/sync-notes)
+    "google-drive": ("AVISO", ("no iOS o Obsidian não suporta oficialmente o Google Drive; no celular, prefira o "
+                               "Obsidian Sync (references/providers.md)")),
+    "onedrive": ("AVISO", ("o OneDrive não é suportado oficialmente no iOS e pode não funcionar bem no Android "
+                           "(Dropsync/FolderSync); veja references/providers.md")),
+    "icloud": ("AVISO", ("recomendado no iPhone e no iPad, só entre aparelhos Apple; nos outros aparelhos, o "
+                         "Obsidian Sync funciona em todos (references/providers.md)")),
+    "local": ("AVISO", ("pasta local não sincroniza com o celular sozinha; o Obsidian Sync funciona em todos "
+                        "(references/providers.md)")),
 }
 
 
@@ -295,21 +295,44 @@ def read_yaml(path: Path) -> dict:
         raise BrainError(f"não consegui ler {path}: {e}", 1) from e
 
 
-def load_config(config_home=None) -> dict:
-    """Effective configuration: local layer + <vault>/brain-config.yml + defaults, with the origin of each value.
-    Without local configuration raises BrainError(NOT_CONFIGURED, 3)."""
+def outside_vault(value: str) -> bool:
+    """True when a vault-relative value of brain-config.yml is absolute or climbs with '..' (ADR-0008)."""
+    return is_absolute(value) or ".." in value.replace("\\", "/").split("/")
+
+
+def check_shared(values: dict) -> list:
+    """(key, message) for each layout, para or contexts.<c>.folder value outside the vault."""
+    problems = []
+    for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
+        problems += [(f"{section}.{key}", values[section][key]) for key in keys]
+    contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
+    for name, item in contexts.items():
+        folder = item.get("folder") if isinstance(item, dict) else None
+        if isinstance(folder, str) and folder:
+            problems.append((f"contexts.{name}.folder", folder))
+    return [(key, f"brain-config.yml: {key} fora do vault: {value}") for key, value in problems
+            if outside_vault(value)]
+
+
+def read_config(config_home=None) -> dict:
+    """Effective configuration without raising on the vault layer: like load_config plus `problems`, the
+    (key, message) pairs of an unreadable brain-config.yml ("brain-config.yml") or values outside the vault.
+    Used by doctor, which reports them and goes on; without local configuration raises BrainError(NOT_CONFIGURED, 3)."""
     local_path = local_config_path(config_home)
     if not local_path.is_file():
         raise BrainError(NOT_CONFIGURED, 3)
     local = read_yaml(local_path)
-    values, origins = {}, {}
+    values, origins, problems = {}, {}, []
     for key in LOCAL_KEYS:
         present = isinstance(local.get(key), str) and local.get(key) != ""
         values[key] = local[key] if present else ""
         origins[key] = ORIGIN_LOCAL if present else ORIGIN_DEFAULT
     shared = {}
     if values["vault"] and shared_config_path(values["vault"]).is_file():
-        shared = read_yaml(shared_config_path(values["vault"]))
+        try:
+            shared = read_yaml(shared_config_path(values["vault"]))
+        except BrainError as e:
+            problems.append(("brain-config.yml", str(e)))
     defaults = default_shared()
     for key in SHARED_KEYS:
         if key in ("layout", "para"):
@@ -323,7 +346,18 @@ def load_config(config_home=None) -> dict:
             found = key in shared
             values[key] = shared[key] if found else defaults.get(key, {})
             origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
-    return {"values": values, "origins": origins}
+    return {"values": values, "origins": origins, "problems": problems + check_shared(values)}
+
+
+def load_config(config_home=None) -> dict:
+    """Effective configuration: local layer + <vault>/brain-config.yml + defaults, with the origin of each value.
+    Without local configuration raises BrainError(NOT_CONFIGURED, 3); an unreadable brain-config.yml or a layout,
+    para or contexts.<c>.folder value outside the vault raises BrainError(..., 1) naming the key."""
+    config = read_config(config_home)
+    problems = config.pop("problems")
+    if problems:
+        raise BrainError(problems[0][1], 1)
+    return config
 
 
 def validate_init_args(vault: str, files: str, provider: str):
@@ -336,19 +370,24 @@ def validate_init_args(vault: str, files: str, provider: str):
 
 
 def render_brain_config(vault: str, layout=None, contexts=None) -> str:
-    """Text of the brain-config.yml that init writes: the default of assets/ plus --map and --context.
-    Never holds an absolute path: folders inside the vault become relative to it."""
-    data = default_shared()
+    """Text of the brain-config.yml that init writes: assets/brain-config.yml with its comments, changing only the
+    values of --map and the contexts of --context. Never holds an absolute path: folders inside the vault become
+    relative to it."""
+    text = DEFAULT_SHARED_CONFIG.read_text(encoding="utf-8")
+    expected = parse_yaml(text)
     for key, folder in (layout or {}).items():
         section = "layout" if key in LAYOUT_KEYS else "para" if key in PARA_KEYS else None
         if section is None:
             raise BrainError(f"chave de --map desconhecida: {key} — use uma de: {', '.join(LAYOUT_KEYS + PARA_KEYS)}")
-        data[section][key] = relative_folder(vault, folder)
-    if contexts:
-        data["contexts"] = {name: {"folder": relative_folder(vault, item["folder"]),
-                                   "title": item.get("title") or name}
-                            for name, item in contexts.items()}
-    return SHARED_HEADER + dump_yaml(data)
+        expected[section][key] = relative_folder(vault, folder)
+        text = set_child_value(text, section, key, expected[section][key])
+    for name, item in (contexts or {}).items():
+        entry = {"folder": relative_folder(vault, item["folder"]), "title": item.get("title") or name}
+        expected["contexts"] = dict(expected["contexts"] or {}, **{name: entry})
+        text = add_context_text(text, name, entry)
+    if parse_yaml(text) != expected:
+        raise BrainError(f"não consegui gerar o brain-config.yml a partir de {DEFAULT_SHARED_CONFIG}", 1)
+    return text
 
 
 def render_local_config(vault: str, files: str, provider: str) -> str:
@@ -462,31 +501,71 @@ def create_context(vault: Path, layout: dict, name: str, item: dict) -> list:
     return created
 
 
-def add_context_text(text: str, name: str, item: dict) -> str:
-    """brain-config.yml with one more context, appended inside `contexts:` so comments and order stay."""
-    entry = f"  {fmt_scalar(name)}: {fmt_flow(item)}"
+def _top_level(lines: list, key: str):
+    """Index of the top-level `key:` line, or None."""
+    pattern = re.compile(rf"^{re.escape(key)}\s*:")
+    return next((i for i, line in enumerate(lines) if pattern.match(line)), None)
+
+
+def _children(lines: list, start: int) -> range:
+    """Lines below lines[start] that belong to it: indented lines (blank ones in between included)."""
+    end, last = start + 1, start + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t"):
+        end += 1
+        if lines[end - 1].strip():
+            last = end
+    return range(start + 1, last)
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _child_indent(lines: list, start: int) -> int:
+    """Indentation of the entries under lines[start]; without entries, the first indented key of the file (or 2)."""
+    for i in list(_children(lines, start)) + list(range(len(lines))):
+        stripped = lines[i].strip()
+        if stripped and not stripped.startswith("#") and _indent(lines[i]) > 0:
+            return _indent(lines[i])
+    return 2
+
+
+def _join(lines: list, text: str) -> str:
+    newline = "\r\n" if "\r\n" in text else "\n"
+    return newline.join(lines) + newline
+
+
+def set_child_value(text: str, section: str, key: str, value: str) -> str:
+    """Text with `section.key` set to value on its own line; the comment of the line and every other line stay."""
     lines = text.splitlines()
-    for i, line in enumerate(lines):
-        m = re.match(r"^contexts\s*:(.*)$", line)
-        if not m:
-            continue
-        rest = strip_comment(m.group(1)).strip()
-        if rest == "{}":
-            lines[i:i + 1] = ["contexts:", entry]
-        elif rest == "":
-            end = i + 1
-            while end < len(lines) and (not lines[end].strip() or lines[end][0] in " #"):
-                end += 1
-            while end > i + 1 and not lines[end - 1].strip():
-                end -= 1
-            lines.insert(end, entry)
-        else:
-            break  # inline map with items: rewritten below
-        return "\n".join(lines) + "\n"
-    data = parse_yaml(text)
-    contexts = data.get("contexts") if isinstance(data.get("contexts"), dict) else {}
-    data["contexts"] = dict(contexts, **{name: item})
-    return SHARED_HEADER + dump_yaml(data)
+    start = _top_level(lines, section)
+    if start is not None:
+        for i in _children(lines, start):
+            content = strip_comment(lines[i])
+            pair = re.match(r"^(\s+)([^\s:#][^:]*?)(\s*:\s*)(.*)$", content)
+            if pair and pair.group(2) == key and len(pair.group(1)) == _child_indent(lines, start):
+                lines[i] = pair.group(1) + key + pair.group(3) + fmt_scalar(value) + lines[i][len(content):]
+                return _join(lines, text)
+    raise BrainError(f"{section}.{key} não está em forma de bloco no modelo {DEFAULT_SHARED_CONFIG}", 1)
+
+
+def add_context_text(text: str, name: str, item: dict) -> str:
+    """brain-config.yml with one more context: only inserts a line inside `contexts:`, with the indentation of the
+    existing entries; comments, order and every other line stay. Inline contexts with items = BrainError (exit 2)."""
+    lines = text.splitlines()
+    start = _top_level(lines, "contexts")
+    if start is None:
+        lines += ["contexts:", f"{' ' * _child_indent(lines, len(lines) - 1)}{fmt_scalar(name)}: {fmt_flow(item)}"]
+        return _join(lines, text)
+    content = strip_comment(lines[start])
+    rest = content.split(":", 1)[1].strip()
+    if rest == "{}":  # empty inline map becomes a block; the comment keeps its column
+        tail = lines[start][len(content):]
+        lines[start] = content.replace("{}", "  ", 1) + tail if tail.strip() else content.replace("{}", "").rstrip()
+    elif rest:
+        raise BrainError("contexts está em forma inline — converta para bloco")
+    lines.insert(_children(lines, start).stop, f"{' ' * _child_indent(lines, start)}{fmt_scalar(name)}: {fmt_flow(item)}")
+    return _join(lines, text)
 
 
 # ---------------------------------------------------------------- commands
@@ -514,6 +593,14 @@ def parse_contexts(values) -> dict:
 def check_context_name(name: str):
     if not CONTEXT_NAME_RE.match(name):
         raise BrainError(f"nome de contexto inválido: {name} (use letras, números, '_' ou '-')")
+
+
+def check_user_files(vault: Path, layout: dict):
+    """index.md and log.md of the user (without the brain:begin markers) are never adopted nor appended to."""
+    for key in ("log", "index"):
+        path = vault / layout[key]
+        if path.is_file() and BRAIN_MARKER not in path.read_text(encoding="utf-8", errors="replace"):
+            raise BrainError(f"{layout[key]} já existe — use --map {key}=<outro>")
 
 
 def cmd_init(args, config_home=None) -> int:
@@ -551,6 +638,10 @@ def cmd_init(args, config_home=None) -> int:
             return 0
         if not args.force:
             raise BrainError("brain-config.yml já existe — use --join ou --force")
+    elif not args.adopt and vault.is_dir() and any(e.name not in OS_METADATA for e in vault.iterdir()):
+        raise BrainError("vault não está vazio — use --adopt")
+    check_user_files(vault, parse_yaml(rendered)["layout"])
+    if shared_path.exists():
         backup = backup_path(shared_path)
         shutil.copy2(shared_path, backup)
 
@@ -634,8 +725,8 @@ def doctor_items(config: dict, local_path: Path) -> list:
     if vault_ok:
         rows.append(("OK", "vault", vault))
     else:
-        rows.append(("ERRO", "vault", f"pasta não encontrada: {vault or '(sem vault na configuração local)'} — "
-                                      "o app do provedor já sincronizou? (references/providers.md)"))
+        rows.append(("ERRO", "vault", (f"pasta não encontrada: {vault or '(sem vault na configuração local)'} — "
+                                       "o app do provedor já sincronizou? (references/providers.md)")))
     if files and Path(files).is_dir():
         inside = vault and is_inside(str(Path(files).resolve()), str(Path(vault).resolve()))
         rows.append(("ERRO", "files", "precisa ficar fora do vault") if inside else ("OK", "files", files))
@@ -647,6 +738,10 @@ def doctor_items(config: dict, local_path: Path) -> list:
     shared_path = shared_config_path(vault)
     if not shared_path.is_file():
         rows.append(("ERRO", "brain-config.yml", f"ausente em {vault} — rode init (ou init --adopt)"))
+        return rows + provider_items(values)
+    problems = dict(config["problems"])
+    if "brain-config.yml" in problems:  # unreadable: the items that depend on it are not checked
+        rows.append(("ERRO", "brain-config.yml", problems["brain-config.yml"]))
         return rows + provider_items(values)
     shared = read_yaml(shared_path)
     unknown = sorted(set(shared) - set(SHARED_KEYS))
@@ -664,6 +759,9 @@ def doctor_items(config: dict, local_path: Path) -> list:
     for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
         for key in keys:
             rel = values[section][key]
+            if f"{section}.{key}" in problems:
+                rows.append(("ERRO", f"{section}.{key}", f"fora do vault: {rel} — use um caminho relativo ao vault"))
+                continue
             path = root / rel
             exists = path.is_file() if key in LAYOUT_FILES else path.is_dir()
             rows.append(("OK" if exists else "AVISO", f"{section}.{key}", rel if exists else f"não existe: {rel}"))
@@ -673,7 +771,11 @@ def doctor_items(config: dict, local_path: Path) -> list:
     for name, item in contexts.items():
         folder = item.get("folder", "") if isinstance(item, dict) else ""
         moc = root / values["layout"]["mocs"] / f"{name}.md"
-        if not folder or not (root / folder).is_dir():
+        if f"contexts.{name}.folder" in problems:
+            rows.append(("ERRO", f"contexto {name}", f"contexts.{name}.folder fora do vault: {folder}"))
+        elif "layout.mocs" in problems:
+            rows.append(("AVISO", f"contexto {name}", f"{folder}; MOC não conferido (layout.mocs fora do vault)"))
+        elif not folder or not (root / folder).is_dir():
             rows.append(("AVISO", f"contexto {name}", f"pasta não existe: {folder or '(sem folder)'}"))
         else:
             rows.append(("OK" if moc.is_file() else "AVISO", f"contexto {name}",
@@ -710,7 +812,7 @@ def provider_items(values: dict) -> list:
 
 
 def cmd_doctor(as_json: bool, config_home=None) -> int:
-    rows = doctor_items(load_config(config_home), local_config_path(config_home))
+    rows = doctor_items(read_config(config_home), local_config_path(config_home))
     code = 1 if any(status == "ERRO" for status, _, _ in rows) else 0
     if as_json:
         items = [{"status": s, "item": i, "detail": d} for s, i, d in rows]
