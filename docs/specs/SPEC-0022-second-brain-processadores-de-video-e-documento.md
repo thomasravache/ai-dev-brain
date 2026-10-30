@@ -174,27 +174,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Funções puras**
-- [ ] Red: UT-01, UT-02, UT-03 com a tag `SPEC-0022:<ID>`, falhando pelo motivo certo
-- [ ] Green: `detect_kind`, `build_args`, `subtitles_to_text`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03 com a tag `SPEC-0022:<ID>`, falhando pelo motivo certo
+- [x] Green: `detect_kind`, `build_args`, `subtitles_to_text`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Execução**
-- [ ] Red: UT-04, IT-01, IT-02, IT-03, IT-04, IT-05, IT-06 com a tag `SPEC-0022:<ID>`, falhando pelo motivo certo
-- [ ] Green: `run_processor`, `process`, `ingest` automático, checagem no `doctor`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-04, IT-01, IT-02, IT-03, IT-04, IT-05, IT-06 com a tag `SPEC-0022:<ID>`, falhando pelo motivo certo
+- [x] Green: `run_processor`, `process`, `ingest` automático, checagem no `doctor`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Guia dos processadores**
-- [ ] Red: UT-05 com a tag `SPEC-0022:<ID>`, falhando pelo motivo certo
-- [ ] Green: `references/processors.md` conferido contra o `--help` de yt-dlp, Whisper e pdftotext (versão e data); onboarding oferece os modelos
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: UT-05 com a tag `SPEC-0022:<ID>`, falhando pelo motivo certo
+- [x] Green: `references/processors.md` conferido contra o `--help` de yt-dlp, Whisper e pdftotext (versão e data); onboarding oferece os modelos
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -205,9 +205,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a80288f | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — a80288f | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (a80288f; 1 major e 3 minor da 1ª rodada corrigidos) — a80288f | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 355419d | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -220,36 +220,63 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Vídeos do YouTube, vídeos e áudios locais e PDFs passam a chegar ao segundo cérebro com o texto extraído:
+- o `ingest` chama sozinho o processador configurado para o tipo (yt-dlp, Whisper, pdftotext ou outro) e grava a transcrição ou o texto na nota de fonte, com links para o trecho do vídeo quando há `--timestamps`;
+- `brain.py process` roda um processador direto;
+- o `doctor` confere se cada processador está instalado.
+
+Sem processador, nada muda: o arquivo fica guardado e a skill avisa.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `brain.py` (versão 2026.10.6) ganhou `detect_kind`, `build_args` (`shlex.split` e substituição em uma passada) e `subtitles_to_text`.
+- `run_processor` é o único ponto que roda processo externo: `Popen` sem shell, num grupo de processos próprio, numa pasta temporária, com timeout que encerra o grupo inteiro.
+- `references/processors.md` traz os modelos. O yt-dlp 2026.08.19 foi conferido contra o `--help` instalado nesta máquina. O Whisper (20250625) e o pdftotext (poppler 26.07.0, página de manual via manpages.debian.org) foram conferidos na documentação em 2026-10-30, sem executar nesta máquina, e nada foi instalado.
+- O escopo passou a incluir `references/config.md` e `references/store-flow.md`, que estavam desatualizados.
+- A 1ª revisão G4 pediu mudanças: 1 major (o timeout matava só o processo direto e deixava netos rodando) e 3 minor (`--out` sobrescrevia; fonte do pdftotext; ffmpeg do Whisper). Os testes de regressão vieram antes da correção (red b102931; fix 5c29b00 e a80288f), e a 2ª revisão aprovou sem achados.
+- O 1º registro do G1 falhou porque o `verify` da `sdd-management` tratou como teste desta spec uma citação a outro teste no texto do plano. A citação foi reescrita.
+- Um G2 falhou uma vez com a máquina carregada (outra suíte rodando em paralelo) e não se repetiu.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Detecção do tipo (YouTube, vídeo, áudio, PDF) | PASS | `test_processors.py::DetectKindTest.test_kinds_of_the_contract` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | Argumentos montados sem shell, um por marcador | PASS | `test_processors.py::BuildArgsTest.test_each_marker_becomes_one_literal_argument_without_shell; test_processors.py::BuildArgsTest.test_a_value_with_a_marker_inside_is_kept_literally` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | Legendas para texto, com tempo e links do YouTube | PASS | `test_processors.py::SubtitlesToTextTest.test_plain_text_without_header_markup_or_repeated_lines; test_processors.py::SubtitlesToTextTest.test_timestamps_become_mm_ss_lines; test_processors.py::SubtitlesToTextTest.test_youtube_timestamps_link_to_the_moment` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-04 | Processo externo só em run_processor, sem shell | PASS | `test_architecture.py::ProcessRulesTest.test_brain_runs_processes_only_in_run_processor; test_architecture.py::ProcessRulesTest.test_run_processor_is_the_one_place_that_runs_a_process_and_never_with_shell` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-05 | Guia dos processadores com versão, data, aviso de rede e pré-requisitos | PASS | `test_processors_instructions.py::ProcessorsGuideTest.test_three_models_each_with_command_version_and_check_date; test_processors_instructions.py::ProcessorsGuideTest.test_network_warning_for_yt_dlp_and_how_to_swap_tools; test_processors_review.py::ProcessorsGuideReviewTest.test_pdf_section_cites_manpages_debian_with_version_date_and_not_run; test_processors_review.py::ProcessorsGuideReviewTest.test_whisper_section_states_the_ffmpeg_prerequisite` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | ingest com processador grava o texto extraído | PASS | `test_processors_cli.py::IngestWithProcessorTest.test_pdf_text_goes_under_extracted_text_and_is_logged` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | YouTube com tempo e saída por arquivo | PASS | `test_processors_cli.py::YoutubeTimestampsTest.test_timestamps_link_each_line_to_the_moment_from_the_largest_vtt; test_processors_cli.py::YoutubeTimestampsTest.test_without_timestamps_the_largest_vtt_becomes_plain_text` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | Sem processador, --no-process e --text-file | PASS | `test_processors_cli.py::WithoutProcessingTest.test_no_processor_no_process_and_text_file_do_not_run_the_processor` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | Falha, executável ausente e tempo esgotado (grupo de processos encerrado) | PASS | `test_processors_cli.py::ProcessorFailureTest.test_exit_3_keeps_the_raw_note_with_the_failure_and_a_short_stderr; test_processors_cli.py::ProcessorFailureTest.test_missing_executable_keeps_the_raw_note_with_the_failure; test_processors_cli.py::ProcessorFailureTest.test_timeout_kills_the_processor_and_keeps_the_raw_note; test_processors_review.py::TimeoutKillsProcessGroupTest.test_ingest_timeout_kills_the_grandchild; test_processors_review.py::TimeoutKillsProcessGroupTest.test_process_timeout_kills_the_grandchild` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-05 | process direto; --out nunca sobrescreve nem escreve no vault | PASS | `test_processors_cli.py::ProcessCommandTest.test_process_exits_0_2_and_1; test_processors_review.py::ProcessOutNeverOverwritesTest.test_existing_out_file_exits_2_and_is_left_unchanged; test_processors_review.py::ProcessOutNeverOverwritesTest.test_out_inside_the_vault_exits_2_and_writes_nothing` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-06 | doctor confere cada processador | PASS | `test_processors_cli.py::DoctorProcessorsTest.test_doctor_runs_each_check_and_warns_on_missing_executable` — CI do PR #15 em 355419d (run 41076965759, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — tempo limitado pelo `timeout` do processador (padrão 1800 s), com o grupo de processos encerrado ao estourar (IT-04); segurança: sem shell, nomes vindos do celular viram um argumento só (UT-02), só URLs http/https
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` com o merge do PR #15
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` configurado
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.6. Rollback: revert do merge ou remover o processador do `brain-config.yml`.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma nova spec desta entrega. Fica uma observação para a `sdd-management`: o `verify` não deveria tratar como teste da spec uma citação a outra spec (por exemplo `SPEC-0017:UT-06`) no texto do plano. Esse ponto é candidato a uma correção lite da skill.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0022`. -->
