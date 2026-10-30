@@ -4,7 +4,7 @@ title: "second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e S
 tier: lite
 type: fix
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0020]
@@ -96,7 +96,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 423ad9d | 2026-10-30 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
 | G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — f143a82 | 2026-10-30 |
 
 ## 9. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -119,10 +119,10 @@ Red 9d2f379: os testes UT-01, UT-02, IT-01 e IT-02 tinham 11 falhas, contando os
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
-| UT-01 | Ocultos fora da varredura, links NFC/NFD, cercas de código, termos curtos e texto do search.md | PASS | `test_search_review.py::HiddenAndUnicodeScanTest.test_hidden_md_files_are_not_scanned; test_search_review.py::HiddenAndUnicodeScanTest.test_nfc_link_resolves_to_a_file_name_stored_in_nfd; test_search_review.py::ParseFixesTest.test_link_and_path_keys_are_compared_in_nfc; test_search_review.py::ParseFixesTest.test_a_fence_closes_only_with_the_same_char_and_at_least_the_same_length; test_search_review.py::ParseFixesTest.test_terms_shorter_than_two_characters_do_not_count; test_search_review.py::SearchDocTest.test_search_md_says_every_attachment_embed_is_broken_in_links` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
-| UT-02 | Note recusa campos desconhecidos | PASS | `test_search_review.py::StrictNoteTest.test_note_rejects_unknown_fields` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
-| IT-01 | log.md e index.md fora de related e ainda achados pelo search | PASS | `test_search_review.py::RelatedLayoutFilesCliTest.test_related_never_lists_log_or_index_but_search_still_finds_them` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
-| IT-02 | context nunca expande pelo index.md ou pelo log.md | PASS | `test_search_review.py::ContextLayoutFilesCliTest.test_context_never_expands_through_index_or_log` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-01 | Ocultos fora da varredura, links NFC/NFD, cercas de código, termos curtos e texto do search.md | PASS | `test_search_review.py::HiddenAndUnicodeScanTest.test_hidden_md_files_are_not_scanned; test_search_review.py::HiddenAndUnicodeScanTest.test_nfc_link_resolves_to_a_file_name_stored_in_nfd; test_search_review.py::ParseFixesTest.test_link_and_path_keys_are_compared_in_nfc; test_search_review.py::ParseFixesTest.test_a_fence_closes_only_with_the_same_char_and_at_least_the_same_length; test_search_review.py::ParseFixesTest.test_terms_shorter_than_two_characters_do_not_count; test_search_review.py::SearchDocTest.test_search_md_says_every_attachment_embed_is_broken_in_links` — CI do PR #15 em 423ad9d (run 41101566278, Python 3.9 e 3.15; pr-check no run 41101569025) e suíte local (G5) |
+| UT-02 | Note recusa campos desconhecidos | PASS | `test_search_review.py::StrictNoteTest.test_note_rejects_unknown_fields` — CI do PR #15 em 423ad9d (run 41101566278, Python 3.9 e 3.15; pr-check no run 41101569025) e suíte local (G5) |
+| IT-01 | log.md e index.md fora de related e ainda achados pelo search | PASS | `test_search_review.py::RelatedLayoutFilesCliTest.test_related_never_lists_log_or_index_but_search_still_finds_them` — CI do PR #15 em 423ad9d (run 41101566278, Python 3.9 e 3.15; pr-check no run 41101569025) e suíte local (G5) |
+| IT-02 | context nunca expande pelo index.md ou pelo log.md | PASS | `test_search_review.py::ContextLayoutFilesCliTest.test_context_never_expands_through_index_or_log` — CI do PR #15 em 423ad9d (run 41101566278, Python 3.9 e 3.15; pr-check no run 41101569025) e suíte local (G5) |
 
 ### Definição de Pronto
 - [x] Teste de regressão falhou antes e passa depois da correção

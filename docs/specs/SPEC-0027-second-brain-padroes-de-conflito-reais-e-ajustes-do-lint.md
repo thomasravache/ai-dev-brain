@@ -1,15 +1,15 @@
 ---
 id: SPEC-0027
-title: "second-brain: padrões de conflito reais e ajustes do lint e da exportação"
+title: "second-brain: padrões de conflito reais e ajustes do lint, da busca e da exportação"
 tier: lite
 type: fix
 user_facing: false
 status: proposed
 created: 2026-10-30
 parent: SPEC-0016
-depends_on: [SPEC-0023, SPEC-0024]
+depends_on: [SPEC-0023, SPEC-0024, SPEC-0026]
 consumes_contract: []
-touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/maintenance.md, skills/second-brain/references/providers.md, skills/second-brain/references/config.md, skills/second-brain/references/notebooklm.md, skills/second-brain/CHANGELOG.md]
+touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/maintenance.md, skills/second-brain/references/providers.md, skills/second-brain/references/config.md, skills/second-brain/references/notebooklm.md, skills/second-brain/references/search.md, skills/second-brain/references/query-flow.md, skills/second-brain/CHANGELOG.md]
 adrs: [ADR-0007, ADR-0008]
 external: []
 size: S
@@ -17,7 +17,7 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0027 — second-brain: padrões de conflito reais e ajustes do lint e da exportação
+# SPEC-0027 — second-brain: padrões de conflito reais e ajustes do lint, da busca e da exportação
 
 ## 1. Problema
 A revisão G4 da SPEC-0023 aprovou o `lint` e apontou seis pontos.
@@ -35,6 +35,13 @@ A revisão G4 da SPEC-0024 (exportação para o NotebookLM) aprovou e apontou ma
 8. Duas notas cujos títulos só diferem na normalização Unicode (NFC e NFD) geram o mesmo nome de arquivo no APFS, e a exportação falha com um pacote parcial.
 9. `flatten_links` reescreve wikilinks dentro de código (`` `[[x]]` `` vira `` `x` ``), o que altera exemplos de código.
 10. Só o MOC exportado é bloqueado. Um MOC de outro contexto serve de caminho, e `export-notebooklm index` exporta quase o vault inteiro.
+
+A revisão G4 da SPEC-0026 (ajustes da busca) aprovou e apontou mais quatro pontos:
+
+11. O `lint` ainda lê arquivos `.md` ocultos, que a varredura da busca já ignora.
+12. A exclusão de `index.md` e `log.md` compara o caminho exato, então não funciona quando muda a caixa (`Index.md`) ou a forma Unicode.
+13. Dentro de um bloco ```, uma linha como "```python" fecha o bloco, mas o CommonMark não aceita texto depois de uma cerca de fechamento.
+14. Em `references/search.md` há uma linha longa fora da quebra do arquivo, e o `references/query-flow.md` não diz que o `context` não expande pelo `index.md` nem pelo `log.md`.
 
 ## 2. Causa Raiz
 Em `skills/second-brain/scripts/brain.py`:
@@ -56,6 +63,10 @@ O texto da sugestão de órfã está no `SKILL.md`.
 - Os nomes exportados são comparados com `unicodedata.normalize("NFC", …).casefold()`.
 - `flatten_links` não mexe em código, nem em cercas nem em código inline.
 - Na exportação, todos os MOCs (`layout.mocs`) ficam bloqueados como caminho, e `index.md` e `log.md` são recusados como MOC, com exit 2.
+- O `lint` ignora `.md` ocultos como notas, com o mesmo filtro da varredura.
+- `generated_paths` e as comparações de caminho de layout passam a usar `_link_key` (caixa e NFC).
+- Uma cerca de fechamento só aceita espaços depois da marca.
+- `search.md` tem a linha longa quebrada, e `query-flow.md` diz que o `context` não expande pelo `index.md` nem pelo `log.md`.
 
 NÃO muda: as regras, as severidades, os formatos e os códigos de saída da SPEC-0023, nem o formato do pacote da SPEC-0024.
 
@@ -71,6 +82,8 @@ NÃO muda: as regras, as severidades, os formatos e os códigos de saída da SPE
 - **UT-02** — Dado uma nota com `files: [../../x.pdf]`, quando `check_missing_file` roda, então o detalhe diz "fora da pasta files".
 - **UT-03** — Dado o texto `` `[[codigo]]` e [[Nota]] ``, quando `flatten_links` roda, então devolve `` `[[codigo]]` e Nota ``; e dado dois títulos "Séries" em NFC e NFD, quando `export_name` roda, então gera nomes diferentes.
 - **IT-02** — Dado uma falha simulada na escrita do terceiro arquivo, quando roda `export-notebooklm`, então `--out` continua vazio; e dado `export-notebooklm index`, então sai com 2; e dado uma nota citada que liga ao MOC de outro contexto, então as notas alcançadas só por esse MOC não entram.
+- **UT-04** — Dado um bloco ``` com uma linha "```python" dentro e `#x` depois, quando `parse_note` roda, então `#x` não é tag; e dado `layout.index: index.md` com o arquivo `Index.md`, quando `generated_paths` é usado em `related`, então `Index.md` fica de fora.
+- **IT-03** — Dado um vault com `.oculta.md` sem links, quando roda `lint`, então nenhum achado cita `.oculta.md`; e dado `references/query-flow.md`, quando lido, então diz que o `context` não expande pelo `index.md` nem pelo `log.md`.
 - **IT-01** — Dado `--only ""`, quando roda `lint`, então sai com 2 e mostra "nenhuma regra em --only"; e dado um `brain-config.yml` com o padrão catastrófico e uma nota de 40 caracteres, quando roda `lint` e `doctor`, então os dois terminam em menos de 3 s com o achado `config`.
 
 ## 5. Questões em Aberto
