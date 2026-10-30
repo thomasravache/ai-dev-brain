@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.9] - 2026-10-30
+
+### Fixed
+- `init` sem `--adopt` numa pasta que só tem `.obsidian/` (vault recém-criado no app do Obsidian), além de `.DS_Store`, `Thumbs.db` ou `desktop.ini`, cria a estrutura padrão completa em vez de pedir `--adopt`, e não altera nada dentro de `.obsidian/`; a checagem vira `is_empty_vault(folder)` no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.9). Qualquer outro arquivo ou pasta continua exigindo `--adopt`; `SKILL.md` e `references/vault-layout.md` citam o caso (SPEC-0025).
+
 ## [2026.10.8] - 2026-10-30
 
 ### Added

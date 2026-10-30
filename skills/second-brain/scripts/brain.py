@@ -39,7 +39,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.8"
+BRAIN_VERSION = "2026.10.9"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -1490,6 +1490,11 @@ def check_context_name(name: str):
         raise BrainError(f"nome de contexto inválido: {name} (use letras, números, '_' ou '-')")
 
 
+def is_empty_vault(folder: Path) -> bool:
+    """Empty for init: nothing but OS_METADATA and the `.obsidian/` the Obsidian app creates with a new vault."""
+    return all(e.name in OS_METADATA or (e.name == ".obsidian" and e.is_dir()) for e in folder.iterdir())
+
+
 def check_user_files(vault: Path, layout: dict):
     """index.md and log.md of the user (without the brain:begin markers) are never adopted nor appended to."""
     for key in ("log", "index"):
@@ -1533,7 +1538,7 @@ def cmd_init(args, config_home=None) -> int:
             return 0
         if not args.force:
             raise BrainError("brain-config.yml já existe — use --join ou --force")
-    elif not args.adopt and vault.is_dir() and any(e.name not in OS_METADATA for e in vault.iterdir()):
+    elif not args.adopt and vault.is_dir() and not is_empty_vault(vault):
         raise BrainError("vault não está vazio — use --adopt")
     check_user_files(vault, parse_yaml(rendered)["layout"])
     if shared_path.exists():
