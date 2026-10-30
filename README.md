@@ -7,7 +7,7 @@ Skills e materiais de apoio para desenvolvimento com agentes de IA (Claude Code,
 | Skill | O que faz |
 |---|---|
 | [`sdd-management`](skills/sdd-management/SKILL.md) | Spec-Driven Development de ponta a ponta: specs com dependências, aprovação humana antes do código, execução multiagente em ondas, TDD verificado no git, gates de qualidade até o deploy, pilares de entrega e relatório de entrega. Agnóstica de tecnologia e de ferramenta. |
-| [`second-brain`](skills/second-brain/SKILL.md) | Segundo cérebro num vault do Obsidian mantido com uma LLM: onboarding de vault novo ou existente, configuração em duas camadas (por máquina e no vault) para usar em várias máquinas e no celular, contextos com MOC e `doctor`. Agnóstica de provedor (Google Drive, OneDrive, iCloud ou pasta local). |
+| [`second-brain`](skills/second-brain/SKILL.md) | Segundo cérebro num vault do Obsidian mantido com uma LLM. Faz o onboarding de um vault novo ou existente e guarda notas, PDFs e vídeos: o texto é extraído por yt-dlp, Whisper ou pdftotext, as notas são ligadas às relacionadas e entram no MOC e no log. Também consulta o vault citando as notas, captura pelo celular via `inbox/`, faz manutenção com `lint` e exporta para o NotebookLM. Agnóstica de provedor (Google Drive, OneDrive, iCloud ou pasta local) e de LLM. |
 
 ## Instalação
 
