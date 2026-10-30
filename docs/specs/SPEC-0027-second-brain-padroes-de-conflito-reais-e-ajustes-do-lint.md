@@ -109,9 +109,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 38e7d71 | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=33)) — 1b06b2a | 2026-10-30 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 26138b3 | 2026-10-30 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 26138b3 | 2026-10-30 |
-| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED (26138b3; 1 major: (a+){20} passa pela checagem de quantificador aninhado e trava o lint; 7 minor) | 2026-10-30 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — e8e1624 | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — e8e1624 | 2026-10-30 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (e8e1624; 8 achados da 1ª rodada corrigidos; 1 minor: janela de corrida do os.replace não documentada) — e8e1624 | 2026-10-30 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
