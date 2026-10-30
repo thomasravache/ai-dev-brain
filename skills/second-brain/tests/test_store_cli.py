@@ -570,5 +570,220 @@ class StoreJourneyCliTest(StoreCliTestCase):
         self.assertTrue(any("mocs/college.md" in rest for rest in by_command["index"]), lines)
 
 
+ORPHAN_BEGIN = "<!-- brain:begin notes -->"
+ORPHAN_END = "<!-- brain:end notes -->"
+BROKEN_MOCS = {
+    "begin sem end": ("---\ntype: moc\ntitle: College\n---\n# College\n\n" + ORPHAN_BEGIN +
+                      "\nTexto meu depois do begin órfão: não pode sumir.\n"),
+    "end antes do begin": ("---\ntype: moc\ntitle: College\n---\n# College\n\n" + ORPHAN_END +
+                           "\nTexto meu entre os marcadores.\n" + ORPHAN_BEGIN + "\nTexto meu no fim: não pode sumir.\n"),
+    "região duplicada": ("---\ntype: moc\ntitle: College\n---\n# College\n\n" + ORPHAN_BEGIN + "\n- [[Velha]]\n" +
+                         ORPHAN_END + "\n\nTexto meu entre as regiões.\n\n" + ORPHAN_BEGIN + "\n- [[Outra]]\n" +
+                         ORPHAN_END + "\n\nRodapé meu.\n"),
+}
+EVIL_CONTEXT = "../../escaped"  # nome que sobe dois níveis: de <files> e de <vault>/mocs cai dentro do sandbox
+
+
+def contents(root):
+    return {k: v[0] for k, v in snapshot(root).items()}
+
+
+class ReviewRegressionCliTest(StoreCliTestCase):
+    """Defeitos reproduzidos na revisão da SPEC-0019 (contrato seção 6 e NFRs seção 5)."""
+
+    def test_index_refuses_a_moc_with_unbalanced_or_duplicated_markers(self):
+        """SPEC-0019:IT-04"""
+        self.make_vault()
+        self.write("projects/college/Derivadas.md", note_text("Derivadas", "lecture", "college"))
+        self.assertExit(self.box.run("index"), 0)
+        for label, broken in BROKEN_MOCS.items():
+            with self.subTest(case=label):
+                moc = self.write("mocs/college.md", broken)
+                raw = moc.read_bytes()
+                before = contents(self.box.vault)
+                for attempt in (1, 2):
+                    out = self.box.run("index")
+                    self.assertNotEqual(out.returncode, 0, f"tentativa {attempt}: {output(out)}")
+                    self.assertNotIn("Traceback", output(out))
+                    self.assertIn("mocs/college.md", output(out), "o erro nomeia o arquivo")
+                    self.assertEqual(moc.read_bytes(), raw, f"tentativa {attempt}: MOC byte a byte")
+                    self.assertEqual(contents(self.box.vault), before, f"tentativa {attempt}: nada escrito nem logado")
+
+    def add_evil_context(self):
+        config = self.box.vault / "brain-config.yml"
+        text = config.read_text(encoding="utf-8")
+        line = "  college: {folder: projects/college, title: College}\n"
+        self.assertIn(line, text)
+        config.write_text(text.replace(line, line + f"  {EVIL_CONTEXT}: {{folder: projects/escaped, "
+                                                   "title: Escaped}\n"), encoding="utf-8")
+
+    def escaped(self):
+        return sorted(p.relative_to(self.box.root).as_posix() for p in self.box.root.rglob("*escaped*")
+                      if p.name != "brain-config.yml")
+
+    def test_context_name_climbing_out_of_files_or_vault_is_refused(self):
+        """SPEC-0019:IT-01"""
+        self.make_vault()
+        self.add_evil_context()
+        pdf = self.source("f.pdf", b"%PDF-1.4")
+        vault_before, files_before = contents(self.box.vault), contents(self.box.files)
+        out = self.box.run("ingest", pdf, "--context", EVIL_CONTEXT)
+        self.assertExit(out, 2)
+        self.assertEqual(self.escaped(), [], "nada escrito fora da pasta files")
+        self.assertEqual(contents(self.box.files), files_before)
+        self.assertEqual(contents(self.box.vault), vault_before, "nenhuma nota de fonte nem linha de log")
+
+    def test_index_never_writes_a_moc_outside_the_vault_for_a_hand_edited_context_name(self):
+        """SPEC-0019:IT-04"""
+        self.make_vault()
+        self.add_evil_context()
+        for args in (("index",), ("index", "--context", EVIL_CONTEXT)):
+            with self.subTest(args=args):
+                out = self.box.run(*args)
+                self.assertNotIn("Traceback", output(out))
+                self.assertEqual(self.escaped(), [], f"MOC fora do vault: {output(out)}")
+                self.assertIn(EVIL_CONTEXT, output(out), "o contexto recusado aparece no erro")
+                if len(args) > 1:
+                    self.assertExit(out, 2)
+
+    def test_title_with_markers_quotes_and_hash_is_kept_literally_and_readable(self):
+        """SPEC-0019:IT-02"""
+        self.make_vault()
+        title = 'Aula "1": {date} {context} {source} #tag'
+        data = self.json_of("new-note", "--type", "lecture", "--title", title, "--context", "college")
+        path = self.rel(data["path"])
+        text = self.read(path)
+        self.assertRegex(text, rf"(?m)^# {re.escape(title)}\s*$", "o título entra literal no cabeçalho")
+        note = self.note(path)
+        self.assertEqual(note.warnings, [], "o frontmatter criado é lido pelo parser da skill")
+        self.assertEqual(note.frontmatter.get("title"), title)
+        self.assertEqual(note.frontmatter.get("type"), "lecture")
+        self.assertEqual(note.frontmatter.get("context"), "college")
+        found = self.json_of("search", "Aula", "--type", "lecture", "--context", "college")
+        self.assertIn(path, [self.rel(r["path"]) for r in found["results"]], found)
+        self.assertExit(self.box.run("index", "--context", "college"), 0)
+        notes = region(self.read("mocs/college.md"), "notes")
+        self.assertRegex(notes, r"(?m)^#* *lecture\s*$", notes)
+        self.assertIn(Path(path).stem, notes)
+
+    def test_very_long_title_is_refused_or_truncated_without_errno(self):
+        """SPEC-0019:IT-02"""
+        self.make_vault()
+        out = self.box.run("new-note", "--type", "note", "--title", "Título longo " + "x" * 287, "--json")
+        text = output(out)
+        self.assertNotIn("Traceback", text)
+        self.assertNotIn("Errno", text, "erro do sistema cru não é mensagem para o usuário")
+        if out.returncode == 0:
+            path = self.box.vault / self.rel(json.loads(out.stdout)["path"])
+            self.assertTrue(path.is_file(), path)
+            self.assertLessEqual(len(path.name.encode("utf-8")), 255, path.name)
+        else:
+            self.assertEqual(out.returncode, 2, text)
+            self.assertIn("título", text)
+
+    def test_relation_with_alias_counts_as_existing(self):
+        """SPEC-0019:IT-03"""
+        self.make_vault()
+        self.write("resources/A.md", note_text("A") + "\n- [[B|Bee]] — aplica\n")
+        self.write("resources/B.md", note_text("B"))
+        before = contents(self.box.vault)
+        out = self.box.run("relate", "A", "B", "--why", "aplica")
+        self.assertExit(out, 0)
+        self.assertIn("relação já existe", output(out))
+        self.assertEqual(contents(self.box.vault), before, "nada muda (nem o log)")
+
+    def assertCrlf(self, path):
+        data = path.read_bytes()
+        self.assertNotRegex(data, rb"(?<!\r)\n", f"{path.name}: fim de linha misturado\n{data!r}")
+
+    def write_crlf(self, rel, text):
+        path = self.box.vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+        return path
+
+    def test_relate_keeps_crlf_files_crlf(self):
+        """SPEC-0019:IT-03"""
+        self.make_vault()
+        a = self.write_crlf("projects/college/A.md", note_text("A", "note", "college"))
+        b = self.write_crlf("projects/college/B.md", note_text("B", "note", "college"))
+        self.assertExit(self.box.run("relate", "A", "B", "--why", "aplica", "--both"), 0)
+        self.assertIn("- [[B]] — aplica", self.read("projects/college/A.md"))
+        self.assertCrlf(a)
+        self.assertCrlf(b)
+
+    def test_index_keeps_crlf_files_crlf(self):
+        """SPEC-0019:IT-04"""
+        self.make_vault()
+        self.write("projects/college/A.md", note_text("A", "note", "college"))
+        moc = self.write_crlf("mocs/college.md", MOC_COLLEGE)
+        index = self.write_crlf("index.md", INDEX_USER)
+        self.assertExit(self.box.run("index", "--context", "college"), 0)
+        self.assertIn("[[A]]", self.read("mocs/college.md"))
+        self.assertCrlf(moc)
+        self.assertCrlf(index)
+
+    def test_ingest_with_unwritable_raw_names_the_copied_file(self):
+        """SPEC-0019:IT-05"""
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root ignora a permissão de escrita")
+        self.make_vault()
+        pdf = self.source("aula.pdf", b"%PDF-1.4")
+        raw = self.box.vault / "raw"
+        mode = raw.stat().st_mode & 0o777
+        raw.chmod(0o555)
+        self.addCleanup(raw.chmod, mode)
+        if os.access(raw, os.W_OK):
+            self.skipTest("o sistema de arquivos ignora a permissão de escrita")
+        log_before = self.log()
+        out = self.box.run("ingest", pdf, "--context", "college")
+        self.assertExit(out, 1)
+        self.assertIn(f"college/{year()}/aula.pdf", output(out), "a mensagem diz onde ficou a cópia")
+        self.assertEqual(self.raw_files(), [])
+        self.assertEqual(self.log(), log_before)
+
+    def test_invalid_created_date_never_goes_above_valid_recent_notes(self):
+        """SPEC-0019:IT-04"""
+        self.make_vault()
+        for i, created in enumerate(("2026-01-01", "2026-03-01", "2026-05-01")):
+            self.write(f"resources/Valida {i}.md", note_text(f"Valida {i}", created=created))
+        self.write("resources/Invalida.md", note_text("Invalida", created="2026-13-45"))
+        self.assertExit(self.box.run("index"), 0)
+        recent = [self.resolve(t) for t in WIKILINK.findall(region(self.read("index.md"), "recent"))]
+        valid = ["resources/Valida 2.md", "resources/Valida 1.md", "resources/Valida 0.md"]
+        self.assertEqual(recent[:3], valid, f"data inválida fora da ordem dos recentes: {recent}")
+
+    def symlinked(self, rel, text):
+        real = self.box.root / "fora" / Path(rel).name
+        real.parent.mkdir(parents=True, exist_ok=True)
+        real.write_text(text, encoding="utf-8")
+        link = self.box.vault / rel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        if link.exists():
+            link.unlink()
+        link.symlink_to(real)
+        return link, real
+
+    def assertStillSymlink(self, args, link):
+        out = self.box.run(*args)
+        self.assertNotIn("Traceback", output(out))
+        self.assertIn(out.returncode, (0, 2), output(out))
+        self.assertTrue(link.is_symlink(), f"{args[0]} trocou o link simbólico por um arquivo comum: {output(out)}")
+
+    def test_relate_never_replaces_a_symlinked_note_with_a_regular_file(self):
+        """SPEC-0019:IT-03"""
+        self.make_vault()
+        link, _ = self.symlinked("projects/college/A.md", note_text("A", "note", "college"))
+        self.write("projects/college/B.md", note_text("B", "note", "college"))
+        self.assertStillSymlink(("relate", "A", "B", "--why", "aplica"), link)
+
+    def test_index_never_replaces_a_symlinked_moc_with_a_regular_file(self):
+        """SPEC-0019:IT-04"""
+        self.make_vault()
+        self.write("projects/college/B.md", note_text("B", "note", "college"))
+        moc, _ = self.symlinked("mocs/college.md", MOC_COLLEGE)
+        self.assertStillSymlink(("index", "--context", "college"), moc)
+
+
 if __name__ == "__main__":
     unittest.main()

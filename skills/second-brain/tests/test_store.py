@@ -215,5 +215,47 @@ class ReplaceRegionTest(unittest.TestCase):
         self.assertEqual(again, result, "com a região já acrescentada, nada mais é acrescentado")
 
 
+class ReviewRegressionUnitTest(unittest.TestCase):
+    """Defeitos reproduzidos na revisão da SPEC-0019 (contrato seção 6 e NFRs seção 5)."""
+
+    def test_replace_region_refuses_unbalanced_or_duplicated_markers(self):
+        """SPEC-0019:UT-04"""
+        cases = {
+            "begin sem end": f"# MOC\n\n{BEGIN}\nTexto do usuário depois do begin órfão.\n",
+            "end antes do begin": f"# MOC\n\n{END}\nTexto do usuário no meio.\n{BEGIN}\nMais texto meu.\n",
+            "região duplicada": f"# MOC\n\n{BEGIN}\n- [[A]]\n{END}\n\nmeu texto\n\n{BEGIN}\n- [[B]]\n{END}\n",
+            "end sem begin": f"# MOC\n\nTexto meu.\n{END}\nMais texto meu.\n",
+        }
+        for label, text in cases.items():
+            with self.subTest(case=label):
+                with self.assertRaises(brain().BrainError) as caught:
+                    replace_region(text, "notes", "- [[Derivadas]]")
+                self.assertIn(caught.exception.code, (1, 2))
+                self.assertIn("notes", str(caught.exception), "a mensagem nomeia a região")
+
+    def test_existing_relation_with_alias_is_not_repeated(self):
+        """SPEC-0019:UT-03"""
+        original = "# A\n\n## Relations\n\n- [[B|Bee]] — aplica\n"
+        self.assertEqual(append_relation(original, "B", "aplica"), original, "[[B|Bee]] já é a relação com B")
+
+    def test_crlf_text_keeps_crlf_line_endings(self):
+        """SPEC-0019:UT-03"""
+        original = "# A\r\n\r\n## Summary\r\n\r\nresumo\r\n\r\n## Relations\r\n\r\n- [[C]] — contradiz\r\n"
+        result = append_relation(original, "B", "aplica")
+        self.assertIn("- [[B]] — aplica", result)
+        self.assertNotRegex(result, r"(?<!\r)\n", "nenhuma linha termina só com LF num arquivo CRLF")
+        without = "# A\r\n\r\n## Summary\r\n\r\nresumo\r\n"
+        self.assertNotRegex(append_relation(without, "B", "aplica"), r"(?<!\r)\n")
+
+    def test_replace_region_in_crlf_text_keeps_crlf_line_endings(self):
+        """SPEC-0019:UT-04"""
+        original = f"# MOC\r\n\r\nmeu texto\r\n\r\n{BEGIN}\r\n- [[Antiga]]\r\n{END}\r\n\r\nfim\r\n"
+        result = replace_region(original, "notes", "### lecture\n\n- [[Derivadas]]\n- [[Limites]]")
+        self.assertIn("[[Limites]]", result)
+        self.assertNotRegex(result, r"(?<!\r)\n", "nenhuma linha termina só com LF num arquivo CRLF")
+        appended = replace_region("# MOC\r\n\r\nsem região\r\n", "notes", "- [[A]]\n- [[B]]")
+        self.assertNotRegex(appended, r"(?<!\r)\n")
+
+
 if __name__ == "__main__":
     unittest.main()

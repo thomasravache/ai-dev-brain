@@ -26,6 +26,7 @@ from brain_support import SKILL
 
 SKILL_MD = SKILL / "SKILL.md"
 NOTE_TYPES_MD = SKILL / "references" / "note-types.md"
+STORE_FLOW_MD = SKILL / "references" / "store-flow.md"
 TEMPLATES = SKILL / "assets" / "templates"
 TYPES = ("note", "lecture", "source", "video", "document", "link", "moc")
 FRONTMATTER_KEYS = ("type", "title", "context", "created", "tags", "source", "files")
@@ -107,6 +108,14 @@ class StoreFlowInstructionsTest(unittest.TestCase):
                     self.assertRegex(body, rf"(?m)^{re.escape(needle)}\s*$", f"{template}: {needle}")
         for key in FRONTMATTER_KEYS:
             self.assertRegex(text, rf"(?<![\w-]){key}(?![\w-])", f"note-types.md sem a chave {key}")
+
+
+    def test_store_flow_states_the_guaranteed_index_bound(self):
+        """SPEC-0019:UT-05"""
+        text = read(STORE_FLOW_MD)
+        self.assertNotRegex(text, r"(?i)menos de 1 s|under 1 s|< ?1 s", "o contrato garante < 3 s, não < 1 s")
+        self.assertRegex(text, r"(?i)(menos de|under|<) ?3 s", "store-flow.md diz o limite garantido do index")
+        self.assertRegex(text, r"5[.,]?000 notas|5[.,]?000 notes")
 
 
 if __name__ == "__main__":
