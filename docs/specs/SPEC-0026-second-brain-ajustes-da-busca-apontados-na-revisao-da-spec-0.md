@@ -1,13 +1,13 @@
 ---
 id: SPEC-0026
-title: "second-brain: ajustes da busca apontados na revisão da SPEC-0018"
+title: "second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020"
 tier: lite
 type: fix
 user_facing: false
 status: proposed
 created: 2026-10-30
 parent: SPEC-0016
-depends_on: [SPEC-0018]
+depends_on: [SPEC-0020]
 consumes_contract: []
 touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/references/search.md, skills/second-brain/CHANGELOG.md]
 adrs: [ADR-0007]
@@ -17,7 +17,7 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0026 — second-brain: ajustes da busca apontados na revisão da SPEC-0018
+# SPEC-0026 — second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020
 
 ## 1. Problema
 A revisão G4 da SPEC-0018 aprovou a entrega e reproduziu à mão casos que a busca trata errado:
@@ -25,7 +25,8 @@ A revisão G4 da SPEC-0018 aprovou a entrega e reproduziu à mão casos que a bu
 2. Um link digitado em NFC (`[[Ação]]`) não encontra um arquivo cujo nome está gravado em NFD, o que é comum no macOS e em alguns provedores de sincronização.
 3. Uma cerca de 4 crases (````) é fechada por uma de 3, e o que vem depois dela é lido como texto (`#x` vira tag).
 4. Termos de 1 caractere, como o `s` de `[[Ref#s]]`, contam na pontuação. Por causa disso, `log.md` aparece como "relacionada" a qualquer nota.
-5. `references/search.md` diz que só anexos fora do vault aparecem em `broken`, mas todo `![[anexo]]` aparece lá.
+5. No `context` (SPEC-0020), o `index.md` liga as notas recentes. Por isso ele vira um atalho na expansão de vizinhos e traz como `link:2` notas sem relação real. A revisão da SPEC-0020 viu o mesmo com o MOC, que já foi corrigido lá.
+6. `references/search.md` diz que só anexos fora do vault aparecem em `broken`, mas todo `![[anexo]]` aparece lá.
 
 Há também dois problemas de manutenção do código: as marcas de acento estão no código como caracteres literais invisíveis, e `Note(**campos)` aceita nomes de campo desconhecidos sem avisar.
 
@@ -45,7 +46,7 @@ O texto errado sobre anexos está em `references/search.md`.
 - `_link_key` e as chaves de caminho passam por `unicodedata.normalize("NFC", …)`.
 - Uma cerca só fecha com outra do mesmo caractere e com pelo menos o mesmo tamanho.
 - Termos com menos de 2 caracteres são descartados na tokenização.
-- `log.md` e `index.md` (`layout.log` e `layout.index`) ficam fora de `related`, mas continuam em `search`.
+- `log.md` e `index.md` (`layout.log` e `layout.index`) ficam fora de `related` e nunca servem de caminho na expansão do `context`, mas continuam em `search`.
 - `COMBINING_RE` vira um filtro com `unicodedata.combining`.
 - `Note` recusa campos desconhecidos com `TypeError`.
 - `references/search.md` diz que todo `![[anexo]]` aparece em `broken`. Distinguir anexo de nota quebrada fica para o `lint` (SPEC-0023).
@@ -63,6 +64,7 @@ NÃO muda: os pesos, os formatos JSON, as mensagens e os códigos de saída da S
 - **UT-01** — Dado o arquivo `.dot.md`, um link `[[Ação]]` (NFC) para `Ação.md` gravado em NFD, uma cerca ```` com ``` dentro e `#x` depois, e o texto `[[Ref#s]]`, quando `scan_vault`, `resolve_link` e `parse_note` rodam, então `.dot.md` não aparece, o link resolve, `#x` não é tag e `s` não é termo.
 - **UT-02** — Dado um `Note` criado com um campo desconhecido, quando é instanciado, então lança `TypeError`.
 - **IT-01** — Dado um vault criado pelo `init` com notas e com o `log.md` cheio de linhas de log, quando roda `related --note <nota>`, então `log.md` e `index.md` não aparecem, e `search` ainda encontra o `log.md` pelo termo `init`.
+- **IT-02** — Dado um vault em que o `index.md` lista as notas recentes, quando roda `context <termo> --hops 2 --json`, então nenhuma nota aparece como `link:N` alcançada só pelo `index.md` ou pelo `log.md`.
 
 ## 5. Questões em Aberto
 Nenhuma
