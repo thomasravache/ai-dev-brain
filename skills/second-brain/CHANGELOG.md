@@ -18,6 +18,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 - `doctor`: `OK|AVISO processor <tipo> — <executável> (<primeira linha da checagem>)`, rodando o `check` declarado ou `<executável> --version` pelo `run_processor` (SPEC-0022).
 - `references/processors.md` com os modelos de yt-dlp (só legendas, `--skip-download`), Whisper (vídeo e áudio) e pdftotext, cada um com versão e data da conferência, o aviso de rede do yt-dlp e como trocar por whisper.cpp; `assets/brain-config.yml` com os modelos comentados; `SKILL.md`: o onboarding oferece os modelos e o passo 2 do fluxo de guardar usa o processador (SPEC-0022).
 
+### Fixed
+- Revisão dos processadores: o `run_processor` roda o processador na própria sessão/grupo de processos e, no `timeout` (ou em qualquer erro no meio da execução), encerra o grupo inteiro (`os.killpg` com `SIGKILL` no POSIX; `kill` no Windows), inclusive os netos (ex.: o `ffmpeg` que o Whisper chama) (SPEC-0022, ADR-0009).
+- `process --out ARQ` nunca sobrescreve: ARQ que já existe sai com 2 ("já existe: <ARQ>"), ARQ dentro do vault sai com 2 sem gravar nada, e a gravação usa criação exclusiva (SPEC-0022).
+- `references/processors.md`: a seção do pdf cita a página de manual do `pdftotext` lida em manpages.debian.org (cópia da página upstream, poppler 26.07.0, 2026-10-30, não executado nesta máquina) e a do Whisper diz que o `ffmpeg` no PATH é pré-requisito (SPEC-0022).
+
 ## [2026.10.5] - 2026-10-30
 
 ### Added

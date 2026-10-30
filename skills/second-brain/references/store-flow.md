@@ -23,7 +23,7 @@ brain.py index --context college
   - `--text-file ARQ` tem prioridade: o texto vem do arquivo e o processador não roda. `--no-process` também não roda o processador (fica `_(pending)_`).
   - `--timestamps`: legendas e transcrições com tempo viram linhas `[mm:ss] texto`; no YouTube, `[mm:ss](<url>?t=<s>s) texto` (`&t=` quando a URL já tem `?`), com link para o trecho — útil para citar uma aula gravada.
   - Sem processador para o tipo: o bruto é guardado como antes, com `_(pending)_` e o aviso `sem processador para <tipo>`.
-  - Falha (executável ausente, saída diferente de 0, `timeout` estourado ou texto vazio): o bruto fica guardado, a nota de fonte recebe `_(extraction failed: <motivo>)_`, o aviso traz o stderr resumido, o log registra a falha e o `ingest` sai com 0. Para tentar de novo sem guardar outra vez, use `brain.py process FONTE --out ARQ` e depois leia o texto (ou passe-o com `--text-file` num ingest novo).
+  - Falha (executável ausente, saída diferente de 0, `timeout` estourado ou texto vazio): o bruto fica guardado, a nota de fonte recebe `_(extraction failed: <motivo>)_`, o aviso traz o stderr resumido, o log registra a falha e o `ingest` sai com 0. Para tentar de novo sem guardar outra vez, use `brain.py process FONTE --out ARQ` (ARQ novo, fora do vault; nunca sobrescreve) e depois leia o texto (ou passe-o com `--text-file` num ingest novo).
 - Fonte inexistente sai com 2 (`fonte não encontrada: FONTE`).
 
 ## `new-note`

@@ -19,7 +19,7 @@ processors:
 - Executável ausente, saída diferente de 0, `timeout` estourado (o processo é encerrado) ou texto vazio é uma falha. No `ingest` vira um aviso com o stderr resumido (até 500 caracteres) e `_(extraction failed: <motivo>)_` na nota de fonte, e o bruto fica guardado. O `process` sai com 1.
 - Tipo detectado no `ingest` e no `process`: `youtube` (URL de youtube.com, www.youtube.com, m.youtube.com ou youtu.be), `video` (`.mp4 .mov .mkv .webm .avi`), `audio` (`.mp3 .m4a .wav .ogg .opus`) e `pdf`. `--kind K` força o tipo; `--no-process` não roda o processador; `--text-file` tem prioridade.
 - `brain.py doctor` mostra `OK|AVISO processor <tipo> — <executável> (<primeira linha da checagem>)`. A checagem é o `check`, ou `<executável> --version`.
-- Teste sem guardar nada: `brain.py process ARQUIVO_OU_URL [--kind K] [--out ARQ] [--timestamps]`.
+- Teste sem guardar nada: `brain.py process ARQUIVO_OU_URL [--kind K] [--out ARQ] [--timestamps]` (`--out` só cria arquivo novo fora do vault: se ARQ já existe ou fica dentro do vault, sai com 2 sem gravar nada).
 
 Copie os modelos abaixo para o `brain-config.yml` do vault (chave `processors`) depois que a ferramenta estiver instalada, e rode `brain.py doctor`. O `brain-config.yml` sincroniza entre as máquinas: a ferramenta precisa existir no PATH de cada máquina que for usar o processador (nas outras o `doctor` mostra AVISO).
 
@@ -55,13 +55,14 @@ openai-whisper versão 20250625 — conferido na documentação oficial em 2026-
     check: "whisper --help"
 ```
 
+- **Pré-requisito:** o openai-whisper precisa do `ffmpeg` no PATH para decodificar o áudio e o vídeo (instale pelo gerenciador de pacotes do sistema, ex.: `brew install ffmpeg` ou `apt install ffmpeg`); sem ele a transcrição falha.
 - Roda localmente (o modelo é baixado pelo próprio Whisper na primeira execução). `--output_format` aceita `txt`, `vtt`, `srt`, `tsv`, `json` ou `all`: use `vtt` (ou `srt`) para ter `--timestamps`, ou `txt` para só o texto. `--language pt` evita a detecção de idioma; `--model` escolhe o tamanho (`turbo` é o padrão da ferramenta; `small` ou `base` são mais rápidos).
 - O Whisper não tem `--version`; por isso o `check` é `whisper --help` (o `doctor` mostra a primeira linha, `usage: whisper ...`).
 - Vídeo longo demora: ajuste o `timeout` (em segundos) ao tamanho das aulas.
 
 ## pdf — pdftotext (Poppler)
 
-Versão: poppler 26.07.0 (página de manual do `pdftotext`; a versão estável mais nova em poppler.freedesktop.org é 26.10.0) — conferido na documentação oficial em 2026-10-30, não executado nesta máquina.
+Versão: poppler 26.07.0 — página de manual do `pdftotext` (poppler 26.07.0, via manpages.debian.org, cópia da página upstream) conferida em 2026-10-30, não executado nesta máquina. A versão estável mais nova em poppler.freedesktop.org é 26.10.0.
 
 ```yaml
   pdf:
