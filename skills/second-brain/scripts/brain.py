@@ -7,11 +7,14 @@ Writes to the vault only create files or append to them (ADR-0007); every write 
 search, related and links only read the vault: an in-memory scan of the notes, without an index (SPEC-0018).
 ingest, new-note, relate and index write only through write_new_file and the text of append_relation and
 replace_region, always with a log.md line (SPEC-0019).
+capture, inbox list, inbox done and ingest --move handle the inbox; move_out_of_inbox is the only function that
+moves a file, and only out of the inbox, never overwriting nor deleting (SPEC-0021, ADR-0007).
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import html
 import json
 import math
 import ntpath
@@ -21,11 +24,12 @@ import re
 import shlex
 import shutil
 import sys
+import time
 import unicodedata
 from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-BRAIN_VERSION = "2026.10.4"
+BRAIN_VERSION = "2026.10.5"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -37,7 +41,7 @@ LAYOUT_DIRS = ("inbox", "raw", "mocs", "templates")
 LAYOUT_FILES = ("index", "log")
 LAYOUT_KEYS = LAYOUT_DIRS + LAYOUT_FILES
 PARA_KEYS = ("projects", "areas", "resources", "archive")
-SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors")
+SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors", "inbox_stale_days")
 SHARED_VERSION = "1"
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
@@ -105,6 +109,19 @@ NAME_MAX_BYTES = 200  # UTF-8 bytes of a note's file name before ".md" (file sys
 INBOX_FILES = "inbox"  # folder of <files> for an ingest without context
 RECENT_LIMIT = 20
 PENDING_TEXT = "_(pending)_"
+
+# inbox: capture, list, done and ingest --move (SPEC-0021; details in references/inbox.md)
+CAPTURE_WORDS = 6  # words of the text in the name of a capture
+INBOX_TEXT_SUFFIXES = (".md", ".txt")
+INBOX_LINK_SUFFIXES = (".url", ".webloc")
+ICLOUD_SUFFIX = ".icloud"  # placeholder of a file iCloud has not downloaded yet
+SYNCING_SECONDS = 600  # a 0-byte file modified less than this ago is still syncing
+INBOX_READ_BYTES = 8192  # enough to classify and preview a text item (a longer text is not "only a URL")
+PREVIEW_MAX = 120
+STALE_DAYS_DEFAULT = 7
+PROCESSED_DIR = "processed"  # <layout.raw>/processed/AAAA-MM/: text items taken out of the inbox
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")  # control characters: escaped in log.md and the output
+LINK_IN_FILE_RE = re.compile(r"^URL=(\S+)|<string>(https?://[^<]+)</string>", re.MULTILINE | re.IGNORECASE)
 
 
 class BrainError(Exception):
@@ -378,7 +395,7 @@ def read_config(config_home=None) -> dict:
     if not local_path.is_file():
         raise BrainError(NOT_CONFIGURED, 3)
     local = read_yaml(local_path)
-    values, origins, problems = {}, {}, []
+    values, origins, problems, warnings = {}, {}, [], []
     for key in LOCAL_KEYS:
         present = isinstance(local.get(key), str) and local.get(key) != ""
         values[key] = local[key] if present else ""
@@ -398,11 +415,30 @@ def read_config(config_home=None) -> dict:
                 found = isinstance(given.get(sub), str) and given[sub] != ""
                 values[key][sub] = given[sub] if found else defaults[key][sub]
                 origins[f"{key}.{sub}"] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
+        elif key == "inbox_stale_days":  # a whole number of days; missing or invalid = the default
+            given = stale_days(shared.get(key))
+            values[key] = given if given is not None else stale_days(defaults.get(key)) or STALE_DAYS_DEFAULT
+            origins[key] = ORIGIN_VAULT if given is not None else ORIGIN_DEFAULT
+            if given is None and key in shared:
+                warnings.append({"key": key, "message": (f"brain-config.yml: {key} inválido: {shared[key]} — use um "
+                                                         f"número inteiro de dias >= 0; usando {values[key]}")})
         else:
             found = key in shared
             values[key] = shared[key] if found else defaults.get(key, {})
             origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
-    return {"values": values, "origins": origins, "problems": problems + check_shared(values)}
+    config = {"values": values, "origins": origins, "problems": problems + check_shared(values)}
+    if warnings:  # invalid values that fell back to the default (shown by config --json and doctor)
+        config["warnings"] = warnings
+    return config
+
+
+def stale_days(value):
+    """inbox_stale_days as a whole number of days (>= 0), or None when absent or invalid."""
+    try:
+        days = int(str(value).strip())
+    except ValueError:
+        return None
+    return days if days >= 0 else None
 
 
 def load_config(config_home=None) -> dict:
@@ -489,7 +525,14 @@ def append_log(vault: Path, layout: dict, command: str, summary: str):
     if not log.exists():
         create_file(log, render_log())
     with open(log, "a", encoding="utf-8") as handle:
-        handle.write(f"- {now()} {command} {summary}\n")
+        handle.write(f"- {now()} {one_line(command)} {one_line(summary)}\n")
+
+
+def one_line(text: str) -> str:
+    """text with each control character escaped ("\\n", "\\t", "\\x1b"): one line in log.md and in the output, and
+    nothing the terminal interprets."""
+    names = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    return CONTROL_RE.sub(lambda m: names.get(m.group(), f"\\x{ord(m.group()):02x}"), str(text))
 
 
 def render_index() -> str:
@@ -1159,10 +1202,10 @@ def replace_region(text: str, name: str, content: str) -> str:
     return text[:start] + block + text[stop + len(end):]
 
 
-def slugify(title: str) -> str:
+def slugify(title: str, fallback: str = "fonte") -> str:
     """Lowercase ASCII slug of a title for the name of a source note ("Aula 1: Limites" -> "aula-1-limites")."""
     slug = re.sub(r"[^a-z0-9]+", "-", fold(title)).strip("-")
-    return slug[:SLUG_MAX].strip("-") or "fonte"
+    return slug[:SLUG_MAX].strip("-") or fallback
 
 
 def render_note(template: str, tags=(), **fields) -> str:
@@ -1390,8 +1433,10 @@ def cmd_config(as_json: bool, config_home=None) -> int:
         print(json.dumps(config, ensure_ascii=False, indent=2))
         return 0
     values, origins = config["values"], config["origins"]
+    for warning in config.get("warnings", []):
+        print(f"aviso: {warning['message']}", file=sys.stderr)
     print(f"second-brain {BRAIN_VERSION} — configuração local: {local_config_path(config_home)}")
-    for key in ("vault", "files", "provider", "version", "language"):
+    for key in ("vault", "files", "provider", "version", "language", "inbox_stale_days"):
         print(f"{key}: {values[key]}  ({origins[key]})")
     for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
         for key in keys:
@@ -1472,6 +1517,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
         missing = [key for key in SHARED_KEYS if key not in shared]
         rows.append(("OK", "brain-config.yml", f"versão {version}"
                      + (f"; padrão para: {', '.join(missing)}" if missing else "")))
+    rows += [("AVISO", warning["key"], warning["message"]) for warning in config.get("warnings", [])]
 
     root = Path(vault)
     for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
@@ -1713,9 +1759,8 @@ def rewrite_file(path: Path, text: str):
     os.replace(tmp, path)
 
 
-def copy_to_files(source: Path, values: dict, context) -> str:
-    """Copy of source into <files>/<context or inbox>/<AAAA>/<name>, never overwriting (<stem>-1<ext>, -2...);
-    returns the path relative to files. Files folder missing or not writable = BrainError (exit 1)."""
+def files_folder(values: dict, context):
+    """(files root, "<context or inbox>/<AAAA>") where ingest puts a file. Files folder missing = BrainError (exit 1)."""
     files = values["files"]
     if not files or not Path(files).is_dir():
         raise BrainError(f"pasta files não encontrada: {files or '(sem files na configuração local)'}", 1)
@@ -1724,7 +1769,14 @@ def copy_to_files(source: Path, values: dict, context) -> str:
     folder = f"{context or INBOX_FILES}/{dt.date.today().year}"
     if posixpath.normpath(folder) != folder or folder.startswith(("/", "..")):
         raise BrainError(f"contexto fora da pasta files: {context}")
-    target, stem, suffix = Path(files) / folder, source.stem, source.suffix
+    return Path(files), folder
+
+
+def copy_to_files(source: Path, values: dict, context) -> str:
+    """Copy of source into <files>/<context or inbox>/<AAAA>/<name>, never overwriting (<stem>-1<ext>, -2...);
+    returns the path relative to files. Files folder missing or not writable = BrainError (exit 1)."""
+    files, folder = files_folder(values, context)
+    target, stem, suffix = files / folder, source.stem, source.suffix
     name, n, created = source.name, 0, None
     try:
         target.mkdir(parents=True, exist_ok=True)
@@ -1759,6 +1811,12 @@ def cmd_ingest(args, config_home=None) -> int:
     url = source if URL_RE.match(source) else None
     if args.context:
         check_context(args.context, values)
+    if args.move:  # only an item of the inbox, checked before anything is written
+        if url is not None:
+            raise BrainError(MOVE_ONLY_INBOX)
+        source = str(inbox_item(source, vault, layout, MOVE_ONLY_INBOX))
+        if classify_inbox_item(Path(source)) == "syncing":
+            raise BrainError(f"ainda sincronizando: {args.source} — espere o app do provedor baixar o arquivo")
     if url is None and not Path(source).is_file():
         raise BrainError(f"fonte não encontrada: {args.source}")
     extracted = ""
@@ -1772,19 +1830,30 @@ def cmd_ingest(args, config_home=None) -> int:
     default_title = re.sub(r"^https?://", "", url, flags=re.IGNORECASE).rstrip("/") if url else Path(source).stem
     title = " ".join((args.title or default_title).split()) or "fonte"
 
-    file_rel = None if url else copy_to_files(Path(source), values, args.context)  # the copy comes first
+    if url:
+        file_rel = None
+    elif args.move:  # the file goes first: out of the inbox into files (logged by move_out_of_inbox)
+        files, folder = files_folder(values, args.context)
+        moved = move_out_of_inbox(Path(source), files / folder / Path(source).name, vault, layout, files=files)
+        file_rel = f"{folder}/{moved.name}"
+    else:
+        file_rel = copy_to_files(Path(source), values, args.context)  # the copy comes first
     raw_rel = free_raw_path(vault, layout, title)
     try:
         write_new_file(vault / raw_rel, render_source_note(title, today(), args.context, file_rel, url, extracted))
     except OSError as e:
-        kept = f"; a cópia ficou em {file_rel} (na pasta files)" if file_rel else ""
+        where = "o arquivo foi movido para" if args.move else "a cópia ficou em"
+        kept = f"; {where} {file_rel} (na pasta files)" if file_rel else ""
         raise BrainError(f"não consegui criar a nota de fonte {raw_rel}: {e.strerror or e}{kept}", 1) from e
     append_log(vault, layout, "ingest", f"{raw_rel} — {url or file_rel}")
     if args.json:
         print_json({"raw": raw_rel, "file": file_rel, "url": url})
         return 0
-    print(f"Nota de fonte: {raw_rel}")
-    print(f"Link: {url}" if url else f"Arquivo copiado: {file_rel} (na pasta files)")
+    print(f"Nota de fonte: {one_line(raw_rel)}")
+    if url:
+        print(f"Link: {url}")
+    else:
+        print(f"Arquivo {'movido da inbox' if args.move else 'copiado'}: {one_line(file_rel)} (na pasta files)")
     return 0
 
 
@@ -1919,6 +1988,257 @@ def cmd_index(args, config_home=None) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- inbox: capture, list, done (SPEC-0021)
+
+MOVE_ONLY_INBOX = "--move só vale para itens da inbox"
+
+
+def capture_name(text: str, existing=(), clock=None) -> str:
+    """Name of a capture, "AAAA-MM-DD-HHMMSS-<slug of the first CAPTURE_WORDS words>.md", with the time of clock()
+    (None = datetime.now); a name in `existing` gets "-1", "-2"... Pure (no I/O)."""
+    stamp = (clock or dt.datetime.now)().strftime("%Y-%m-%d-%H%M%S")
+    base = f"{stamp}-{slugify(' '.join(text.split()[:CAPTURE_WORDS]), fallback='captura')}"
+    taken, name, n = set(existing), f"{base}.md", 0
+    while name in taken:
+        n += 1
+        name = f"{base}-{n}.md"
+    return name
+
+
+def render_capture(text: str, created: str, context) -> str:
+    frontmatter = {"type": "capture", "created": created}
+    if context:
+        frontmatter["context"] = context
+    return f"---\n{dump_yaml(frontmatter)}---\n\n{text.strip()}\n"
+
+
+def inbox_dir(vault: Path, layout: dict) -> Path:
+    return vault / inside_vault(layout["inbox"], "layout.inbox")
+
+
+def in_inbox(path: Path, vault: Path, layout: dict) -> bool:
+    """True when path is a file below the inbox, with the folders resolved ("inbox/../raw/x" is outside; a vault
+    reached through a symbolic link is the same vault). The item itself is not resolved: it is what moves, and a
+    symbolic link is never an item."""
+    folder = Path(os.path.realpath(path.parent))
+    return (is_inside(str(folder), os.path.realpath(inbox_dir(vault, layout))) and path.is_file()
+            and not path.is_symlink())
+
+
+def hidden_in_inbox(path: Path, vault: Path, layout: dict) -> bool:
+    """True when `inbox list` hides path: a hidden subfolder of the inbox (any part starting with "."), OS metadata
+    or a hidden file that is not an iCloud placeholder."""
+    folder = _pure(os.path.realpath(path.parent)).relative_to(_pure(os.path.realpath(inbox_dir(vault, layout))))
+    hidden_name = path.name.startswith(".") and not path.name.lower().endswith(ICLOUD_SUFFIX)
+    return any(part.startswith(".") for part in folder.parts) or hidden_name or path.name in OS_METADATA
+
+
+def inbox_item(item: str, vault: Path, layout: dict, outside: str = "item fora da inbox") -> Path:
+    """Path of ITEM as the CLI receives it (absolute, relative to the current folder or to the vault); missing =
+    BrainError(2) "item não encontrado", outside the inbox = BrainError(2, outside)."""
+    given = Path(os.path.expanduser(item.strip()))
+    candidates = [given] if given.is_absolute() else [Path.cwd() / given, vault / given]
+    path = next((c for c in candidates if c.exists() or c.is_symlink()), None)
+    if path is None:
+        raise BrainError(f"item não encontrado: {one_line(item)}")
+    if path.is_symlink():
+        raise BrainError(f"item é um link simbólico (não é processado): {one_line(item)}")
+    if not in_inbox(path, vault, layout):
+        raise BrainError(f"{outside}: {one_line(item)}")
+    if hidden_in_inbox(path, vault, layout):
+        raise BrainError(f"item numa pasta ou arquivo oculto da inbox (o inbox list não o mostra): {one_line(item)}")
+    return path
+
+
+def shown_path(path: Path, vault: Path, files=None) -> str:
+    """How log.md names a path: relative to the vault, "<files>/..." inside files, else only the name (log.md is
+    synced with the vault and never holds an absolute path)."""
+    real = os.path.realpath(path)
+    for root, prefix in ((vault, ""), (files, "<files>/")):
+        if root is not None and is_inside(real, os.path.realpath(root)):
+            return prefix + Path(real).relative_to(os.path.realpath(root)).as_posix()
+    return path.name
+
+
+def move_out_of_inbox(item: Path, dest: Path, vault: Path, layout: dict, command: str = "inbox-move", note=None,
+                      files=None) -> Path:
+    """The only function that moves a file (ADR-0007): `item`, inside the inbox, goes to `dest` (folders created as
+    needed); an existing dest gets "<stem>-1<ext>", "-2"... and is never touched. Returns the final path and logs
+    "<command> <item> → <dest> [nota: <note>]". A source outside the inbox = BrainError(2), nothing moved or
+    created. Never deletes: the destination name is reserved with an exclusive create and the item is renamed onto
+    that empty reservation; when it cannot be renamed (another disk) only the reservation goes and the item stays."""
+    item, dest = Path(item), Path(dest)
+    if not in_inbox(item, vault, layout):
+        raise BrainError(f"item fora da inbox: {one_line(item)}")
+    origin = shown_path(item, vault, files)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    candidate, n = dest, 0
+    while True:
+        try:
+            with open(candidate, "xb"):
+                break
+        except FileExistsError:
+            n += 1
+            candidate = dest.with_name(f"{dest.stem}-{n}{dest.suffix}")
+    try:
+        os.replace(item, candidate)
+    except OSError as e:
+        candidate.unlink()  # only the empty reservation this call created; the item stays in the inbox
+        raise BrainError(f"não consegui mover {origin} para {candidate.parent}: {e.strerror or e} — o item ficou "
+                         "na inbox (use ingest sem --move para copiar)", 1) from e
+    summary = f"{origin} → {shown_path(candidate, vault, files)}" + (f" nota: {note}" if note else "")
+    append_log(vault, layout, command, summary)
+    return candidate
+
+
+def read_head(path: Path) -> str:
+    """The first INBOX_READ_BYTES of a text item, decoded (not UTF-8 = replaced characters)."""
+    try:
+        with open(path, "rb") as handle:
+            data = handle.read(INBOX_READ_BYTES)
+    except OSError:
+        return ""
+    return data.decode("utf-8-sig", errors="replace")
+
+
+def item_text(path: Path) -> str:
+    """Text of an inbox item for the kind and the preview: the body of a .md/.txt (without frontmatter) or the URL
+    of a .url/.webloc."""
+    suffix, text = path.suffix.lower(), read_head(path)
+    if suffix in INBOX_LINK_SUFFIXES:
+        m = LINK_IN_FILE_RE.search(text)
+        if not m:
+            return ""
+        return (m.group(1) or html.unescape(m.group(2))).strip()  # .webloc is XML: "&amp;" is "&"
+    return read_frontmatter(text)[1].strip() if suffix == ".md" else text.strip()
+
+
+def classify_inbox_item(path: Path, now=None) -> str:
+    """"text" (.md, .txt) | "link" (.url, .webloc, or a .md/.txt whose text is only a URL) | "file" (the rest) |
+    "syncing" (an iCloud "*.icloud" placeholder, or a 0-byte file modified less than SYNCING_SECONDS before `now`,
+    seconds since the epoch; None = now)."""
+    path = Path(path)
+    if path.name.lower().endswith(ICLOUD_SUFFIX):
+        return "syncing"
+    stat = path.stat()
+    if stat.st_size == 0 and (time.time() if now is None else now) - stat.st_mtime < SYNCING_SECONDS:
+        return "syncing"
+    suffix = path.suffix.lower()
+    if suffix in INBOX_LINK_SUFFIXES:
+        return "link"
+    if suffix in INBOX_TEXT_SUFFIXES:
+        if "\x00" in read_head(path):  # NUL bytes: binary content with a text name
+            return "file"
+        return "link" if URL_RE.match(item_text(path)) else "text"
+    return "file"
+
+
+def walk_inbox(vault: Path, layout: dict):
+    """(path, path relative to the vault) of each file of the inbox, its subfolders included except hidden ones;
+    hidden files and OS metadata are skipped, except iCloud placeholders (".x.pdf.icloud")."""
+    folder = inbox_dir(vault, layout)
+    if not folder.is_dir():
+        return
+    for root, dirs, names in os.walk(folder):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        for name in sorted(names):
+            hidden = name.startswith(".") and not name.lower().endswith(ICLOUD_SUFFIX)
+            if not hidden and name not in OS_METADATA:
+                path = Path(root) / name
+                yield path, path.relative_to(vault).as_posix()
+
+
+def inbox_entries(vault: Path, layout: dict, stale_after: int, now=None) -> list:
+    """The items of `inbox list`, oldest first: path, kind, size, age_days, stale and preview."""
+    now = time.time() if now is None else now
+    rows = []
+    for path, rel in walk_inbox(vault, layout):
+        try:
+            stat = path.stat()
+            kind = classify_inbox_item(path, now)
+        except OSError:
+            continue  # vanished while listing (the provider moved it)
+        age = max(0.0, (now - stat.st_mtime) / 86400)
+        preview = " ".join(CONTROL_RE.sub(" ", item_text(path)).split()) if kind in ("text", "link") else ""
+        if len(preview) > PREVIEW_MAX:
+            preview = preview[:PREVIEW_MAX - 1] + "…"
+        rows.append((stat.st_mtime, rel, {"path": rel, "kind": kind, "size": stat.st_size,
+                                          "age_days": round(age, 2), "stale": age > stale_after, "preview": preview}))
+    return [entry for _, _, entry in sorted(rows, key=lambda row: (row[0], row[1]))]
+
+
+def cmd_capture(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    text = args.text.strip()
+    if not text:
+        raise BrainError("texto da captura vazio")
+    if args.context:
+        check_context(args.context, values)
+    moment = dt.datetime.now()
+    folder = inbox_dir(vault, layout)
+    existing = {p.name for p in folder.iterdir()} if folder.is_dir() else set()
+    rel = posixpath.join(inside_vault(layout["inbox"], "layout.inbox"), capture_name(text, existing, lambda: moment))
+    write_new_file(vault / rel, render_capture(text, moment.isoformat(timespec="seconds"), args.context))
+    append_log(vault, layout, "capture", rel)
+    if args.json:
+        print_json({"path": rel})
+    else:
+        print(rel)
+    return 0
+
+
+def cmd_inbox_list(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    items = inbox_entries(vault, layout, values["inbox_stale_days"])
+    if args.json:
+        print_json({"items": items})
+        return 0
+    if not items:
+        print("Inbox vazia")
+        return 0
+    for item in items:
+        flag = " (parado)" if item["stale"] else ""
+        print(f"{item['kind']:<7} {item['age_days']:>6.1f}d {item['size']:>9}  {one_line(item['path'])}{flag}")
+        if item["preview"]:
+            print(f"    {item['preview']}")
+    syncing = sum(1 for item in items if item["kind"] == "syncing")
+    print(f"{len(items)} item(ns)" + (f", {syncing} ainda sincronizando (não processe)" if syncing else ""))
+    return 0
+
+
+def cmd_inbox_done(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    item = inbox_item(args.item, vault, layout)
+    kind = classify_inbox_item(item)
+    if kind == "file":
+        raise BrainError(f"arquivo: use ingest --move — {args.item}")
+    if kind == "syncing":
+        raise BrainError(f"ainda sincronizando: {args.item} — espere o app do provedor baixar o arquivo")
+    note = None
+    if args.note:
+        ref = note_ref(args.note, vault)
+        found = LinkIndex(rel for _, rel in walk_notes(values)).resolve(ref)
+        note = found or " ".join(ref.split())
+    raw = inside_vault(layout["raw"], "layout.raw")
+    dest = vault / raw / PROCESSED_DIR / dt.date.today().strftime("%Y-%m") / item.name
+    origin = shown_path(item, vault)
+    final = move_out_of_inbox(item, dest, vault, layout, command="inbox-done", note=note)
+    print(one_line(f"{origin} → {shown_path(final, vault)}" + (f" (nota: {note})" if note else "")))
+    return 0
+
+
+def note_ref(note: str, vault: Path) -> str:
+    """--note of inbox done as log.md records it: an absolute path inside the vault becomes relative to the vault;
+    outside the vault = BrainError(2), before anything moves (log.md never holds an absolute path)."""
+    text = note.strip()
+    if not is_absolute(text):
+        return text
+    real, root = os.path.realpath(os.path.expanduser(text)), os.path.realpath(vault)
+    if not is_inside(real, root):
+        raise BrainError("--note fora do vault: use uma nota do vault (caminho relativo ao vault ou nome)")
+    return Path(real).relative_to(root).as_posix()
+
+
 # ---------------------------------------------------------------- cli
 
 def context_add_parser() -> argparse.ArgumentParser:
@@ -1934,7 +2254,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="brain.py",
         description=("Ferramentas determinísticas do second-brain: onboarding do vault, configuração, diagnóstico, "
-                     "busca e fluxo de guardar."))
+                     "busca, fluxo de guardar e inbox."))
     parser.add_argument("--version", action="version", version=f"second-brain {BRAIN_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("init", help="cria um vault novo, adota um existente (--adopt) ou só liga esta máquina (--join)")
@@ -1981,6 +2301,7 @@ def main(argv=None) -> int:
     p.add_argument("--context", help="contexto da fonte (sem ele, a cópia vai para <files>/inbox)")
     p.add_argument("--title", help="título da nota de fonte (padrão: o nome do arquivo ou a URL)")
     p.add_argument("--text-file", metavar="ARQ", help="texto extraído da fonte (UTF-8), sob '## Extracted text'")
+    p.add_argument("--move", action="store_true", help="item da inbox: move para files em vez de copiar")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("new-note", help="cria uma nota a partir do modelo do tipo; nunca sobrescreve")
     p.add_argument("--type", required=True, help=" | ".join(NOTE_TYPES))
@@ -1996,6 +2317,17 @@ def main(argv=None) -> int:
     p.add_argument("--both", action="store_true", help="também em PARA, apontando para DE")
     p = sub.add_parser("index", help="regenera as regiões geradas dos MOCs e do index.md")
     p.add_argument("--context", help="só o MOC deste contexto (e o index.md)")
+    p = sub.add_parser("capture", help="nota rápida na inbox, com data e hora no nome")
+    p.add_argument("text", metavar="TEXTO")
+    p.add_argument("--context", help="contexto da captura (vai no frontmatter)")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("inbox", help="itens da inbox (list) e saída de um item já guardado (done)")
+    inbox = p.add_subparsers(dest="inbox_command", required=True)
+    q = inbox.add_parser("list", help="itens da inbox, do mais antigo para o mais novo; só leitura")
+    q.add_argument("--json", action="store_true")
+    q = inbox.add_parser("done", help="move um item de texto ou link já guardado para raw/processed/AAAA-MM/")
+    q.add_argument("item", metavar="ITEM", help="caminho do item (ex.: inbox/<nome>)")
+    q.add_argument("--note", metavar="CAMINHO", help="nota criada a partir do item (vai no log)")
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:2] == ["context", "add"]:
         args = context_add_parser().parse_args(argv[2:])
@@ -2028,6 +2360,10 @@ def main(argv=None) -> int:
             return cmd_relate(args)
         if args.command == "index":
             return cmd_index(args)
+        if args.command == "capture":
+            return cmd_capture(args)
+        if args.command == "inbox":
+            return cmd_inbox_list(args) if args.inbox_command == "list" else cmd_inbox_done(args)
     except BrainError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code

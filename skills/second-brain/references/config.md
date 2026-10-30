@@ -50,6 +50,7 @@ processors: {}            # tipo → {command: "executável {input} {output}"} (
 - `para` — pastas do método PARA (projects, areas, resources, archive); também aceitam `--map`.
 - `contexts` — assuntos com pasta própria e MOC em `mocs/<nome>.md`; crie com `brain.py context add`.
 - `processors` — conversores de arquivo em texto (executados numa versão futura); o `doctor` confere se a primeira palavra de `command` existe no PATH.
+- `inbox_stale_days` — dias (número inteiro >= 0, padrão 7) até um item da inbox aparecer como parado (`stale`) no `inbox list` (`references/inbox.md`). Valor inválido (negativo, decimal ou texto) usa o padrão 7 e gera um aviso: na lista `warnings` do `config --json` e como `AVISO inbox_stale_days` no `doctor`.
 
 Todo valor de `layout`, `para` e `contexts.<nome>.folder` precisa ser relativo e ficar dentro do vault: caminho absoluto ou com `..` faz os comandos saírem com 1 (`brain-config.yml: <chave> fora do vault`), e o `doctor` mostra ERRO nessa chave. Um `brain-config.yml` que não pode ser lido aparece no `doctor` como `ERRO brain-config.yml — <erro>`, e os outros itens continuam.
 

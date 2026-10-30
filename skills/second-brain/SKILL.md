@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: >-
-  Segundo cérebro num vault do Obsidian mantido junto com uma LLM — notas em Markdown organizadas por PARA, contextos com MOC, inbox, índice e log, num vault sincronizado pelo provedor que a pessoa escolher (Google Drive, OneDrive, iCloud ou pasta local) e usado em várias máquinas e no celular. Use quando o usuário quiser configurar o segundo cérebro (onboarding de vault novo ou existente, ligar uma máquina nova), ver a configuração, criar um contexto, diagnosticar o vault (doctor), buscar notas, notas relacionadas e links (search, related, links) guardar qualquer coisa no segundo cérebro — uma anotação, uma aula, um PDF, um vídeo ou um link (ingest, new-note, relate, index) — ou perguntar ao segundo cérebro ("o que eu sei sobre X", "me prepara para a prova": context, resposta citando as notas, nota answer). O fluxo de manter chega numa próxima versão.
+  Segundo cérebro num vault do Obsidian mantido junto com uma LLM — notas em Markdown organizadas por PARA, contextos com MOC, inbox, índice e log, num vault sincronizado pelo provedor que a pessoa escolher (Google Drive, OneDrive, iCloud ou pasta local) e usado em várias máquinas e no celular. Use quando o usuário quiser configurar o segundo cérebro (onboarding de vault novo ou existente, ligar uma máquina nova), ver a configuração, criar um contexto, diagnosticar o vault (doctor), buscar notas, notas relacionadas e links (search, related, links) guardar qualquer coisa no segundo cérebro — uma anotação, uma aula, um PDF, um vídeo ou um link (ingest, new-note, relate, index) — ou perguntar ao segundo cérebro ("o que eu sei sobre X", "me prepara para a prova": context, resposta citando as notas, nota answer), capturar rápido na inbox e processar a inbox ("anota isso", "processa minha inbox": capture, inbox list, ingest --move, inbox done), inclusive o que foi jogado pelo celular. O fluxo de manter chega numa próxima versão.
 ---
 
 # Second Brain
@@ -29,8 +29,12 @@ Rode `python3 <skill-dir>/scripts/brain.py <comando>`, onde `<skill-dir>` é a p
 | `new-note --type T --title X [--context C] [--source S] [--tags a,b] [--json]` | Cria a nota a partir do modelo do tipo, na pasta do contexto (sem contexto, `resources/`); imprime o caminho. Nota existente, tipo ou contexto inválido saem com 2 |
 | `relate DE PARA --why "motivo" [--both]` | Acrescenta `- [[PARA]] — motivo` na seção `## Relations` de DE (e de PARA com `--both`); repetida = "relação já existe" |
 | `index [--context C]` | Regenera as regiões geradas dos MOCs (`notes`) e do `index.md` (`contexts`, `recent`), sem tocar no texto da pessoa |
+| `capture TEXTO [--context C] [--json]` | Nota rápida `inbox/AAAA-MM-DD-HHMMSS-<slug>.md` (`type: capture`); imprime o caminho. Texto vazio sai com 2 |
+| `inbox list [--json]` | Itens da inbox, do mais antigo para o mais novo: `path`, `kind` (`text`, `link`, `file` ou `syncing`), `size`, `age_days`, `stale` (mais velho que `inbox_stale_days`, padrão 7) e `preview`. Vazia imprime "Inbox vazia" |
+| `ingest ITEM --move [--context C] [...]` | Como o `ingest`, mas o arquivo **sai** da inbox para `files` em vez de ser copiado. Fonte fora da inbox sai com 2 ("--move só vale para itens da inbox"); item `syncing` sai com 2 |
+| `inbox done ITEM [--note CAMINHO]` | Item `text` ou `link` já guardado vai para `raw/processed/AAAA-MM/` (nunca sobrescreve: `-1`, `-2`...) e o log cita a nota. `file` sai com 2 ("arquivo: use ingest --move"), `syncing` sai com 2 ("ainda sincronizando") |
 
-Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de consultar e o pacote do `context`: `references/query-flow.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`.
+Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de consultar e o pacote do `context`: `references/query-flow.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`. Inbox em detalhe: `references/inbox.md`; capturar pelo celular: `references/mobile-capture.md`.
 
 ## Antes de qualquer fluxo
 
@@ -111,13 +115,24 @@ Para responder uma pergunta com base no vault ("o que eu sei sobre X", "me prepa
 3. **Responder:** cada afirmação vinda do vault cita a nota de onde veio, como `[[Integrais por partes]]`; o que vier de conhecimento geral (fora do vault) é marcado como tal; aponte as lacunas — o que a pergunta pede e o vault não tem.
 4. **Oferecer salvar:** pergunte se a pessoa quer guardar a resposta. Só com o sim dela: `brain.py new-note --type answer --title "<pergunta curta>" --context C --json`, escreva a pergunta, a resposta e as lacunas nas seções do modelo (e `question`/`cites` no frontmatter), rode `brain.py relate "<answer>" "<nota citada>" --why "cita" --both` para cada nota citada e depois `brain.py index --context C`.
 
+## Capturar e processar a inbox
+
+A `inbox/` é a porta de entrada: capture sem pensar e organize depois. No computador, "anota isso: …" vira `brain.py capture "<texto>" [--context C]`. No celular a pessoa joga qualquer coisa na pasta `inbox/` pelo app do provedor ou pelo Obsidian mobile (`references/mobile-capture.md`); o celular não roda a skill.
+
+Para processar a inbox ("processa minha inbox"), siga sempre estes quatro passos, nesta ordem. Detalhes: `references/inbox.md`.
+
+1. **Listar:** rode `brain.py inbox list --json` e mostre quantos itens há e quais estão parados (`stale`).
+2. **Guardar cada item:** para cada item, do mais antigo para o mais novo, siga o fluxo de guardar (seção **Guardar no segundo cérebro**): arquivo (`file`) → `ingest --move` (`brain.py ingest ITEM --move --context C --json`: o arquivo sai da inbox para `files`) e a nota a partir da nota de fonte; texto ou link → leia o item e escreva a nota com `new-note` (link: `ingest URL` antes, para a nota de fonte).
+3. **Tirar da inbox:** item de texto ou link já guardado → `brain.py inbox done ITEM --note <nota criada>` (vai para `raw/processed/AAAA-MM/`; nada é apagado).
+4. **Pular e reportar:** pule os itens `syncing` (ainda sincronizando; não processe) e avise a pessoa; no fim, reporte o que entrou, onde (as notas criadas) e as relações criadas.
+
 ## Próximas versões
 
-Os fluxos de **captura rápida e inbox** e **manter** (lint de links, conflitos de sincronização e órfãs) chegam nas próximas versões da skill. Os fluxos de guardar e de consultar já existem (seções acima); o de guardar é o único jeito de escrever notas no vault: sempre pelos comandos do `brain.py`, nunca criando arquivos à mão.
+O fluxo de **manter** (lint de links, conflitos de sincronização, órfãs e itens parados na inbox) chega numa próxima versão da skill. Os fluxos de guardar, consultar e da inbox já existem (seções acima); o de guardar é o único jeito de escrever notas no vault: sempre pelos comandos do `brain.py`, nunca criando arquivos à mão.
 
 ## Regras
 
 - **`brain.py config` antes de qualquer fluxo.** Configurado → direto ao pedido, sem perguntar configuração.
-- **O vault é do usuário.** O `brain.py` só cria e acrescenta; nada é apagado. Toda escrita dele no vault aparece no `log.md`.
+- **O vault é do usuário.** O `brain.py` só cria e acrescenta; nada é apagado. A única movimentação é tirar da inbox um item já processado (`inbox done`, `ingest --move`). Toda escrita dele no vault aparece no `log.md`.
 - **Sem caminho absoluto no vault.** Caminhos de máquina ficam só na configuração local (`references/config.md`).
 - **Sem credenciais e sem rede.** A skill só lê e escreve pastas; quem sincroniza é o app do provedor.

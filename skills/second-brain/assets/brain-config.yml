@@ -16,3 +16,4 @@ para:                     # pastas do método PARA
   archive: archive
 contexts: {}              # nome → {folder: pasta relativa, title: título do MOC}
 processors: {}            # tipo → {command: "executável {input} {output}"} (ADR-0009)
+inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inbox list e lint)

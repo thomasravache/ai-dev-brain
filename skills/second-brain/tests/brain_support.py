@@ -72,12 +72,13 @@ class Sandbox:
     def cleanup(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def run(self, *args, config_home=None):
+    def run(self, *args, config_home=None, cwd=None):
+        """`cwd` padrão: a raiz do sandbox (os testes da SPEC-0021 rodam também de dentro do vault)."""
         env = dict(os.environ)
         env["HOME"] = str(self.home)
         env["BRAIN_CONFIG_HOME"] = str(config_home or self.config_home)
         return subprocess.run([sys.executable, str(SCRIPT), *[str(a) for a in args]], check=False,
-                              cwd=self.root, capture_output=True, text=True, env=env)
+                              cwd=cwd or self.root, capture_output=True, text=True, env=env)
 
     def init(self, *extra, vault=None, files=None, provider="google-drive", config_home=None):
         return self.run("init", "--vault", vault or self.vault, "--files", files or self.files,
