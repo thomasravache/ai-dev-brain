@@ -7,8 +7,8 @@ O second-brain separa o que é de cada máquina do que é do vault (ADR-0008). `
 Fica em `$BRAIN_CONFIG_HOME/config.yml`; sem a variável, em `~/.config/second-brain/config.yml`. Nunca vai para o vault nem para um repositório. Guarda só os caminhos desta máquina:
 
 ```yaml
-vault: /Users/<nome>/Library/CloudStorage/GoogleDrive-<conta>/My Drive/Vault
-files: /Users/<nome>/Library/CloudStorage/GoogleDrive-<conta>/My Drive/Vault-files
+vault: <pasta sincronizada pelo provedor>/Vault
+files: <pasta sincronizada pelo provedor>/Vault-files
 provider: google-drive          # google-drive | onedrive | icloud | local
 ```
 
@@ -20,22 +20,28 @@ provider: google-drive          # google-drive | onedrive | icloud | local
 
 ## Camada compartilhada — `brain-config.yml`
 
-Fica na raiz do vault e sincroniza com ele: todas as máquinas veem os mesmos contextos e a mesma estrutura. **Nunca tem caminho absoluto** — tudo é relativo ao vault. Nasce de `assets/brain-config.yml`:
+Fica na raiz do vault e sincroniza com ele: todas as máquinas veem os mesmos contextos e a mesma estrutura. **Nunca tem caminho absoluto** — tudo é relativo ao vault. O `init` gera o arquivo a partir de `assets/brain-config.yml`, com os comentários do modelo; só mudam os valores de `--map` e as entradas de `--context`. Exemplo com `--context college=projects/college:College`:
 
 ```yaml
+# second-brain — configuração compartilhada padrão (copiada para <vault>/brain-config.yml pelo init).
+# Sincroniza com o vault: só caminhos relativos ao vault, nunca absolutos (ADR-0008). Detalhes: references/config.md
 version: 1
-language: auto                  # idioma do conteúdo; a estrutura é sempre em inglês
-layout:                         # pastas e arquivos da skill, relativos ao vault
+language: auto            # idioma do conteúdo das notas; a estrutura do vault é sempre em inglês
+layout:                   # pastas e arquivos da skill, relativos ao vault
   inbox: inbox
   raw: raw
   mocs: mocs
   templates: templates
   index: index.md
   log: log.md
-para: {projects: projects, areas: areas, resources: resources, archive: archive}
-contexts:                       # nome → pasta (relativa ao vault) + título do MOC
+para:                     # pastas do método PARA
+  projects: projects
+  areas: areas
+  resources: resources
+  archive: archive
+contexts:                 # nome → {folder: pasta relativa, title: título do MOC}
   college: {folder: projects/college, title: College}
-processors: {}                  # tipo → {command: "executável {input} {output}"}
+processors: {}            # tipo → {command: "executável {input} {output}"} (ADR-0009)
 ```
 
 - `version` — versão do schema; o `doctor` avisa quando é diferente da que a skill usa.
@@ -44,6 +50,10 @@ processors: {}                  # tipo → {command: "executável {input} {outpu
 - `para` — pastas do método PARA (projects, areas, resources, archive); também aceitam `--map`.
 - `contexts` — assuntos com pasta própria e MOC em `mocs/<nome>.md`; crie com `brain.py context add`.
 - `processors` — conversores de arquivo em texto (executados numa versão futura); o `doctor` confere se a primeira palavra de `command` existe no PATH.
+
+Todo valor de `layout`, `para` e `contexts.<nome>.folder` precisa ser relativo e ficar dentro do vault: caminho absoluto ou com `..` faz os comandos saírem com 1 (`brain-config.yml: <chave> fora do vault`), e o `doctor` mostra ERRO nessa chave. Um `brain-config.yml` que não pode ser lido aparece no `doctor` como `ERRO brain-config.yml — <erro>`, e os outros itens continuam.
+
+`brain.py context add` só insere uma linha dentro de `contexts:`, com a indentação das entradas que já existem; comentários e o resto do arquivo não mudam. Se `contexts` estiver escrito em uma linha (`contexts: {college: {...}}`), o comando sai com 2 e pede para converter para a forma em bloco.
 
 Chave ausente usa o padrão (origem `padrão` no `config`). Valores são texto; o arquivo pode ser editado à mão, e o `init` nunca o sobrescreve sem `--force` (o anterior fica em `brain-config.yml.bak`).
 

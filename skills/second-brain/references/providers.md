@@ -2,28 +2,35 @@
 
 A skill não instala nem configura o app de sincronização: ela só recebe o caminho da pasta. Escolha o provedor no onboarding (`--provider`) e siga a seção dele. O `provider` não muda o código; muda o guia e os avisos do `doctor`.
 
-Em todos os provedores, o **Obsidian Sync** (pago) é a opção oficial do Obsidian e funciona no desktop, no iOS e no Android. Fonte: https://obsidian.md/help/sync-notes (verificado em 2026-10-30).
+**Fonte verificada:** https://obsidian.md/help/sync-notes (verificado em 2026-10-30, ADR-0008). Ela diz:
+
+- o **Obsidian Sync** (pago) é a opção oficial do Obsidian e funciona em todos os sistemas: desktop, iOS e Android;
+- o **iCloud** é o recomendado no iPhone e no iPad, só entre aparelhos Apple;
+- **Google Drive** e **OneDrive** não são oficialmente suportados no iOS;
+- no **Android**, o OneDrive pode não funcionar bem, e a página sugere **Dropsync** ou **FolderSync**.
+
+O que não está nessa lista vem marcado como *orientação geral, não verificada*: confira na documentação do provedor antes de seguir.
 
 ## Google Drive (`google-drive`)
 
-- **Desktop:** instale o Google Drive para desktop e crie o vault dentro da pasta sincronizada (no macOS fica em `~/Library/CloudStorage/GoogleDrive-<conta>/`). Marque o vault e a pasta `files` como disponíveis offline.
-- **iOS:** o Obsidian não suporta oficialmente o Google Drive no iPhone e no iPad. Para usar o vault no celular, use o Obsidian Sync.
-- **Android:** não há sincronização oficial do Google Drive com o Obsidian; use o Obsidian Sync ou um app de sincronização de pastas.
+- **Desktop:** *orientação geral, não verificada* — instale o app de desktop do Google Drive, crie o vault dentro da pasta sincronizada e deixe o vault e a pasta `files` disponíveis offline.
+- **iOS:** o Google Drive não é oficialmente suportado pelo Obsidian no iPhone e no iPad (fonte verificada). Para usar o vault no celular, use o Obsidian Sync.
+- **Android:** a fonte verificada não trata do Google Drive no Android. O Obsidian Sync funciona no Android (fonte verificada).
 
 ## OneDrive (`onedrive`)
 
-- **Desktop:** instale o OneDrive e crie o vault dentro da pasta dele; deixe o vault e a pasta `files` sempre disponíveis neste dispositivo.
-- **iOS:** o Obsidian não suporta oficialmente o OneDrive no iPhone e no iPad; use o Obsidian Sync.
-- **Android:** o OneDrive pode não funcionar bem com o Obsidian; a ajuda oficial sugere Dropsync ou FolderSync para manter a pasta sincronizada, ou o Obsidian Sync.
+- **Desktop:** *orientação geral, não verificada* — instale o app do OneDrive, crie o vault dentro da pasta dele e deixe o vault e a pasta `files` sempre disponíveis no dispositivo.
+- **iOS:** o OneDrive não é oficialmente suportado pelo Obsidian no iPhone e no iPad (fonte verificada); use o Obsidian Sync.
+- **Android:** o OneDrive pode não funcionar bem com o Obsidian; a fonte verificada sugere Dropsync ou FolderSync, e o Obsidian Sync também funciona.
 
 ## iCloud (`icloud`)
 
-- **Desktop:** no Mac, crie o vault em iCloud Drive (`~/Library/Mobile Documents/iCloud~md~obsidian/Documents/` aparece para o iPhone). No Windows, use o iCloud para Windows.
-- **iOS:** recomendado no iPhone e no iPad, entre aparelhos Apple: crie o vault pelo Obsidian no iOS marcando "Store in iCloud" e abra a mesma pasta no Mac.
-- **Android:** o iCloud não sincroniza com o Android; quem usa Android precisa do Obsidian Sync ou de outro provedor.
+- **Desktop:** *orientação geral, não verificada* — no Mac, crie o vault no iCloud Drive para que os aparelhos Apple vejam a mesma pasta.
+- **iOS:** recomendado no iPhone e no iPad, entre aparelhos Apple (fonte verificada).
+- **Android:** a fonte verificada recomenda o iCloud só entre aparelhos Apple; com Android, use o Obsidian Sync, que funciona em todos.
 
 ## Pasta local (`local`)
 
-- **Desktop:** qualquer pasta do disco, ou uma sincronizada por outro meio (Syncthing, Dropbox, git). A skill trata como pasta comum.
-- **iOS:** uma pasta local do computador não chega ao iPhone sozinha; use o Obsidian Sync ou mova o vault para o iCloud.
-- **Android:** use o Obsidian Sync ou um app de sincronização de pastas (ex.: Syncthing, FolderSync).
+- **Desktop:** qualquer pasta do disco; a skill trata como pasta comum. Se outro programa sincroniza essa pasta, a skill não sabe nem depende disso.
+- **iOS:** *orientação geral, não verificada* — uma pasta local do computador não chega ao iPhone sozinha. O Obsidian Sync funciona no iOS (fonte verificada).
+- **Android:** *orientação geral, não verificada* — a pasta local também não chega ao Android sozinha. O Obsidian Sync funciona no Android (fonte verificada).

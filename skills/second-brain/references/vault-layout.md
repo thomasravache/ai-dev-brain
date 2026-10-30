@@ -23,6 +23,8 @@ Arquivos pesados (PDFs, vídeos) ficam na pasta `files`, fora do vault (configur
 
 - `init` num vault novo cria tudo acima que falta, copia os modelos de `assets/templates/` e cria a pasta e o MOC de cada `--context`.
 - `init --adopt` não move nem altera nada que existe e não cria as pastas de PARA que a pessoa não tem: cria só `inbox/`, `raw/`, `templates/`, `index.md`, `log.md` e `brain-config.yml` que faltarem (as pastas mapeadas com `--map` que já existem contam como presentes). O `doctor` mostra como AVISO o que ficou faltando.
+- `index.md` ou `log.md` que já existem sem os marcadores `<!-- brain:begin` são da pessoa: o `init --adopt` sai com 2 e não escreve nada. Use `--map log=<outro>` (ou `--map index=<outro>`) para a skill usar outro arquivo.
+- `init` sem `--adopt` numa pasta que já tem conteúdo e não tem `brain-config.yml` sai com 2 (`vault não está vazio — use --adopt`) e não cria nada.
 
 ## Regiões geradas
 
