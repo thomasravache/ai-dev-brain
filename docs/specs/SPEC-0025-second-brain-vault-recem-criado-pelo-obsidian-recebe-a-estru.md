@@ -64,9 +64,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 1304494 | 2026-10-30 |
-| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0025:IT-09 — 608f572 | 2026-10-30 |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=2)) — 608f572 | 2026-10-30 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — c9ca851 | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — c9ca851 | 2026-10-30 |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
