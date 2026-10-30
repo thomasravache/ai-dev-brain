@@ -29,3 +29,9 @@ processors: {}            # tipo → {command: "executável {input} {output}"} (
 #     command: "pdftotext -enc UTF-8 -nopgbrk {input} {output}"
 #     check: "pdftotext -v"
 inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inbox list e lint)
+# conflict_patterns: regex sobre o nome do arquivo, com o grupo "base" (o nome do original sem ".md"), que o lint
+# usa para achar cópias de conflito da sincronização. Ausente = os padrões do provider desta máquina
+# (references/providers.md). Para trocar, por exemplo:
+# conflict_patterns:
+#   - '(?P<base>.+) \(\d+\)\.md$'
+#   - '(?P<base>.+)[ _-]conflict.*\.md$'
