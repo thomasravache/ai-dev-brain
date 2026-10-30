@@ -133,7 +133,7 @@ references/processors.md: modelos para youtube (yt-dlp, legendas sem baixar o v�
 - **UT-01** — Dado `https://www.youtube.com/watch?v=x`, `https://youtu.be/x`, `aula.MP4`, `nota.m4a`, `slides.pdf` e `x.docx`, quando `detect_kind` roda, então devolve youtube, youtube, video, audio, pdf e nenhum.
 - **UT-02** — Dado o comando `"tool --in {input} -o {output_dir}/x"` e a entrada `a b; $(rm -rf x) "c".pdf`, quando `build_args` roda, então devolve `["tool", "--in", "<entrada literal>", "-o", "<dir>/x"]`, com a entrada como um único argumento.
 - **UT-03** — Dado um `.vtt` e um `.srt` com cabeçalho, linhas repetidas e marcações `<c>`, quando `subtitles_to_text` roda com e sem tempo, então devolve o texto sem duplicação e sem marcação, ou linhas `[mm:ss] texto`; com `https://youtu.be/abc` as linhas viram links `https://youtu.be/abc?t=<s>s`, e com `https://www.youtube.com/watch?v=abc`, links `…&t=<s>s`.
-- **UT-04** — Dado o código do `brain.py`, quando o teste de arquitetura (SPEC-0017:UT-06) roda, então a única chamada a `subprocess` está em `run_processor`.
+- **UT-04** — Dado o código do `brain.py`, quando o teste de arquitetura da SPEC-0017 (o UT-06 dela) roda, então a única chamada a `subprocess` está em `run_processor`.
 - **UT-05** — Dado `references/processors.md`, quando lido, então tem modelos para youtube, video ou audio e pdf, cada um com versão e data de conferência, e o aviso de que o yt-dlp acessa a rede.
 
 ### 7.3 Testes de Integração
