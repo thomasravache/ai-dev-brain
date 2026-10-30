@@ -1944,7 +1944,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("context", help="pacote de notas para uma pergunta (só leitura); 'context add' cria um contexto",
                        description=("context QUERY: MOC do contexto, resultados da busca e vizinhos por link, até "
                                     "--max-chars. Se o primeiro argumento é exatamente 'add', é o 'context add' "
-                                    "(cria um contexto); para buscar a palavra add, use 'context -- add'."))
+                                    "(cria um contexto); para buscar a palavra add, use 'context -- add' (depois do -- tudo é consulta)."))
     p.add_argument("query", nargs="+", metavar="QUERY")
     p.add_argument("--context", help="só notas deste contexto na busca; o MOC dele entra primeiro")
     p.add_argument("--hops", type=int, default=1, help=f"passos de link a partir da busca (0..{MAX_HOPS}, padrão 1)")
