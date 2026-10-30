@@ -4,7 +4,7 @@ title: "second-brain: pastas sempre em kebab-case"
 tier: lite
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-10-30
 parent:
 depends_on: [SPEC-0016]
@@ -13,8 +13,8 @@ touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, sk
 adrs: [ADR-0007]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0032 — second-brain: pastas sempre em kebab-case
@@ -57,6 +57,15 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01, IT-01 e IT-02 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
+- [ ] Green: `kebab`, contextos e pastas ajustados com aviso, AVISOs no `doctor`, docs
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
