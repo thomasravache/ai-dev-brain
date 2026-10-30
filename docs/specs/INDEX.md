@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **0 erro(s), 7 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 7, implemented 15
+- Validação (G0): **0 erro(s), 6 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 6, in-progress 1, implemented 15
 - Impedimentos: **0 aberto(s)**, 13 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0018  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0018
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0018 | second-brain: busca e relações entre notas | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0018 | second-brain: busca e relações entre notas | full/M | in-progress | 🔄 em andamento |  |
 | 2 | SPEC-0019 | second-brain: fluxo de guardar | full/M | approved | ⛔ aguarda implementação de SPEC-0018 |  |
 | 3 | SPEC-0020 | second-brain: fluxo de consultar | full/S | approved | ⛔ aguarda implementação de SPEC-0019 |  |
 | 4 | SPEC-0021 | second-brain: inbox e captura pelo celular | full/S | approved | ⛔ aguarda implementação de SPEC-0019 | saiu da onda 3: arquivos em comum com SPEC-0020 |
@@ -53,7 +53,7 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 flowchart LR
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0017["SPEC-0017<br/>second-brain: esqueleto, configuração e…"]:::implemented
-    S0018["SPEC-0018<br/>second-brain: busca e relações entre no…"]:::approved
+    S0018["SPEC-0018<br/>second-brain: busca e relações entre no…"]:::inprogress
     S0019["SPEC-0019<br/>second-brain: fluxo de guardar"]:::approved
     S0020["SPEC-0020<br/>second-brain: fluxo de consultar"]:::approved
     S0021["SPEC-0021<br/>second-brain: inbox e captura pelo celu…"]:::approved
@@ -98,7 +98,7 @@ flowchart LR
 | [SPEC-0015](SPEC-0015-rodape-refs-decide-a-spec-do-commit.md) | Rodapé Refs decide a spec do commit | lite | fix | implemented | 2026-10-27 | — | — | — |
 | [SPEC-0016](SPEC-0016-second-brain-skill-de-segundo-cerebro-no-obsidian.md) | Second brain: skill de segundo cérebro no Obsidian | epic | feature | approved | 2026-10-30 | — | — | — |
 | [SPEC-0017](SPEC-0017-second-brain-esqueleto-configuracao-em-duas-camadas-onboardi.md) | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full | feature | implemented | 2026-10-30 | SPEC-0016 | — | — |
-| [SPEC-0018](SPEC-0018-second-brain-busca-e-relacoes-entre-notas.md) | second-brain: busca e relações entre notas | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
+| [SPEC-0018](SPEC-0018-second-brain-busca-e-relacoes-entre-notas.md) | second-brain: busca e relações entre notas | full | feature | in-progress | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
 | [SPEC-0019](SPEC-0019-second-brain-fluxo-de-guardar.md) | second-brain: fluxo de guardar | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0018 | — |
 | [SPEC-0020](SPEC-0020-second-brain-fluxo-de-consultar.md) | second-brain: fluxo de consultar | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0019 | — |
 | [SPEC-0021](SPEC-0021-second-brain-inbox-e-captura-pelo-celular.md) | second-brain: inbox e captura pelo celular | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0019 | — |

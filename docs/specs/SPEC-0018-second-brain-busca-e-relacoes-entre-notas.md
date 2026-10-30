@@ -4,7 +4,7 @@ title: "second-brain: busca e relações entre notas"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0017]
