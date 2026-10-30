@@ -6,7 +6,7 @@ Tudo o que chega à inbox pelo celular aparece no `inbox list` assim que o app d
 
 **Fonte verificada:** https://obsidian.md/help/sync-notes (verificado em 2026-10-30, ADR-0008). Ela diz:
 
-- o **Obsidian Sync** (pago) é a opção oficial do Obsidian e funciona em todos os sistemas: desktop, iOS e Android;
+- o **Obsidian Sync** é a opção oficial do Obsidian e funciona em todos os sistemas: desktop, iOS e Android;
 - o **iCloud** é o recomendado no iPhone e no iPad, só entre aparelhos Apple;
 - **Google Drive** e **OneDrive** não são oficialmente suportados no iOS;
 - no **Android**, o OneDrive pode não funcionar bem, e a página sugere **Dropsync** ou **FolderSync**.
@@ -28,7 +28,7 @@ A fonte trata de abrir o vault no Obsidian, não de salvar arquivos pelo app do 
 ## iCloud (`icloud`)
 
 - **iOS:** *orientação geral, não verificada* — no item, toque em Compartilhar, "Salvar em Arquivos", e escolha iCloud Drive → pasta do vault → `inbox`.
-- **Android:** *orientação geral, não verificada* — não há app do iCloud Drive para Android que salve na pasta do vault; a fonte verificada recomenda o iCloud só entre aparelhos Apple. Com Android, a captura pelo celular vai pelo Obsidian Sync (seção **Obsidian mobile**), com a pasta padrão de notas novas na `inbox`.
+- **Android:** *orientação geral, não verificada* — até onde sabemos (não conferido numa fonte), não há app do iCloud Drive para Android que salve na pasta do vault; o que a fonte verificada diz é só que o iCloud é recomendado entre aparelhos Apple. Com Android, a captura pelo celular vai pelo Obsidian Sync (seção **Obsidian mobile**), com a pasta padrão de notas novas na `inbox`.
 - **Obsidian mobile:** recomendado no iPhone e no iPad (fonte verificada): abra o vault do iCloud Drive no Obsidian e capture por nota rápida.
 
 ## Pasta local (`local`)

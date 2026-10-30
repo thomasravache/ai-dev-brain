@@ -42,12 +42,17 @@ brain.py inbox done inbox/2026-10-30-140509-ideia-sobre-grafos.md --note "projec
 - O log ganha duas linhas: `inbox-move inbox/<nome> → <files>/<contexto>/<AAAA>/<nome>` e a do `ingest`.
 - Fonte fora da inbox (ou uma URL): exit 2 "--move só vale para itens da inbox", nada muda. Item `syncing`: exit 2 "ainda sincronizando".
 - Sem `--move`, o `ingest` de um item da inbox copia e o item fica onde está.
+- `files` em outro volume (outro disco ou partição) que o vault: o `--move` falha com segurança — exit 1 "não consegui mover", o item fica na inbox, nada vai para o log e nenhuma nota de fonte é criada. Não há cópia automática na v1: rode `ingest ITEM` sem `--move` (copia) e depois tire o item da inbox à mão.
+- O destino é reservado com uma criação exclusiva (arquivo vazio) e o item é renomeado sobre a reserva com `os.replace`. Entre os dois passos há uma janela teórica: outro processo que escreva exatamente naquele nome nesse intervalo seria substituído. Na prática só o `brain.py` cria nomes ali; não rode dois `--move` do mesmo item ao mesmo tempo.
+- Item que é link simbólico, ou que está numa subpasta oculta da inbox (qualquer parte começando com `.`, que o `inbox list` não mostra): exit 2, nada muda.
 
 ## `inbox done ITEM [--note CAMINHO]`
 
 - Para um item `text` ou `link` já guardado como nota: move para `raw/processed/AAAA-MM/<nome>` (mês de hoje). Nome que já existe lá vira `<nome>-1`, `-2`... e o arquivo existente nunca muda.
 - `--note` é a nota criada a partir do item (caminho ou nome, resolvido como um link); o log ganha `- … inbox-done inbox/<nome> → raw/processed/AAAA-MM/<nome> nota: <nota>`.
-- Item `file`: exit 2 "arquivo: use ingest --move". Item `syncing`: exit 2 "ainda sincronizando". Item fora da inbox (inclusive `inbox/../raw/x`) ou inexistente: exit 2. Em todo erro o item fica onde estava e o log não muda.
+- `--note` com caminho absoluto: dentro do vault vira o caminho relativo ao vault; fora do vault, exit 2 e nada muda (o `log.md` nunca guarda caminho absoluto).
+- Item `file`: exit 2 "arquivo: use ingest --move". Item `syncing`: exit 2 "ainda sincronizando". Item fora da inbox (inclusive `inbox/../raw/x`), inexistente, link simbólico ou numa subpasta oculta: exit 2. Em todo erro o item fica onde estava e o log não muda.
+- Caracteres de controle no nome do item (quebra de linha, tab, ESC) aparecem escapados (`\n`, `\t`, `\x1b`) no `log.md` e na saída: cada registro continua numa linha só.
 
 ## Itens chegando pelo celular
 
@@ -57,4 +62,4 @@ brain.py inbox done inbox/2026-10-30-140509-ideia-sobre-grafos.md --note "projec
 
 ## `inbox_stale_days`
 
-Chave de primeiro nível do `brain-config.yml` (padrão 7 quando ausente ou inválida; vaults criados antes funcionam sem mudança). Usada pelo `inbox list` (`stale`) e, quando chegar o fluxo de manter, pelo `lint` (itens parados).
+Chave de primeiro nível do `brain-config.yml` (padrão 7 quando ausente ou inválida; vaults criados antes funcionam sem mudança). Valor inválido (negativo, decimal ou texto) usa 7 e aparece como aviso no `config --json` (lista `warnings`) e como `AVISO inbox_stale_days` no `doctor`. Usada pelo `inbox list` (`stale`) e, quando chegar o fluxo de manter, pelo `lint` (itens parados).
