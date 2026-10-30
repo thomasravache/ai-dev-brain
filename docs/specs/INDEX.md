@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **0 erro(s), 7 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 4, in-progress 1, implemented 18
+- Specs: approved 5, in-progress 1, implemented 18
 - Impedimentos: **0 aberto(s)**, 13 resolvido(s)
 
 ## Cobertura de Pilares
@@ -34,7 +34,7 @@ Perfil: **minimo**
 | 3 | SPEC-0023 | second-brain: manutenção do vault (lint) | full/S | approved | ⛔ aguarda implementação de SPEC-0021 | saiu da onda 2: arquivos em comum com SPEC-0022 |
 | 4 | SPEC-0024 | second-brain: exportação para o NotebookLM | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0021; saiu da onda 2: arquivos em comum com SPEC-0022; saiu da onda 3: arquivos em comum com SPEC-0023 |
 | 5 | SPEC-0025 | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0021; saiu da onda 2: arquivos em comum com SPEC-0022; saiu da onda 3: arquivos em comum com SPEC-0023; saiu da onda 4: arquivos em comum com SPEC-0024 |
-| 6 | SPEC-0026 | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0021; saiu da onda 2: arquivos em comum com SPEC-0022; saiu da onda 3: arquivos em comum com SPEC-0023; saiu da onda 4: arquivos em comum com SPEC-0024; saiu da onda 5: arquivos em comum com SPEC-0025 |
+| 6 | SPEC-0026 | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0021; saiu da onda 2: arquivos em comum com SPEC-0022; saiu da onda 3: arquivos em comum com SPEC-0023; saiu da onda 4: arquivos em comum com SPEC-0024; saiu da onda 5: arquivos em comum com SPEC-0025 |
 
 ## Épicos
 
@@ -58,7 +58,7 @@ flowchart LR
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::approved
     S0024["SPEC-0024<br/>second-brain: exportação para o Noteboo…"]:::approved
     S0025["SPEC-0025<br/>second-brain: vault recém-criado pelo O…"]:::approved
-    S0026["SPEC-0026<br/>second-brain: ajustes da busca apontado…"]:::proposed
+    S0026["SPEC-0026<br/>second-brain: ajustes da busca apontado…"]:::approved
   end
   S0019 --> S0020
   S0019 --> S0021
@@ -103,7 +103,7 @@ flowchart LR
 | [SPEC-0023](SPEC-0023-second-brain-manutencao-do-vault-lint.md) | second-brain: manutenção do vault (lint) | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0021 | — |
 | [SPEC-0024](SPEC-0024-second-brain-exportacao-para-o-notebooklm.md) | second-brain: exportação para o NotebookLM | lite | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
 | [SPEC-0025](SPEC-0025-second-brain-vault-recem-criado-pelo-obsidian-recebe-a-estru.md) | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
-| [SPEC-0026](SPEC-0026-second-brain-ajustes-da-busca-apontados-na-revisao-da-spec-0.md) | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite | fix | proposed | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
+| [SPEC-0026](SPEC-0026-second-brain-ajustes-da-busca-apontados-na-revisao-da-spec-0.md) | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite | fix | approved | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
 
 ## ADRs
 

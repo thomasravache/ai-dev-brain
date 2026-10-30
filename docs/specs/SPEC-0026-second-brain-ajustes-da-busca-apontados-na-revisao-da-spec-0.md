@@ -4,7 +4,7 @@ title: "second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e S
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0020]
@@ -13,8 +13,8 @@ touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, sk
 adrs: [ADR-0007]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0026 — second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020
@@ -74,12 +74,21 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01, UT-02, IT-01 e IT-02 com a tag `SPEC-0026:<ID>`, falhando pelo motivo certo
+- [ ] Green: arquivos ocultos, NFC, cercas, termos curtos, `log.md`/`index.md` fora de `related` e da expansão do `context`, `unicodedata.combining`, `Note` estrito, texto de `search.md`
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PENDING | | |
+| G0 Spec | PASS | validate: 0 erro(s) — e26c5a4 | 2026-10-30 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
