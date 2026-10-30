@@ -10,7 +10,7 @@ max_parallel: 3
 # Exemplos: "dotnet build" | "npm run build" | "./gradlew build" | "go build ./..."
 build: ""
 # Suíte completa. Exemplos: "dotnet test" | "npm test" | "pytest" | "go test ./..."
-test: "python3 -m unittest discover -s skills/sdd-management/tests"
+test: "python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests"
 test_integration: ""
 # E2E da jornada do usuário. Exemplos: "npx playwright test" | "npx cypress run" | "maestro test flows/"
 test_e2e: ""
@@ -25,7 +25,7 @@ mutation: ""
 
 # --- Arquitetura e segurança (G3, G5) ---
 # Exemplos: "dotnet test --filter Category=Architecture" | "npx depcruise src" | "lint-imports"
-arch_test: "python3 -m unittest discover -s skills/sdd-management/tests -p test_architecture.py"
+arch_test: "python3 -m unittest discover -s skills/sdd-management/tests -p test_architecture.py && python3 -m unittest discover -s skills/second-brain/tests -p test_architecture.py"
 # Auditoria de dependências + segredos. Exemplos: "npm audit --audit-level=high" | "dotnet list package --vulnerable" | "gitleaks detect"
 security_scan: ""
 

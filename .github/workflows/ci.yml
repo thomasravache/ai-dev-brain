@@ -1,4 +1,4 @@
-# CI da skill (SPEC-0001): lint, testes de arquitetura (ADR-0001) e suíte completa.
+# CI das skills (SPEC-0001): lint, testes de arquitetura (ADR-0001, ADR-0007) e suítes completas.
 # SPEC-0001:IT-01 — verde num PR sem problemas. SPEC-0001:IT-02 — vermelho com erro de lint ou teste falhando.
 name: ci
 
@@ -42,3 +42,7 @@ jobs:
 
       - name: Testes de arquitetura e suíte completa
         run: python -m unittest discover -s skills/sdd-management/tests -v
+
+      # Suíte da second-brain, com os testes de arquitetura do ADR-0007 (SPEC-0017).
+      - name: Testes da second-brain
+        run: python -m unittest discover -s skills/second-brain/tests -v

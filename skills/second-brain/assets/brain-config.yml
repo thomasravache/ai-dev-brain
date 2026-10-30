@@ -1,0 +1,37 @@
+# second-brain — configuração compartilhada padrão (copiada para <vault>/brain-config.yml pelo init).
+# Sincroniza com o vault: só caminhos relativos ao vault, nunca absolutos (ADR-0008). Detalhes: references/config.md
+version: 1
+language: auto            # idioma do conteúdo das notas; a estrutura do vault é sempre em inglês
+layout:                   # pastas e arquivos da skill, relativos ao vault
+  inbox: inbox
+  raw: raw
+  mocs: mocs
+  templates: templates
+  index: index.md
+  log: log.md
+para:                     # pastas do método PARA
+  projects: projects
+  areas: areas
+  resources: resources
+  archive: archive
+contexts: {}              # nome → {folder: pasta relativa, title: título do MOC}
+processors: {}            # tipo → {command: "executável {input} {output}"} (ADR-0009)
+# Modelos conferidos (versão e data) em references/processors.md; troque "processors: {}" por, por exemplo:
+# processors:
+#   youtube:
+#     command: 'yt-dlp --skip-download --write-subs --write-auto-subs --sub-langs "pt.*,en.*" --sub-format "vtt/best" --convert-subs vtt --no-playlist -o "{output_dir}/%(id)s.%(ext)s" {input}'
+#     output: vtt
+#   video:
+#     command: "whisper {input} --model turbo --output_format vtt --output_dir {output_dir} --verbose False"
+#     output: vtt
+#     check: "whisper --help"
+#   pdf:
+#     command: "pdftotext -enc UTF-8 -nopgbrk {input} {output}"
+#     check: "pdftotext -v"
+inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inbox list e lint)
+# conflict_patterns: regex sobre o nome do arquivo, com o grupo "base" (o nome do original sem ".md"), que o lint
+# usa para achar cópias de conflito da sincronização. Ausente = os padrões do provider desta máquina
+# (references/providers.md). Para trocar, por exemplo:
+# conflict_patterns:
+#   - '(?P<base>.+) \(\d+\)\.md$'
+#   - '(?P<base>.+)[ _-]conflict.*\.md$'
