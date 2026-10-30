@@ -74,15 +74,15 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01, UT-02, IT-01 e IT-02 com a tag `SPEC-0026:<ID>`, falhando pelo motivo certo
-- [ ] Green: arquivos ocultos, NFC, cercas, termos curtos, `log.md`/`index.md` fora de `related` e da expansão do `context`, `unicodedata.combining`, `Note` estrito, texto de `search.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega e CHANGELOG (G7)
+- [x] Red: UT-01, UT-02, IT-01 e IT-02 com a tag `SPEC-0026:<ID>`, falhando pelo motivo certo
+- [x] Green: arquivos ocultos, NFC, cercas, termos curtos, `log.md`/`index.md` fora de `related` e da expansão do `context`, `unicodedata.combining`, `Note` estrito, texto de `search.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -93,9 +93,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 116fed3 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 116fed3 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (116fed3; 4 minor encaminhados para a SPEC-0027) — 116fed3 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 423ad9d | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -107,28 +107,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+A busca passa a ignorar arquivos ocultos. Ela resolve links com acento mesmo quando o nome do arquivo está gravado em outra forma Unicode (NFD, comum no macOS), trata direito cercas de código de 4 crases ou de tils e descarta termos de 1 caractere. Por fim, deixa `log.md` e `index.md` fora das relacionadas e da expansão do `context`; eles continuam encontráveis pelo `search`.
 
 ### Como foi feito
+`brain.py` (versão 2026.10.10) mudou em `walk_notes` (ignora ocultos), `_link_key` (normalização NFC), `FENCE_RE` e `prose` (a cerca fecha com o mesmo caractere e tamanho mínimo), `tokenize` (`MIN_TERM = 2`), `fold` (agora usa `unicodedata.combining`), `Note` (recusa campos extras) e `generated_paths`. Esta última é usada por `related`, `build_context` e `export_notes`. `references/search.md` documenta as regras e diz que todo `![[anexo]]` aparece em `broken`. A revisão G4 aprovou com 4 minor, encaminhados para a SPEC-0027.
 
 ### Prova de Correção
 <!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+Red 9d2f379: os testes UT-01, UT-02, IT-01 e IT-02 tinham 11 falhas, contando os subtestes, registradas no G1. Green 743c8b0 e 116fed3: todos passam e a suíte completa passa (G2, G5 e CI do PR #15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Ocultos fora da varredura, links NFC/NFD, cercas de código, termos curtos e texto do search.md | PASS | `test_search_review.py::HiddenAndUnicodeScanTest.test_hidden_md_files_are_not_scanned; test_search_review.py::HiddenAndUnicodeScanTest.test_nfc_link_resolves_to_a_file_name_stored_in_nfd; test_search_review.py::ParseFixesTest.test_link_and_path_keys_are_compared_in_nfc; test_search_review.py::ParseFixesTest.test_a_fence_closes_only_with_the_same_char_and_at_least_the_same_length; test_search_review.py::ParseFixesTest.test_terms_shorter_than_two_characters_do_not_count; test_search_review.py::SearchDocTest.test_search_md_says_every_attachment_embed_is_broken_in_links` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | Note recusa campos desconhecidos | PASS | `test_search_review.py::StrictNoteTest.test_note_rejects_unknown_fields` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | log.md e index.md fora de related e ainda achados pelo search | PASS | `test_search_review.py::RelatedLayoutFilesCliTest.test_related_never_lists_log_or_index_but_search_still_finds_them` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | context nunca expande pelo index.md ou pelo log.md | PASS | `test_search_review.py::ContextLayoutFilesCliTest.test_context_never_expands_through_index_or_log` — CI do PR #15 em 423ad9d (run 41101569025, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6)
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.10. Rollback: revert do merge.
 
 ### Pendências
+SPEC-0027 recebe os minor da revisão: o `lint` ainda lê `.md` ocultos; a exclusão de `index.md` e `log.md` compara o caminho exato, sem considerar maiúsculas nem a forma Unicode; uma cerca de fechamento com texto depois ("```python"); uma linha longa no `search.md`; e uma linha no `query-flow.md` dizendo que o `context` não expande pelo `index.md` nem pelo `log.md`.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
