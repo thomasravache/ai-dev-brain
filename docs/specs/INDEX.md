@@ -4,9 +4,9 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 17 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 10, implemented 25
-- Impedimentos: **0 aberto(s)**, 13 resolvido(s)
+- Validação (G0): **3 erro(s), 15 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 10, implemented 26
+- Impedimentos: **0 aberto(s)**, 14 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -139,6 +139,7 @@ flowchart LR
 | [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@1 |
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
+| [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 
 ## ADRs
 
