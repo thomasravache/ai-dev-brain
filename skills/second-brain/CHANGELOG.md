@@ -9,6 +9,13 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.8] - 2026-10-30
+
+### Added
+- `export-notebooklm MOC --out PASTA [--hops 0..2] [--combined] [--json]` no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.8), só leitura do vault: junta o MOC (nome do contexto ou caminho), as notas que ele cita e as vizinhas delas por link até `--hops` (padrão 1), reusando o `neighbors` do `context` com o MOC, o `index.md` e o `log.md` bloqueados; grava em `PASTA`, fora do vault, um `.md` por nota (título na primeira linha, sem frontmatter), `sources.md` (de onde veio cada nota) e, com `--combined`, `combined.md`. Cada arquivo é criado em modo exclusivo; `--out` dentro do vault, ou já com arquivos, sai com 2 e nada é escrito; o vault não muda, nem o `log.md` (SPEC-0024, ADR-0007).
+- `flatten_links(text)`: wikilinks viram texto simples (`[[Nota|apelido]]` → `apelido`) e embeds de anexo viram `(anexo: nome)` (SPEC-0024).
+- `references/notebooklm.md` com o passo a passo de envio, os formatos aceitos e os limites (500.000 palavras ou 200 MB por fonte; 50 fontes por notebook no plano gratuito), conferidos em 2026-10-30 na ajuda oficial do Google; `SKILL.md`: oferecer o pacote do MOC quando a pessoa vai estudar ou se preparar para uma prova (SPEC-0024).
+
 ## [2026.10.7] - 2026-10-30
 
 ### Added
