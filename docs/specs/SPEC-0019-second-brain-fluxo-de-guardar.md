@@ -218,27 +218,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Escrita segura**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0019:<ID>`, falhando pelo motivo certo
-- [ ] Green: `note_path`, `write_new_file`, `append_relation`, `replace_region`, `append_log`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0019:<ID>`, falhando pelo motivo certo
+- [x] Green: `note_path`, `write_new_file`, `append_relation`, `replace_region`, `append_log`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comandos de guardar**
-- [ ] Red: IT-01, IT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0019:<ID>`, falhando pelo motivo certo
-- [ ] Green: `ingest`, `new-note`, `relate`, `index`; modelos dos 7 tipos
-- [ ] Refactor mantendo tudo verde
+- [x] Red: IT-01, IT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0019:<ID>`, falhando pelo motivo certo
+- [x] Green: `ingest`, `new-note`, `relate`, `index`; modelos dos 7 tipos
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Jornada, desempenho e instruções**
-- [ ] Red: IT-07, IT-06, UT-05 com a tag `SPEC-0019:<ID>`, falhando pelo motivo certo
-- [ ] Green: fluxo de guardar no `SKILL.md`, `store-flow.md`, `note-types.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: IT-07, IT-06, UT-05 com a tag `SPEC-0019:<ID>`, falhando pelo motivo certo
+- [x] Green: fluxo de guardar no `SKILL.md`, `store-flow.md`, `note-types.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -249,9 +249,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 9791639 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 9791639 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (9791639; 10 achados da 1ª rodada corrigidos; 2 minor opcionais) — 9791639 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 8988dc9 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -264,36 +264,69 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+O fluxo de guardar existe de ponta a ponta:
+- `brain.py ingest` guarda o bruto: arquivo copiado para `files/<contexto>/<ano>/`, sem sobrescrever, ou link, e nota de fonte em `raw/`;
+- `new-note` cria a nota a partir do modelo do tipo, na pasta do contexto;
+- `relate --why` liga notas explicando o motivo, com `--both` para os dois lados;
+- `index` regenera os MOCs e o `index.md` sem tocar no seu texto.
+
+Toda escrita vai para o `log.md`. O `SKILL.md` traz os seis passos que o agente sempre segue: classificar, guardar o bruto, buscar relações, escrever, ligar e indexar, reportar.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `brain.py` (versão 2026.10.3) ganhou `note_path`, `write_new_file` (falha se a nota já existe), `append_relation`, `replace_region` e `append_log`. As escritas de `relate` e `index` são atômicas (arquivo temporário oculto + `os.replace`) e preservam BOM e CRLF.
+- O `index` planeja e valida todos os arquivos antes de escrever qualquer um.
+- Foram criados `references/store-flow.md` e `references/note-types.md`.
+- A 1ª revisão G4 pediu mudanças: 1 blocker (marcadores desbalanceados num MOC apagavam texto do usuário), 1 major (nome de contexto editado à mão escapava do vault) e 8 minor. Os testes de regressão vieram antes da correção (red e198ade; fix f2b23f3 e 9791639), e a 2ª revisão aprovou.
+- Desvios aceitos na revisão:
+  - o nome de contexto é validado onde é usado, além do `doctor`;
+  - o leitor de YAML trata `\"` e `''` dentro de aspas;
+  - symlink dentro do vault é escrito no alvo, e fora do vault é recusado;
+  - títulos são cortados em 200 bytes;
+  - datas inválidas ficam fora de "recent".
+- Ficaram 2 achados minor opcionais: o motivo da relação é comparado diferenciando maiúsculas, e um marcador citado num bloco de código faz o `index` recusar o MOC (falha segura).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Caminho da nota pelo contexto, sanitizado, dentro do vault | PASS | `test_store.py::NotePathTest.test_context_folder_sanitized_title_resources_fallback_and_outside_vault; test_store.py::NotePathTest.test_every_forbidden_character_is_removed_from_the_file_name; test_store.py::NotePathTest.test_title_with_dots_never_leaves_the_folder; test_store.py::NotePathTest.test_unknown_context_lists_the_valid_ones` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | write_new_file nunca sobrescreve | PASS | `test_store.py::WriteNewFileTest.test_existing_file_raises_note_exists_and_is_not_touched` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | Relação acrescentada na seção Relations, sem duplicar (com apelido, CRLF) | PASS | `test_store.py::AppendRelationTest.test_section_created_at_the_end_when_missing; test_store.py::AppendRelationTest.test_line_goes_at_the_end_of_the_section_before_the_next_heading; test_store.py::AppendRelationTest.test_empty_section_of_the_template_gets_the_line; test_store.py::ReviewRegressionUnitTest.test_existing_relation_with_alias_is_not_repeated; test_store.py::ReviewRegressionUnitTest.test_crlf_text_keeps_crlf_line_endings` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-04 | Região gerada substituída sem tocar no texto do usuário; marcadores desbalanceados recusados | PASS | `test_store.py::ReplaceRegionTest.test_only_the_content_between_the_markers_changes; test_store.py::ReplaceRegionTest.test_other_regions_are_untouched; test_store.py::ReplaceRegionTest.test_missing_region_is_appended_at_the_end; test_store.py::ReviewRegressionUnitTest.test_replace_region_refuses_unbalanced_or_duplicated_markers; test_store.py::ReviewRegressionUnitTest.test_replace_region_in_crlf_text_keeps_crlf_line_endings` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-05 | SKILL.md com os seis passos e note-types.md com os sete tipos | PASS | `test_store_instructions.py::StoreFlowInstructionsTest.test_skill_md_has_the_six_store_steps_in_order_with_the_commands; test_store_instructions.py::StoreFlowInstructionsTest.test_note_types_reference_describes_the_seven_types_with_templates; test_store_instructions.py::StoreFlowInstructionsTest.test_store_flow_states_the_guaranteed_index_bound` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | ingest de arquivo e URL, nomes repetidos, texto extraído, nome de contexto inválido | PASS | `test_store_cli.py::IngestCliTest.test_ingest_copies_without_overwriting_creates_source_notes_and_rejects_missing; test_store_cli.py::ReviewRegressionCliTest.test_context_name_climbing_out_of_files_or_vault_is_refused` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | new-note: modelo, nota existente, tipo inválido, modelo do vault, título com marcadores e título longo | PASS | `test_store_cli.py::NewNoteCliTest.test_new_note_from_template_never_overwrites_and_validates_type_and_context; test_store_cli.py::ReviewRegressionCliTest.test_title_with_markers_quotes_and_hash_is_kept_literally_and_readable; test_store_cli.py::ReviewRegressionCliTest.test_very_long_title_is_refused_or_truncated_without_errno` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | relate, relação repetida, --both, CRLF e symlink | PASS | `test_store_cli.py::RelateCliTest.test_relate_appends_once_both_ways_and_rejects_missing_notes; test_store_cli.py::ReviewRegressionCliTest.test_relation_with_alias_counts_as_existing; test_store_cli.py::ReviewRegressionCliTest.test_relate_keeps_crlf_files_crlf; test_store_cli.py::ReviewRegressionCliTest.test_relate_never_replaces_a_symlinked_note_with_a_regular_file` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | index de MOCs e index.md, texto do usuário intacto, marcadores quebrados, datas inválidas | PASS | `test_store_cli.py::IndexCliTest.test_index_regenerates_mocs_and_index_keeping_user_text; test_store_cli.py::ReviewRegressionCliTest.test_index_refuses_a_moc_with_unbalanced_or_duplicated_markers; test_store_cli.py::ReviewRegressionCliTest.test_index_never_writes_a_moc_outside_the_vault_for_a_hand_edited_context_name; test_store_cli.py::ReviewRegressionCliTest.test_index_keeps_crlf_files_crlf; test_store_cli.py::ReviewRegressionCliTest.test_invalid_created_date_never_goes_above_valid_recent_notes; test_store_cli.py::ReviewRegressionCliTest.test_index_never_replaces_a_symlinked_moc_with_a_regular_file` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-05 | Uma linha de log por escrita; files ou raw sem permissão | PASS | `test_store_cli.py::LogCliTest.test_every_write_adds_its_log_line; test_store_cli.py::LogCliTest.test_ingest_with_unwritable_files_folder_exits_1_and_creates_no_source_note; test_store_cli.py::ReviewRegressionCliTest.test_ingest_with_unwritable_raw_names_the_copied_file` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-06 | index com 5.000 notas abaixo de 3 s | PASS | `test_store_cli.py::IndexPerformanceCliTest.test_index_takes_under_3_seconds_on_5000_notes` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-07 | Jornada completa de guardar | PASS | `test_store_cli.py::StoreJourneyCliTest.test_ingest_related_new_note_relate_both_and_index` — CI do PR #15 em 8988dc9 (run 41055883309, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — `index` em 0,35–0,56 s com 5.000 notas (meta: menos de 3 s), no IT-06; segurança pelo UT-01, UT-02, UT-04 e IT-01 a IT-05 (sem sobrescrever, sem sair do vault, sem apagar texto do usuário)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` com o merge do PR #15
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` configurado
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.3. Rollback: revert do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma nova. Os 2 minor opcionais da revisão (motivo da relação comparado sem ignorar maiúsculas e marcador citado em bloco de código) são aceitos como estão.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0019`. -->
