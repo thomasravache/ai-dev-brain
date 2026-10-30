@@ -1,11 +1,11 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-10-27 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-10-30 — não edite manualmente.
 
 ## Saúde
 
 - Validação (G0): **0 erro(s), 5 aviso(s)** — rode `spec_graph.py validate`
-- Specs: implemented 14
+- Specs: approved 8, implemented 14
 - Impedimentos: **0 aberto(s)**, 12 resolvido(s)
 
 ## Cobertura de Pilares
@@ -14,7 +14,7 @@ Perfil: **minimo**
 
 | Pilar | Situação | Detalhe |
 |---|---|---|
-| Arquitetura e fronteiras | coberto | ADR-0001 |
+| Arquitetura e fronteiras | coberto | ADR-0001, ADR-0007, ADR-0008, ADR-0009 |
 | Estratégia de testes | coberto | ADR-0002 |
 | Qualidade de código | coberto | ADR-0003 |
 | Entrega contínua e ambientes | dispensado | sem deploy nem ambientes: a skill é usada direto do checkout da main (link simbólico) ou copiada; release, versão e rollback estão no ADR-0005 |
@@ -23,13 +23,57 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-Nenhuma spec aberta.
+**Em andamento:** —  
+**Paradas por impedimento:** —  
+**Próximo lote:** SPEC-0017
+
+| Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
+|---|---|---|---|---|---|---|
+| 1 | SPEC-0017 | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full/M | approved | ✅ pronta |  |
+| 2 | SPEC-0018 | second-brain: busca e relações entre notas | full/M | approved | ⛔ aguarda implementação de SPEC-0017 |  |
+| 3 | SPEC-0019 | second-brain: fluxo de guardar | full/M | approved | ⛔ aguarda implementação de SPEC-0018 |  |
+| 4 | SPEC-0020 | second-brain: fluxo de consultar | full/S | approved | ⛔ aguarda implementação de SPEC-0019 |  |
+| 5 | SPEC-0021 | second-brain: inbox e captura pelo celular | full/S | approved | ⛔ aguarda implementação de SPEC-0019 | saiu da onda 4: arquivos em comum com SPEC-0020 |
+| 6 | SPEC-0022 | second-brain: processadores de vídeo e documento | full/M | approved | ⛔ aguarda implementação de SPEC-0021 |  |
+| 7 | SPEC-0023 | second-brain: manutenção do vault (lint) | full/S | approved | ⛔ aguarda implementação de SPEC-0021 | saiu da onda 6: arquivos em comum com SPEC-0022 |
+| 8 | SPEC-0024 | second-brain: exportação para o NotebookLM | lite/S | approved | ⛔ aguarda implementação de SPEC-0020 | saiu da onda 5: arquivos em comum com SPEC-0021; saiu da onda 6: arquivos em comum com SPEC-0022; saiu da onda 7: arquivos em comum com SPEC-0023 |
 
 ## Épicos
 
 | Épico | Título | Status | Progresso |
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
+| SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | approved | 0/8 implementadas |
+
+## Grafo de Dependências
+
+Seta contínua: depende da implementação. Seta tracejada: consome contrato.
+
+```mermaid
+flowchart LR
+  subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
+    S0017["SPEC-0017<br/>second-brain: esqueleto, configuração e…"]:::approved
+    S0018["SPEC-0018<br/>second-brain: busca e relações entre no…"]:::approved
+    S0019["SPEC-0019<br/>second-brain: fluxo de guardar"]:::approved
+    S0020["SPEC-0020<br/>second-brain: fluxo de consultar"]:::approved
+    S0021["SPEC-0021<br/>second-brain: inbox e captura pelo celu…"]:::approved
+    S0022["SPEC-0022<br/>second-brain: processadores de vídeo e …"]:::approved
+    S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::approved
+    S0024["SPEC-0024<br/>second-brain: exportação para o Noteboo…"]:::approved
+  end
+  S0017 --> S0018
+  S0018 --> S0019
+  S0019 --> S0020
+  S0019 --> S0021
+  S0021 --> S0022
+  S0021 --> S0023
+  S0020 --> S0024
+  classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
+  classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
+  classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
+  classDef implemented fill:#dcfce7,stroke:#16a34a,color:#111
+  classDef deprecated fill:#f3f4f6,stroke:#9ca3af,color:#6b7280
+```
 
 ## Todas as Specs
 
@@ -50,6 +94,15 @@ Nenhuma spec aberta.
 | [SPEC-0013](SPEC-0013-novidades-da-skill-para-os-projetos-whats-new.md) | Novidades da skill para os projetos (whats-new) | full | feature | implemented | 2026-10-26 | — | — | SPEC-0003@1 |
 | [SPEC-0014](SPEC-0014-validate-nao-sugere-a-politica-de-h2-ja-declarada.md) | validate não sugere a política de H2 já declarada | lite | fix | implemented | 2026-10-26 | — | — | — |
 | [SPEC-0015](SPEC-0015-rodape-refs-decide-a-spec-do-commit.md) | Rodapé Refs decide a spec do commit | lite | fix | implemented | 2026-10-27 | — | — | — |
+| [SPEC-0016](SPEC-0016-second-brain-skill-de-segundo-cerebro-no-obsidian.md) | Second brain: skill de segundo cérebro no Obsidian | epic | feature | approved | 2026-10-30 | — | — | — |
+| [SPEC-0017](SPEC-0017-second-brain-esqueleto-configuracao-em-duas-camadas-onboardi.md) | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full | feature | approved | 2026-10-30 | SPEC-0016 | — | — |
+| [SPEC-0018](SPEC-0018-second-brain-busca-e-relacoes-entre-notas.md) | second-brain: busca e relações entre notas | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
+| [SPEC-0019](SPEC-0019-second-brain-fluxo-de-guardar.md) | second-brain: fluxo de guardar | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0018 | — |
+| [SPEC-0020](SPEC-0020-second-brain-fluxo-de-consultar.md) | second-brain: fluxo de consultar | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0019 | — |
+| [SPEC-0021](SPEC-0021-second-brain-inbox-e-captura-pelo-celular.md) | second-brain: inbox e captura pelo celular | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0019 | — |
+| [SPEC-0022](SPEC-0022-second-brain-processadores-de-video-e-documento.md) | second-brain: processadores de vídeo e documento | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0021 | — |
+| [SPEC-0023](SPEC-0023-second-brain-manutencao-do-vault-lint.md) | second-brain: manutenção do vault (lint) | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0021 | — |
+| [SPEC-0024](SPEC-0024-second-brain-exportacao-para-o-notebooklm.md) | second-brain: exportação para o NotebookLM | lite | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
 
 ## ADRs
 
@@ -60,3 +113,6 @@ Nenhuma spec aberta.
 | [ADR-0003](../adr/ADR-0003-qualidade-de-codigo.md) | Qualidade de código | accepted | SPEC-0001 |
 | [ADR-0005](../adr/ADR-0005-fluxo-de-mudanca.md) | Fluxo de mudança e versionamento da skill | accepted | N/A — repositório privado no plano gratuito do GitHub não tem proteção de branch; `validate` aponta commits diretos e merges fora de PR |
 | [ADR-0006](../adr/ADR-0006-modo-privado.md) | Modo privado: estado do SDD fora do repositório | accepted | SPEC-0003 |
+| [ADR-0007](../adr/ADR-0007-fronteiras-da-skill-second-brain.md) | Fronteiras da skill second-brain | accepted | SPEC-0017 |
+| [ADR-0008](../adr/ADR-0008-armazenamento-do-vault-e-sincronizacao-entre-dispositivos.md) | Armazenamento do vault e sincronização entre dispositivos | accepted | SPEC-0017 |
+| [ADR-0009](../adr/ADR-0009-processadores-externos-de-arquivos.md) | Processadores externos de arquivos | accepted | SPEC-0022 |

@@ -1,0 +1,262 @@
+---
+id: SPEC-0021
+title: "second-brain: inbox e captura pelo celular"
+tier: full
+type: feature
+user_facing: false
+status: approved
+created: 2026-10-30
+parent: SPEC-0016
+depends_on: [SPEC-0019]
+consumes_contract: []
+contract_version: 1
+touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/inbox.md, skills/second-brain/references/mobile-capture.md, skills/second-brain/assets/brain-config.yml, skills/second-brain/CHANGELOG.md]
+adrs: [ADR-0007, ADR-0008, ADR-0002]
+external: []
+size: S
+approved_by: thomas
+approved_at: 2026-10-30
+---
+
+# SPEC-0021 — second-brain: inbox e captura pelo celular
+
+## 1. Visão Geral
+A `inbox/` do vault vira a porta de entrada para capturar sem pensar:
+- No computador, `capture "texto"` cria uma nota rápida.
+- No celular, você joga ali qualquer coisa (texto, link, foto, PDF, vídeo), pelo menu de compartilhar para a pasta do provedor ou por uma nota rápida no Obsidian mobile.
+
+Depois, em qualquer máquina com a skill, "processa minha inbox" passa cada item pelo fluxo de guardar (SPEC-0019) e tira o item da inbox, sem apagar nada.
+
+## 2. Motivação & Escopo
+**Motivação:** no celular não roda a skill com acesso aos arquivos (ADR-0008). Para guardar uma ideia na hora, a captura precisa ser só "jogar na pasta", e o trabalho de classificar e ligar fica para depois, numa máquina com a skill.
+
+**Objetivos (dentro do escopo):**
+- `capture TEXTO [--context C]`: nota rápida em `inbox/` com data e hora no nome.
+- `inbox list`: itens da inbox (notas, textos e arquivos), com tipo, tamanho, idade e uma prévia do texto.
+- `ingest --move` para itens da inbox: o arquivo vai da inbox para `files` em vez de ser copiado, para não deixar arquivo pesado dentro do vault.
+- `inbox done ITEM [--note CAMINHO]`: tira da inbox um item de texto já processado, movendo-o para `raw/processed/AAAA-MM/`, e registra no log qual nota saiu dele.
+- `inbox_stale_days` no `brain-config.yml` (padrão 7), usado pelo `inbox list` e pelo `lint` (SPEC-0023).
+- `references/mobile-capture.md`: como capturar pelo celular com cada provedor da v1 (compartilhar para a pasta `inbox/`) e pelo Obsidian mobile (pasta padrão de notas novas = `inbox/`), para iOS e Android.
+- No `SKILL.md`, o fluxo "processar a inbox".
+
+**Não-objetivos (fora do escopo):**
+- Processar a inbox automaticamente por tarefa agendada na nuvem: spec futura, decidido na SPEC-0016.
+- App ou atalho próprio para o celular: só os recursos dos apps existentes.
+- Captura pelo app do Claude com conector do provedor: fora dos canais documentados na v1 (SPEC-0016).
+
+## 3. Dependências
+- **Implementações necessárias:** SPEC-0019 — `ingest` (estendido aqui com `--move`), `new-note`, `relate`, `index` e o log.
+- **Contratos consumidos:** N/A
+- **Pré-requisitos externos:** app do provedor sincronizando a pasta do vault no computador (ADR-0008); no celular, o app do provedor ou o Obsidian mobile.
+
+## 4. Decisão Arquitetural
+**Contexto:** projeto existente. Segue a SPEC-0019: escrita só por `write_new_file` e funções de append, mais a linha no `log.md`. O ADR-0007 já prevê a exceção de tirar um item processado da inbox sem apagar.
+
+**Decisão:** `move_out_of_inbox(item, destino)` é a única função que move arquivo. Ela recusa origem fora de `layout.inbox` e destino que já exista, e registra no log. O `ingest --move` usa essa função para arquivos, e o `inbox done` usa para textos.
+
+**Justificativa:** mantém "nada se apaga" (ADR-0007) e ainda tira os arquivos pesados do vault (ADR-0008).
+
+**Desvio do padrão existente:** Nenhum. Esta spec detalha a exceção já prevista no ADR-0007.
+
+**Alternativas descartadas:**
+- Apagar o item da inbox depois de processar: viola o ADR-0007.
+- Deixar o item na inbox com uma marca de "processado": a inbox nunca esvazia, e marcar exigiria alterar o arquivo do usuário.
+
+**ADRs:** ADR-0007, ADR-0008 e ADR-0002 (aplicados).
+
+## 5. Requisitos Não-Funcionais
+- **Desempenho e escala:** `inbox list` em menos de 1 s com 500 itens.
+- **Segurança:** só move de dentro da inbox; nunca sobrescreve o destino (UT-02).
+- **Privacidade e dados pessoais:** nada sai da máquina; o celular usa a sincronização do provedor escolhido.
+- **Disponibilidade e resiliência:** arquivo ainda sincronizando, como um placeholder do iCloud (`.icloud`) ou um arquivo de 0 bytes recente, aparece como `syncing` no `inbox list` e não é processado. Nome com caracteres estranhos vindos do celular é aceito.
+- **Acessibilidade (UI):** N/A — CLI.
+- **Custo:** N/A.
+
+## 6. Artefato A — Contrato
+**Interface:** comandos `capture`, `inbox list`, `inbox done`, a opção `ingest --move`, a chave `inbox_stale_days` e o fluxo de processar a inbox no `SKILL.md`.
+
+```text
+brain.py capture TEXTO [--context C] [--json]
+  cria inbox/AAAA-MM-DD-HHMMSS-<slug das 6 primeiras palavras>.md com frontmatter
+  {type: capture, created, context?} e o TEXTO; imprime o caminho; mesmo nome no mesmo segundo → sufixo -1
+  TEXTO vazio: exit 2
+
+brain.py inbox list [--json]
+  um item por arquivo de layout.inbox (sem subpastas ocultas), do mais antigo para o mais novo
+  kind: text (.md, .txt) | link (.url, .webloc, ou texto que é só uma URL) | file (o resto) | syncing
+  campos: path, kind, size, age_days, stale (age_days > inbox_stale_days), preview (até 120 caracteres de texto)
+  inbox vazia: "Inbox vazia", exit 0
+
+brain.py ingest ITEM_DA_INBOX --move [...opções da SPEC-0019]
+  igual ao ingest da SPEC-0019, mas move o arquivo para files em vez de copiar
+  --move com fonte fora da inbox: exit 2 "--move só vale para itens da inbox"
+
+brain.py inbox done ITEM [--note CAMINHO]
+  ITEM text ou link: move para raw/processed/AAAA-MM/<nome> (nome existente → sufixo -1)
+  log: "- … inbox-done <ITEM> → <destino> [nota: <CAMINHO>]"
+  ITEM file: exit 2 "arquivo: use ingest --move"; ITEM syncing: exit 2 "ainda sincronizando"
+  ITEM fora da inbox ou inexistente: exit 2
+
+brain-config.yml: inbox_stale_days: 7
+
+SKILL.md — processar a inbox ("processa minha inbox"):
+  1. inbox list
+  2. para cada item (do mais antigo): fluxo de guardar (SPEC-0019); arquivo → ingest --move; texto ou link → nota
+  3. item de texto ou link já guardado → inbox done ITEM --note <nota criada>
+  4. pular itens syncing e avisar; reportar no fim o que entrou, onde e as relações criadas
+
+references/mobile-capture.md: uma seção por provedor da v1 (Google Drive, OneDrive, iCloud, pasta local), cada uma
+  com iOS e Android: como salvar na pasta inbox pelo compartilhar; Obsidian mobile: pasta padrão de notas novas
+  = inbox, e em quais provedores o Obsidian mobile abre o vault (conforme ADR-0008)
+```
+
+**Design:** N/A — sem interface gráfica.
+
+**Arquivos/módulos afetados:** ver `touches`.
+
+### 6.1 Mapa de Comportamentos
+| Cenário | Condição / Entrada | Resultado esperado | Testes |
+|---|---|---|---|
+| Captura | `capture "ideia"` | nota em `inbox/` com frontmatter | IT-01 |
+| Captura vazia | `capture ""` | exit 2 | IT-01 |
+| Mesmo segundo | duas capturas iguais | sufixo `-1` | UT-01 |
+| Listar | texto, link, PDF, `.icloud` | kinds corretos, stale pela idade | UT-03, IT-02 |
+| Inbox vazia | nenhum item | "Inbox vazia" | IT-02 |
+| Ingest com move | PDF da inbox | vai para `files`, sai da inbox, nota de fonte criada | IT-03 |
+| Move fora da inbox | `--move` em arquivo de outra pasta | exit 2 | IT-03 |
+| Done de texto | item de texto processado | movido para `raw/processed/AAAA-MM/`, log com a nota | IT-04 |
+| Done de arquivo | item file | exit 2 com orientação | IT-04 |
+| Done sincronizando | item syncing | exit 2 | IT-04 |
+| Destino existente | mesmo nome em `raw/processed` | sufixo `-1`, nada sobrescrito | UT-02 |
+| Outra máquina | item jogado na inbox e processado com outra configuração local | mesmo resultado do fluxo de guardar | IT-05 |
+| Instruções | `SKILL.md`, `mobile-capture.md` | fluxo da inbox e um guia por provedor e sistema | UT-04 |
+
+## 7. Artefato B — Plano de Testes (TDD)
+
+### 7.1 Testes de Caracterização
+- N/A — o `ingest` da SPEC-0019 continua coberto pelos testes dela; `--move` é opção nova.
+
+### 7.2 Testes Unitários
+- **UT-01** — Dado um relógio fixo, quando `capture_name("Ideia para o TCC sobre grafos de conhecimento")` é chamado duas vezes no mesmo segundo, então os nomes são `AAAA-MM-DD-HHMMSS-ideia-para-o-tcc-sobre-grafos.md` e o mesmo com `-1`.
+- **UT-02** — Dado um item em `inbox/` e um arquivo de mesmo nome já em `raw/processed/AAAA-MM/`, quando `move_out_of_inbox` roda, então o destino ganha o sufixo `-1`, o arquivo existente não muda e uma origem fora da inbox é recusada.
+- **UT-03** — Dado arquivos `a.md`, `b.txt` só com uma URL, `c.webloc`, `d.pdf`, `e.pdf.icloud` e um de 0 bytes modificado agora, quando `classify_inbox_item` roda, então os kinds são text, link, link, file, syncing e syncing.
+- **UT-04** — Dado o `SKILL.md` e `references/mobile-capture.md`, quando lidos, então o `SKILL.md` tem os quatro passos de processar a inbox, e `mobile-capture.md` tem uma seção para cada provedor da v1, cada uma com iOS e Android, e a seção do Obsidian mobile.
+
+### 7.3 Testes de Integração
+- **IT-01** — Dado um vault criado pelo `init`, quando roda `capture "Ideia sobre grafos" --context college` e `capture ""`, então a primeira cria a nota na inbox com `type: capture` e `context: college`, imprime o caminho e grava o log; a segunda sai com 2.
+- **IT-02** — Dado uma inbox com uma nota de 10 dias, um link, um PDF e um placeholder `.icloud`, com `inbox_stale_days: 7`, quando roda `inbox list --json`, então os quatro aparecem com os kinds certos e só a nota antiga é `stale`; numa inbox vazia, imprime "Inbox vazia".
+- **IT-03** — Dado um PDF em `inbox/`, quando roda `ingest inbox/aula.pdf --move --context college`, então o PDF está em `files/college/<ano>/`, não está mais na inbox, a nota de fonte existe em `raw/` e o log registra; `ingest outro/x.pdf --move` sai com 2.
+- **IT-04** — Dado uma nota de texto na inbox já guardada como "Ideia sobre grafos", quando roda `inbox done <item> --note "Ideia sobre grafos"`, então o item está em `raw/processed/AAAA-MM/` e o log cita a nota; `inbox done` num PDF ou num `.icloud` sai com 2 e com a mensagem do contrato.
+- **IT-05** — Dado um vault com duas configurações locais (máquinas A e B, caminhos diferentes, como no IT-04 da SPEC-0017), quando a máquina A só joga um arquivo de texto na inbox e a máquina B roda `inbox list`, `new-note`, `relate`, `index` e `inbox done`, então a nota criada pela B está no contexto, ligada, no MOC, e a inbox fica vazia. É o critério de aceite "inbox" do épico.
+
+### 7.4 Testes de Contrato
+- N/A — sem contrato consumido.
+
+### 7.5 Testes E2E
+- N/A — conforme o ADR-0002, a jornada é a CLI, coberta pelos testes de integração. A captura no celular usa apps de terceiros, e a sincronização é do provedor (ADR-0008). O guia é verificado no UT-04.
+
+### 7.6 Outros
+- `inbox list` com 500 itens gerados em menos de 1 s, medido na revisão.
+
+**Dublês e dados de teste:** vaults temporários; placeholders `.icloud` e arquivos de 0 bytes simulando sincronização; relógio injetável para os nomes; `BRAIN_CONFIG_HOME` e `HOME` isolados.
+
+**Ambiente de execução:** local e CI (Python 3.9 e 3.15).
+
+## 8. Plano de Rollout
+- **Estratégia:** deploy direto.
+- **Dados/schema:** chave nova `inbox_stale_days` no `brain-config.yml`, com padrão 7 quando ausente (vaults criados antes funcionam sem mudança).
+- **Compatibilidade:** `ingest` sem `--move` não muda.
+- **Observabilidade:** `log.md` registra cada movimentação; `inbox list` mostra itens parados.
+- **Rollback:** `git revert` do merge; os itens já movidos continuam em `raw/processed/` e em `files`.
+- **Etapas de migração/coexistência:** N/A.
+
+## 9. Questões em Aberto
+Nenhuma
+
+## 10. Aprovação (H1)
+Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
+
+## 11. Checklist de Implementação
+<!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Captura e classificação**
+- [ ] Red: UT-01, UT-03, IT-01, IT-02 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
+- [ ] Green: `capture`, `classify_inbox_item`, `inbox list`, `inbox_stale_days`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Saída da inbox**
+- [ ] Red: UT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
+- [ ] Green: `move_out_of_inbox`, `ingest --move`, `inbox done`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: Instruções**
+- [ ] Red: UT-04 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
+- [ ] Green: fluxo da inbox no `SKILL.md`, `inbox.md`, `mobile-capture.md`
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+
+## 12. Registro de Gates
+<!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
+| Gate | Status | Evidência | Data |
+|---|---|---|---|
+| G0 Spec | PASS | validate: 0 erro(s) — dbf5614 (árvore suja) | 2026-10-30 |
+| G1 Red | PENDING | | |
+| G2 Green | PENDING | | |
+| G3 Arquitetura | PENDING | | |
+| G4 Review | PENDING | | |
+| G5 Integração & CI | PENDING | | |
+| H2 Integração aprovada | PENDING | | |
+| G6 Deploy | PENDING | | |
+| G7 Pronto & Docs | PENDING | | |
+
+## 13. Registro de Impedimentos
+<!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
+| ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
+|---|---|---|---|---|---|---|---|---|
+
+## 14. Relatório de Entrega
+<!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
+
+### O que foi entregue
+<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+
+### Como foi feito
+<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+
+### Prova de Correção
+<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+
+### Verificação
+<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
+| Teste | Comportamento | Resultado | Evidência |
+|---|---|---|---|
+
+### Definição de Pronto
+- [ ] Todos os testes do plano passando e listados na Verificação
+- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [ ] Review independente sem achados blocker/major (G4)
+- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [ ] Documentação raiz e CHANGELOG atualizados (G7)
+- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [ ] Pendências registradas como novas specs (ou nenhuma)
+
+### Deploy
+<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+
+### Pendências
+<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+
+## 15. Emendas
+<!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0021`. -->
+| Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
+|---|---|---|---|---|---|
