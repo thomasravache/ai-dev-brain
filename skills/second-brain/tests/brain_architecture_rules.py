@@ -86,9 +86,9 @@ def cross_skill_path_findings(source, filename):
     """Textos que apontam para a outra skill ou para tools/ (ex.: sys.path com sdd-management)."""
     findings = []
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if "sdd-management" in node.value or re.search(r"(^|/)tools/", node.value):
-                findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_CROSS_SKILL} — '{node.value}'"))
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and ("sdd-management" in node.value or re.search(r"(^|/)tools/", node.value))):
+            findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_CROSS_SKILL} — '{node.value}'"))
     return [message for _, message in sorted(findings)]
 
 

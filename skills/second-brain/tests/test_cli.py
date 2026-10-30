@@ -14,8 +14,9 @@ Saídas que os testes conferem (contrato da seção 6; mensagens de erro podem i
     init --join sem config     exit 2, "vault sem brain-config.yml — rode init"
     config / doctor sem local  exit 3, "second-brain não configurado nesta máquina — rode init (ou init --join)"
     config --json              {"values": {...}, "origins": {...}} (ver test_config.load_config)
-    log.md                     uma linha "AAAA-MM-DD HH:MM <comando> <resumo>" por escrita no vault
-                               (init: "AAAA-MM-DD HH:MM init ...")
+    log.md                     uma linha "- AAAA-MM-DD HH:MM <comando> <resumo>" no fim, por escrita no vault
+                               (init: "- AAAA-MM-DD HH:MM init ..."; context add: "- ... context add ...")
+    brain-config.yml gerado    assets/brain-config.yml com os comentários; só --map e --context mudam valores
     doctor                     linhas "OK|AVISO|ERRO <item> — <detalhe>", com os itens começando por
                                "configuração local", "vault", "files", "brain-config.yml", ... e
                                "processor <kind>" para cada processador (o executável é a primeira palavra de
@@ -24,6 +25,7 @@ Saídas que os testes conferem (contrato da seção 6; mensagens de erro podem i
                                sem escrever nada no vault.
 """
 import os
+import re
 import shutil
 import unittest
 
@@ -32,6 +34,7 @@ from brain_support import (
     LOG_LINE,
     NOT_CONFIGURED,
     SCRIPT,
+    SKILL,
     Sandbox,
     doctor_lines,
     fn,
@@ -42,6 +45,7 @@ from brain_support import (
 STRUCTURE_DIRS = ("inbox", "raw", "projects", "areas", "resources", "archive", "mocs", "templates")
 STRUCTURE_FILES = ("index.md", "log.md", "brain-config.yml")
 OLD_MTIME = 1_600_000_000
+ASSET_CONFIG = SKILL / "assets" / "brain-config.yml"
 
 
 class CliTestCase(unittest.TestCase):
@@ -89,6 +93,9 @@ class NewVaultTest(CliTestCase):
         self.assertRegex((vault / "log.md").read_text(encoding="utf-8"), INIT_LOG_LINE)
 
         shared = (vault / "brain-config.yml").read_text(encoding="utf-8")
+        for line in (ASSET_CONFIG.read_text(encoding="utf-8").splitlines()):
+            if line.startswith("#"):
+                self.assertIn(line, shared, "brain-config.yml perdeu os comentários do modelo")
         self.assertIn("college", shared)
         self.assertIn("projects/college", shared)
         self.assertNotIn(str(self.box.root), shared)
@@ -127,8 +134,8 @@ class AdoptVaultTest(CliTestCase):
         out = self.box.init("--adopt", "--map", "inbox=Inbox", provider="local")
         self.assertExit(out, 0)
 
-        for sub in before:
-            self.assertEqual(snapshot(vault / sub), before[sub], f"{sub}/ mudou")
+        for sub, state in before.items():
+            self.assertEqual(snapshot(vault / sub), state, f"{sub}/ mudou")
             self.assertEqual((vault / sub).stat().st_mtime_ns, before_mtimes[sub], f"{sub}/ mudou")
         self.assertEqual(sorted(os.listdir(vault)),
                          sorted([".obsidian", "Inbox", "Notas", "raw", "templates", "index.md", "log.md",
@@ -274,8 +281,10 @@ class ContextAddTest(CliTestCase):
         self.assertTrue((vault / "mocs" / "work.md").is_file())
         log_after = (vault / "log.md").read_text(encoding="utf-8")
         self.assertGreater(len(LOG_LINE.findall(log_after)), len(LOG_LINE.findall(log_before)))
-        new_lines = [line for line in log_after.splitlines() if line not in log_before.splitlines()]
-        self.assertTrue(any("work" in line for line in new_lines), log_after)
+        self.assertTrue(log_after.startswith(log_before), "log.md só recebe linhas no fim")
+        new_lines = log_after[len(log_before):].splitlines()
+        self.assertTrue(any(re.match(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} context add .*\bwork\b", line)
+                            for line in new_lines), log_after)
 
         shared_before = (vault / "brain-config.yml").read_text(encoding="utf-8")
         out = self.box.run("context", "add", "work", "--folder", "areas/work", "--title", "Work")

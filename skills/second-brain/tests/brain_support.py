@@ -19,8 +19,9 @@ TESTS = Path(__file__).resolve().parent
 SKILL = TESTS.parent
 SCRIPT = SKILL / "scripts" / "brain.py"
 NOT_CONFIGURED = "second-brain não configurado nesta máquina — rode init (ou init --join)"
-LOG_LINE = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} ")
-INIT_LOG_LINE = re.compile(r"^(?:[-*] )?\d{4}-\d{2}-\d{2} \d{2}:\d{2} init\b", re.MULTILINE)
+# linha de log.md do contrato v2 (formato da SPEC-0019): "- AAAA-MM-DD HH:MM <comando> <resumo>"
+LOG_LINE = re.compile(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} \S", re.MULTILINE)
+INIT_LOG_LINE = re.compile(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} init \S", re.MULTILINE)
 DOCTOR_LINE = re.compile(r"^(OK|AVISO|ERRO) (.+?) — (.*)$")
 
 _CACHE = {}

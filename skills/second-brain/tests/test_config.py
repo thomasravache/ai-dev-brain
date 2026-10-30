@@ -28,6 +28,8 @@ Contrato esperado das funções puras de scripts/brain.py (o Implementer segue e
                     "provider", "version", "language", "contexts", "processors" e uma entrada por chave de
                     layout e para ("layout.inbox", "para.projects", ...).
         `brain.py config --json` imprime exatamente esse objeto em JSON.
+        (v2) Valor de layout, para ou contexts.<c>.folder absoluto ou com ".." -> exceção com
+        "brain-config.yml: <chave> fora do vault" (código 1 na CLI) — UT-07 em test_amendment_v2.
 
     validate_init_args(vault: str, files: str, provider: str) -> str | None
         Validação pura (sem I/O) dos argumentos de init. Devolve a mensagem de erro do contrato ou None:
@@ -37,7 +39,8 @@ Contrato esperado das funções puras de scripts/brain.py (o Implementer segue e
         A CLI imprime a mensagem e sai com 2.
 
     render_brain_config(vault: str, layout: dict | None = None, contexts: dict | None = None) -> str
-        Texto do brain-config.yml que init grava para o vault (a partir de assets/brain-config.yml).
+        Texto do brain-config.yml que init grava para o vault: assets/brain-config.yml com os comentários
+        mantidos; só os valores de --map e --context mudam (contrato v2, IT-10).
         layout   : sobrescritas de --map (chave de layout ou de para -> pasta relativa ao vault).
         contexts : {nome: {"folder": pasta relativa, "title": título}} vindos de --context.
         Nunca contém caminho absoluto (o caminho do vault só fica na configuração local).
