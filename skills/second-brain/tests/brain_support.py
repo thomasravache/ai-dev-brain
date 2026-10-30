@@ -50,11 +50,11 @@ def brain():
     return module
 
 
-def fn(name):
-    """Função de brain.py exigida pela SPEC-0017; ausente = o teste falha pelo motivo certo."""
+def fn(name, spec="SPEC-0017"):
+    """Função de brain.py exigida pela spec `spec`; ausente = o teste falha pelo motivo certo."""
     f = getattr(brain(), name, None)
     if f is None:
-        raise AssertionError(f"brain.{name} não existe (SPEC-0017)")
+        raise AssertionError(f"brain.{name} não existe ({spec})")
     return f
 
 
