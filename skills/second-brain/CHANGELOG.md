@@ -17,6 +17,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ### Changed
 - `init --context` e `context add`: o nome do contexto e cada parte da pasta passam a ser kebab-case, com o aviso "nome ajustado para kebab-case: `<de>` → `<para>`"; nome ou parte só de símbolos sai com 2; o título do MOC fica como foi escrito; as pastas de `--adopt --map` não mudam (SPEC-0032).
+- `init --context` e `context add`: dois contextos com o mesmo kebab (no mesmo `init` ou contra um contexto gravado) saem com 2 antes de qualquer escrita, citando os dois nomes; as partes iniciais da pasta iguais a uma pasta do `layout`/`para` mantêm a grafia configurada (`Projects/Faculdade` → `Projects/faculdade` com `--map projects=Projects`); nome vazio depois do kebab pede letras a–z ou dígitos 0–9, e nomes só com outros alfabetos não são aceitos (SPEC-0032).
 - `SKILL.md`, `references/config.md` e `references/vault-layout.md`: o onboarding sugere `~/second-brain/vault` e `~/second-brain/files`, e a regra do kebab-case está documentada (SPEC-0032).
 
 ## [2026.10.11] - 2026-10-30
