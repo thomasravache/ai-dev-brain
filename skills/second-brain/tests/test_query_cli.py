@@ -14,6 +14,8 @@ Saídas que os testes conferem (contrato da seção 6; mensagens de erro podem i
                 (os testes só exigem esses rótulos quando há o que listar).
         nada encontrado : "Nenhuma nota encontrada para: QUERY", exit 0
         --hops fora de 0..2 : exit 2, com a mensagem citando hops (o comando context existe: não é "invalid choice")
+    Decisão A do Architect (revisão CHANGES_REQUESTED): com --context o MOC entra primeiro, mas nunca é atravessado
+        na expansão de vizinhos; notas alcançáveis só pelo MOC (irmãs do contexto, index.md) não entram como link:N.
     new-note --type answer : modelo answer (type: answer, "## Question", "## Answer", "## Gaps", "## Relations").
 """
 import json
@@ -153,6 +155,39 @@ class ContextCliTest(QueryCliTestCase):
         self.assertExit(out, 0)
         self.assertRegex(out.stdout, r"(?m)^Omitidas:")
         self.assertIn(INTEGRAIS, out.stdout.split("Omitidas:", 1)[1])
+
+    def test_context_moc_is_not_traversed_with_two_hops(self):
+        """SPEC-0020:IT-01"""
+        self.build_vault()
+        siblings = []
+        for title in ("Séries de Taylor", "Limites laterais"):
+            siblings.append(self.rel(self.json_of("new-note", "--type", "lecture", "--title", title,
+                                                  "--context", "college")["path"]))
+        # Sem created, as notas ficam fora da região "recent" do index.md: assim o index.md só liga ao MOC, e o
+        # único caminho de "Integrais por partes" até as irmãs e o index.md passa pelo MOC.
+        for rel in [INTEGRAIS, PRODUCT, DERIVADAS, OUTSIDE] + siblings:
+            path = self.box.vault / rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(re.sub(r"(?m)^created:.*\n", "", text, count=1), encoding="utf-8")
+        self.assertExit(self.box.run("index", "--context", "college"), 0)
+        moc = self.read(MOC)
+        for title in ("Integrais por partes", "Séries de Taylor", "Limites laterais"):
+            self.assertIn(f"[[{title}]]", moc, "o MOC lista as irmãs")
+        self.assertIn("mocs/college", self.read("index.md"), "o index.md liga ao MOC")
+        self.assertNotIn("[[Integrais por partes]]", self.read("index.md"), "index.md não liga direto à nota")
+
+        data = self.context_json("integrais", "--context", "college", "--hops", "2")
+        self.assertContractOrder(data["notes"])
+        by_path = {n["path"]: n["reason"] for n in data["notes"]}
+        listed = set(by_path) | {o["path"] for o in data["omitted"]}
+        self.assertEqual(data["notes"][0]["path"], MOC)
+        self.assertEqual(data["notes"][0]["reason"], "moc")
+        self.assertTrue(by_path.get(INTEGRAIS, "").startswith("search:"), data["notes"])
+        self.assertEqual(by_path.get(PRODUCT), "link:1", data["notes"])
+        self.assertEqual(by_path.get(DERIVADAS), "link:2", "vizinho real a dois passos, por Regra do produto")
+        for rel in siblings + ["index.md"]:
+            with self.subTest(path=rel):
+                self.assertNotIn(rel, listed, "alcançável só pelo MOC: não entra (decisão A)")
 
     def test_context_without_results_and_invalid_hops(self):
         """SPEC-0020:IT-02"""

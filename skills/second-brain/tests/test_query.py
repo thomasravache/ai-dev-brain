@@ -21,6 +21,14 @@ search(notes, query, context=None, ...) da SPEC-0018, recebendo as notas já lid
         "broken" lista os alvos de links que não resolvem, encontrados durante a expansão (forma do item livre:
         o alvo como string ou um dict que o contenha); link quebrado nunca levanta exceção.
         hops fora de 0..2 é validado pela CLI (exit 2, IT-02 em test_query_cli).
+
+Decisões do Architect após a revisão (CHANGES_REQUESTED), fixadas pelos testes de regressão abaixo:
+    A. Com context, o MOC do contexto entra primeiro, mas NUNCA é atravessado na expansão de vizinhos (traria o
+       contexto inteiro): notas alcançáveis só pelo MOC não entram como link:N. Sem context, o MOC é uma nota comum
+       (atravessada como qualquer outra). (UT-01; IT-01 em test_query_cli)
+    B. O corte por max_chars é "pula e continua": na ordem de prioridade, cada nota entra inteira se ainda couber; a
+       que não cabe vai para omitted e as seguintes continuam sendo tentadas (uma nota grande bem ranqueada não
+       empurra notas pequenas e relevantes para omitted). A ordem de "notes" segue a prioridade. (UT-02)
 """
 import re
 import unittest
@@ -102,6 +110,47 @@ class BuildContextExpansionTest(unittest.TestCase):
         self.assertEqual(paths_of(build(self.notes(), "zebra")["notes"]), ["A.md", "B.md", "D.md"])
 
 
+# MOC do contexto college liga a A (resultado da busca) e às irmãs S1 e S2, que só o MOC liga. A -> B -> C.
+MOC_GRAPH = {
+    "mocs/college.md": "---\ntype: moc\ntitle: College\ncontext: college\n---\n# College\n\n"
+                       "- [[A]]\n- [[S1]]\n- [[S2]]\n",
+    "A.md": "---\ncontext: college\n---\n# A\n\nA zebra listrada. Ver [[B]].\n",
+    "B.md": "---\ncontext: college\n---\n# B\n\nCavalos. Ver [[C]].\n",
+    "C.md": "# C\n\nBurros e mulas.\n",
+    "S1.md": "---\ncontext: college\n---\n# S1\n\nCálculo diferencial.\n",
+    "S2.md": "---\ncontext: college\n---\n# S2\n\nÁlgebra linear.\n",
+}
+
+
+class BuildContextMocNotTraversedTest(unittest.TestCase):
+    def notes(self):
+        return [parse(path, text) for path, text in MOC_GRAPH.items()]
+
+    def test_moc_comes_first_but_is_not_traversed_with_context(self):
+        """SPEC-0020:UT-01"""
+        data = build(self.notes(), "zebra", context="college", hops=2)
+        found = paths_of(data["notes"]) + paths_of(data["omitted"])
+        reasons = {item["path"]: item["reason"] for item in data["notes"]}
+        self.assertEqual(data["notes"][0]["path"], "mocs/college.md", data["notes"])
+        self.assertEqual(reasons["mocs/college.md"], "moc")
+        self.assertRegex(reasons.get("A.md", ""), REASON_SEARCH, data["notes"])
+        self.assertEqual(reasons.get("B.md"), "link:1", data["notes"])
+        self.assertEqual(reasons.get("C.md"), "link:2", "vizinho real a dois passos (por B, não pelo MOC)")
+        for sibling in ("S1.md", "S2.md"):
+            with self.subTest(sibling=sibling):
+                self.assertNotIn(sibling, found, "nota alcançável só pelo MOC não entra (decisão A)")
+        self.assertEqual(paths_of(data["notes"]), ["mocs/college.md", "A.md", "B.md", "C.md"], data["notes"])
+
+    def test_without_context_the_moc_is_an_ordinary_note(self):
+        """SPEC-0020:UT-01"""
+        data = build(self.notes(), "zebra", hops=2)
+        reasons = {item["path"]: item["reason"] for item in data["notes"]}
+        self.assertRegex(reasons.get("A.md", ""), REASON_SEARCH, data["notes"])
+        self.assertEqual(reasons.get("mocs/college.md"), "link:1", "sem context o MOC é vizinho comum")
+        self.assertEqual(reasons.get("S1.md"), "link:2", "sem context o MOC é atravessado")
+        self.assertEqual(reasons.get("S2.md"), "link:2")
+
+
 class BuildContextSizeLimitTest(unittest.TestCase):
     def test_notes_that_do_not_fit_max_chars_go_to_omitted(self):
         """SPEC-0020:UT-02"""
@@ -129,6 +178,27 @@ class BuildContextSizeLimitTest(unittest.TestCase):
         everything = build(notes, "zebra", hops=0)
         self.assertEqual(paths_of(everything["notes"]), ["N1.md", "N2.md", "N3.md"], "padrão 40.000 cabe tudo")
         self.assertEqual(everything["omitted"], [])
+
+    def test_a_big_top_note_that_does_not_fit_does_not_push_small_ones_out(self):
+        """SPEC-0020:UT-02"""
+        texts = {
+            "N1.md": padded("# Zebra alfa\n\nzebra zebra zebra no título e no corpo.", 45000),
+            "N2.md": "# Beta\n\nzebra zebra\n",
+            "N3.md": "# Gama\n\numa zebra!!\n",
+        }
+        self.assertEqual({path: len(text) for path, text in texts.items()},
+                         {"N1.md": 45000, "N2.md": 20, "N3.md": 20})
+        notes = [parse(path, text) for path, text in texts.items()]
+        ranked = [r["path"] for r in fn("search", "SPEC-0018")(notes, "zebra")]
+        self.assertEqual(ranked, ["N1.md", "N2.md", "N3.md"], "pré-condição: prioridade N1, N2, N3")
+
+        data = build(notes, "zebra", hops=0, max_chars=40000)
+        self.assertEqual(paths_of(data["notes"]), ["N2.md", "N3.md"], "pula a que não cabe e continua (decisão B)")
+        self.assertEqual(paths_of(data["omitted"]), ["N1.md"], data["omitted"])
+        self.assertRegex(data["omitted"][0]["reason"], REASON_SEARCH)
+        self.assertNotIn("content", data["omitted"][0])
+        for item in data["notes"]:
+            self.assertEqual(item["content"], texts[item["path"]], "nota entra inteira")
 
 
 if __name__ == "__main__":
