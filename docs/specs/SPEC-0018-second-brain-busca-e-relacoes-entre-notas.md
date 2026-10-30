@@ -179,27 +179,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Leitura de notas e links**
-- [ ] Red: UT-01, UT-02 com a tag `SPEC-0018:<ID>`, falhando pelo motivo certo
-- [ ] Green: `parse_note`, `resolve_link`, `scan_vault`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02 com a tag `SPEC-0018:<ID>`, falhando pelo motivo certo
+- [x] Green: `parse_note`, `resolve_link`, `scan_vault`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Busca e relações**
-- [ ] Red: UT-03, UT-04, IT-01, IT-02, IT-03, IT-04 com a tag `SPEC-0018:<ID>`, falhando pelo motivo certo
-- [ ] Green: `search`, `related`, `links` com `--json` e `warnings`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-03, UT-04, IT-01, IT-02, IT-03, IT-04 com a tag `SPEC-0018:<ID>`, falhando pelo motivo certo
+- [x] Green: `search`, `related`, `links` com `--json` e `warnings`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Desempenho e instruções**
-- [ ] Red: IT-05, UT-05 com a tag `SPEC-0018:<ID>`, falhando pelo motivo certo
-- [ ] Green: ajustes de desempenho; `SKILL.md` e `references/search.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: IT-05, UT-05 com a tag `SPEC-0018:<ID>`, falhando pelo motivo certo
+- [x] Green: ajustes de desempenho; `SKILL.md` e `references/search.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -210,9 +210,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — f53f220 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — f53f220 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (f53f220; 8 minor, encaminhados para a SPEC-0026) — f53f220 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 8b98a89 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -225,36 +225,60 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+O agente passa a conhecer o vault antes de escrever ou responder, com três comandos que só leem:
+- `brain.py search` busca por texto com pontuação, filtros por contexto, tipo e tag, e `--json`;
+- `brain.py related` encontra notas parecidas com uma nota ou com um texto e diz o motivo de cada uma;
+- `brain.py links` mostra links de saída, backlinks e links quebrados de uma nota.
+
+O `SKILL.md` diz em que passo de cada fluxo usar cada comando.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `brain.py` (versão 2026.10.2) ganhou `parse_note`, `scan_vault`, `resolve_link(target, paths)` com um índice em dicionário (`LinkIndex`), tokenização sem acentos e sem stopwords, TF-IDF com pesos 3/2/1 e `related` com os pesos do contrato (0,5 / 0,2 / 0,1 / 0,2).
+- `Note` é uma classe simples com `__slots__`, porque o carregador dos testes não registra o módulo e um `dataclass` quebra.
+- Desvios aceitos na revisão: `warnings` também no JSON de `related` e `links`; todas as pastas ocultas ignoradas; wikilinks em código não contam, como no Obsidian; alvo com `/` também casa com o fim do caminho; a assinatura de `resolve_link` recebe os caminhos (fixada pelos testes red).
+- Também foram criados `references/search.md` e a seção 2026.10.2 do CHANGELOG da skill.
+- A revisão G4 aprovou com 8 achados minor, encaminhados para a SPEC-0026.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Leitura de nota: título, frontmatter, tags, links e contexto | PASS | `test_search.py::ParseNoteTest.test_parse_note_reads_frontmatter_tags_and_wikilinks; test_search.py::ParseNoteTest.test_title_falls_back_to_heading_then_file_name; test_search.py::ParseNoteTest.test_tags_accept_a_string_and_are_lowercased; test_search.py::ParseNoteTest.test_context_comes_from_the_context_folder_when_not_in_frontmatter; test_search.py::ParseNoteTest.test_invalid_frontmatter_becomes_empty_without_raising` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | Resolução de links como no Obsidian | PASS | `test_search.py::ResolveLinkTest.test_resolve_link_by_name_path_case_and_shortest_candidate` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | Pontuação da busca com peso no título e sem acentos | PASS | `test_search.py::SearchScoringTest.test_title_scores_higher_and_accents_are_ignored` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-04 | Relacionadas pela pontuação, com motivos | PASS | `test_search.py::RelatedScoringTest.test_shared_tags_and_direct_link_beat_shared_terms` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-05 | SKILL.md diz quando usar search, related e links | PASS | `test_instructions.py::SearchInstructionsTest.test_skill_md_says_when_to_use_search_related_and_links` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | search com filtros, JSON, sem resultado e sem configuração | PASS | `test_search_cli.py::SearchCliTest.test_search_filters_json_text_and_no_results; test_search_cli.py::SearchCliTest.test_search_without_local_configuration_exits_3` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | related por nota e por texto; nota inexistente | PASS | `test_search_cli.py::RelatedCliTest.test_related_by_note_by_text_and_missing_note` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | links com saída, backlinks e quebrados | PASS | `test_search_cli.py::LinksCliTest.test_links_outgoing_backlinks_and_broken_by_path_and_name` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | Notas inválidas viram aviso; pastas ignoradas; só leitura | PASS | `test_search_cli.py::InvalidNotesCliTest.test_invalid_notes_become_warnings_and_ignored_folders_never_appear` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-05 | Desempenho com 5.000 notas abaixo de 2 s | PASS | `test_search_cli.py::PerformanceCliTest.test_search_and_related_take_under_2_seconds_on_5000_notes` — CI do PR #15 em 8b98a89 (run 41047141517, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — `search` e `related` em 0,6–0,8 s com 5.000 notas (meta: menos de 2 s), medido no IT-05 e na revisão; resiliência com frontmatter inválido, latin-1 e BOM pelo IT-04
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` com o merge do PR #15
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` configurado
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.2. Rollback: revert do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+SPEC-0026 — ajustes da busca apontados na revisão: arquivos ocultos, normalização Unicode, cercas de código, termos de 1 caractere, `log.md` fora de `related` e o texto sobre anexos. A spec está proposta e aguarda aprovação.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0018`. -->
