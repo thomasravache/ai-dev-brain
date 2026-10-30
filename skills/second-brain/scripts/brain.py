@@ -11,6 +11,8 @@ capture, inbox list, inbox done and ingest --move handle the inbox; move_out_of_
 moves a file, and only out of the inbox, never overwriting nor deleting (SPEC-0021, ADR-0007).
 process, ingest and doctor run the processors declared in brain-config.yml; run_processor is the only function
 that runs an external process: without a shell, in a temporary folder, with a timeout (SPEC-0022, ADR-0009).
+lint only reads: each rule is a check_<rule> function over a single scan of the vault; it never fixes nor deletes
+(SPEC-0023, ADR-0007).
 """
 from __future__ import annotations
 
@@ -35,7 +37,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.6"
+BRAIN_VERSION = "2026.10.7"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -47,7 +49,8 @@ LAYOUT_DIRS = ("inbox", "raw", "mocs", "templates")
 LAYOUT_FILES = ("index", "log")
 LAYOUT_KEYS = LAYOUT_DIRS + LAYOUT_FILES
 PARA_KEYS = ("projects", "areas", "resources", "archive")
-SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors", "inbox_stale_days")
+SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors", "inbox_stale_days",
+               "conflict_patterns")
 SHARED_VERSION = "1"
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
@@ -145,6 +148,14 @@ STDERR_MAX = 500  # characters of the processor stderr in a failure message
 SUBTITLE_SUFFIXES = (".vtt", ".srt")
 SUBTITLE_TIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2}):(\d{2})[.,]\d+\s+-->")
 SUBTITLE_TAG_RE = re.compile(r"<[^>\n]*>")
+# lint (SPEC-0023): rule -> severity, in the order of the report; conflict patterns per provider documented in
+# references/providers.md (generic patterns: the real names of each provider were not checked on this machine)
+LINT_SEVERITY = {"broken-link": "error", "conflict-copy": "error", "missing-file": "error", "orphan": "warn",
+                 "stale-inbox": "warn", "frontmatter": "warn", "config": "error"}
+LINT_LABELS = {"error": "ERRO", "warn": "AVISO"}
+GENERIC_CONFLICT_PATTERNS = (r"(?P<base>.+) \(\d+\)\.md$", r"(?P<base>.+)[ _-]conflict.*\.md$")
+CONFLICT_PATTERNS = {provider: GENERIC_CONFLICT_PATTERNS for provider in PROVIDERS}
+REQUIRED_FIELDS = ("title", "created")  # frontmatter of a note of the skill's types (references/note-types.md)
 
 
 class BrainError(Exception):
@@ -445,6 +456,11 @@ def read_config(config_home=None) -> dict:
             if given is None and key in shared:
                 warnings.append({"key": key, "message": (f"brain-config.yml: {key} inválido: {shared[key]} — use um "
                                                          f"número inteiro de dias >= 0; usando {values[key]}")})
+        elif key == "conflict_patterns":  # missing = the patterns of the local provider (references/providers.md)
+            found = key in shared
+            values[key] = shared[key] if found else list(CONFLICT_PATTERNS.get(values["provider"],
+                                                                                GENERIC_CONFLICT_PATTERNS))
+            origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
         else:
             found = key in shared
             values[key] = shared[key] if found else defaults.get(key, {})
@@ -897,9 +913,9 @@ def vault_dir(values: dict) -> Path:
     return vault
 
 
-def walk_notes(values: dict):
-    """(absolute path, path relative to the vault) of every .md note, in path order, except .obsidian/, .trash/
-    and the layout.templates folder."""
+def walk_vault(values: dict):
+    """(absolute path, path relative to the vault) of every file, in path order, except .obsidian/, .trash/ (any
+    hidden folder) and the layout.templates folder."""
     vault = vault_dir(values)
     templates = posixpath.normpath(str(values["layout"]["templates"]).replace("\\", "/"))
     for root, dirs, files in os.walk(vault):
@@ -907,8 +923,16 @@ def walk_notes(values: dict):
         prefix = "" if base == "." else base + "/"
         dirs[:] = sorted(d for d in dirs if not ignored_dir(prefix + d, templates))
         for name in sorted(files):
-            if name.lower().endswith(".md"):
-                yield Path(root) / name, prefix + name
+            yield Path(root) / name, prefix + name
+
+
+def is_note(rel: str) -> bool:
+    return rel.lower().endswith(".md")
+
+
+def walk_notes(values: dict):
+    """(absolute path, path relative to the vault) of every .md note of walk_vault."""
+    return ((path, rel) for path, rel in walk_vault(values) if is_note(rel))
 
 
 def scan_vault(config: dict) -> list:
@@ -1570,6 +1594,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
             rows.append(("OK" if moc.is_file() else "AVISO", f"contexto {name}",
                          folder + ("" if moc.is_file() else f"; MOC ausente: {moc.relative_to(root).as_posix()}")))
     rows += processor_items(values["processors"])
+    rows.append(lint_item(values, problems))
     return rows + provider_items(values)
 
 
@@ -2183,17 +2208,23 @@ def walk_inbox(vault: Path, layout: dict):
     for root, dirs, names in os.walk(folder):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
         for name in sorted(names):
-            hidden = name.startswith(".") and not name.lower().endswith(ICLOUD_SUFFIX)
-            if not hidden and name not in OS_METADATA:
+            if visible_in_inbox(name):
                 path = Path(root) / name
                 yield path, path.relative_to(vault).as_posix()
 
 
-def inbox_entries(vault: Path, layout: dict, stale_after: int, now=None) -> list:
-    """The items of `inbox list`, oldest first: path, kind, size, age_days, stale and preview."""
+def visible_in_inbox(name: str) -> bool:
+    """False for a hidden file (except an iCloud placeholder) and OS metadata, which `inbox list` skips."""
+    hidden = name.startswith(".") and not name.lower().endswith(ICLOUD_SUFFIX)
+    return not hidden and name not in OS_METADATA
+
+
+def inbox_entries(vault: Path, layout: dict, stale_after: int, now=None, items=None) -> list:
+    """The items of `inbox list`, oldest first: path, kind, size, age_days, stale and preview. items = the (path,
+    path relative to the vault) to describe; None = walk_inbox (lint passes the ones of its single scan)."""
     now = time.time() if now is None else now
     rows = []
-    for path, rel in walk_inbox(vault, layout):
+    for path, rel in walk_inbox(vault, layout) if items is None else items:
         try:
             stat = path.stat()
             kind = classify_inbox_item(path, now)
@@ -2498,6 +2529,250 @@ def cmd_process(args, config_home=None) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- lint (read only; SPEC-0023)
+
+class Finding:
+    """A finding of lint: rule, severity (of LINT_SEVERITY), path relative to the vault, detail and suggestion.
+    A plain class, like Note."""
+    __slots__ = ("detail", "path", "rule", "severity", "suggestion")
+    FIELDS = ("rule", "severity", "path", "detail", "suggestion")  # order of the JSON item
+
+    def __init__(self, rule: str, path: str, detail: str, suggestion: str):
+        self.rule, self.severity, self.path = rule, LINT_SEVERITY[rule], path
+        self.detail, self.suggestion = detail, suggestion
+
+    def __repr__(self) -> str:
+        return f"Finding({self.rule!r}, {self.path!r}, {self.detail!r})"
+
+    def as_dict(self) -> dict:
+        return {name: getattr(self, name) for name in self.FIELDS}
+
+
+def attachment_exists(target: str, attachments) -> bool:
+    """True when a link with an extension other than .md ("![[img.png]]") names a file of the vault, by name
+    (ignoring case) or by path, as Obsidian resolves attachments; attachments = a LinkIndex of those files."""
+    suffix = posixpath.splitext(target)[1].lower()
+    return attachments is not None and suffix not in ("", ".md") and attachments.resolve(target) is not None
+
+
+def check_broken_link(notes: list, index: LinkIndex, attachments=None) -> list:
+    """One error per link of each note that resolves neither to a note (resolve_link) nor to an attachment."""
+    return [Finding("broken-link", note.path, f"[[{one_line(target)}]] não resolve",
+                    "crie a nota (new-note) ou corrija o link")
+            for note in notes for target in note.links
+            if index.resolve(target) is None and not attachment_exists(target, attachments)]
+
+
+def check_conflict_copy(paths, patterns) -> list:
+    """One error per file whose name matches a pattern (regex text or compiled, with the group "base") and whose
+    original "<base>.md" exists in the same folder."""
+    compiled = [re.compile(pattern) for pattern in patterns]
+    existing, found = set(paths), []
+    for path in paths:
+        folder, name = posixpath.split(path)
+        for pattern in compiled:
+            m = pattern.match(name)
+            base = m.groupdict().get("base") if m else None
+            original = posixpath.join(folder, base + ".md") if base else None
+            if original and original != path and original in existing:
+                found.append(Finding("conflict-copy", path, f"cópia de conflito de {posixpath.basename(original)}",
+                                     f"compare com {original} e escolha a versão certa; nada é apagado sozinho"))
+                break
+    return found
+
+
+def frontmatter_files(value) -> list:
+    """frontmatter.files as a list of non-empty strings (a single string is one item)."""
+    items = [value] if isinstance(value, str) else value if isinstance(value, list) else []
+    return [str(item).strip() for item in items if str(item).strip()]
+
+
+def check_missing_file(notes: list, files: Path) -> list:
+    """One error per item of frontmatter.files (relative to the files folder) that does not exist there."""
+    return [Finding("missing-file", note.path, f"{one_line(item)} não existe na pasta files",
+                    "confira se o arquivo foi sincronizado ou corrija o caminho em files")
+            for note in notes for item in frontmatter_files(note.frontmatter.get("files"))
+            if outside_vault(item) or not (files / item).exists()]
+
+
+def layout_paths(layout: dict, keys) -> list:
+    return [posixpath.normpath(str(layout[key]).replace("\\", "/")) for key in keys]
+
+
+def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
+    """One warning per note with no outgoing link that resolves, no incoming link and outside any MOC (a MOC's
+    links are incoming links). Notes of raw/, inbox/, mocs/ and templates/ and index.md and log.md are not judged;
+    the lists of index.md and log.md do not count as incoming links."""
+    folders, generated = layout_paths(layout, LAYOUT_DIRS), set(layout_paths(layout, LAYOUT_FILES))
+    linked = set()
+    for note in notes:
+        if note.path in generated:
+            continue
+        targets = {index.resolve(target) for target in note.links} - {None, note.path}
+        if targets:
+            linked |= targets | {note.path}
+    return [Finding("orphan", note.path, "sem links de entrada nem de saída e fora de qualquer MOC",
+                    "relacione com relate, ponha no MOC com index ou ligue a uma nota nova")
+            for note in notes if note.path not in linked and note.path not in generated
+            and not any(note.path.startswith(folder + "/") for folder in folders)]
+
+
+def check_stale_inbox(entries: list, stale_after: int) -> list:
+    """One warning per item of inbox_entries older than inbox_stale_days."""
+    return [Finding("stale-inbox", entry["path"], f"na inbox há {entry['age_days']:.0f} dias (limite {stale_after})",
+                    "processe a inbox (inbox list, ingest --move, inbox done)")
+            for entry in entries if entry["stale"]]
+
+
+def frontmatter_problem(note: Note):
+    """Why the frontmatter of a note was not read (unclosed or invalid YAML), or None."""
+    if note.frontmatter or not note.text.startswith("---"):
+        return None
+    return read_frontmatter(note.text)[2]
+
+
+def check_frontmatter(notes: list) -> list:
+    """One warning per note whose frontmatter is not read, or whose type is one of the skill's (NOTE_TYPES) and
+    lacks title or created."""
+    found = []
+    for note in notes:
+        problem = frontmatter_problem(note)
+        missing = [] if problem or note.note_type not in NOTE_TYPES else [
+            key for key in REQUIRED_FIELDS if not str(note.frontmatter.get(key) or "").strip()]
+        if problem:
+            found.append(Finding("frontmatter", note.path, problem, "corrija o YAML entre as linhas ---"))
+        elif missing:
+            found.append(Finding("frontmatter", note.path, f"type {note.note_type} sem {' e '.join(missing)}",
+                                 f"acrescente {', '.join(missing)} ao frontmatter (references/note-types.md)"))
+    return found
+
+
+def compile_conflict_patterns(value):
+    """(compiled patterns, problems) of conflict_patterns: a list of regex (a single string is one) with the group
+    "base"; an invalid regex or one without "base" is a problem and the others still count."""
+    items = [value] if isinstance(value, str) else value if isinstance(value, list) else [] if not value else None
+    if items is None:
+        return [], [f"conflict_patterns precisa ser uma lista de regex: {one_line(value)}"]
+    compiled, problems = [], []
+    for item in items:
+        try:
+            pattern = re.compile(str(item))
+        except re.error as e:
+            problems.append(f"conflict_patterns: regex inválido {one_line(item)!r} ({e})")
+            continue
+        if "base" in pattern.groupindex:
+            compiled.append(pattern)
+        else:
+            problems.append(f"conflict_patterns: regex sem o grupo base {one_line(item)!r}")
+    return compiled, problems
+
+
+class LintVault:
+    """What the rules read, from a single scan of the vault (walk_vault): notes, the link index of the notes and
+    of the attachments, every file path, the inbox items, the files folder (None = inaccessible), the valid
+    conflict patterns and the config findings, each with the rule it affects."""
+    __slots__ = ("attachments", "config", "files", "inbox", "index", "notes", "paths", "patterns", "values")
+
+    def __init__(self, values: dict):
+        vault, layout = vault_dir(values), values["layout"]
+        contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
+        inbox = layout_paths(layout, ("inbox",))[0] + "/"
+        self.values, self.paths, self.notes, self.config = values, [], [], []
+        attachments, inbox_items = [], []
+        for path, rel in walk_vault(values):
+            self.paths.append(rel)
+            if is_note(rel):
+                self.notes.append(read_note(path, rel, contexts))
+            else:
+                attachments.append(rel)
+            if rel.startswith(inbox) and visible_in_inbox(path.name):
+                inbox_items.append((path, rel))
+        self.index, self.attachments = LinkIndex(n.path for n in self.notes), LinkIndex(attachments)
+        self.inbox = inbox_entries(vault, layout, values["inbox_stale_days"], items=inbox_items)
+        self.patterns, problems = compile_conflict_patterns(values.get("conflict_patterns"))
+        self.config += [("conflict-copy", Finding("config", "brain-config.yml", problem,
+                                                  "corrija conflict_patterns (references/maintenance.md)"))
+                        for problem in problems]
+        self.files = Path(values["files"]) if values["files"] else None
+        try:
+            if self.files is None:
+                raise OSError("sem files na configuração local")
+            os.listdir(self.files)
+        except OSError as e:
+            self.files = None
+            self.config.append(("missing-file", Finding(
+                "config", "<files>", f"pasta files inacessível: {values['files'] or '(vazia)'} "
+                f"({getattr(e, 'strerror', None) or e}); missing-file não rodou",
+                "confira a pasta files e a permissão de leitura (brain.py doctor)")))
+
+
+LINT_CHECKS = {  # rule -> check over the LintVault; "config" findings come from the LintVault itself
+    "broken-link": lambda v: check_broken_link(v.notes, v.index, v.attachments),
+    "conflict-copy": lambda v: check_conflict_copy(v.paths, v.patterns),
+    "missing-file": lambda v: [] if v.files is None else check_missing_file(v.notes, v.files),
+    "orphan": lambda v: check_orphan(v.notes, v.index, v.values["layout"]),
+    "stale-inbox": lambda v: check_stale_inbox(v.inbox, v.values["inbox_stale_days"]),
+    "frontmatter": lambda v: check_frontmatter(v.notes),
+    "config": lambda v: [],
+}
+
+
+def lint_rules(only=None) -> list:
+    """The rules of --only ("a,b"), in report order; None = all. An unknown rule = BrainError (exit 2)."""
+    if only is None:
+        return list(LINT_SEVERITY)
+    given = [rule.strip() for rule in str(only).split(",") if rule.strip()]
+    unknown = [rule for rule in given if rule not in LINT_SEVERITY]
+    if unknown or not given:
+        raise BrainError(f"regra desconhecida: {one_line(', '.join(unknown) or only)} — regras: "
+                         f"{', '.join(LINT_SEVERITY)}")
+    return [rule for rule in LINT_SEVERITY if rule in given]
+
+
+def run_lint(values: dict, rules=None) -> list:
+    """Findings of the rules (None = all) over a single scan of the vault, errors first; only reads."""
+    rules = list(LINT_SEVERITY) if rules is None else rules
+    vault = LintVault(values)
+    found = [finding for affected, finding in vault.config if "config" in rules or affected in rules]
+    for rule in rules:
+        found += LINT_CHECKS[rule](vault)
+    order = {rule: i for i, rule in enumerate(LINT_SEVERITY)}
+    return sorted(found, key=lambda f: (f.severity != "error", order[f.rule], f.path, f.detail))
+
+
+def lint_summary(findings: list) -> dict:
+    return {severity: sum(1 for f in findings if f.severity == severity) for severity in LINT_LABELS}
+
+
+def summary_text(summary: dict) -> str:
+    return f"{summary['error']} erros, {summary['warn']} avisos"
+
+
+def lint_item(values: dict, problems: dict) -> tuple:
+    """The doctor line of lint: "OK|AVISO|ERRO lint — N erros, M avisos (rode lint)"."""
+    if problems:
+        return ("AVISO", "lint", "não conferido (brain-config.yml com valores fora do vault)")
+    try:
+        summary = lint_summary(run_lint(values))
+    except (BrainError, OSError) as e:
+        return ("AVISO", "lint", f"não conferido: {e}")
+    status = "ERRO" if summary["error"] else "AVISO" if summary["warn"] else "OK"
+    return (status, "lint", f"{summary_text(summary)} (rode lint)")
+
+
+def cmd_lint(args, config_home=None) -> int:
+    rules = lint_rules(args.only)
+    findings = run_lint(load_config(config_home)["values"], rules)
+    summary = lint_summary(findings)
+    if args.json:
+        print_json({"findings": [f.as_dict() for f in findings], "summary": summary})
+    else:
+        for f in findings:
+            print(f"{LINT_LABELS[f.severity]} {f.rule} {one_line(f.path)} — {f.detail} (sugestão: {f.suggestion})")
+        print(summary_text(summary))
+    return 1 if summary["error"] else 0
+
+
 # ---------------------------------------------------------------- cli
 
 def context_add_parser() -> argparse.ArgumentParser:
@@ -2513,7 +2788,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="brain.py",
         description=("Ferramentas determinísticas do second-brain: onboarding do vault, configuração, diagnóstico, "
-                     "busca, fluxo de guardar, inbox e processadores."))
+                     "busca, fluxo de guardar, inbox, processadores e manutenção (lint)."))
     parser.add_argument("--version", action="version", version=f"second-brain {BRAIN_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("init", help="cria um vault novo, adota um existente (--adopt) ou só liga esta máquina (--join)")
@@ -2595,6 +2870,9 @@ def main(argv=None) -> int:
     q = inbox.add_parser("done", help="move um item de texto ou link já guardado para raw/processed/AAAA-MM/")
     q.add_argument("item", metavar="ITEM", help="caminho do item (ex.: inbox/<nome>)")
     q.add_argument("--note", metavar="CAMINHO", help="nota criada a partir do item (vai no log)")
+    p = sub.add_parser("lint", help="achados de manutenção do vault (links, conflitos, órfãs, inbox); só leitura")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--only", metavar="REGRA,...", help=f"só estas regras: {', '.join(LINT_SEVERITY)}")
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:2] == ["context", "add"]:
         args = context_add_parser().parse_args(argv[2:])
@@ -2633,6 +2911,8 @@ def main(argv=None) -> int:
             return cmd_capture(args)
         if args.command == "inbox":
             return cmd_inbox_list(args) if args.inbox_command == "list" else cmd_inbox_done(args)
+        if args.command == "lint":
+            return cmd_lint(args)
     except BrainError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
