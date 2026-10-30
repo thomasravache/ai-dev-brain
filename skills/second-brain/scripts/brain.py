@@ -1002,9 +1002,10 @@ def moc_path(context: str, values=None) -> str:
     return f"{posixpath.normpath(str(mocs).replace(chr(92), '/'))}/{context}.md"
 
 
-def neighbors(seeds: list, graph: dict, hops: int) -> dict:
-    """Distance (1..hops) of every note reached from the seeds by the undirected link graph (breadth first)."""
-    seen, frontier, found = set(seeds), list(seeds), {}
+def neighbors(seeds: list, graph: dict, hops: int, blocked=()) -> dict:
+    """Distance (1..hops) of every note reached from the seeds by the undirected link graph (breadth first); the
+    blocked notes are neither reached nor walked through."""
+    seen, frontier, found = set(seeds) | set(blocked), list(seeds), {}
     for distance in range(1, hops + 1):
         reached = []
         for path in frontier:
@@ -1020,8 +1021,10 @@ def neighbors(seeds: list, graph: dict, hops: int) -> dict:
 def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_chars=40000, values=None) -> dict:
     """Package of notes that answer the query: the MOC of `context` (when given), the search results by score and
     their link neighbors (outgoing links and backlinks) up to `hops` steps, by distance and title; no note repeats.
-    Whole notes while the sum of their content fits max_chars; from the first that does not fit on, the notes go to
-    "omitted" (path, title, reason). "broken" lists the broken links of the notes in the package. Nothing found by
+    The MOC is never walked through (it would bring the whole context): notes reached only through it stay out;
+    without `context` the MOC is an ordinary note. In that priority order each note goes in whole when it still
+    fits max_chars (sum of len(content)); one that does not fit goes to "omitted" (path, title, reason) and the
+    next ones are still tried. "broken" lists the broken links of the notes in the package. Nothing found by
     the search = empty package (no MOC alone)."""
     by_path = {note.path: note for note in notes}
     index = LinkIndex(by_path)
@@ -1030,8 +1033,8 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     picked = [(moc, "moc")] if moc in by_path else []  # (path, reason) in the contract order
     seeds = [r["path"] for r in results if r["path"] != moc]
     picked += [(r["path"], f"search:{r['score']}") for r in results if r["path"] != moc]
-    found = neighbors(seeds, link_graph(notes, index), hops) if seeds and hops > 0 else {}
-    found.pop(moc, None)
+    blocked = [moc] if moc else []  # with context the MOC comes first but is never walked through
+    found = neighbors(seeds, link_graph(notes, index), hops, blocked) if seeds and hops > 0 else {}
     picked += [(path, f"link:{distance}")
                for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
                                                                               item[0]))]
@@ -1039,7 +1042,7 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     for path, reason in picked:
         note = by_path[path]
         content = note.text or ""
-        if not omitted and size + len(content) <= max_chars:
+        if size + len(content) <= max_chars:
             size += len(content)
             package.append({"path": path, "title": note.title, "reason": reason, "content": content})
         else:
@@ -1547,10 +1550,16 @@ def check_limit(limit: int):
         raise BrainError(f"--limit precisa ser maior que zero: {limit}")
 
 
+def load_vault(config_home=None):
+    """(values, notes, warnings) of the configured vault; not configured locally = BrainError(NOT_CONFIGURED, 3)."""
+    config = load_config(config_home)
+    notes = scan_vault(config)
+    return config["values"], notes, [warning for note in notes for warning in note.warnings]
+
+
 def load_notes(config_home=None):
-    """(notes, warnings) of the configured vault; without local configuration, BrainError(NOT_CONFIGURED, 3)."""
-    notes = scan_vault(load_config(config_home))
-    return notes, [warning for note in notes for warning in note.warnings]
+    """(notes, warnings) of the configured vault (load_vault without the configuration values)."""
+    return load_vault(config_home)[1:]
 
 
 def print_json(data: dict):
@@ -1636,11 +1645,9 @@ def cmd_context(args, config_home=None) -> int:
     if args.max_chars < 1:
         raise BrainError(f"--max-chars precisa ser maior que zero: {args.max_chars}")
     query = " ".join(args.query)
-    config = load_config(config_home)
-    notes = scan_vault(config)
-    warnings = [warning for note in notes for warning in note.warnings]
+    values, notes, warnings = load_vault(config_home)
     data = build_context(notes, query, context=args.context, hops=args.hops, limit=args.limit,
-                         max_chars=args.max_chars, values=config["values"])
+                         max_chars=args.max_chars, values=values)
     if args.json:
         print_json(dict(data, warnings=warnings))
         return 0
