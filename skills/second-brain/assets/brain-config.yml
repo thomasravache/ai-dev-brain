@@ -16,4 +16,16 @@ para:                     # pastas do método PARA
   archive: archive
 contexts: {}              # nome → {folder: pasta relativa, title: título do MOC}
 processors: {}            # tipo → {command: "executável {input} {output}"} (ADR-0009)
+# Modelos conferidos (versão e data) em references/processors.md; troque "processors: {}" por, por exemplo:
+# processors:
+#   youtube:
+#     command: 'yt-dlp --skip-download --write-subs --write-auto-subs --sub-langs "pt.*,en.*" --sub-format "vtt/best" --convert-subs vtt --no-playlist -o "{output_dir}/%(id)s.%(ext)s" {input}'
+#     output: vtt
+#   video:
+#     command: "whisper {input} --model turbo --output_format vtt --output_dir {output_dir} --verbose False"
+#     output: vtt
+#     check: "whisper --help"
+#   pdf:
+#     command: "pdftotext -enc UTF-8 -nopgbrk {input} {output}"
+#     check: "pdftotext -v"
 inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inbox list e lint)
