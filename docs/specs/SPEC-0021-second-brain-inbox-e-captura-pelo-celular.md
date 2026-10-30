@@ -179,27 +179,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Captura e classificação**
-- [ ] Red: UT-01, UT-03, IT-01, IT-02 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
-- [ ] Green: `capture`, `classify_inbox_item`, `inbox list`, `inbox_stale_days`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-03, IT-01, IT-02 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
+- [x] Green: `capture`, `classify_inbox_item`, `inbox list`, `inbox_stale_days`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Saída da inbox**
-- [ ] Red: UT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
-- [ ] Green: `move_out_of_inbox`, `ingest --move`, `inbox done`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
+- [x] Green: `move_out_of_inbox`, `ingest --move`, `inbox done`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Instruções**
-- [ ] Red: UT-04 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
-- [ ] Green: fluxo da inbox no `SKILL.md`, `inbox.md`, `mobile-capture.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: UT-04 com a tag `SPEC-0021:<ID>`, falhando pelo motivo certo
+- [x] Green: fluxo da inbox no `SKILL.md`, `inbox.md`, `mobile-capture.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -210,9 +210,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a344a93 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — a344a93 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (a344a93; achados da 1ª rodada corrigidos; 4 minor) — a344a93 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — c9d3b34 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -225,36 +225,68 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+A inbox virou a porta de entrada para capturar sem pensar:
+- `brain.py capture "texto"` cria uma nota rápida;
+- `inbox list` mostra os itens com tipo, idade e prévia;
+- `ingest ITEM --move` tira um arquivo da inbox para a pasta `files`, sem deixar cópia pesada no vault;
+- `inbox done ITEM --note …` tira um texto já processado para `raw/processed/AAAA-MM/`.
+
+Itens ainda sincronizando são ignorados. O `SKILL.md` traz os quatro passos de "processa minha inbox", e `references/mobile-capture.md` explica como capturar pelo celular em cada provedor, no iOS e no Android.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `brain.py` (versão 2026.10.5) ganhou `capture_name`, `classify_inbox_item` e `move_out_of_inbox`. Esta última é a única função que move arquivos: reserva o destino com criação exclusiva, faz `os.replace`, nunca sobrescreve e nunca apaga dado do usuário.
+- Entraram também a chave `inbox_stale_days` (padrão 7) e os arquivos `references/inbox.md` e `references/mobile-capture.md`.
+- A 1ª revisão G4 pediu mudanças: 1 major (um `--note` absoluto ia para o `log.md`) e 10 minor. Decisões do Architect, com testes de regressão antes da correção (red 64941a4, fix 9ef338d e a344a93):
+  - `--note` absoluto vira caminho relativo, e fora do vault é recusado;
+  - symlinks e subpastas ocultas são recusados;
+  - caracteres de controle são escapados;
+  - texto com NUL vira arquivo;
+  - prévia limpa;
+  - aviso para `inbox_stale_days` inválido;
+  - documentação da janela de corrida e da falha segura entre volumes.
+- O escopo passou a incluir `references/config.md`. A 2ª revisão aprovou.
+- Achados minor aceitos: algumas mensagens de erro no stderr não escapam controles; `.txt` em UTF-16 é tratado como arquivo; uma pasta vazia de destino pode sobrar em `files` quando a mudança entre volumes falha.
+- O teste de desempenho da busca falhou uma vez sob carga, e o revisor não conseguiu reproduzir em 8 execuções.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Nome da captura com data, hora e slug, sem colisão | PASS | `test_inbox.py::CaptureNameTest.test_same_second_gets_suffix_1_and_slug_has_the_first_six_words` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | move_out_of_inbox nunca sobrescreve e recusa origem fora da inbox | PASS | `test_inbox.py::MoveOutOfInboxTest.test_existing_destination_gets_suffix_1_and_source_outside_inbox_is_refused` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | Classificação dos itens da inbox (texto, link, arquivo, sincronizando; NUL vira arquivo) | PASS | `test_inbox.py::ClassifyInboxItemTest.test_kinds_text_link_file_and_syncing; test_inbox_review.py::ClassifyNulTest.test_text_with_nul_bytes_is_a_file` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-04 | SKILL.md com os quatro passos da inbox e guias de captura por provedor e sistema | PASS | `test_inbox_instructions.py::InboxInstructionsTest.test_skill_md_has_the_four_inbox_steps_in_order; test_inbox_instructions.py::InboxInstructionsTest.test_mobile_capture_has_a_section_per_provider_with_ios_and_android; test_inbox_instructions.py::InboxInstructionsTest.test_mobile_capture_has_the_obsidian_mobile_section; test_inbox_review.py::ReviewInstructionsTest.test_mobile_capture_does_not_list_paid_among_the_verified_facts; test_inbox_review.py::ReviewInstructionsTest.test_config_md_documents_inbox_stale_days; test_inbox_review.py::ReviewInstructionsTest.test_inbox_md_says_ingest_move_fails_safely_on_another_volume` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | capture cria a nota na inbox; texto vazio recusado | PASS | `test_inbox_cli.py::CaptureCliTest.test_capture_creates_a_capture_note_in_the_inbox_and_empty_text_exits_2` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | inbox list com tipos, idade, itens parados, prévia limpa e inbox_stale_days | PASS | `test_inbox_cli.py::InboxListCliTest.test_list_shows_kinds_oldest_first_and_only_the_old_note_is_stale; test_inbox_cli.py::InboxListCliTest.test_stale_days_comes_from_brain_config; test_inbox_cli.py::InboxListCliTest.test_empty_inbox_prints_inbox_vazia; test_inbox_review.py::PreviewTest.test_previews_have_no_control_characters_and_webloc_entities_are_unescaped; test_inbox_review.py::InvalidStaleDaysTest.test_invalid_stale_days_falls_back_to_7_with_a_warning` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | ingest --move tira o arquivo da inbox; recusas fora da inbox, symlink, oculto e sincronizando | PASS | `test_inbox_cli.py::IngestMoveCliTest.test_ingest_move_takes_the_pdf_out_of_the_inbox_into_files; test_inbox_cli.py::IngestMoveCliTest.test_move_outside_the_inbox_exits_2_and_plain_ingest_still_copies; test_inbox_review.py::SymlinkItemTest.test_symlinked_items_are_refused_by_ingest_move_and_done; test_inbox_review.py::ControlCharacterNameTest.test_ingest_move_logs_a_name_with_control_characters_on_one_line_each; test_inbox_review.py::SyncingMoveTest.test_ingest_move_refuses_syncing_items_and_list_shows_a_recent_empty_file_as_syncing` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | inbox done move texto e link para raw/processed; recusas; --note relativo; nomes com controles | PASS | `test_inbox_cli.py::InboxDoneCliTest.test_done_moves_text_to_raw_processed_and_logs_the_note; test_inbox_cli.py::InboxDoneCliTest.test_done_refuses_file_syncing_missing_and_outside_items; test_inbox_review.py::DoneNoteAbsolutePathTest.test_absolute_note_inside_the_vault_is_logged_relative; test_inbox_review.py::DoneNoteAbsolutePathTest.test_absolute_note_outside_the_vault_exits_2_and_nothing_moves; test_inbox_review.py::HiddenSubfolderTest.test_items_in_hidden_inbox_subfolders_are_refused; test_inbox_review.py::ControlCharacterNameTest.test_done_logs_and_prints_a_name_with_control_characters_on_one_line` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-05 | Item jogado numa máquina processado por outra | PASS | `test_inbox_cli.py::OtherMachineCliTest.test_item_dropped_on_machine_a_is_stored_by_machine_b_and_the_inbox_empties` — CI do PR #15 em c9d3b34 (run 41070051416, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — `inbox list` com 500 itens em 0,09–0,18 s (meta: menos de 1 s); segurança pelo UT-02, IT-03 e IT-04 (nada sobrescrito ou apagado, nenhum caminho absoluto no log)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` com o merge do PR #15
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` configurado
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.5. Rollback: revert do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma nova spec. Os 4 achados minor aceitos estão descritos em "Como foi feito". Se o teste de desempenho voltar a falhar, ele vira spec de teste instável (ADR-0002).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0021`. -->
