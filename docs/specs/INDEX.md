@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **0 erro(s), 5 aviso(s)** — rode `spec_graph.py validate`
-- Specs: approved 8, implemented 14
+- Specs: approved 7, in-progress 1, implemented 14
 - Impedimentos: **0 aberto(s)**, 12 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0017  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0017
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0017 | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0017 | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full/M | in-progress | 🔄 em andamento |  |
 | 2 | SPEC-0018 | second-brain: busca e relações entre notas | full/M | approved | ⛔ aguarda implementação de SPEC-0017 |  |
 | 3 | SPEC-0019 | second-brain: fluxo de guardar | full/M | approved | ⛔ aguarda implementação de SPEC-0018 |  |
 | 4 | SPEC-0020 | second-brain: fluxo de consultar | full/S | approved | ⛔ aguarda implementação de SPEC-0019 |  |
@@ -52,7 +52,7 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
-    S0017["SPEC-0017<br/>second-brain: esqueleto, configuração e…"]:::approved
+    S0017["SPEC-0017<br/>second-brain: esqueleto, configuração e…"]:::inprogress
     S0018["SPEC-0018<br/>second-brain: busca e relações entre no…"]:::approved
     S0019["SPEC-0019<br/>second-brain: fluxo de guardar"]:::approved
     S0020["SPEC-0020<br/>second-brain: fluxo de consultar"]:::approved
@@ -95,7 +95,7 @@ flowchart LR
 | [SPEC-0014](SPEC-0014-validate-nao-sugere-a-politica-de-h2-ja-declarada.md) | validate não sugere a política de H2 já declarada | lite | fix | implemented | 2026-10-26 | — | — | — |
 | [SPEC-0015](SPEC-0015-rodape-refs-decide-a-spec-do-commit.md) | Rodapé Refs decide a spec do commit | lite | fix | implemented | 2026-10-27 | — | — | — |
 | [SPEC-0016](SPEC-0016-second-brain-skill-de-segundo-cerebro-no-obsidian.md) | Second brain: skill de segundo cérebro no Obsidian | epic | feature | approved | 2026-10-30 | — | — | — |
-| [SPEC-0017](SPEC-0017-second-brain-esqueleto-configuracao-em-duas-camadas-onboardi.md) | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full | feature | approved | 2026-10-30 | SPEC-0016 | — | — |
+| [SPEC-0017](SPEC-0017-second-brain-esqueleto-configuracao-em-duas-camadas-onboardi.md) | second-brain: esqueleto, configuração em duas camadas, onboarding e doctor | full | feature | in-progress | 2026-10-30 | SPEC-0016 | — | — |
 | [SPEC-0018](SPEC-0018-second-brain-busca-e-relacoes-entre-notas.md) | second-brain: busca e relações entre notas | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
 | [SPEC-0019](SPEC-0019-second-brain-fluxo-de-guardar.md) | second-brain: fluxo de guardar | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0018 | — |
 | [SPEC-0020](SPEC-0020-second-brain-fluxo-de-consultar.md) | second-brain: fluxo de consultar | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0019 | — |
