@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **0 erro(s), 6 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 6, in-progress 1, implemented 15
+- Specs: approved 7, in-progress 1, implemented 15
 - Impedimentos: **0 aberto(s)**, 13 resolvido(s)
 
 ## Cobertura de Pilares
@@ -36,7 +36,7 @@ Perfil: **minimo**
 | 5 | SPEC-0022 | second-brain: processadores de vídeo e documento | full/M | approved | ⛔ aguarda implementação de SPEC-0021 |  |
 | 6 | SPEC-0023 | second-brain: manutenção do vault (lint) | full/S | approved | ⛔ aguarda implementação de SPEC-0021 | saiu da onda 5: arquivos em comum com SPEC-0022 |
 | 7 | SPEC-0024 | second-brain: exportação para o NotebookLM | lite/S | approved | ⛔ aguarda implementação de SPEC-0020 | saiu da onda 4: arquivos em comum com SPEC-0021; saiu da onda 5: arquivos em comum com SPEC-0022; saiu da onda 6: arquivos em comum com SPEC-0023 |
-| 8 | SPEC-0025 | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0018; saiu da onda 2: arquivos em comum com SPEC-0019; saiu da onda 3: arquivos em comum com SPEC-0020; saiu da onda 4: arquivos em comum com SPEC-0021; saiu da onda 5: arquivos em comum com SPEC-0022; saiu da onda 6: arquivos em comum com SPEC-0023; saiu da onda 7: arquivos em comum com SPEC-0024 |
+| 8 | SPEC-0025 | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0018; saiu da onda 2: arquivos em comum com SPEC-0019; saiu da onda 3: arquivos em comum com SPEC-0020; saiu da onda 4: arquivos em comum com SPEC-0021; saiu da onda 5: arquivos em comum com SPEC-0022; saiu da onda 6: arquivos em comum com SPEC-0023; saiu da onda 7: arquivos em comum com SPEC-0024 |
 
 ## Épicos
 
@@ -60,7 +60,7 @@ flowchart LR
     S0022["SPEC-0022<br/>second-brain: processadores de vídeo e …"]:::approved
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::approved
     S0024["SPEC-0024<br/>second-brain: exportação para o Noteboo…"]:::approved
-    S0025["SPEC-0025<br/>second-brain: vault recém-criado pelo O…"]:::proposed
+    S0025["SPEC-0025<br/>second-brain: vault recém-criado pelo O…"]:::approved
   end
   S0017 --> S0018
   S0018 --> S0019
@@ -105,7 +105,7 @@ flowchart LR
 | [SPEC-0022](SPEC-0022-second-brain-processadores-de-video-e-documento.md) | second-brain: processadores de vídeo e documento | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0021 | — |
 | [SPEC-0023](SPEC-0023-second-brain-manutencao-do-vault-lint.md) | second-brain: manutenção do vault (lint) | full | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0021 | — |
 | [SPEC-0024](SPEC-0024-second-brain-exportacao-para-o-notebooklm.md) | second-brain: exportação para o NotebookLM | lite | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
-| [SPEC-0025](SPEC-0025-second-brain-vault-recem-criado-pelo-obsidian-recebe-a-estru.md) | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite | feature | proposed | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
+| [SPEC-0025](SPEC-0025-second-brain-vault-recem-criado-pelo-obsidian-recebe-a-estru.md) | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite | feature | approved | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
 
 ## ADRs
 
