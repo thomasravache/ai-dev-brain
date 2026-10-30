@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: >-
-  Segundo cérebro num vault do Obsidian mantido junto com uma LLM — notas em Markdown organizadas por PARA, contextos com MOC, inbox, índice e log, num vault sincronizado pelo provedor que a pessoa escolher (Google Drive, OneDrive, iCloud ou pasta local) e usado em várias máquinas e no celular. Use quando o usuário quiser configurar o segundo cérebro (onboarding de vault novo ou existente, ligar uma máquina nova), ver a configuração, criar um contexto, diagnosticar o vault (doctor), buscar notas, notas relacionadas e links (search, related, links) guardar qualquer coisa no segundo cérebro — uma anotação, uma aula, um PDF, um vídeo ou um link (ingest, new-note, relate, index), com extração de texto de vídeos do YouTube, vídeos, áudios e PDFs pelos processadores configurados (process) — ou perguntar ao segundo cérebro ("o que eu sei sobre X", "me prepara para a prova": context, resposta citando as notas, nota answer), capturar rápido na inbox e processar a inbox ("anota isso", "processa minha inbox": capture, inbox list, ingest --move, inbox done), inclusive o que foi jogado pelo celular. O fluxo de manter chega numa próxima versão.
+  Segundo cérebro num vault do Obsidian mantido junto com uma LLM — notas em Markdown organizadas por PARA, contextos com MOC, inbox, índice e log, num vault sincronizado pelo provedor que a pessoa escolher (Google Drive, OneDrive, iCloud ou pasta local) e usado em várias máquinas e no celular. Use quando o usuário quiser configurar o segundo cérebro (onboarding de vault novo ou existente, ligar uma máquina nova), ver a configuração, criar um contexto, diagnosticar o vault (doctor), buscar notas, notas relacionadas e links (search, related, links) guardar qualquer coisa no segundo cérebro — uma anotação, uma aula, um PDF, um vídeo ou um link (ingest, new-note, relate, index), com extração de texto de vídeos do YouTube, vídeos, áudios e PDFs pelos processadores configurados (process) — ou perguntar ao segundo cérebro ("o que eu sei sobre X", "me prepara para a prova": context, resposta citando as notas, nota answer), capturar rápido na inbox e processar a inbox ("anota isso", "processa minha inbox": capture, inbox list, ingest --move, inbox done), inclusive o que foi jogado pelo celular, ou manter o vault ("tem link quebrado?": lint).
 ---
 
 # Second Brain
@@ -33,9 +33,10 @@ Rode `python3 <skill-dir>/scripts/brain.py <comando>`, onde `<skill-dir>` é a p
 | `capture TEXTO [--context C] [--json]` | Nota rápida `inbox/AAAA-MM-DD-HHMMSS-<slug>.md` (`type: capture`); imprime o caminho. Texto vazio sai com 2 |
 | `inbox list [--json]` | Itens da inbox, do mais antigo para o mais novo: `path`, `kind` (`text`, `link`, `file` ou `syncing`), `size`, `age_days`, `stale` (mais velho que `inbox_stale_days`, padrão 7) e `preview`. Vazia imprime "Inbox vazia" |
 | `ingest ITEM --move [--context C] [...]` | Como o `ingest`, mas o arquivo **sai** da inbox para `files` em vez de ser copiado. Fonte fora da inbox sai com 2 ("--move só vale para itens da inbox"); item `syncing` sai com 2 |
+| `lint [--json] [--only regra,...]` | Achados de manutenção, só leitura: `broken-link`, `conflict-copy`, `missing-file` e `config` (erro); `orphan`, `stale-inbox` e `frontmatter` (aviso). Uma linha `<ERRO\|AVISO> <regra> <caminho> — <detalhe> (sugestão: …)` por achado e o resumo "N erros, M avisos"; exit 0 sem erro, 1 com erro, 2 com regra desconhecida em `--only` |
 | `inbox done ITEM [--note CAMINHO]` | Item `text` ou `link` já guardado vai para `raw/processed/AAAA-MM/` (nunca sobrescreve: `-1`, `-2`...) e o log cita a nota. `file` sai com 2 ("arquivo: use ingest --move"), `syncing` sai com 2 ("ainda sincronizando") |
 
-Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de consultar e o pacote do `context`: `references/query-flow.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`. Inbox em detalhe: `references/inbox.md`; capturar pelo celular: `references/mobile-capture.md`. Processadores (modelos de yt-dlp, Whisper e pdftotext): `references/processors.md`.
+Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de consultar e o pacote do `context`: `references/query-flow.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`. Inbox em detalhe: `references/inbox.md`; capturar pelo celular: `references/mobile-capture.md`. Processadores (modelos de yt-dlp, Whisper e pdftotext): `references/processors.md`. Manutenção e as regras do `lint`: `references/maintenance.md`; padrões de cópia de conflito por provedor: `references/providers.md`.
 
 ## Antes de qualquer fluxo
 
@@ -127,9 +128,16 @@ Para processar a inbox ("processa minha inbox"), siga sempre estes quatro passos
 3. **Tirar da inbox:** item de texto ou link já guardado → `brain.py inbox done ITEM --note <nota criada>` (vai para `raw/processed/AAAA-MM/`; nada é apagado).
 4. **Pular e reportar:** pule os itens `syncing` (ainda sincronizando; não processe) e avise a pessoa; no fim, reporte o que entrou, onde (as notas criadas) e as relações criadas.
 
-## Próximas versões
+## Manter o vault (lint)
 
-O fluxo de **manter** (lint de links, conflitos de sincronização, órfãs e itens parados na inbox) chega numa próxima versão da skill. Os fluxos de guardar, consultar e da inbox já existem (seções acima); o de guardar é o único jeito de escrever notas no vault: sempre pelos comandos do `brain.py`, nunca criando arquivos à mão.
+Rode a manutenção quando a pessoa pedir ("arruma meu segundo cérebro", "tem link quebrado?"), quando o `brain.py doctor` mostrar a linha `lint` com achados (AVISO ou ERRO), e depois de processar a inbox. O `lint` só lê; a correção é sempre proposta e só acontece com o sim da pessoa. Detalhes de cada regra: `references/maintenance.md`.
+
+1. **Rodar o lint:** `brain.py lint --json` (ou `--only regra,...` para olhar só algumas regras).
+2. **Explicar os achados por severidade:** primeiro os erros (`broken-link`, `conflict-copy`, `missing-file`, `config`), depois os avisos (`orphan`, `stale-inbox`, `frontmatter`), dizendo em palavras simples o que cada um significa.
+3. **Propor uma correção por achado:** link quebrado → criar a nota com `new-note` ou corrigir o link; órfã → `relate` com uma nota próxima, `index` para pô-la no MOC, ou uma nota nova que a ligue; cópia de conflito → orientar a pessoa a comparar a cópia com o original e escolher a versão certa ela mesma; inbox parada → o fluxo da inbox; arquivo ausente ou frontmatter → mostrar o que falta.
+4. **Aplicar só com o sim do usuário:** cada correção, uma a uma, pelos comandos que só criam e acrescentam (`relate`, `index`, `new-note`); depois rode o `lint` de novo e mostre o resultado.
+
+Nunca apague arquivo: nem a cópia de conflito, nem a nota órfã, nem um item da inbox. Mesclar conflito é decisão da pessoa, feita por ela no Obsidian. O fluxo de guardar continua sendo o único jeito de escrever notas no vault: sempre pelos comandos do `brain.py`, nunca criando arquivos à mão.
 
 ## Regras
 

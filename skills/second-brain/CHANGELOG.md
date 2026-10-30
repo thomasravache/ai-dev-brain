@@ -9,6 +9,17 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.7] - 2026-10-30
+
+### Added
+- `lint [--json] [--only regra,...]` no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.7), só leitura: `broken-link`, `conflict-copy`, `missing-file` e `config` (erro); `orphan`, `stale-inbox` e `frontmatter` (aviso). Cada regra é uma função `check_<regra>` sobre uma única varredura do vault; texto `<ERRO|AVISO> <regra> <caminho> — <detalhe> (sugestão: …)` com o resumo "N erros, M avisos", ou JSON `{"findings", "summary"}`; exit 0 sem erro, 1 com erro, 2 com regra desconhecida em `--only` (SPEC-0023, ADR-0007).
+- Chave `conflict_patterns` no `brain-config.yml` (regex sobre o nome do arquivo, com o grupo `base`); ausente = os padrões do provider da configuração local, documentados em `references/providers.md` (por enquanto os genéricos, sem os nomes reais de cada provedor conferidos). Regex inválido vira achado `config` e as outras regras rodam; pasta `files` inacessível vira achado `config` e `missing-file` é pulada (SPEC-0023).
+- Link ou embed para anexo (`![[foto.png]]`) só é `broken-link` quando nenhum arquivo com esse nome existe no vault (SPEC-0023).
+- `SKILL.md`: fluxo de manutenção em quatro passos (lint, explicar por severidade, propor por achado, aplicar só com o sim do usuário), quando rodar e a regra de nunca apagar; `references/maintenance.md`; `assets/brain-config.yml` com o exemplo comentado de `conflict_patterns` (SPEC-0023).
+
+### Changed
+- `doctor` ganha a linha `OK|AVISO|ERRO lint — N erros, M avisos (rode lint)` e passa a sair com 1 quando o `lint` tem erro (SPEC-0023).
+
 ## [2026.10.6] - 2026-10-30
 
 ### Added

@@ -34,3 +34,26 @@ O que não está nessa lista vem marcado como *orientação geral, não verifica
 - **Desktop:** qualquer pasta do disco; a skill trata como pasta comum. Se outro programa sincroniza essa pasta, a skill não sabe nem depende disso.
 - **iOS:** *orientação geral, não verificada* — uma pasta local do computador não chega ao iPhone sozinha. O Obsidian Sync funciona no iOS (fonte verificada).
 - **Android:** *orientação geral, não verificada* — a pasta local também não chega ao Android sozinha. O Obsidian Sync funciona no Android (fonte verificada).
+
+## Cópias de conflito (`conflict_patterns`)
+
+Quando duas máquinas (ou o celular) mudam a mesma nota antes de sincronizar, o app do provedor pode guardar as duas versões, com um sufixo no nome da cópia. O `brain.py lint` aponta essas cópias com a regra `conflict-copy` (erro), mas só quando o original (`<base>.md`) existe na mesma pasta. A skill nunca mescla nem apaga a cópia: quem compara e escolhe é a pessoa (`references/maintenance.md`).
+
+Sem `conflict_patterns` no `brain-config.yml`, valem os padrões do `provider` da configuração local desta máquina, abaixo. Cada padrão é um regex sobre o nome do arquivo, com o grupo `base` (o nome do original sem `.md`).
+
+| Provedor | Padrões da v1 | Conferência |
+|---|---|---|
+| Google Drive (`google-drive`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
+| OneDrive (`onedrive`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
+| iCloud (`icloud`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico; nomes reais do provedor não conferidos nesta máquina em 2026-10-30 |
+| Pasta local (`local`) | `(?P<base>.+) \(\d+\)\.md$` e `(?P<base>.+)[ _-]conflict.*\.md$` | padrão genérico (vale para outro programa que sincronize a pasta); nomes reais não conferidos nesta máquina em 2026-10-30 |
+
+Os quatro provedores usam, por enquanto, os mesmos padrões genéricos: `Aula (1).md` (número entre parênteses) e `Plano conflict 2026-10-30.md` (a palavra `conflict` depois de espaço, `_` ou `-`). Os nomes que cada app grava de verdade não foram conferidos com cópias reais nesta máquina; se o seu provedor usa outro formato, ponha o padrão em `conflict_patterns` no `brain-config.yml` (ele sincroniza e vale para todas as máquinas):
+
+```yaml
+conflict_patterns:
+  - '(?P<base>.+) \(\d+\)\.md$'
+  - '(?P<base>.+)[ _-]conflict.*\.md$'
+```
+
+Regex inválido, ou sem o grupo `base`, vira um achado `config` (erro) no `lint`; os outros padrões e as outras regras continuam rodando.
