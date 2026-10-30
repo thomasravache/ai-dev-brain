@@ -248,7 +248,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=21)) — b7dbec2 | 2026-10-30 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — d11f17f | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — d11f17f | 2026-10-30 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED (d11f17f; 1 blocker: marcadores desbalanceados apagam texto do usuário; 1 major: nome de contexto do brain-config.yml escapa do vault; 9 minor) | 2026-10-30 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
