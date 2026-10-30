@@ -49,7 +49,13 @@ processors: {}            # tipo → {command: "executável {input} {output}"} (
 - `layout` — onde ficam inbox, raw, MOCs, modelos, `index.md` e `log.md`. Num vault adotado, `init --adopt --map inbox=Inbox` aponta para a pasta que já existe.
 - `para` — pastas do método PARA (projects, areas, resources, archive); também aceitam `--map`.
 - `contexts` — assuntos com pasta própria e MOC em `mocs/<nome>.md`; crie com `brain.py context add`.
-- `processors` — conversores de arquivo em texto (executados numa versão futura); o `doctor` confere se a primeira palavra de `command` existe no PATH.
+- `processors` — tipo (`youtube`, `video`, `audio`, `pdf` ou outro) → comando que converte a fonte em texto (ADR-0009; modelos de yt-dlp, Whisper e pdftotext em `references/processors.md`). Chaves de cada processador:
+  - `command` (obrigatória) — linha de comando com os marcadores `{input}` (o arquivo guardado em `files`, ou a URL), `{output}` (arquivo de saída) e `{output_dir}` (pasta de saída); roda sem shell, num diretório temporário.
+  - `output` — extensão esperada (`vtt`, `srt` ou `txt`): sem `{output}` escrito, o texto vem do maior arquivo dessa extensão em `{output_dir}`, senão do stdout; `.vtt`/`.srt` viram texto.
+  - `timeout` — segundos até o processo ser encerrado (padrão 1800).
+  - `check` — comando que o `doctor` roda para testar o processador (padrão `<executável> --version`).
+
+  O `ingest` roda o processador do tipo detectado (`--no-process` desliga; `--text-file` tem prioridade) e o `process` roda sob demanda. O `doctor` mostra `OK|AVISO processor <tipo> — <executável> (<primeira linha da checagem>)`: AVISO quando o executável não está no PATH desta máquina ou a checagem falha. O `brain-config.yml` sincroniza, então a ferramenta precisa existir em cada máquina que for usá-la.
 - `inbox_stale_days` — dias (número inteiro >= 0, padrão 7) até um item da inbox aparecer como parado (`stale`) no `inbox list` (`references/inbox.md`). Valor inválido (negativo, decimal ou texto) usa o padrão 7 e gera um aviso: na lista `warnings` do `config --json` e como `AVISO inbox_stale_days` no `doctor`.
 
 Todo valor de `layout`, `para` e `contexts.<nome>.folder` precisa ser relativo e ficar dentro do vault: caminho absoluto ou com `..` faz os comandos saírem com 1 (`brain-config.yml: <chave> fora do vault`), e o `doctor` mostra ERRO nessa chave. Um `brain-config.yml` que não pode ser lido aparece no `doctor` como `ERRO brain-config.yml — <erro>`, e os outros itens continuam.

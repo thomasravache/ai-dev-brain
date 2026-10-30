@@ -5,10 +5,12 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 - scripts/brain.py é arquivo único (nenhum outro .py em scripts/) e importa só a biblioteca padrão;
 - nenhum import de skills/sdd-management (spec_graph, architecture_rules) nem de tools/, nem caminho para elas;
 - nenhuma biblioteca de rede (ADR-0008);
-- processo externo só dentro da função run_processor (ADR-0009);
+- processo externo só dentro da função run_processor (ADR-0009), que existe, roda o processo e nunca usa shell
+  (SPEC-0022:UT-04);
 - nenhum caminho pessoal absoluto em arquivos de skills/second-brain/ fora de tests/ (placeholders como
   /Users/<nome> são permitidos).
 """
+import ast
 import unittest
 
 from brain_architecture_rules import (
@@ -95,9 +97,23 @@ class ProcessRulesTest(unittest.TestCase):
         self.assertIn("scripts/brain.py:7", findings[1])
 
     def test_brain_runs_processes_only_in_run_processor(self):
-        """SPEC-0017:UT-06"""
+        """SPEC-0017:UT-06 SPEC-0022:UT-04"""
         findings = subprocess_findings(script_source(), "scripts/brain.py", ALLOWED_PROCESS_FUNCTIONS)
         self.assertEqual(findings, [], report(findings))
+
+    def test_run_processor_is_the_one_place_that_runs_a_process_and_never_with_shell(self):
+        """SPEC-0022:UT-04"""
+        tree = ast.parse(script_source())
+        functions = [node for node in ast.walk(tree)
+                     if isinstance(node, ast.FunctionDef) and node.name == "run_processor"]
+        self.assertEqual(len(functions), 1, "brain.py precisa de uma função run_processor (SPEC-0022)")
+        calls = [node for node in ast.walk(functions[0]) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name)
+                 and node.func.value.id == "subprocess"]
+        self.assertTrue(calls, "run_processor precisa rodar o processo com subprocess (SPEC-0022)")
+        shell = [node.lineno for node in ast.walk(tree) if isinstance(node, ast.keyword) and node.arg == "shell"
+                 and not (isinstance(node.value, ast.Constant) and node.value.value is False)]
+        self.assertEqual(shell, [], f"shell= em brain.py (linhas {shell}): processos rodam sem shell (ADR-0009)")
 
 
 class PersonalPathRulesTest(unittest.TestCase):

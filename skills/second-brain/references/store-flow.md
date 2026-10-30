@@ -17,8 +17,13 @@ brain.py index --context college
 ## `ingest FONTE`
 
 - **Arquivo:** copiado para `<files>/<contexto ou inbox>/<AAAA>/<nome>`. Nome que já existe vira `<nome>-1`, `-2`... — a cópia anterior nunca muda. A cópia acontece antes da nota de fonte: pasta `files` inexistente ou sem permissão sai com 1 e nada é criado no vault.
-- **URL (http/https):** nada é copiado nem baixado; a nota guarda `source_url`. Ler a página é com você, se tiver ferramenta para isso.
-- **Nota de fonte:** `raw/AAAA-MM-DD-<slug>.md` (`-1`, `-2`... no mesmo dia), `type: source`, com o texto de `--text-file` sob `## Extracted text`, ou `_(pending)_`.
+- **URL (http/https):** nada é copiado; a nota guarda `source_url`. O `brain.py` não baixa nada; só um processador `youtube` configurado (yt-dlp) acessa a rede, para baixar as legendas. Ler outras páginas é com você, se tiver ferramenta para isso.
+- **Nota de fonte:** `raw/AAAA-MM-DD-<slug>.md` (`-1`, `-2`... no mesmo dia), `type: source`, com o texto extraído sob `## Extracted text`, ou `_(pending)_`.
+- **Processador:** o tipo é detectado pela fonte (URL do YouTube; `.mp4 .mov .mkv .webm .avi`; `.mp3 .m4a .wav .ogg .opus`; `.pdf`), ou forçado com `--kind K`. Com processador configurado para o tipo (`references/processors.md`), o `ingest` o roda sobre a cópia em `files` (ou a URL) e grava o texto na nota de fonte; o log registra `texto extraído (<tipo>)`.
+  - `--text-file ARQ` tem prioridade: o texto vem do arquivo e o processador não roda. `--no-process` também não roda o processador (fica `_(pending)_`).
+  - `--timestamps`: legendas e transcrições com tempo viram linhas `[mm:ss] texto`; no YouTube, `[mm:ss](<url>?t=<s>s) texto` (`&t=` quando a URL já tem `?`), com link para o trecho — útil para citar uma aula gravada.
+  - Sem processador para o tipo: o bruto é guardado como antes, com `_(pending)_` e o aviso `sem processador para <tipo>`.
+  - Falha (executável ausente, saída diferente de 0, `timeout` estourado ou texto vazio): o bruto fica guardado, a nota de fonte recebe `_(extraction failed: <motivo>)_`, o aviso traz o stderr resumido, o log registra a falha e o `ingest` sai com 0. Para tentar de novo sem guardar outra vez, use `brain.py process FONTE --out ARQ` (ARQ novo, fora do vault; nunca sobrescreve) e depois leia o texto (ou passe-o com `--text-file` num ingest novo).
 - Fonte inexistente sai com 2 (`fonte não encontrada: FONTE`).
 
 ## `new-note`

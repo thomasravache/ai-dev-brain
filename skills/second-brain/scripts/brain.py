@@ -9,6 +9,8 @@ ingest, new-note, relate and index write only through write_new_file and the tex
 replace_region, always with a log.md line (SPEC-0019).
 capture, inbox list, inbox done and ingest --move handle the inbox; move_out_of_inbox is the only function that
 moves a file, and only out of the inbox, never overwriting nor deleting (SPEC-0021, ADR-0007).
+process, ingest and doctor run the processors declared in brain-config.yml; run_processor is the only function
+that runs an external process: without a shell, in a temporary folder, with a timeout (SPEC-0022, ADR-0009).
 """
 from __future__ import annotations
 
@@ -23,13 +25,17 @@ import posixpath
 import re
 import shlex
 import shutil
+import signal
+import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.5"
+BRAIN_VERSION = "2026.10.6"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -122,6 +128,23 @@ STALE_DAYS_DEFAULT = 7
 PROCESSED_DIR = "processed"  # <layout.raw>/processed/AAAA-MM/: text items taken out of the inbox
 CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")  # control characters: escaped in log.md and the output
 LINK_IN_FILE_RE = re.compile(r"^URL=(\S+)|<string>(https?://[^<]+)</string>", re.MULTILINE | re.IGNORECASE)
+
+# processors: commands of brain-config.yml that turn a source into text (SPEC-0022, ADR-0009; references/processors.md)
+YOUTUBE_HOSTS = frozenset(("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"))
+KIND_SUFFIXES = {
+    "video": (".mp4", ".mov", ".mkv", ".webm", ".avi"),
+    "audio": (".mp3", ".m4a", ".wav", ".ogg", ".opus"),
+    "pdf": (".pdf",),
+}
+SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
+PROCESSOR_MARKERS = ("input", "output", "output_dir")
+PROCESSOR_MARKER_RE = re.compile(r"\{(input|output|output_dir)\}")
+PROCESSOR_TIMEOUT = 1800  # seconds, when the processor does not declare timeout
+CHECK_TIMEOUT = 60  # seconds for the doctor check ("<executable> --version" or check)
+STDERR_MAX = 500  # characters of the processor stderr in a failure message
+SUBTITLE_SUFFIXES = (".vtt", ".srt")
+SUBTITLE_TIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2}):(\d{2})[.,]\d+\s+-->")
+SUBTITLE_TAG_RE = re.compile(r"<[^>\n]*>")
 
 
 class BrainError(Exception):
@@ -1481,7 +1504,7 @@ def cmd_context_add(args, config_home=None) -> int:
 
 
 def doctor_items(config: dict, local_path: Path) -> list:
-    """(status, item, detail) for each check; only reads the disk and shutil.which (no process runs)."""
+    """(status, item, detail) for each check; reads the disk and runs only the check of each processor."""
     values, rows = config["values"], [("OK", "configuração local", str(local_path))]
     vault, files = values["vault"], values["files"]
     vault_ok = bool(vault) and Path(vault).is_dir()
@@ -1551,21 +1574,24 @@ def doctor_items(config: dict, local_path: Path) -> list:
 
 
 def processor_items(processors) -> list:
+    """"OK|AVISO processor <kind> — <executable> (<first line of the check>)": the check (or "<executable>
+    --version") runs through run_processor; an executable missing from the PATH is not run."""
     if not isinstance(processors, dict) or not processors:
         return [("OK", "processadores", "nenhum configurado")]
     rows = []
-    for kind, item in processors.items():
-        command = item.get("command", "") if isinstance(item, dict) else ""
-        try:
-            executable = shlex.split(command)[0] if command.strip() else ""
-        except ValueError:
-            executable = ""
+    for kind in processors:
+        item = processor_of(kind, processors)
+        executable = executable_of(str(item.get("command", ""))) if item else ""
+        found = shutil.which(executable) if executable else None
         if not executable:
             rows.append(("AVISO", f"processor {kind}", "sem command"))
-        elif shutil.which(executable):
-            rows.append(("OK", f"processor {kind}", shutil.which(executable)))
+        elif not found:
+            rows.append(("AVISO", f"processor {kind}", f"{executable} (executável não encontrado no PATH)"))
         else:
-            rows.append(("AVISO", f"processor {kind}", f"executável não encontrado no PATH: {executable}"))
+            try:
+                rows.append(("OK", f"processor {kind}", f"{found} ({run_processor(kind, '', processors, check=True)})"))
+            except ProcessorError as e:
+                rows.append(("AVISO", f"processor {kind}", f"{found} (checagem falhou: {e.reason})"))
     return rows
 
 
@@ -1819,6 +1845,11 @@ def cmd_ingest(args, config_home=None) -> int:
             raise BrainError(f"ainda sincronizando: {args.source} — espere o app do provedor baixar o arquivo")
     if url is None and not Path(source).is_file():
         raise BrainError(f"fonte não encontrada: {args.source}")
+    kind = args.kind or detect_kind(source)
+    process = bool(kind) and not args.text_file and not args.no_process
+    if process and not processor_of(kind, values["processors"]):
+        process = False
+        print_warnings([f"sem processador para {kind} — veja references/processors.md"])
     extracted = ""
     if args.text_file:
         if not Path(args.text_file).is_file():
@@ -1838,6 +1869,16 @@ def cmd_ingest(args, config_home=None) -> int:
         file_rel = f"{folder}/{moved.name}"
     else:
         file_rel = copy_to_files(Path(source), values, args.context)  # the copy comes first
+    extraction = ""
+    if process:  # on the stored copy (or the URL); a failure keeps the raw and is written in the note
+        try:
+            extracted = run_processor(kind, url or str(Path(values["files"]) / file_rel), values["processors"],
+                                      args.timestamps)
+            extraction = f"; texto extraído ({kind})"
+        except ProcessorError as e:
+            print_warnings([str(e)])
+            extracted = f"_(extraction failed: {one_line(e.reason)})_"
+            extraction = f"; extração falhou ({kind}): {e.reason}"
     raw_rel = free_raw_path(vault, layout, title)
     try:
         write_new_file(vault / raw_rel, render_source_note(title, today(), args.context, file_rel, url, extracted))
@@ -1845,7 +1886,7 @@ def cmd_ingest(args, config_home=None) -> int:
         where = "o arquivo foi movido para" if args.move else "a cópia ficou em"
         kept = f"; {where} {file_rel} (na pasta files)" if file_rel else ""
         raise BrainError(f"não consegui criar a nota de fonte {raw_rel}: {e.strerror or e}{kept}", 1) from e
-    append_log(vault, layout, "ingest", f"{raw_rel} — {url or file_rel}")
+    append_log(vault, layout, "ingest", f"{raw_rel} — {url or file_rel}{extraction}")
     if args.json:
         print_json({"raw": raw_rel, "file": file_rel, "url": url})
         return 0
@@ -2239,6 +2280,224 @@ def note_ref(note: str, vault: Path) -> str:
     return Path(real).relative_to(root).as_posix()
 
 
+# ---------------------------------------------------------------- processors (SPEC-0022, ADR-0009)
+class ProcessorError(BrainError):
+    """Failure of a processor (executable missing, exit != 0, timeout, empty text): the reason is kept apart for
+    the source note ("_(extraction failed: <reason>)_")."""
+
+    def __init__(self, kind: str, reason: str):
+        super().__init__(f"processador {kind} falhou: {reason}", 1)
+        self.reason = reason
+
+
+def detect_kind(source: str):
+    """youtube (http(s) URL of a YouTube host), video, audio or pdf (by the extension); anything else = None."""
+    text = source.strip()
+    if SCHEME_RE.match(text):
+        parts = urlsplit(text)
+        host = (parts.hostname or "").lower()
+        return "youtube" if parts.scheme.lower() in ("http", "https") and host in YOUTUBE_HOSTS else None
+    suffix = posixpath.splitext(text.replace("\\", "/"))[1].lower()
+    return next((kind for kind, suffixes in KIND_SUFFIXES.items() if suffix in suffixes), None)
+
+
+def build_args(command: str, input: str, output: str, output_dir: str) -> list:
+    """shlex.split(command) with {input}, {output} and {output_dir} replaced in each argument, in a single pass (a
+    value is never split, interpreted nor searched for markers again). No shell ever sees the result."""
+    values = {"input": input, "output": output, "output_dir": output_dir}
+    try:
+        words = shlex.split(command)
+    except ValueError as e:
+        raise BrainError(f"command inválido ({e}): {command}") from e
+    return [PROCESSOR_MARKER_RE.sub(lambda m: values[m.group(1)], word) for word in words]
+
+
+def moment_link(url: str, seconds: int) -> str:
+    """url pointing at the moment: ?t=<s>s, or &t=<s>s when the URL already has a query."""
+    return f"{url}{'&' if urlsplit(url).query else '?'}t={seconds}s"
+
+
+def subtitles_to_text(text: str, timestamps: bool = False, url=None) -> str:
+    """.vtt or .srt -> text: no header, cue numbers, timing lines, markup nor blank lines; a line that repeats one
+    of the previous cue (YouTube automatic captions) appears once. timestamps: "[mm:ss] text" with the start of
+    the first cue showing the line; with a YouTube url, "[mm:ss](<url>?t=<s>s) text"."""
+    rows = text.lstrip("﻿").splitlines()
+    cues = []
+    for i, row in enumerate(rows):
+        line = row.strip()
+        m = SUBTITLE_TIME_RE.match(line)
+        if m:
+            cues.append((int(m.group(1) or 0) * 3600 + int(m.group(2)) * 60 + int(m.group(3)), []))
+            continue
+        if not cues or not line:  # header (WEBVTT, Kind:, Language:) or blank line
+            continue
+        if line.isdigit() and i + 1 < len(rows) and SUBTITLE_TIME_RE.match(rows[i + 1].strip()):
+            continue  # number of the next .srt cue
+        clean = " ".join(html.unescape(SUBTITLE_TAG_RE.sub("", line)).split())
+        if clean:
+            cues[-1][1].append(clean)
+    out, previous = [], set()
+    for start, lines in cues:
+        for line in lines:
+            if line in previous:
+                continue
+            if not timestamps:
+                out.append(line)
+                continue
+            stamp = f"{start // 60:02d}:{start % 60:02d}"
+            out.append(f"[{stamp}]({moment_link(url, start)}) {line}" if url else f"[{stamp}] {line}")
+        previous = set(lines)
+    return "\n".join(out)
+
+
+def processor_of(kind, processors) -> dict:
+    """The entry processors[kind] with a command, or {} when there is none."""
+    item = processors.get(kind) if isinstance(processors, dict) and kind else None
+    return item if isinstance(item, dict) and str(item.get("command") or "").strip() else {}
+
+
+def executable_of(command: str) -> str:
+    """First word of a command ("" when it cannot be split)."""
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return ""
+    return words[0] if words else ""
+
+
+def short_stderr(stderr: str) -> str:
+    """stderr of a processor in one line, up to STDERR_MAX characters."""
+    return " ".join((stderr or "").split())[:STDERR_MAX]
+
+
+def read_text_file(path: Path) -> str:
+    return path.read_bytes().decode("utf-8", errors="replace").lstrip("﻿")
+
+
+def processor_text(item: dict, output: Path, output_dir: Path, stdout: str):
+    """(text, suffix): from {output}, else from the largest file with the `output` extension in {output_dir},
+    else from stdout."""
+    ext = str(item.get("output") or "").strip().lstrip(".").lower()
+    if output.is_file() and output.stat().st_size:
+        return read_text_file(output), output.suffix.lower()
+    if ext:
+        found = [p for p in output_dir.rglob("*") if p.is_file() and p.suffix.lower() == f".{ext}"]
+        if found:
+            largest = max(found, key=lambda p: (p.stat().st_size, p.name))
+            return read_text_file(largest), largest.suffix.lower()
+    return stdout, f".{ext}" if ext else ""
+
+
+def kill_process_group(proc) -> None:
+    """Kills the processor and everything it started (its process group, POSIX; on Windows only the process),
+    then reaps it. Signals only, never runs a process."""
+    try:
+        if os.name != "nt":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.communicate(timeout=5)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+
+def run_processor(kind: str, source: str, processors: dict, timestamps: bool = False, check: bool = False) -> str:
+    """The only place of brain.py that runs an external process (ADR-0009): the command of processors[kind] (or,
+    with check, its check command, by default "<executable> --version") as a list of arguments, without a shell,
+    in a temporary folder and its own process group, with a timeout (the whole group is killed when it expires) and the output captured. Returns the text
+    (with check, the first line of the check output). No processor = BrainError (code 2); failure = ProcessorError
+    (code 1) "processador <kind> falhou: <reason>" with the stderr cut to STDERR_MAX characters."""
+    item = processor_of(kind, processors)
+    if not item:
+        raise BrainError(f"nenhum processador para {kind} — veja references/processors.md")
+    command = str(item["command"])
+    if check:
+        command = str(item.get("check") or "").strip() or f"{shlex.quote(executable_of(command))} --version"
+    try:
+        timeout = CHECK_TIMEOUT if check else int(str(item.get("timeout") or PROCESSOR_TIMEOUT).strip())
+    except ValueError as e:
+        raise ProcessorError(kind, f"timeout inválido: {item.get('timeout')}") from e
+    if timeout < 1:
+        raise ProcessorError(kind, f"timeout inválido: {item.get('timeout')}")
+    is_url = URL_RE.match(source.strip()) is not None
+    entry = source.strip() if is_url or check else str(Path(source).resolve())
+    ext = str(item.get("output") or "txt").strip().lstrip(".").lower() or "txt"
+    with tempfile.TemporaryDirectory(prefix="brain-processor-") as tmp:
+        output, output_dir = Path(tmp) / f"output.{ext}", Path(tmp) / "out"
+        output_dir.mkdir()
+        try:
+            args = build_args(command, entry, str(output), str(output_dir))
+        except BrainError as e:
+            raise ProcessorError(kind, str(e)) from e
+        if not args:
+            raise ProcessorError(kind, "command vazio")
+        try:
+            # Own session/process group: on timeout (or any error) the whole group dies, grandchildren included.
+            proc = subprocess.Popen(args, cwd=tmp, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
+                                    start_new_session=os.name != "nt")
+        except FileNotFoundError as e:
+            raise ProcessorError(kind, f"executável não encontrado: {args[0]}") from e
+        except OSError as e:
+            raise ProcessorError(kind, f"não consegui executar {args[0]}: {e.strerror or e}") from e
+        try:
+            stdout, stderr_text = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            kill_process_group(proc)
+            raise ProcessorError(kind, f"tempo esgotado ({timeout} s); processo encerrado") from e
+        except BaseException:
+            kill_process_group(proc)
+            raise
+        stderr = short_stderr(stderr_text)
+        if proc.returncode != 0:
+            raise ProcessorError(kind, f"saiu com {proc.returncode}" + (f": {stderr}" if stderr else ""))
+        if check:
+            lines = [line.strip() for line in (stdout or stderr_text or "").splitlines() if line.strip()]
+            return lines[0] if lines else "sem saída"
+        text, suffix = processor_text(item, output, output_dir, stdout or "")
+    if suffix in SUBTITLE_SUFFIXES:
+        text = subtitles_to_text(text, timestamps, source.strip() if kind == "youtube" and is_url else None)
+    text = text.strip()
+    if not text:
+        raise ProcessorError(kind, "saída vazia" + (f": {stderr}" if stderr else ""))
+    return text
+
+
+def cmd_process(args, config_home=None) -> int:
+    values = load_config(config_home)["values"]
+    source = args.source.strip()
+    if not URL_RE.match(source) and not Path(source).is_file():
+        raise BrainError(f"fonte não encontrada: {args.source}")
+    kind = args.kind or detect_kind(source)
+    if not kind:
+        raise BrainError(f"tipo não reconhecido: {args.source} — use --kind (youtube, video, audio, pdf...)")
+    out = Path(args.out).expanduser().resolve() if args.out else None
+    if out is not None:  # never overwrites and never writes into the vault (checked before running)
+        if out.exists() or out.is_symlink():
+            raise BrainError(f"já existe: {args.out}")
+        if values["vault"] and is_inside(str(out), str(Path(values["vault"]).expanduser().resolve())):
+            raise BrainError(f"--out dentro do vault: {args.out} — o process não escreve no vault")
+    text = run_processor(kind, source, values["processors"], args.timestamps)
+    if out is not None:
+        try:
+            with open(out, "x", encoding="utf-8") as f:
+                f.write(text + "\n")
+        except FileExistsError as e:
+            raise BrainError(f"já existe: {args.out}") from e
+        except OSError as e:
+            raise BrainError(f"não consegui gravar {args.out}: {e.strerror or e}", 1) from e
+        print(f"Texto ({kind}): {one_line(args.out)}", file=sys.stderr)
+    else:
+        print(text)
+    return 0
+
+
 # ---------------------------------------------------------------- cli
 
 def context_add_parser() -> argparse.ArgumentParser:
@@ -2254,7 +2513,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="brain.py",
         description=("Ferramentas determinísticas do second-brain: onboarding do vault, configuração, diagnóstico, "
-                     "busca, fluxo de guardar e inbox."))
+                     "busca, fluxo de guardar, inbox e processadores."))
     parser.add_argument("--version", action="version", version=f"second-brain {BRAIN_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("init", help="cria um vault novo, adota um existente (--adopt) ou só liga esta máquina (--join)")
@@ -2302,7 +2561,15 @@ def main(argv=None) -> int:
     p.add_argument("--title", help="título da nota de fonte (padrão: o nome do arquivo ou a URL)")
     p.add_argument("--text-file", metavar="ARQ", help="texto extraído da fonte (UTF-8), sob '## Extracted text'")
     p.add_argument("--move", action="store_true", help="item da inbox: move para files em vez de copiar")
+    p.add_argument("--kind", help="tipo da fonte para o processador (padrão: detectado; youtube, video, audio, pdf)")
+    p.add_argument("--no-process", action="store_true", help="não roda o processador do tipo")
+    p.add_argument("--timestamps", action="store_true", help="legendas com '[mm:ss]' (no YouTube, link para o trecho)")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("process", help="roda o processador do tipo da fonte e devolve o texto (references/processors.md)")
+    p.add_argument("source", metavar="ENTRADA", help="arquivo local ou URL http(s)")
+    p.add_argument("--kind", help="tipo da fonte (padrão: detectado; youtube, video, audio, pdf)")
+    p.add_argument("--out", metavar="ARQ", help="grava o texto neste arquivo novo (fora do vault) em vez do stdout")
+    p.add_argument("--timestamps", action="store_true", help="legendas com '[mm:ss]' (no YouTube, link para o trecho)")
     p = sub.add_parser("new-note", help="cria uma nota a partir do modelo do tipo; nunca sobrescreve")
     p.add_argument("--type", required=True, help=" | ".join(NOTE_TYPES))
     p.add_argument("--title", required=True)
@@ -2354,6 +2621,8 @@ def main(argv=None) -> int:
             return cmd_links(args)
         if args.command == "ingest":
             return cmd_ingest(args)
+        if args.command == "process":
+            return cmd_process(args)
         if args.command == "new-note":
             return cmd_new_note(args)
         if args.command == "relate":

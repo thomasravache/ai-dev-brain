@@ -9,6 +9,20 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.6] - 2026-10-30
+
+### Added
+- Processadores no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.6): `run_processor` é o único ponto que roda processo externo — o `command` de `processors.<tipo>` do `brain-config.yml` vira uma lista de argumentos (`shlex.split`, `{input}`, `{output}` e `{output_dir}` trocados numa passada), sem shell, num diretório temporário, com `timeout` (padrão 1800 s; o processo é encerrado) e saída capturada; o texto vem de `{output}`, do maior arquivo da extensão `output` em `{output_dir}` ou do stdout, e legendas `.vtt`/`.srt` viram texto (SPEC-0022, ADR-0009).
+- `process ENTRADA [--kind K] [--out ARQ] [--timestamps]`: texto no stdout ou em `--out` (exit 0); sem processador sai com 2 ("nenhum processador para <tipo> — veja references/processors.md"); falha sai com 1 ("processador <tipo> falhou: <motivo>", com o stderr resumido em até 500 caracteres) (SPEC-0022).
+- `ingest` detecta o tipo (URL do YouTube, extensões de vídeo e áudio, `.pdf`; `--kind` força) e chama o processador, com o texto sob `## Extracted text`; `--no-process` desliga e `--text-file` tem prioridade; `--timestamps` gera linhas `[mm:ss]` e, no YouTube, `[mm:ss](<url>?t=<s>s)` (ou `&t=`). Falha: aviso, `_(extraction failed: <motivo>)_` na nota, registro no `log.md` e exit 0; sem processador: `_(pending)_` e aviso "sem processador para <tipo>" (SPEC-0022).
+- `doctor`: `OK|AVISO processor <tipo> — <executável> (<primeira linha da checagem>)`, rodando o `check` declarado ou `<executável> --version` pelo `run_processor` (SPEC-0022).
+- `references/processors.md` com os modelos de yt-dlp (só legendas, `--skip-download`), Whisper (vídeo e áudio) e pdftotext, cada um com versão e data da conferência, o aviso de rede do yt-dlp e como trocar por whisper.cpp; `assets/brain-config.yml` com os modelos comentados; `SKILL.md`: o onboarding oferece os modelos e o passo 2 do fluxo de guardar usa o processador (SPEC-0022).
+
+### Fixed
+- Revisão dos processadores: o `run_processor` roda o processador na própria sessão/grupo de processos e, no `timeout` (ou em qualquer erro no meio da execução), encerra o grupo inteiro (`os.killpg` com `SIGKILL` no POSIX; `kill` no Windows), inclusive os netos (ex.: o `ffmpeg` que o Whisper chama) (SPEC-0022, ADR-0009).
+- `process --out ARQ` nunca sobrescreve: ARQ que já existe sai com 2 ("já existe: <ARQ>"), ARQ dentro do vault sai com 2 sem gravar nada, e a gravação usa criação exclusiva (SPEC-0022).
+- `references/processors.md`: a seção do pdf cita a página de manual do `pdftotext` lida em manpages.debian.org (cópia da página upstream, poppler 26.07.0, 2026-10-30, não executado nesta máquina) e a do Whisper diz que o `ffmpeg` no PATH é pré-requisito (SPEC-0022).
+
 ## [2026.10.5] - 2026-10-30
 
 ### Added
