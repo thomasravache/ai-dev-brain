@@ -123,4 +123,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-10-30 | O AVISO do `doctor` olha a pasta do vault e de `files` e também a pasta que contém cada uma; é uma linha AVISO própria | IMP-01: a §3 falava só da última pasta, mas o IT-02 (`.../SecondBrain/vault`) espera o aviso sobre `SecondBrain` | Nenhuma | thomas (2026-10-30) |
-| 3 | 2026-10-30 | Colisão de nomes depois do kebab sai com 2; partes iniciais já mapeadas no `layout`/`para` ficam como estão; mensagem e doc sobre letras a–z e dígitos; teste IT-03 | Revisão G4: contextos se sobrescreviam ou duplicavam só pela caixa, e o kebab criava `projects/` paralelo a uma `Projects/` mapeada | Nenhuma | |
+| 3 | 2026-10-30 | Colisão de nomes depois do kebab sai com 2; partes iniciais já mapeadas no `layout`/`para` ficam como estão; mensagem e doc sobre letras a–z e dígitos; teste IT-03 | Revisão G4: contextos se sobrescreviam ou duplicavam só pela caixa, e o kebab criava `projects/` paralelo a uma `Projects/` mapeada | Nenhuma | thomas (2026-10-30) |
