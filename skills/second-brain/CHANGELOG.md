@@ -9,6 +9,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.5] - 2026-10-30
+
+### Added
+- Inbox no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.5): `capture TEXTO [--context C] [--json]` cria a nota rápida `inbox/AAAA-MM-DD-HHMMSS-<slug>.md` (`type: capture`; mesmo nome no mesmo segundo → `-1`; texto vazio sai com 2); `inbox list [--json]` lista os itens do mais antigo para o mais novo com `kind` (`text`, `link`, `file`, `syncing` para placeholders `.icloud` e arquivos de 0 bytes recentes), `size`, `age_days`, `stale` e `preview`; `inbox done ITEM [--note CAMINHO]` move um item de texto ou link já guardado para `raw/processed/AAAA-MM/` e registra a nota no log (`file` e `syncing` saem com 2) (SPEC-0021).
+- `ingest ITEM --move`: o arquivo sai da inbox para `files` em vez de ser copiado; fonte fora da inbox sai com 2 ("--move só vale para itens da inbox"). `move_out_of_inbox` é a única função que move arquivo: só de dentro da inbox, nunca sobrescreve o destino (`-1`, `-2`...) e nunca apaga (SPEC-0021, ADR-0007).
+- `inbox_stale_days` no `brain-config.yml` (padrão 7 quando ausente), visível no `config` (SPEC-0021).
+- `SKILL.md`: fluxo de processar a inbox em quatro passos; `references/inbox.md`; `references/mobile-capture.md` com a captura pelo celular em cada provedor da v1 (iOS e Android) e pelo Obsidian mobile, só com os fatos verificados do ADR-0008 (SPEC-0021).
+
 ## [2026.10.4] - 2026-10-30
 
 ### Added
