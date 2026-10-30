@@ -31,6 +31,9 @@ Melhoria pequena. `check_context_name` (`CONTEXT_NAME_RE = ^[\w][\w-]*$`) e `rel
 ## 3. Mudança Proposta
 - Nova função `kebab(name)`: minúsculas, sem acento (`fold`), e cada sequência fora de `[a-z0-9]` vira um `-`, sem traço no começo nem no fim. Exemplos: `Faculdade` → `faculdade`, `Trabalho Novo` → `trabalho-novo`, `Cálculo_II` → `calculo-ii`.
 - **Nomes de contexto** (`init --context`, `context add`) e **cada parte da pasta** de um contexto passam por `kebab`. Se o nome mudar, o comando segue e avisa "nome ajustado para kebab-case: `<de>` → `<para>`". Um nome que fica vazio depois do ajuste (só símbolos) sai com 2. O título do MOC (`--title` ou `:título`) mantém o que o usuário escreveu.
+- **Colisão (v3):** dois contextos que viram o mesmo nome em kebab-case, no mesmo `init` ou contra um contexto já gravado (comparando o kebab do nome gravado), saem com 2 antes de qualquer escrita, citando os dois nomes.
+- **Pastas já mapeadas (v3):** as partes iniciais da pasta de um contexto que coincidem com uma pasta do `layout`/`para` do vault (ex.: `Projects` mapeada por `--map projects=Projects`) ficam como estão; só as partes novas passam por `kebab`.
+- **Só letras latinas (v3):** a mensagem de nome vazio diz que o nome precisa de letras a–z ou dígitos 0–9, e `config.md` registra que nomes só com outros alfabetos (ex.: `数学`) não são aceitos.
 - **Pastas do vault com `--adopt --map`** não mudam: são pastas que já existem, e o ADR-0007 proíbe renomear o que é do usuário.
 - **Caminhos do vault e de `files`** são escolha do usuário. O onboarding do `SKILL.md` passa a sugerir nomes em kebab-case (ex.: `~/second-brain/vault` e `~/second-brain/files`), e o `doctor` mostra AVISO quando a pasta do vault, a de `files` ou a pasta que contém cada uma delas não está em kebab-case (ex.: `.../SecondBrain/vault` avisa sobre `SecondBrain`; v2). O aviso é uma linha AVISO própria, que não muda as linhas `OK vault` e `OK files` nem vira ERRO.
 - `references/config.md` e `references/vault-layout.md` documentam a regra.
@@ -47,6 +50,7 @@ NÃO muda: nomes de arquivos de nota (seguem o título, SPEC-0019), a estrutura 
 - Caracterização: N/A — os testes atuais de `init` e `context add` com nomes já em kebab-case continuam valendo.
 - **UT-01** — Dado `Faculdade`, `Trabalho Novo`, `Cálculo_II`, `--Ok--` e `???`, quando `kebab` roda, então devolve `faculdade`, `trabalho-novo`, `calculo-ii`, `ok` e vazio.
 - **IT-01** — Dado um vault novo, quando roda `init --context "Faculdade=Projects/Faculdade:Faculdade"` e depois `context add "Trabalho Novo" --folder "Areas/Trabalho Novo"`, então as pastas criadas são `projects/faculdade` e `areas/trabalho-novo`, os contextos ficam gravados como `faculdade` e `trabalho-novo` com os MOCs `mocs/faculdade.md` e `mocs/trabalho-novo.md`, a saída avisa o ajuste e o título do MOC continua "Faculdade"; e `context add "???" --folder x` sai com 2.
+- **IT-03** — (v3) Dado `init --context "Trabalho Novo=a" --context "trabalho-novo=b"`, quando roda, então sai com 2 sem escrever nada; dado um contexto gravado `Work`, quando roda `context add Work --folder Areas/Work`, então sai com 2 citando `Work`; dado um vault adotado com `--map projects=Projects`, quando roda `context add Faculdade --folder Projects/Faculdade`, então a pasta é `Projects/faculdade`; e `context add 数学 --folder x` sai com 2 com a mensagem sobre letras a–z e dígitos.
 - **IT-02** — Dado um vault adotado com `--adopt --map inbox=Inbox`, quando roda `init`, então `Inbox` não é renomeada; e dado um vault em `.../SecondBrain/vault` e um contexto gravado à mão como `Work` em `Areas/Work`, quando roda `doctor`, então mostra AVISO para a pasta do vault, o nome do contexto e a pasta, sem renomear nada.
 
 ## 5. Questões em Aberto
@@ -73,9 +77,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 2e6ace1 | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=3)) — 56a7836 | 2026-10-30 |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 80f8e87 | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 80f8e87 | 2026-10-30 |
+| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED (80f8e87; 1 high: contextos que viram o mesmo kebab se sobrescrevem; 1 medium: context add duplica contexto que só difere na caixa; 2 low) | 2026-10-30 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -119,3 +123,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-10-30 | O AVISO do `doctor` olha a pasta do vault e de `files` e também a pasta que contém cada uma; é uma linha AVISO própria | IMP-01: a §3 falava só da última pasta, mas o IT-02 (`.../SecondBrain/vault`) espera o aviso sobre `SecondBrain` | Nenhuma | thomas (2026-10-30) |
+| 3 | 2026-10-30 | Colisão de nomes depois do kebab sai com 2; partes iniciais já mapeadas no `layout`/`para` ficam como estão; mensagem e doc sobre letras a–z e dígitos; teste IT-03 | Revisão G4: contextos se sobrescreviam ou duplicavam só pela caixa, e o kebab criava `projects/` paralelo a uma `Projects/` mapeada | Nenhuma | |
