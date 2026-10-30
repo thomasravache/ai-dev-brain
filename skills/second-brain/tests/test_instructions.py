@@ -17,6 +17,11 @@ O que o contrato exige que esteja escrito (as checagens aceitam português ou in
     references/providers.md
         uma seção `## ` por provedor da v1, com o id no título (ex.: "## Google Drive (`google-drive`)"):
         google-drive, onedrive, icloud, local; cada seção fala de iOS e de Android.
+
+    SKILL.md (SPEC-0018:UT-05)
+        cita `brain.py search`, `brain.py related` e `brain.py links` e diz em que passo de cada fluxo usar:
+        no fluxo de guardar, `related`/`search` antes de escrever (buscar relações); no fluxo de consultar,
+        `search` para achar as notas e `links` para seguir os links (as checagens aceitam português ou inglês).
 """
 import re
 import unittest
@@ -85,6 +90,24 @@ class InstructionsTest(unittest.TestCase):
                 body = found[titles[0]]
                 self.assertIn("iOS", body)
                 self.assertIn("Android", body)
+
+
+class SearchInstructionsTest(unittest.TestCase):
+    def test_skill_md_says_when_to_use_search_related_and_links(self):
+        """SPEC-0018:UT-05"""
+        text = read(SKILL_MD)
+        for command in ("brain.py search", "brain.py related", "brain.py links"):
+            self.assertTrue(command in text, f"SKILL.md não cita `{command}` (SPEC-0018)")
+        self.assertRegex(text, r"(?is)(guardar|store|save)\b.{0,600}\b(related|search)\b.{0,300}"
+                               r"(antes de escrever|before writing)"
+                               r"|(guardar|store|save)\b.{0,600}(antes de escrever|before writing).{0,300}"
+                               r"\b(related|search)\b",
+                         "fluxo de guardar: related/search antes de escrever")
+        self.assertRegex(text, r"(?is)(consultar|query|answer)\b.{0,600}\bsearch\b",
+                         "fluxo de consultar: search")
+        self.assertRegex(text, r"(?is)(consultar|query|answer)\b.{0,600}\blinks\b.{0,200}(seguir|follow)"
+                               r"|(consultar|query|answer)\b.{0,600}(seguir|follow).{0,200}\blinks\b",
+                         "fluxo de consultar: links para seguir os links")
 
 
 if __name__ == "__main__":
