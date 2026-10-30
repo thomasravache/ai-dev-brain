@@ -35,6 +35,19 @@ Hoje cada skill é instalada copiando a sua pasta, e o usuário chama uma de cad
 5. **Marca:** nome do plugin e, num futuro distante, das skills. Renomear é migração: muda o nome visível e a descrição continua dizendo o que a skill faz (é ela que faz o agente acionar a skill); caminhos já instalados nos projetos (`tools/sdd/`, `sdd-config.yml`, bloco `sdd:start`) ficam como estão.
 6. **Proteção do "como a gente faz" (última frente):** usar a skill numa organização sem entregar o código e o método. Caminhos, do mais aberto ao mais fechado: (a) instalar menos no projeto — a CI baixa a ferramenta numa versão fixa em vez de uma cópia no repo, como o modo privado já faz para as specs; (b) **MCP remoto** hospedado, em que o cliente só tem o conector. Limite: o texto do `SKILL.md` é sempre legível quando roda localmente; só o hospedado esconde o método de verdade.
 
+### Nomes e por quê
+Decididos em 2026-10-30 (Questões em Aberto); a troca acontece só na filha de marca, bem no futuro. Tema: **partículas** — cada parte é uma partícula cujo papel na física espelha o papel dela no conjunto. Padrão das skills: `<nome>-<função>`, com a função em uma palavra em inglês, porque é o nome (com a descrição) que faz o agente entender quando usar a skill.
+
+| Parte | Nome | Partícula | Por quê |
+|---|---|---|---|
+| Marca | **Hadron** (falado) · `hadron-lab` (repositório, marketplace, domínio) · `hadron` (plugin) | hádron: partícula composta de quarks | o conjunto feito de várias partes; "lab" lembra o laboratório do LHC (o Grande Colisor de **Hádrons**) e soa como lugar de experimento e construção |
+| `sdd-management` | `gluon-spec` | glúon | o glúon segura os quarks dentro do hádron: specs, gates e aprovações seguram a entrega inteira junta |
+| `second-brain` | `photon-brain` | fóton | olhar uma estrela é ver a luz do passado, e a radiação cósmica de fundo é a memória mais antiga do universo: o fóton é memória viajando |
+| `org-atlas` | `boson-atlas` | bóson | os bósons carregam todas as interações entre partículas; o atlas mapeia as interações entre os sistemas. O glúon é o bóson que segura o hádron: o atlas mapeia todas as forças, o `gluon-spec` é a que mantém o nosso conjunto inteiro |
+| Probes (SPEC-0030) | **Muon** (capacidade; comando `probe`; `muon-probe` se virar skill) | múon | múons "radiografaram" a Grande Pirâmide e acharam uma câmara escondida sem mover uma pedra (ScanPyramids, 2017): ver por dentro sem alterar, que é o que um probe só de leitura faz |
+
+**Por que não os outros:** tema cérebro (`engrama`, `egide`, `hipocampo`, `talamo`) — sentido bom, fonética fraca; filosofia grega (`organon`, `kanon`, `hegemonikon`, `anamnesis`, `gnomon`) — as terminações em -mon/-kon lembram Pokémon; mito do labirinto (`daedala`, `eunomia`, `mneme`, `ariadne`) — o tema grego não agradou; `noether`, `higgs` — nomes de pessoas (risco de marca), e com o sufixo de função o nome não precisa explicar sozinho; `horizon`, `gaia` — fora do tema partículas; `graviton` — colide com os processadores AWS Graviton, confuso num atlas com coletor de AWS; `quark` — lembra o framework Quarkus; `pion` — biblioteca WebRTC conhecida; `neutrino` (probes) — não agradou; sufixo `-dev` na marca — soou fraco, `-lab` ficou melhor.
+
 **Não-objetivos (fora do escopo):**
 - Abandonar a instalação por cópia ou a compatibilidade com outros agentes.
 - API HTTP própria como produto separado: se houver serviço hospedado, ele é exposto como MCP remoto.
