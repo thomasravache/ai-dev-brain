@@ -9,6 +9,13 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.4] - 2026-10-30
+
+### Added
+- Fluxo de consultar no `scripts/brain.py` (`BRAIN_VERSION` 2026.10.4): `context QUERY [--context] [--hops 0..2] [--limit] [--max-chars] [--json]` monta, só lendo o vault, o pacote de notas da pergunta — o MOC do contexto primeiro, os resultados da busca pela pontuação e os vizinhos por link (saída e backlinks) por distância e título, sem repetir nota; notas inteiras até `--max-chars` (padrão 40.000), o resto em `omitted`; links quebrados em `broken`. `context add` continua igual: vale quando `add` é a primeira palavra depois de `context` (SPEC-0020).
+- Tipo de nota `answer` (`assets/templates/answer.md`, com `question`, `cites` e as seções `Question`, `Answer`, `Gaps` e `Relations`), aceito pelo `new-note --type answer` (SPEC-0020).
+- `SKILL.md`: fluxo de consultar em quatro passos (buscar com `context`, ler e seguir links, responder citando `[[nota]]` e apontando lacunas, oferecer salvar como `answer` com o sim da pessoa); `references/query-flow.md`; `references/note-types.md` com o tipo `answer` (SPEC-0020).
+
 ## [2026.10.3] - 2026-10-30
 
 ### Added
