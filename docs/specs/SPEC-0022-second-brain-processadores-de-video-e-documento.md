@@ -10,7 +10,7 @@ parent: SPEC-0016
 depends_on: [SPEC-0021]
 consumes_contract: []
 contract_version: 1
-touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/processors.md, skills/second-brain/assets/brain-config.yml, skills/second-brain/CHANGELOG.md]
+touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/processors.md, skills/second-brain/references/config.md, skills/second-brain/references/store-flow.md, skills/second-brain/assets/brain-config.yml, skills/second-brain/CHANGELOG.md]
 adrs: [ADR-0009, ADR-0007, ADR-0002]
 external: []
 size: M
