@@ -4,12 +4,14 @@
 Two configuration layers (ADR-0008): the local one, per machine, in $BRAIN_CONFIG_HOME/config.yml (vault, files,
 provider) and the shared one, synced with the vault, in <vault>/brain-config.yml (layout, contexts, processors).
 Writes to the vault only create files or append to them (ADR-0007); every write adds a line to log.md.
+search, related and links only read the vault: an in-memory scan of the notes, without an index (SPEC-0018).
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
+import math
 import ntpath
 import os
 import posixpath
@@ -17,9 +19,11 @@ import re
 import shlex
 import shutil
 import sys
+import unicodedata
+from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-BRAIN_VERSION = "2026.10.1"
+BRAIN_VERSION = "2026.10.2"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -55,6 +59,33 @@ PROVIDER_NOTES = {  # only the facts of the verified source of ADR-0008 (https:/
     "local": ("AVISO", ("pasta local não sincroniza com o celular sozinha; o Obsidian Sync funciona em todos "
                         "(references/providers.md)")),
 }
+
+# search, related and links (SPEC-0018; scoring explained in references/search.md)
+SEARCH_WEIGHTS = {"title": 3, "tags": 2, "body": 1}
+RELATED_WEIGHTS = {"terms": 0.5, "tags": 0.2, "context": 0.1, "links": 0.2}
+TWO_HOPS = 0.5  # neighborhood of a note two links away (a direct link is 1)
+SNIPPET_WIDTH, SNIPPET_LEAD = 160, 40  # snippet length and how much of it comes before the term
+REASON_TERMS = 5  # shared terms listed in the "termos:" reason
+FRONTMATTER_END_RE = re.compile(r"^(?:---|\.\.\.)[ \t\r]*$", re.MULTILINE)
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
+INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+WIKILINK_RE = re.compile(r"!?\[\[([^\[\]\n]+?)\]\]")
+HEADING_RE = re.compile(r"^#[ \t]+(.+?)[ \t#]*$")
+TAG_RE = re.compile(r"(?<!\S)#([\w/-]+)")
+TOKEN_RE = re.compile(r"[^\W_]+")
+COMBINING_RE = re.compile(r"[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]")
+STOPWORDS_TEXT = """  # Portuguese and English, already folded (no accents)
+a o as os um uma uns umas de do da dos das no na nos nas num numa em ao aos pelo pela pelos pelas por para pra
+com sem sob sobre entre ate apos e ou mas porem nem que se como mais menos muito muita muitos muitas pouco ja nao
+sim tambem so seu sua seus suas meu minha meus minhas teu tua nosso nossa dele dela deles delas este esta estes
+estas esse essa esses essas isto isso aquilo aquele aquela eu tu ele ela vos eles elas voce voces me te lhe lhes
+ser foi era sao estar estao ter tem tinha ha havia quando onde qual quais quem cujo cuja la lo
+the an and or but if of to in on at by for with from as is are was were be been being it its this that these
+those there here i you he she we they them his her their our your my not yes do does did have has had will would
+can could should so than then too very just also into over under about after before up down out what which who
+whom when where why how all any each both few more most other some such only own same
+"""
+STOPWORDS = frozenset(STOPWORDS_TEXT.split())
 
 
 class BrainError(Exception):
@@ -568,6 +599,353 @@ def add_context_text(text: str, name: str, item: dict) -> str:
     return _join(lines, text)
 
 
+# ---------------------------------------------------------------- notes, links and search (read only)
+
+def fold(text: str) -> str:
+    """Lowercase without accents (NFKD minus combining marks): "Integração" -> "integracao"."""
+    return COMBINING_RE.sub("", unicodedata.normalize("NFKD", text.lower()))
+
+
+def tokenize(text: str) -> list:
+    """Terms of a text: folded words (letters and digits) that are not Portuguese or English stopwords."""
+    return [term for term in TOKEN_RE.findall(fold(text)) if term not in STOPWORDS]
+
+
+def unique(items) -> list:
+    return list(dict.fromkeys(items))
+
+
+class Note:
+    """A note of the vault as parse_note reads it (path relative to the vault, with "/"). `terms` counts every term
+    (title, tags and body: the vector of related); title_terms, tag_terms and body_terms are the fields of search.
+    A plain class, not a dataclass: the tests load brain.py by path, outside sys.modules."""
+    __slots__ = ("body", "body_terms", "context", "frontmatter", "links", "path", "tag_terms", "tags", "terms",
+                 "title", "title_terms", "warnings")
+
+    def __init__(self, **fields):
+        for name in self.__slots__:
+            setattr(self, name, fields.get(name))
+
+    def __repr__(self) -> str:
+        return f"Note({self.path!r}, title={self.title!r})"
+
+    @property
+    def note_type(self) -> str:
+        value = self.frontmatter.get("type")
+        return value.strip() if isinstance(value, str) else ""
+
+
+def read_frontmatter(text: str):
+    """(frontmatter, body, problem): YAML between a first line "---" and the next "---" (or "..."). Invalid or
+    unclosed YAML gives {} and the problem, never an exception."""
+    first, sep, rest = text.partition("\n")
+    if first.rstrip() != "---" or not sep:
+        return {}, text, None
+    end = FRONTMATTER_END_RE.search(rest)
+    if not end:
+        return {}, text, "frontmatter sem fechamento"
+    body = rest[end.end():]
+    try:
+        data = parse_yaml(rest[:end.start()])
+    except (ValueError, IndexError, TypeError) as e:
+        return {}, body, f"frontmatter inválido ({e})"
+    return data, body, None
+
+
+def prose(body: str) -> str:
+    """Body without fenced code blocks (``` or ~~~) and inline code: where tags, links and headings count."""
+    lines, fence = [], None
+    for line in body.splitlines():
+        m = FENCE_RE.match(line)
+        if m:
+            if fence is None:
+                fence = m.group(1)
+            elif m.group(1) == fence:
+                fence = None
+            continue
+        if fence is None:
+            lines.append(line)
+    return INLINE_CODE_RE.sub(" ", "\n".join(lines))
+
+
+def link_target(raw: str) -> str:
+    """[[alvo#seção|apelido]] -> "alvo" (the "\\|" of links inside tables included)."""
+    return raw.split("|", 1)[0].split("#", 1)[0].rstrip("\\").strip()
+
+
+def frontmatter_tags(value) -> list:
+    """frontmatter.tags as a list or as a string ("a, b" or "a b"), without "#", lowercased."""
+    if isinstance(value, str):
+        value = re.split(r"[,\s]+", value)
+    if not isinstance(value, list):
+        return []
+    tags = (str(item).strip().lstrip("#").lower() for item in value)
+    return [tag for tag in tags if tag]
+
+
+def text_tags(text: str) -> list:
+    """#tags of a text (a heading "# Título" is not a tag, nor a number like "#1")."""
+    return [tag.lower() for tag in TAG_RE.findall(text) if not tag.isdigit()]
+
+
+def note_context(path: str, frontmatter: dict, contexts) -> str:
+    """frontmatter.context, else the context whose folder holds the note (the deepest one), else ""."""
+    given = frontmatter.get("context")
+    if isinstance(given, str) and given.strip():
+        return given.strip()
+    parts, best, depth = path.split("/"), "", 0
+    for name, item in (contexts if isinstance(contexts, dict) else {}).items():
+        folder = item.get("folder") if isinstance(item, dict) else None
+        if not isinstance(folder, str) or not folder.strip():
+            continue
+        folder_parts = posixpath.normpath(folder.strip().replace("\\", "/")).split("/")
+        if len(parts) > len(folder_parts) > depth and parts[:len(folder_parts)] == folder_parts:
+            best, depth = name, len(folder_parts)
+    return best
+
+
+def parse_note(path: str, text: str, contexts=None) -> Note:
+    """Note of `text` (already decoded) at `path` (relative to the vault), without I/O. contexts is the
+    values["contexts"] of load_config(); an invalid frontmatter becomes {} and a warning, never an exception."""
+    frontmatter, body, problem = read_frontmatter(text)
+    plain = prose(body)
+    title = frontmatter.get("title")
+    if not isinstance(title, str) or not title.strip():
+        heading = next((m.group(1) for m in map(HEADING_RE.match, plain.splitlines()) if m), "")
+        title = heading or posixpath.splitext(posixpath.basename(path))[0]
+    title = title.strip()
+    links = unique(target for target in (link_target(m) for m in WIKILINK_RE.findall(plain)) if target)
+    tags = unique(frontmatter_tags(frontmatter.get("tags")) + text_tags(WIKILINK_RE.sub(" ", plain)))
+    title_terms, tag_terms, body_terms = tokenize(title), tokenize(" ".join(tags)), tokenize(body)
+    return Note(path=path, title=title, frontmatter=frontmatter, tags=tags, links=links,
+                context=note_context(path, frontmatter, contexts), terms=Counter(title_terms + tag_terms + body_terms),
+                body=body, title_terms=Counter(title_terms), tag_terms=Counter(tag_terms),
+                body_terms=Counter(body_terms), warnings=[f"{path}: {problem} — lida sem frontmatter"] if problem else [])
+
+
+def _link_key(target: str) -> str:
+    key = target.strip().replace("\\", "/")
+    while key.startswith(("./", "/")):
+        key = key[1:] if key.startswith("/") else key[2:]
+    if key.lower().endswith(".md"):
+        key = key[:-3]
+    return key.lower()
+
+
+class LinkIndex:
+    """Obsidian-like resolution of [[links]] over the note paths, with dicts built once (one lookup per link)."""
+
+    def __init__(self, paths):
+        self.by_path, self.by_name = {}, {}
+        for path in sorted(set(paths), key=lambda p: (len(p), p)):  # shortest path first: it wins the ties
+            key = _link_key(path)
+            self.by_path.setdefault(key, path)
+            self.by_name.setdefault(key.rsplit("/", 1)[-1], []).append(path)
+
+    def resolve(self, target: str):
+        """Path of the note or None (broken). With "/" = path relative to the vault (with or without .md, or its
+        ending); without = file name, ignoring case; several candidates = the shortest path."""
+        key = _link_key(target)
+        if not key:
+            return None
+        if "/" not in key:
+            found = self.by_name.get(key)
+            return found[0] if found else None
+        if key in self.by_path:
+            return self.by_path[key]
+        suffix = "/" + key
+        return next((p for p in self.by_name.get(key.rsplit("/", 1)[-1], ()) if _link_key(p).endswith(suffix)), None)
+
+
+def resolve_link(target: str, paths):
+    """Path of the note a link points to, or None (broken); paths = the Note.path of the vault or a LinkIndex."""
+    index = paths if isinstance(paths, LinkIndex) else LinkIndex(paths)
+    return index.resolve(target)
+
+
+def ignored_dir(rel: str, templates: str) -> bool:
+    """.obsidian/, .trash/ (and any other hidden folder, which Obsidian does not index) and layout.templates."""
+    return posixpath.basename(rel).startswith(".") or rel == templates
+
+
+def read_note(path: Path, rel: str, contexts) -> Note:
+    """Note on disk: a file that is not UTF-8 is read with errors="replace" and gets a warning."""
+    problem = None
+    try:
+        data = path.read_bytes()
+    except OSError as e:
+        data, problem = b"", f"não consegui ler ({e.strerror or e})"
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text, problem = data.decode("utf-8", errors="replace"), "não é UTF-8 — lida com caracteres substituídos"
+    note = parse_note(rel, text, contexts)
+    if problem:
+        note.warnings.insert(0, f"{rel}: {problem}")
+    return note
+
+
+def scan_vault(config: dict) -> list:
+    """Every .md note of the vault of load_config(), in path order, except .obsidian/, .trash/ and the
+    layout.templates folder. Only reads; the problems of each note are in Note.warnings."""
+    values = config["values"]
+    vault = Path(values["vault"]) if values["vault"] else None
+    if vault is None or not vault.is_dir():
+        raise BrainError(f"vault não encontrado: {values['vault'] or '(sem vault na configuração local)'}", 1)
+    templates = posixpath.normpath(str(values["layout"]["templates"]).replace("\\", "/"))
+    contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
+    notes = []
+    for root, dirs, files in os.walk(vault):
+        base = Path(root).relative_to(vault).as_posix()
+        prefix = "" if base == "." else base + "/"
+        dirs[:] = sorted(d for d in dirs if not ignored_dir(prefix + d, templates))
+        for name in sorted(files):
+            if name.lower().endswith(".md"):
+                notes.append(read_note(Path(root) / name, prefix + name, contexts))
+    return notes
+
+
+def inverse_frequency(df: int, total: int) -> float:
+    return math.log(1 + total / df) if df else 0.0
+
+
+def first_match(text: str, terms) -> int:
+    """Index in text of the first term (compared folded), or -1."""
+    folded, origin = [], []
+    for i, char in enumerate(text):
+        piece = char.lower() if char < "\x80" else fold(char)
+        folded.append(piece)
+        origin.extend([i] * len(piece))
+    joined = "".join(folded)
+    best = -1
+    for term in terms:
+        m = re.search(rf"(?<![^\W_]){re.escape(term)}(?![^\W_])", joined)
+        if m and (best < 0 or origin[m.start()] < best):
+            best = origin[m.start()]
+    return best
+
+
+def make_snippet(note: Note, terms) -> str:
+    """Up to SNIPPET_WIDTH characters of the body around the first query term (the start of the body without it)."""
+    flat = " ".join(note.body.split()) or note.title
+    pos = max(first_match(flat, terms), 0)
+    start = max(0, min(pos - SNIPPET_LEAD, len(flat) - SNIPPET_WIDTH))
+    piece = flat[start:start + SNIPPET_WIDTH]
+    if start > 0:
+        piece = "…" + piece[1:]
+    if start + SNIPPET_WIDTH < len(flat):
+        piece = piece[:-1] + "…"
+    return piece
+
+
+def search(notes: list, query: str, context=None, note_type=None, tag=None, limit=10) -> list:
+    """Notes of the query by score: sum per query term of tf * idf, weighting title 3, tags 2 and body 1.
+    Only score > 0, descending; filters by context, frontmatter.type and tag."""
+    terms = unique(tokenize(query))
+    if not terms:
+        return []
+    idf = {term: inverse_frequency(sum(1 for n in notes if term in n.terms), len(notes)) for term in terms}
+    wanted_type = fold(note_type.strip()) if note_type else None
+    wanted_tag = tag.strip().lstrip("#").lower() if tag else None
+    scored = []
+    for note in notes:
+        if ((context and note.context != context) or (wanted_type and fold(note.note_type) != wanted_type)
+                or (wanted_tag and wanted_tag not in note.tags)):
+            continue
+        score = sum(idf[t] * (SEARCH_WEIGHTS["title"] * note.title_terms[t] + SEARCH_WEIGHTS["tags"] * note.tag_terms[t]
+                              + SEARCH_WEIGHTS["body"] * note.body_terms[t]) for t in terms if t in note.terms)
+        if score > 0:
+            scored.append((score, note))
+    scored.sort(key=lambda item: (-item[0], item[1].path))
+    return [{"path": note.path, "title": note.title, "score": round(score, 3), "snippet": make_snippet(note, terms),
+             "context": note.context or None, "type": note.note_type or None}
+            for score, note in scored[:limit]]
+
+
+def link_graph(notes: list, index: LinkIndex) -> dict:
+    """Undirected neighborhood of each note: the notes it links to and the ones that link to it."""
+    graph = {note.path: set() for note in notes}
+    for note in notes:
+        for target in note.links:
+            dest = index.resolve(target)
+            if dest and dest != note.path:
+                graph[note.path].add(dest)
+                graph[dest].add(note.path)
+    return graph
+
+
+def related(notes: list, note=None, text=None, limit=10) -> list:
+    """Notes like `note` (a Note.path) or like a free `text`, by 0.5 * TF-IDF cosine + 0.2 * tag Jaccard
+    + 0.1 * same context + 0.2 * neighborhood (1 direct link, 0.5 two hops). Excludes the note itself; descending;
+    each result says why (reasons)."""
+    index = LinkIndex(n.path for n in notes)
+    graph = link_graph(notes, index)
+    if note is not None:
+        ref = next((n for n in notes if n.path == note), None)
+        if ref is None:
+            raise BrainError(f"nota não encontrada: {note}")
+        direct = graph[ref.path]
+    else:
+        ref = parse_note("", text or "")
+        direct = {index.resolve(target) for target in ref.links} - {None}
+    two_hops = set().union(*(graph[p] for p in direct)) - direct - {ref.path} if direct else set()
+
+    df = Counter()
+    for n in notes:
+        df.update(n.terms.keys())
+    idf = {term: inverse_frequency(count, len(notes)) for term, count in df.items()}
+    ref_vector = {t: tf * idf[t] for t, tf in ref.terms.items() if t in idf}
+    ref_norm = math.sqrt(sum(w * w for w in ref_vector.values()))
+    ref_tags = set(ref.tags)
+
+    scored = []
+    for n in notes:
+        if n.path == ref.path:
+            continue
+        shared = ref_vector.keys() & n.terms.keys() if ref_norm else set()
+        contributions = {t: ref_vector[t] * n.terms[t] * idf[t] for t in shared}
+        cosine = 0.0
+        if contributions:
+            norm = math.sqrt(sum((tf * idf[t]) ** 2 for t, tf in n.terms.items()))
+            cosine = sum(contributions.values()) / (ref_norm * norm)
+        common_tags = [tag for tag in ref.tags if tag in n.tags]
+        jaccard = len(common_tags) / len(ref_tags | set(n.tags)) if common_tags else 0.0
+        same_context = bool(ref.context) and n.context == ref.context
+        neighborhood = 1.0 if n.path in direct else TWO_HOPS if n.path in two_hops else 0.0
+        score = (RELATED_WEIGHTS["terms"] * cosine + RELATED_WEIGHTS["tags"] * jaccard
+                 + RELATED_WEIGHTS["context"] * same_context + RELATED_WEIGHTS["links"] * neighborhood)
+        if score > 0:
+            scored.append((score, n, common_tags, same_context, neighborhood, contributions))
+    scored.sort(key=lambda item: (-item[0], item[1].path))
+    return [{"path": n.path, "title": n.title, "score": round(score, 4),
+             "reasons": related_reasons(common_tags, same_context, neighborhood, contributions)}
+            for score, n, common_tags, same_context, neighborhood, contributions in scored[:limit]]
+
+
+def related_reasons(common_tags, same_context, neighborhood, contributions) -> list:
+    reasons = []
+    if common_tags:
+        reasons.append("tags: " + ", ".join(common_tags))
+    if same_context:
+        reasons.append("mesmo contexto")
+    if neighborhood:
+        reasons.append("link direto" if neighborhood == 1.0 else "link a dois passos")
+    if contributions:
+        top = sorted(contributions, key=lambda t: (-contributions[t], t))[:REASON_TERMS]
+        reasons.append("termos: " + ", ".join(top))
+    return reasons
+
+
+def note_links(notes: list, path: str, index: LinkIndex) -> dict:
+    """Outgoing links of the note at `path` (resolved or None), its backlinks and its broken targets."""
+    note = next(n for n in notes if n.path == path)
+    outgoing = [{"target": target, "path": index.resolve(target)} for target in note.links]
+    backlinks = sorted(n.path for n in notes
+                       if n.path != path and any(index.resolve(target) == path for target in n.links))
+    return {"outgoing": outgoing, "backlinks": backlinks,
+            "broken": [item["target"] for item in outgoing if item["path"] is None]}
+
+
 # ---------------------------------------------------------------- commands
 
 def parse_pairs(values, flag: str) -> list:
@@ -825,6 +1203,93 @@ def cmd_doctor(as_json: bool, config_home=None) -> int:
     return code
 
 
+def check_limit(limit: int):
+    if limit < 1:
+        raise BrainError(f"--limit precisa ser maior que zero: {limit}")
+
+
+def load_notes(config_home=None):
+    """(notes, warnings) of the configured vault; without local configuration, BrainError(NOT_CONFIGURED, 3)."""
+    notes = scan_vault(load_config(config_home))
+    return notes, [warning for note in notes for warning in note.warnings]
+
+
+def print_json(data: dict):
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def print_warnings(warnings: list):
+    for warning in warnings:
+        print(f"aviso: {warning}", file=sys.stderr)
+
+
+def find_note(ref: str, index: LinkIndex) -> str:
+    """Path of the note named by a path or a name (resolve_link); not found = BrainError (exit 2)."""
+    path = index.resolve(ref)
+    if path is None:
+        raise BrainError(f"nota não encontrada: {ref}")
+    return path
+
+
+def cmd_search(args, config_home=None) -> int:
+    check_limit(args.limit)
+    query = " ".join(args.query)
+    notes, warnings = load_notes(config_home)
+    results = search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit)
+    if args.json:
+        print_json({"query": query, "results": results, "warnings": warnings})
+        return 0
+    print_warnings(warnings)
+    if not results:
+        print(f"Nenhuma nota encontrada para: {query}")
+    for result in results:
+        print(f"{result['score']:.2f}  {result['path']}  — {result['title']}")
+        if result["snippet"]:
+            print(f"    {result['snippet']}")
+    return 0
+
+
+def cmd_related(args, config_home=None) -> int:
+    check_limit(args.limit)
+    notes, warnings = load_notes(config_home)
+    if args.note is not None:
+        path = find_note(args.note, LinkIndex(n.path for n in notes))
+        results = related(notes, note=path, limit=args.limit)
+    else:
+        results = related(notes, text=args.text, limit=args.limit)
+    if args.json:
+        print_json({"results": results, "warnings": warnings})
+        return 0
+    print_warnings(warnings)
+    if not results:
+        print("Nenhuma nota relacionada encontrada.")
+    for result in results:
+        print(f"{result['score']:.2f}  {result['path']}  — {result['title']}")
+        print(f"    {'; '.join(result['reasons'])}")
+    return 0
+
+
+def cmd_links(args, config_home=None) -> int:
+    notes, warnings = load_notes(config_home)
+    index = LinkIndex(n.path for n in notes)
+    path = find_note(args.note, index)
+    data = note_links(notes, path, index)
+    if args.json:
+        print_json(dict(data, warnings=warnings))
+        return 0
+    print_warnings(warnings)
+    print(f"Links de saída de {path} ({len(data['outgoing'])}):")
+    for item in data["outgoing"]:
+        print(f"  {item['target']} → {item['path'] or 'quebrado'}")
+    print(f"Backlinks ({len(data['backlinks'])}):")
+    for backlink in data["backlinks"]:
+        print(f"  {backlink}")
+    print(f"Quebrados ({len(data['broken'])}):")
+    for target in data["broken"]:
+        print(f"  {target}")
+    return 0
+
+
 # ---------------------------------------------------------------- cli
 
 def main(argv=None) -> int:
@@ -852,6 +1317,22 @@ def main(argv=None) -> int:
     p.add_argument("--title", help="título do MOC (padrão: o nome)")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("search", help="busca por termos, com pontuação (título 3, tags 2, corpo 1); só leitura")
+    p.add_argument("query", nargs="+", metavar="QUERY")
+    p.add_argument("--context", help="só notas deste contexto")
+    p.add_argument("--type", help="só notas com este frontmatter.type")
+    p.add_argument("--tag", help="só notas com esta tag")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("related", help="notas parecidas com uma nota ou com um texto, com os motivos; só leitura")
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--note", metavar="CAMINHO", help="caminho (ou nome) da nota de referência")
+    group.add_argument("--text", metavar="TEXTO", help="texto livre de referência")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("links", help="links de saída, backlinks e links quebrados de uma nota; só leitura")
+    p.add_argument("note", metavar="NOTA", help="caminho ou nome da nota")
+    p.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -863,6 +1344,12 @@ def main(argv=None) -> int:
             return cmd_context_add(args)
         if args.command == "doctor":
             return cmd_doctor(args.json)
+        if args.command == "search":
+            return cmd_search(args)
+        if args.command == "related":
+            return cmd_related(args)
+        if args.command == "links":
+            return cmd_links(args)
     except BrainError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
