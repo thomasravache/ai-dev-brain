@@ -6,7 +6,7 @@ type: feature
 status: proposed
 created: 2026-10-30
 depends_on: []
-adrs: [ADR-0010]
+adrs: [ADR-0010, ADR-0011, ADR-0012]
 external: []
 approved_by:
 approved_at:
@@ -16,7 +16,7 @@ approved_at:
 
 <!-- type: feature | migration | foundation (produto novo: ver references/greenfield.md). O épico não é executado: define visão, decisões, decomposição e entrega. Quem executa são as specs filhas (tier full ou lite, tamanho S/M, `parent: SPEC-0029`). A ordem de execução é calculada a partir do frontmatter das filhas (`spec_graph.py waves`). -->
 
-> Rascunho de radar (2026-10-30): registra o desenho conversado com o thomas. As filhas são criadas depois que as Questões em Aberto forem respondidas.
+> Desenho conversado com o thomas em 2026-10-30; filhas SPEC-0032 a SPEC-0041.
 
 ## 1. Visão
 Uma terceira skill no `ai-dev-brain`, a `org-atlas`, que **varre como uma organização desenvolve e opera software** e gera um atlas versionado para os agentes usarem. A skill não é de uma empresa: funciona em qualquer organização e aprende os padrões dela. O atlas cobre vários repositórios, a infraestrutura, os dados, o processo e as convenções, e principalmente **como as peças se ligam** (o serviço A grava no banco B e publica na fila C, que o serviço D consome).
@@ -68,26 +68,27 @@ Desenho:
 
 **Decisões (ADRs):**
 - ADR-0010 — fronteiras da skill: script único stdlib, sem import entre skills, só coletores declarados, sem rede própria, só metadados, redaction, regiões geradas.
-- A criar antes do H1: modelo neutro e contrato dos coletores (formato e versão do JSON); política de curadoria (`inferred` → `confirmed`).
+- ADR-0011 — modelo neutro do atlas e contrato dos coletores (JSON na saída padrão, tipos fechados, versão `org-atlas/collector@1`).
+- ADR-0012 — curadoria: `inferred` → `confirmed`/`rejected` só por humano, com quem e por onde.
 
-**Regras de arquitetura a garantir (G3):** as do ADR-0010, em `skills/org-atlas/tests/test_architecture.py` (criado pela primeira filha).
+**Regras de arquitetura a garantir (G3):** as do ADR-0010, em `skills/org-atlas/tests/test_architecture.py` (SPEC-0032:UT-05, estendido aos coletores pela SPEC-0034); as do ADR-0011 pelos testes de contrato (SPEC-0033:CT-01, SPEC-0034:CT-01, SPEC-0035:CT-01); as do ADR-0012 por SPEC-0037:UT-04.
 
 ## 4. Decomposição
 <!-- Uma linha por spec filha. As colunas de dependência são informativas: a fonte da verdade é o frontmatter de cada filha. -->
-Planejada (as filhas ganham ID com `new --parent SPEC-0029` depois das respostas da seção 8):
-
 | Spec | Título | Tier | Tipo | Tamanho | Depende de | Consome contrato de |
 |---|---|---|---|---|---|---|
-| a criar | Esqueleto: `atlas.py`, configuração em duas camadas, `init`, `doctor`, testes de arquitetura e CI | full | feature | M | — | — |
-| a criar | Modelo neutro, contrato dos coletores, `scan` com snapshots e diff | full | feature | M | esqueleto | — |
-| a criar | Coletores de código (GitHub e `generic`): repos, stack, CI, histórico de PRs | full | feature | M | — | contrato dos coletores |
-| a criar | Coletores de entrega (Argo CD e `generic`): apps, ambientes, configuração | full | feature | M | — | contrato dos coletores |
-| a criar | Cruzamento de fontes: `graph.json`, `services/`, `platform/` | full | feature | M | scan | — |
-| a criar | Curadoria: `curate`, `inferred` → `confirmed` | full | feature | S | cruzamento | — |
-| a criar | `context QUERY` com aviso de envelhecimento | full | feature | S | cruzamento | — |
-| a criar | `lint`: fato velho, referência quebrada, segredo vazado, convenção sem confirmação | full | feature | S | cruzamento | — |
-| a criar | Modo repositório (`vendor --ci` com scan agendado abrindo PR) e modo local | full | feature | S | scan | — |
-| a criar | `sdd-management`: chave `org_context` e DISCOVER usando `atlas.py context` | lite | feature | S | context | — |
+| SPEC-0032 | Esqueleto: `atlas.py`, configuração em duas camadas, `init`, `doctor`, testes de arquitetura e CI | full | feature | M | — | — |
+| SPEC-0033 | `scan`: contrato dos coletores, snapshots, diff e redaction | full | feature | M | SPEC-0032 | — |
+| SPEC-0034 | Coletores `generic` e GitHub | full | feature | M | SPEC-0032 | SPEC-0033@1 |
+| SPEC-0035 | Coletor Argo CD | full | feature | M | SPEC-0032 | SPEC-0033@1 |
+| SPEC-0036 | Cruzamento de fontes, `graph.json` e páginas geradas | full | feature | M | SPEC-0033 | — |
+| SPEC-0037 | Curadoria de convenções (`curate`) | full | feature | M | SPEC-0036 | — |
+| SPEC-0038 | `context` com aviso de envelhecimento | full | feature | S | SPEC-0036 | SPEC-0037@1 |
+| SPEC-0039 | `lint` do atlas | full | feature | S | SPEC-0036 | SPEC-0037@1 |
+| SPEC-0040 | Modo repositório (scan agendado com PR) e modo local | full | feature | S | SPEC-0039 | — |
+| SPEC-0041 | `sdd-management`: `org_context` no DISCOVER | lite | feature | S | SPEC-0038 | — |
+
+Os coletores (SPEC-0034, SPEC-0035) só consomem o contrato da SPEC-0033 e mexem em arquivos próprios, mas todas as filhas atualizam o `CHANGELOG.md` da skill, então o `waves` as coloca uma de cada vez. A SPEC-0041 mexe só na `sdd-management`.
 
 **Fase 2 (pós-MVP, mesmo épico ou épico novo):** coletores de nuvem (ex.: AWS, GCP, Azure — inventário só de metadados), runtime (ex.: Kubernetes), dados (schemas: ex.: PostgreSQL, MySQL, MongoDB, com dono por tabela e colunas sensíveis marcadas para a SPEC-0030), mensageria, observabilidade, tracker e documentação (ex.: Jira, Linear, Confluence, ADRs e runbooks).
 
@@ -107,13 +108,12 @@ Planejada (as filhas ganham ID com `new --parent SPEC-0029` depois das respostas
 
 ## 7. Critérios de Aceite do Épico
 <!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-Os IDs dos testes entram quando as filhas forem criadas.
-- [ ] Uma organização com coletores de código e entrega declarados gera o atlas e o grafo de dependências entre aplicações — teste a definir
-- [ ] Um segundo scan mostra só o que mudou — teste a definir
-- [ ] Nenhum valor de segredo chega ao atlas, e um segredo plantado num coletor é mascarado e acusado pelo `lint` — teste a definir
-- [ ] O `context` de uma tarefa traz os serviços, dados e convenções certos e avisa quando o atlas está velho — teste a definir
-- [ ] Convenção inferida só vira regra depois de confirmada — teste a definir
-- [ ] Com `org_context`, o DISCOVER da `sdd-management` usa o atlas; sem a chave, nada muda — teste a definir
+- [ ] Uma organização com coletores de código e entrega declarados gera o atlas e o grafo de dependências entre aplicações — SPEC-0036:IT-01
+- [ ] Um segundo scan mostra só o que mudou — SPEC-0033:IT-02
+- [ ] Nenhum valor de segredo chega ao atlas, e um segredo colado à mão é acusado pelo `lint` — SPEC-0033:IT-03, SPEC-0039:IT-02
+- [ ] O `context` de uma tarefa traz os serviços, dados e convenções certos e avisa quando o atlas está velho — SPEC-0038:IT-03, SPEC-0038:IT-02
+- [ ] Convenção inferida só vira regra depois de confirmada — SPEC-0037:IT-02, SPEC-0037:UT-04
+- [ ] Com `org_context`, o DISCOVER da `sdd-management` usa o atlas; sem a chave, nada muda — SPEC-0041:UT-01, SPEC-0041:UT-02
 
 ## 8. Questões em Aberto
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
