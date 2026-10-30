@@ -1,0 +1,18 @@
+# second-brain — configuração compartilhada padrão (copiada para <vault>/brain-config.yml pelo init).
+# Sincroniza com o vault: só caminhos relativos ao vault, nunca absolutos (ADR-0008). Detalhes: references/config.md
+version: 1
+language: auto            # idioma do conteúdo das notas; a estrutura do vault é sempre em inglês
+layout:                   # pastas e arquivos da skill, relativos ao vault
+  inbox: inbox
+  raw: raw
+  mocs: mocs
+  templates: templates
+  index: index.md
+  log: log.md
+para:                     # pastas do método PARA
+  projects: projects
+  areas: areas
+  resources: resources
+  archive: archive
+contexts: {}              # nome → {folder: pasta relativa, title: título do MOC}
+processors: {}            # tipo → {command: "executável {input} {output}"} (ADR-0009)
