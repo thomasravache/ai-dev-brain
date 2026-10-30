@@ -4,7 +4,7 @@ title: "second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e S
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0020]
