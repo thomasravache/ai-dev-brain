@@ -13,6 +13,8 @@ process, ingest and doctor run the processors declared in brain-config.yml; run_
 that runs an external process: without a shell, in a temporary folder, with a timeout (SPEC-0022, ADR-0009).
 lint only reads: each rule is a check_<rule> function over a single scan of the vault; it never fixes nor deletes
 (SPEC-0023, ADR-0007).
+export-notebooklm only reads the vault: it writes the package of a MOC to an empty folder outside it, creating each
+file exclusively, and does not touch log.md (SPEC-0024).
 """
 from __future__ import annotations
 
@@ -37,7 +39,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.7"
+BRAIN_VERSION = "2026.10.8"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -78,7 +80,8 @@ PROVIDER_NOTES = {  # only the facts of the verified source of ADR-0008 (https:/
 # search, related and links (SPEC-0018; scoring explained in references/search.md)
 SEARCH_WEIGHTS = {"title": 3, "tags": 2, "body": 1}
 RELATED_WEIGHTS = {"terms": 0.5, "tags": 0.2, "context": 0.1, "links": 0.2}
-MAX_HOPS = 2  # context: link steps from the search results
+MAX_HOPS = 2  # context: link steps from the search results; export-notebooklm: from the notes the MOC cites
+EXPORT_EXTRA = ("sources.md", "combined.md")  # export-notebooklm files that are not notes
 TWO_HOPS = 0.5  # neighborhood of a note two links away (a direct link is 1)
 SNIPPET_WIDTH, SNIPPET_LEAD = 160, 40  # snippet length and how much of it comes before the term
 REASON_TERMS = 5  # shared terms listed in the "termos:" reason
@@ -1141,6 +1144,92 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     return {"query": query, "notes": package, "omitted": omitted, "broken": broken}
 
 
+# ---------------------------------------------------------------- export: NotebookLM package (pure; SPEC-0024)
+
+def flatten_links(text: str) -> str:
+    """Wikilinks as plain text ([[Nota]] -> "Nota", [[Nota|apelido]] -> "apelido", [[Nota#seção]] -> "Nota >
+    seção") and attachment embeds as "(anexo: nome)" (![[grafico.png]]); the rest of the text does not change."""
+    def plain(match) -> str:
+        target, _, alias = match.group(1).partition("|")
+        target = target.rstrip("\\").strip()
+        page, _, section = target.partition("#")
+        page, section = page.strip(), section.strip()
+        name = posixpath.basename(page)
+        if match.group(0).startswith("!") and posixpath.splitext(name)[1].lower() not in ("", ".md"):
+            return f"(anexo: {name})"
+        if alias.strip():
+            return alias.strip()
+        return f"{page} > {section}" if page and section else page or section
+    return WIKILINK_RE.sub(plain, text)
+
+
+def export_notes(notes: list, moc: str, hops: int, values=None) -> list:
+    """[(path, origin)] of the NotebookLM package of the MOC at `moc`: the MOC, the notes it cites (in its order)
+    and their link neighbors up to `hops` steps, by distance and title (neighbors of build_context). The MOC is
+    never walked through, nor the generated index.md and log.md: notes reached only through them stay out."""
+    by_path = {note.path: note for note in notes}
+    index = LinkIndex(by_path)
+    layout = values["layout"] if values else {"index": "index.md", "log": "log.md"}
+    blocked = [moc] + layout_paths(layout, LAYOUT_FILES)
+    cited = unique(path for path in (index.resolve(target) for target in by_path[moc].links)
+                   if path and path not in blocked)
+    found = neighbors(cited, link_graph(notes, index), hops, blocked) if cited and hops > 0 else {}
+    picked = [(moc, "MOC")] + [(path, "citada pelo MOC") for path in cited]
+    picked += [(path, f"link:{distance}")
+               for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
+                                                                              item[0]))]
+    return picked
+
+
+def export_text(note: Note) -> str:
+    """The note for the NotebookLM: the title as the first line (no frontmatter), the body without the
+    brain:begin/end markers and with flatten_links."""
+    lines = [line for line in (note.body or "").splitlines() if not re.match(r"^\s*<!-- brain:(?:begin|end) ", line)]
+    body = flatten_links("\n".join(lines)).strip()
+    title = flatten_links(note.title)
+    first = body.splitlines()[0] if body else ""
+    heading = HEADING_RE.match(first)
+    if not (heading and heading.group(1).strip() == title):
+        body = f"# {title}\n\n{body}" if body else f"# {title}"
+    return body + "\n"
+
+
+def export_name(title: str, path: str, taken: set) -> str:
+    """File name of an exported note: the sanitized title (else the vault file name), with " (2)", " (3)"... when
+    the name, ignoring case, is already taken (by another note, sources.md or combined.md)."""
+    try:
+        stem = sanitize_title(title)
+    except BrainError:
+        stem = posixpath.splitext(posixpath.basename(path))[0]
+    name, n = f"{stem}.md", 1
+    while name.lower() in taken:
+        n += 1
+        name = f"{stem} ({n}).md"
+    taken.add(name.lower())
+    return name
+
+
+def export_package(notes: list, moc: str, hops: int, values=None) -> dict:
+    """{"notes": [{"path", "title", "origin", "file"}], "files": {name: text}}: one .md per note of export_notes,
+    sources.md (where each one came from) and combined.md (every note in one file; dropped without --combined)."""
+    by_path = {note.path: note for note in notes}
+    taken = {name.lower() for name in EXPORT_EXTRA}
+    items, files = [], {}
+    for path, origin in export_notes(notes, moc, hops, values):
+        note = by_path[path]
+        name = export_name(note.title, path, taken)
+        files[name] = export_text(note)
+        items.append({"path": path, "title": note.title, "origin": origin, "file": name})
+    moc_title = flatten_links(by_path[moc].title)
+    lines = [f"# Fontes — {moc_title}", "", f"Pacote para o NotebookLM exportado do MOC {moc} (hops: {hops}).", ""]
+    lines += [f"- {item['file']} — {flatten_links(item['title'])} — {item['path']} ({item['origin']})"
+              for item in items]
+    files["sources.md"] = "\n".join(lines) + "\n"
+    files["combined.md"] = (f"# {moc_title} — todas as notas\n\n"
+                            + "\n---\n\n".join(files[item["file"]] for item in items))
+    return {"notes": items, "files": files}
+
+
 # ---------------------------------------------------------------- store: note paths, relations, regions (pure)
 
 def inside_vault(folder, what: str) -> str:
@@ -1764,6 +1853,60 @@ def cmd_context(args, config_home=None) -> int:
         print("Links quebrados:")
         for item in data["broken"]:
             print(f"  {item['note']} → {item['target']}")
+    return 0
+
+
+def find_moc(ref: str, values: dict, index: LinkIndex) -> str:
+    """Path of the MOC named by a context name (<layout.mocs>/<name>.md) or by a note path or name."""
+    if CONTEXT_NAME_RE.match(ref):
+        path = index.resolve(moc_path(ref, values))
+        if path:
+            return path
+    path = index.resolve(ref)
+    if path is None:
+        raise BrainError(f"MOC não encontrado: {ref}")
+    return path
+
+
+def export_folder(out: str, vault: Path) -> Path:
+    """--out resolved: inside the vault or already with files = BrainError(code 2), before anything is written."""
+    folder = Path(out).expanduser().resolve()
+    if is_inside(str(folder), str(vault.expanduser().resolve())):
+        raise BrainError(f"--out dentro do vault: {out} — o export-notebooklm não escreve no vault")
+    if folder.exists() and not folder.is_dir():
+        raise BrainError(f"--out não é uma pasta: {out}")
+    if folder.is_dir() and any(entry.name not in OS_METADATA for entry in folder.iterdir()):
+        raise BrainError(f"--out já tem arquivos: {out} — o export-notebooklm nunca sobrescreve; use uma pasta vazia")
+    return folder
+
+
+def cmd_export_notebooklm(args, config_home=None) -> int:
+    if not 0 <= args.hops <= MAX_HOPS:
+        raise BrainError(f"--hops precisa estar entre 0 e {MAX_HOPS}: {args.hops}")
+    values, notes, warnings = load_vault(config_home)
+    folder = export_folder(args.out, vault_dir(values))
+    moc = find_moc(args.moc, values, LinkIndex(note.path for note in notes))
+    data = export_package(notes, moc, args.hops, values)
+    files = {name: text for name, text in data["files"].items() if args.combined or name != "combined.md"}
+    folder.mkdir(parents=True, exist_ok=True)
+    for name, text in files.items():  # exclusive create: nothing is ever overwritten
+        try:
+            with open(folder / name, "x", encoding="utf-8") as handle:
+                handle.write(text)
+        except FileExistsError as e:
+            raise BrainError(f"já existe: {folder / name}") from e
+        except OSError as e:
+            raise BrainError(f"não consegui gravar {folder / name}: {e.strerror or e}", 1) from e
+    if args.json:
+        print_json({"moc": moc, "out": str(folder), "notes": data["notes"], "files": list(files),
+                    "warnings": warnings})
+        return 0
+    print_warnings(warnings)
+    print(f"Pacote do NotebookLM: {len(data['notes'])} notas de {moc} em {one_line(str(folder))}")
+    for item in data["notes"]:
+        print(f"  {item['file']} — {item['path']} ({item['origin']})")
+    print(f"  {', '.join(name for name in files if name in EXPORT_EXTRA)}")
+    print("Suba os arquivos como fontes no NotebookLM (references/notebooklm.md).")
     return 0
 
 
@@ -2788,7 +2931,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="brain.py",
         description=("Ferramentas determinísticas do second-brain: onboarding do vault, configuração, diagnóstico, "
-                     "busca, fluxo de guardar, inbox, processadores e manutenção (lint)."))
+                     "busca, fluxo de guardar, inbox, processadores, manutenção (lint) e exportação para o NotebookLM."))
     parser.add_argument("--version", action="version", version=f"second-brain {BRAIN_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("init", help="cria um vault novo, adota um existente (--adopt) ou só liga esta máquina (--join)")
@@ -2813,6 +2956,13 @@ def main(argv=None) -> int:
     p.add_argument("--max-chars", type=int, default=40000, help="soma máxima do conteúdo das notas (padrão 40000)")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("export-notebooklm", help="pacote de um MOC para subir no NotebookLM, fora do vault; só lê o vault")
+    p.add_argument("moc", metavar="MOC", help="nome do contexto (ex.: college) ou caminho do MOC no vault")
+    p.add_argument("--out", required=True, metavar="PASTA", help="pasta vazia (ou nova) fora do vault")
+    p.add_argument("--hops", type=int, default=1,
+                   help=f"passos de link a partir das notas citadas pelo MOC (0..{MAX_HOPS}, padrão 1)")
+    p.add_argument("--combined", action="store_true", help="grava também combined.md, com todas as notas")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("search", help="busca por termos, com pontuação (título 3, tags 2, corpo 1); só leitura")
     p.add_argument("query", nargs="+", metavar="QUERY")
@@ -2891,6 +3041,8 @@ def main(argv=None) -> int:
             return cmd_context(args)
         if args.command == "doctor":
             return cmd_doctor(args.json)
+        if args.command == "export-notebooklm":
+            return cmd_export_notebooklm(args)
         if args.command == "search":
             return cmd_search(args)
         if args.command == "related":
