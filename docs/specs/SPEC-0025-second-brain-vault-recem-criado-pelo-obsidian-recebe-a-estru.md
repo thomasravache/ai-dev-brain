@@ -49,15 +49,15 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01 e IT-01 com a tag `SPEC-0025:<ID>`, falhando pelo motivo certo
-- [ ] Green: pasta só com `.obsidian/` conta como vazia; `SKILL.md` e `vault-layout.md` citam o caso
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega e CHANGELOG (G7)
+- [x] Red: UT-01 e IT-01 com a tag `SPEC-0025:<ID>`, falhando pelo motivo certo
+- [x] Green: pasta só com `.obsidian/` conta como vazia; `SKILL.md` e `vault-layout.md` citam o caso
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -68,9 +68,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — c9ca851 | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — c9ca851 | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (c9ca851; 3 minor, sem bloqueio) — c9ca851 | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 6b4621b | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -82,28 +82,35 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+Quem cria o vault primeiro no app do Obsidian, com uma pasta que só tem `.obsidian/`, roda `init` e recebe a estrutura padrão completa, sem precisar de `--adopt`. Nada dentro de `.obsidian/` é alterado.
 
 ### Como foi feito
+`brain.py` (versão 2026.10.9) ganhou `is_empty_vault(folder)`, usado só pelo `init`: a pasta é vazia quando só tem arquivos do sistema (`OS_METADATA`) e o diretório `.obsidian`. A regra do `--out` da exportação não mudou. `SKILL.md`, `references/vault-layout.md` e o CHANGELOG citam o caso. A revisão G4 aprovou com 3 minor informativos. O tipo da spec foi corrigido para `fix`.
 
 ### Prova de Correção
 <!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+Red 608f572: com os testes UT-01 e IT-01, a suíte da skill tinha 2 falhas (`is_empty_vault` não existia; o `init` saía com "vault não está vazio — use --adopt"), registrado no G1. Green 631f10a: as duas passam e a suíte completa passa (G2 em c9ca851, G5 e CI do PR #15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Pasta só com .obsidian/ e .DS_Store conta como vazia; com uma nota, não | PASS | `test_obsidian_vault.py::EmptyVaultCheckTest.test_only_obsidian_and_os_metadata_counts_as_empty_and_a_note_does_not` — CI do PR #15 em 6b4621b (run 41098462098, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | init num vault criado pelo app do Obsidian cria a estrutura sem tocar em .obsidian/ | PASS | `test_obsidian_vault.py::ObsidianVaultInitTest.test_init_in_a_vault_created_by_obsidian_creates_the_structure_and_keeps_obsidian` — CI do PR #15 em 6b4621b (run 41098462098, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6)
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.9. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
