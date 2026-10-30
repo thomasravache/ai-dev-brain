@@ -4,7 +4,7 @@ title: "org-atlas: esqueleto, configuração em duas camadas, init e doctor"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: []
@@ -14,8 +14,8 @@ touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/o
 adrs: [ADR-0010, ADR-0002, ADR-0003, ADR-0005]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0032 — org-atlas: esqueleto, configuração em duas camadas, init e doctor
@@ -182,6 +182,34 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Arquitetura e parser**
+- [ ] Red: UT-05, UT-04 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
+- [ ] Green: `tests/architecture_rules.py` e `test_architecture.py` com as regras do ADR-0010; `atlas.py` com `argparse` e parser/escritor de YAML
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Configuração em duas camadas**
+- [ ] Red: UT-01, UT-02, UT-03, IT-04 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
+- [ ] Green: `load_config` com origem dos valores, validação de `credentials`, `config`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: init e doctor**
+- [ ] Red: IT-01, IT-02, IT-03, IT-05 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
+- [ ] Green: `init` (repo, local, `--force`, `--join`), `doctor`, `assets/atlas-config.yml` e `assets/pages/`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 4: Instruções, CI e docs**
+- [ ] Red: N/A — fase de instruções, CI e docs, sem comportamento novo; o passo da CI é provado pela suíte rodando no próprio PR
+- [ ] Green: `SKILL.md` (antes de qualquer fluxo, onboarding), `references/config.md` e `atlas-layout.md`; passo da suíte em `.github/workflows/ci.yml`; README
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [ ] Architect: `test` e `arch_test` do `docs/specs/sdd-config.yml` passam a incluir `skills/org-atlas/tests`
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

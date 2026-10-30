@@ -1,7 +1,7 @@
 ---
 id: ADR-0011
 title: Modelo neutro do atlas e contrato dos coletores
-status: proposed
+status: accepted
 origin: decision
 date: 2026-10-30
 pillars: [arquitetura]

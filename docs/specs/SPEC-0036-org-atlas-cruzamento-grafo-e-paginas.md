@@ -4,7 +4,7 @@ title: "org-atlas: cruzamento de fontes, grafo e páginas geradas"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0033]
@@ -14,8 +14,8 @@ touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/o
 adrs: [ADR-0010, ADR-0011]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0036 — org-atlas: cruzamento de fontes, grafo e páginas geradas
@@ -148,6 +148,28 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Junção e inferência**
+- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, CT-01 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
+- [ ] Green: `merge_snapshots`, `infer_relations`, `render_graph` e `references/graph.md`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Páginas**
+- [ ] Red: UT-06, IT-02, IT-03 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
+- [ ] Green: `render_pages` com regiões `atlas:` e esqueletos em `assets/pages/`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: Comando build**
+- [ ] Red: IT-01 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
+- [ ] Green: `build` e chamada no fim do `scan`; `SKILL.md` e `references/atlas-layout.md`
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

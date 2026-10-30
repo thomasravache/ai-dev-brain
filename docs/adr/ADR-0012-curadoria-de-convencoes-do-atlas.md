@@ -1,7 +1,7 @@
 ---
 id: ADR-0012
 title: Curadoria de convenções do atlas
-status: proposed
+status: accepted
 origin: decision
 date: 2026-10-30
 pillars: [arquitetura]

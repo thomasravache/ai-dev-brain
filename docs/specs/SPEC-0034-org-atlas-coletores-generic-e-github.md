@@ -4,7 +4,7 @@ title: "org-atlas: coletores generic e GitHub"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0032]
@@ -14,8 +14,8 @@ touches: [skills/org-atlas/assets/collectors/generic.py, skills/org-atlas/assets
 adrs: [ADR-0010, ADR-0011]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0034 — org-atlas: coletores generic e GitHub
@@ -151,6 +151,28 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Coletor generic**
+- [ ] Red: UT-05, IT-04 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
+- [ ] Green: `assets/collectors/generic.py` e `references/collectors/generic.md`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Coletor GitHub**
+- [ ] Red: UT-01, UT-02, UT-03, UT-04, IT-01, IT-02, IT-03 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
+- [ ] Green: `assets/collectors/github.py` com `--input`, fixtures da organização `acme`, `gh` falso e `references/collectors/github.md`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: Contrato**
+- [ ] Red: CT-01 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
+- [ ] Green: ajustes para a saída passar no validador da SPEC-0033@1; teste de arquitetura cobrindo `assets/collectors/`
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

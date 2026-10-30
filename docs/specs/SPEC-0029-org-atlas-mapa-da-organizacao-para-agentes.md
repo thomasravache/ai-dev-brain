@@ -3,13 +3,13 @@ id: SPEC-0029
 title: "org-atlas: mapa da organização para agentes"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-10-30
 depends_on: []
 adrs: [ADR-0010, ADR-0011, ADR-0012]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0029 — org-atlas: mapa da organização para agentes (Épico)

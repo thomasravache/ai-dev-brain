@@ -4,7 +4,7 @@ title: "org-atlas: curadoria de convenções"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0036]
@@ -14,8 +14,8 @@ touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/o
 adrs: [ADR-0010, ADR-0012]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-10-30
 ---
 
 # SPEC-0037 — org-atlas: curadoria de convenções
@@ -157,6 +157,23 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Propostas**
+- [ ] Red: UT-01, UT-02, CT-01, IT-01 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
+- [ ] Green: cálculo das propostas com `curation.min_share`/`min_total`, escopo e `conventions/<id>.md` com a região `evidence`; `curate propose` no fim do `scan`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Decisão humana**
+- [ ] Red: UT-03, UT-04, IT-02, IT-03, IT-04 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
+- [ ] Green: `curate list`, `confirm` e `reject`; `references/curation.md` e `SKILL.md`
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

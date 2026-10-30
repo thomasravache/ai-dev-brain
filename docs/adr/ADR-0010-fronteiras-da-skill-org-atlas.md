@@ -1,7 +1,7 @@
 ---
 id: ADR-0010
 title: Fronteiras da skill org-atlas
-status: proposed
+status: accepted
 origin: decision
 date: 2026-10-30
 pillars: [arquitetura]
