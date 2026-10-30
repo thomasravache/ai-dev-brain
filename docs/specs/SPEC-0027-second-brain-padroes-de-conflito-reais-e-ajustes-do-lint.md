@@ -1,6 +1,6 @@
 ---
 id: SPEC-0027
-title: "second-brain: padrões de conflito reais e ajustes do lint, da busca e da exportação"
+title: "second-brain: ajustes do lint, da busca e da exportação"
 tier: lite
 type: fix
 user_facing: false
@@ -17,12 +17,12 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0027 — second-brain: padrões de conflito reais e ajustes do lint, da busca e da exportação
+# SPEC-0027 — second-brain: ajustes do lint, da busca e da exportação
 
 ## 1. Problema
 A revisão G4 da SPEC-0023 aprovou o `lint` e apontou seis pontos.
 
-1. O contrato pedia padrões de conflito conferidos com cópias reais de cada provedor. Foram entregues só padrões genéricos (`Nota (1).md`, `Nota conflict ….md`), marcados como "não conferidos". Cópias no estilo do OneDrive (sufixo com o nome da máquina) ou do iCloud (`Nota 2.md`) provavelmente não são detectadas.
+1. (Separado para a SPEC-0028, a pedido do usuário em 2026-10-30.) A conferência dos padrões de conflito com cópias reais de cada provedor.
 2. Um padrão escrito pelo usuário com backtracking catastrófico, como `(?P<base>(a+)+)b\.md$`, trava o `lint` e o `doctor`. Como o `brain-config.yml` é sincronizado, trava todas as máquinas.
 3. Os padrões genéricos diferenciam maiúsculas: `Plano Conflict.md` não é detectado.
 4. O `SKILL.md` sugere `index` para resolver uma nota órfã, mas isso não adianta para uma nota sem contexto.
@@ -45,7 +45,7 @@ A revisão G4 da SPEC-0026 (ajustes da busca) aprovou e apontou mais quatro pont
 
 ## 2. Causa Raiz
 Em `skills/second-brain/scripts/brain.py`:
-- `GENERIC_CONFLICT_PATTERNS` e `CONFLICT_PATTERNS` não têm padrões por provedor nem `(?i)`;
+- `GENERIC_CONFLICT_PATTERNS` não tem `(?i)`;
 - `compile_conflict_patterns` aceita qualquer regex, sem limite;
 - a mensagem de `check_missing_file` não diferencia "fora da pasta files" de "não existe";
 - a validação de `--only` não trata uma lista vazia.
@@ -53,7 +53,6 @@ Em `skills/second-brain/scripts/brain.py`:
 O texto da sugestão de órfã está no `SKILL.md`.
 
 ## 3. Mudança Proposta
-- **Padrões por provedor.** O usuário gera cópias de conflito reais em cada provedor que usa (Google Drive, OneDrive, iCloud) e informa os nomes. O Architect registra esses nomes em `references/providers.md`, com a data, e os padrões entram em `CONFLICT_PATTERNS`. Provedor não conferido continua com os padrões genéricos, marcados como tal.
 - O padrão genérico de "conflict" passa a ignorar maiúsculas.
 - Padrões com quantificador aninhado (`(…+)+`, `(…*)*` e variações) são recusados com achado `config`. Cada padrão também tem limite de tamanho. `config.md` e `providers.md` avisam sobre isso.
 - `missing-file` mostra o detalhe "fora da pasta files" quando é o caso, e `maintenance.md` diz isso.
@@ -87,7 +86,7 @@ NÃO muda: as regras, as severidades, os formatos e os códigos de saída da SPE
 - **IT-01** — Dado `--only ""`, quando roda `lint`, então sai com 2 e mostra "nenhuma regra em --only"; e dado um `brain-config.yml` com o padrão catastrófico e uma nota de 40 caracteres, quando roda `lint` e `doctor`, então os dois terminam em menos de 3 s com o achado `config`.
 
 ## 5. Questões em Aberto
-- [ ] Em quais provedores você consegue gerar uma cópia de conflito real (editar a mesma nota em dois aparelhos sem sincronizar) e me passar o nome exato do arquivo que o provedor criou? (thomas)
+- [x] A conferência com cópias reais de cada provedor fica aqui? — Não: vai para a SPEC-0028, separada, para esta spec seguir já (thomas, 2026-10-30)
 
 ## 6. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
@@ -99,7 +98,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PENDING | | |
+| G0 Spec | PASS | validate: 0 erro(s) — ac6a933 (árvore suja) | 2026-10-30 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |

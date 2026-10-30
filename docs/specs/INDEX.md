@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **1 erro(s), 8 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, implemented 24
+- Specs: proposed 2, implemented 24
 - Impedimentos: **0 aberto(s)**, 13 resolvido(s)
 
 ## Cobertura de Pilares
@@ -29,7 +29,8 @@ Perfil: **minimo**
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0027 | second-brain: padrões de conflito reais e ajustes do lint, da busca e da exportação | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 1 | SPEC-0027 | second-brain: ajustes do lint, da busca e da exportação | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0027 |
 
 ## Épicos
 
@@ -44,15 +45,17 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 
 ```mermaid
 flowchart LR
+  S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
     S0024["SPEC-0024<br/>second-brain: exportação para o Noteboo…"]:::implemented
     S0026["SPEC-0026<br/>second-brain: ajustes da busca apontado…"]:::implemented
-    S0027["SPEC-0027<br/>second-brain: padrões de conflito reais…"]:::proposed
+    S0027["SPEC-0027<br/>second-brain: ajustes do lint, da busca…"]:::proposed
   end
   S0023 --> S0027
   S0024 --> S0027
   S0026 --> S0027
+  S0023 --> S0028
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -90,7 +93,8 @@ flowchart LR
 | [SPEC-0024](SPEC-0024-second-brain-exportacao-para-o-notebooklm.md) | second-brain: exportação para o NotebookLM | lite | feature | implemented | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
 | [SPEC-0025](SPEC-0025-second-brain-vault-recem-criado-pelo-obsidian-recebe-a-estru.md) | second-brain: vault recém-criado pelo Obsidian recebe a estrutura padrão | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0017 | — |
 | [SPEC-0026](SPEC-0026-second-brain-ajustes-da-busca-apontados-na-revisao-da-spec-0.md) | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
-| [SPEC-0027](SPEC-0027-second-brain-padroes-de-conflito-reais-e-ajustes-do-lint.md) | second-brain: padrões de conflito reais e ajustes do lint, da busca e da exportação | lite | fix | proposed | 2026-10-30 | SPEC-0016 | SPEC-0023, SPEC-0024, SPEC-0026 | — |
+| [SPEC-0027](SPEC-0027-second-brain-padroes-de-conflito-reais-e-ajustes-do-lint.md) | second-brain: ajustes do lint, da busca e da exportação | lite | fix | proposed | 2026-10-30 | SPEC-0016 | SPEC-0023, SPEC-0024, SPEC-0026 | — |
+| [SPEC-0028](SPEC-0028-second-brain-padroes-de-copia-de-conflito-reais-por-provedor.md) | second-brain: padrões de cópia de conflito reais por provedor | lite | feature | proposed | 2026-10-30 | — | SPEC-0023 | — |
 
 ## ADRs
 
