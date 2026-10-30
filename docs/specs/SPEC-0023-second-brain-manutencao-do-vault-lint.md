@@ -178,27 +178,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Regras**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0023:<ID>`, falhando pelo motivo certo
-- [ ] Green: `check_*` e registro das regras; padrões de conflito conferidos e documentados em `providers.md`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0023:<ID>`, falhando pelo motivo certo
+- [x] Green: `check_*` e registro das regras; padrões de conflito conferidos e documentados em `providers.md`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comando e doctor**
-- [ ] Red: IT-01, IT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0023:<ID>`, falhando pelo motivo certo
-- [ ] Green: `lint` com `--json` e `--only`; linha no `doctor`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: IT-01, IT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0023:<ID>`, falhando pelo motivo certo
+- [x] Green: `lint` com `--json` e `--only`; linha no `doctor`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Instruções**
-- [ ] Red: UT-05 com a tag `SPEC-0023:<ID>`, falhando pelo motivo certo
-- [ ] Green: fluxo de manutenção no `SKILL.md` e `maintenance.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: UT-05 com a tag `SPEC-0023:<ID>`, falhando pelo motivo certo
+- [x] Green: fluxo de manutenção no `SKILL.md` e `maintenance.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -224,39 +224,68 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`brain.py lint` aponta o que piora o vault, sem consertar nada:
+- links quebrados (anexos só contam se o arquivo não existir);
+- cópias de conflito da sincronização;
+- arquivos citados que sumiram;
+- notas órfãs;
+- itens parados na inbox;
+- notas sem frontmatter válido;
+- problemas de configuração.
+
+Cada achado vem com uma sugestão. O `doctor` mostra o resumo. O `SKILL.md` traz os quatro passos de manutenção e só aplica uma correção com o sim do usuário.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `brain.py` (versão 2026.10.7) ganhou uma função por regra (`check_*`), a classe `Finding` e `LintVault`, que lê o vault uma vez só.
+- Entraram a chave `conflict_patterns` (padrão por provedor) e os arquivos `references/maintenance.md`, `references/providers.md` e `references/config.md`. Este último passou a fazer parte do escopo.
+- Decisão do Architect: um anexo `![[arquivo.ext]]` só é link quebrado se nenhum arquivo do vault tiver o mesmo nome ou caminho.
+- A revisão G4 aprovou com 6 achados minor.
+- **Emenda v2** (aprovada por thomas): na v1 os padrões de conflito são genéricos para os quatro provedores e estão marcados como não conferidos. A conferência com cópias reais e os ajustes minor foram para a SPEC-0027.
+- Desvios aceitos na revisão: links vindos de `index.md` e `log.md` não contam como entrada para órfã; a regra de frontmatter vale só para os tipos de nota da skill; o `doctor` mostra "não conferido" quando a configuração é inválida.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Link quebrado detectado; seção, apelido e anexos existentes não contam | PASS | `test_lint.py::BrokenLinkTest.test_only_the_link_that_does_not_resolve_is_reported; test_lint.py::BrokenLinkTest.test_vault_without_broken_links_has_no_findings` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | Cópia de conflito só com o original na mesma pasta | PASS | `test_lint.py::ConflictCopyTest.test_copies_with_the_original_in_the_same_folder_are_reported; test_lint.py::ConflictCopyTest.test_a_suffix_without_the_original_in_the_same_folder_is_not_reported` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-03 | Arquivo citado em files que não existe | PASS | `test_lint.py::MissingFileTest.test_only_the_missing_file_of_frontmatter_files_is_reported` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-04 | Nota órfã; raw, inbox, mocs, index e log ignorados | PASS | `test_lint.py::OrphanTest.test_only_the_note_without_links_and_outside_any_moc_is_reported` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-05 | SKILL.md com os quatro passos de manutenção e padrões de conflito no providers.md | PASS | `test_lint_instructions.py::MaintenanceInstructionsTest.test_skill_md_has_the_four_maintenance_steps_in_order; test_lint_instructions.py::MaintenanceInstructionsTest.test_skill_md_says_when_to_run_and_never_to_delete; test_lint_instructions.py::MaintenanceInstructionsTest.test_providers_md_has_conflict_patterns_per_provider_with_the_check_date` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | Um achado por regra, resumo e exit 1 | PASS | `test_lint_cli.py::LintReportTest.test_one_finding_per_rule_with_the_contract_severity_and_exit_1` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-02 | Só leitura, --only, vault limpo | PASS | `test_lint_cli.py::LintReadOnlyTest.test_lint_only_reads_and_prints_the_text_report; test_lint_cli.py::LintReadOnlyTest.test_only_runs_the_given_rules; test_lint_cli.py::LintReadOnlyTest.test_only_with_an_unknown_rule_exits_2_with_the_list; test_lint_cli.py::LintReadOnlyTest.test_clean_vault_prints_zero_errors_zero_warnings_and_exits_0` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-03 | lint com 5.000 notas abaixo de 3 s | PASS | `test_lint_cli.py::LintPerformanceTest.test_lint_takes_under_3_seconds_on_5000_notes` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-04 | Regex inválido e files ilegível viram achado config sem parar as outras regras | PASS | `test_lint_cli.py::LintResilienceTest.test_invalid_conflict_pattern_is_a_config_finding_and_the_other_rules_run; test_lint_cli.py::LintResilienceTest.test_unreadable_files_folder_is_a_config_finding_and_missing_file_is_skipped` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-05 | Linha do lint no doctor | PASS | `test_lint_cli.py::LintDoctorTest.test_doctor_shows_the_lint_summary_and_exits_1_with_errors; test_lint_cli.py::LintDoctorTest.test_doctor_lint_line_is_aviso_with_only_warnings_and_ok_when_clean` — CI do PR #15 em 84241ab (run 41082458846, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — `lint` em 0,64–0,68 s com 5.000 notas (meta: menos de 3 s), no IT-03; só leitura conferida pelo IT-02
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado; vale na `main` com o merge do PR #15
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` configurado
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.7. Rollback: revert do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+SPEC-0027: padrões de conflito conferidos com cópias reais de cada provedor e os ajustes minor da revisão (padrão que trava o lint, maiúsculas, mensagem de arquivo fora da pasta `files`, `--only` vazio e a dica sobre órfãs). A spec está proposta, com uma pergunta aberta para o usuário.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0023`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
-| 2 | 2026-10-30 | Padrão de conflito por provedor: na v1, genéricos para os quatro provedores, marcados como não conferidos; a conferência com cópias reais passa para a SPEC-0027 | Revisão G4: não dá para gerar cópias de conflito reais dos provedores nesta máquina; precisa de aparelhos do usuário | Nenhuma (nenhuma spec consome o contrato da SPEC-0023) | |
+| 2 | 2026-10-30 | Padrão de conflito por provedor: na v1, genéricos para os quatro provedores, marcados como não conferidos; a conferência com cópias reais passa para a SPEC-0027 | Revisão G4: não dá para gerar cópias de conflito reais dos provedores nesta máquina; precisa de aparelhos do usuário | Nenhuma (nenhuma spec consome o contrato da SPEC-0023) | thomas (2026-10-30) |
