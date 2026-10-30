@@ -1437,19 +1437,34 @@ def kebab_name(name: str) -> str:
     """Context name passed through kebab: changed = notice on stdout; empty after the change = BrainError (exit 2)."""
     adjusted = kebab(name)
     if not adjusted:
-        raise BrainError(f"nome de contexto inválido: {name} (sem letras nem números para o kebab-case)")
+        raise BrainError(f"nome de contexto inválido: {name} (o kebab-case precisa de letras a–z ou dígitos 0–9; "
+                         "nomes só com outros alfabetos não são aceitos)")
     if adjusted != name:
         print(f"nome ajustado para kebab-case: `{name}` → `{adjusted}`")
     return adjusted
 
 
-def kebab_folder(vault: str, folder: str) -> str:
-    """Context folder relative to the vault with each part passed through kebab; changed = notice on stdout; a part
-    that becomes empty = BrainError (exit 2)."""
+def layout_folders(shared: dict) -> list:
+    """Folders of the vault's layout and para (vault-relative, as configured)."""
+    folders = [shared["layout"][key] for key in LAYOUT_DIRS] + [shared["para"][key] for key in PARA_KEYS]
+    return [folder for folder in folders if isinstance(folder, str) and folder]
+
+
+def kebab_folder(vault: str, folder: str, mapped=()) -> str:
+    """Context folder relative to the vault with each part passed through kebab; the leading parts that match a
+    folder of `mapped` (layout/para, case-insensitive) keep the configured spelling; changed = notice on stdout; a
+    part that becomes empty = BrainError (exit 2)."""
     rel = relative_folder(vault, folder)
-    parts = [kebab(part) for part in rel.split("/")]
+    rel_parts = rel.split("/")
+    kept = []
+    for candidate in mapped:
+        parts = candidate.replace("\\", "/").strip("/").split("/")
+        if len(kept) < len(parts) <= len(rel_parts) and [p.lower() for p in parts] == [
+                p.lower() for p in rel_parts[:len(parts)]]:
+            kept = parts
+    parts = kept + [kebab(part) for part in rel_parts[len(kept):]]
     if not all(parts):
-        raise BrainError(f"pasta inválida: {folder} (parte sem letras nem números para o kebab-case)")
+        raise BrainError(f"pasta inválida: {folder} (parte sem letras a–z nem dígitos 0–9 para o kebab-case)")
     adjusted = "/".join(parts)
     if adjusted != rel:
         print(f"nome ajustado para kebab-case: `{rel}` → `{adjusted}`")
@@ -1587,13 +1602,17 @@ def parse_pairs(values, flag: str) -> list:
     return pairs
 
 
-def parse_contexts(values, vault: str) -> dict:
-    """--context nome=pasta[:título] → {nome: {folder, title}}; name and folder in kebab-case, title as typed."""
-    contexts = {}
+def parse_contexts(values, vault: str, mapped=()) -> dict:
+    """--context nome=pasta[:título] → {nome: {folder, title}}; name and folder in kebab-case (leading parts mapped
+    in the layout/para kept), title as typed; two names with the same kebab = BrainError (exit 2)."""
+    contexts, origin = {}, {}
     for name, rest in parse_pairs(values, "--context"):
         folder, _, title = rest.partition(":")
         key = kebab_name(name)
-        contexts[key] = {"folder": kebab_folder(vault, folder), "title": title.strip() or name}
+        if key in contexts:
+            raise BrainError(f"contextos com o mesmo nome em kebab-case: {origin[key]} e {name} → {key}")
+        origin[key] = name
+        contexts[key] = {"folder": kebab_folder(vault, folder, mapped), "title": title.strip() or name}
     return contexts
 
 
@@ -1640,7 +1659,8 @@ def cmd_init(args, config_home=None) -> int:
     if args.adopt and not vault.is_dir():
         raise BrainError(f"vault não encontrado: {vault_s}")
     layout = dict(parse_pairs(args.map, "--map"))
-    rendered = render_brain_config(vault_s, layout=layout, contexts=parse_contexts(args.context, vault_s))
+    mapped = layout_folders(parse_yaml(render_brain_config(vault_s, layout=layout)))
+    rendered = render_brain_config(vault_s, layout=layout, contexts=parse_contexts(args.context, vault_s, mapped))
     backup = None
     if shared_path.exists():
         if read_yaml(shared_path) == parse_yaml(rendered):
@@ -1716,9 +1736,11 @@ def cmd_context_add(args, config_home=None) -> int:
         raise BrainError("vault sem brain-config.yml — rode init", 1)
     name = kebab_name(args.name)
     contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
-    if name in contexts:
-        raise BrainError(f"contexto já existe: {name}")
-    item = {"folder": kebab_folder(str(vault), args.folder), "title": args.title or args.name}
+    stored = next((key for key in contexts if key == name or kebab(str(key)) == name), None)
+    if stored is not None:
+        raise BrainError(f"contexto já existe: {stored}" + (f" (mesmo kebab-case de {args.name})"
+                                                             if stored != args.name else ""))
+    item = {"folder": kebab_folder(str(vault), args.folder, layout_folders(values)), "title": args.title or args.name}
     text = add_context_text(shared_path.read_text(encoding="utf-8"), name, item)
     if parse_yaml(text).get("contexts", {}).get(name) != item:
         raise BrainError(f"não consegui acrescentar o contexto em {shared_path}", 1)
