@@ -9,10 +9,10 @@ Quando oferecer: a pessoa vai estudar ou se preparar para uma prova ("me prepara
 `brain.py export-notebooklm MOC --out PASTA [--hops 0..2] [--combined] [--json]`
 
 - `MOC` é o nome do contexto (`college` → `mocs/college.md`) ou o caminho (ou nome) do MOC no vault.
-- Entram o MOC, as notas que ele cita e as vizinhas delas por link até `--hops` passos (padrão 1; 0 = só o MOC e as citadas). Como no `context`, o MOC nunca é atravessado, nem o `index.md` e o `log.md`: o que só eles alcançam fica fora.
+- Entram o MOC, as notas que ele cita e as vizinhas delas por link até `--hops` passos (padrão 1; 0 = só o MOC e as citadas). Como no `context`, o MOC nunca é atravessado, nem os MOCs dos outros contextos (todo MOC de `layout.mocs`), nem o `index.md` e o `log.md`: o que só eles alcançam fica fora. O `index.md` e o `log.md` (`index`, `log`) também não servem de `MOC`: saem com 2 e nada é escrito.
 - Em `PASTA` (fora do vault, vazia ou nova) ficam: um `.md` por nota, com o título na primeira linha e sem frontmatter; `sources.md`, com a lista das notas e o caminho de cada uma no vault; e, com `--combined`, `combined.md`, com todas as notas num arquivo só (para quem quer usar poucas fontes).
-- Os wikilinks viram texto (`[[Nota|apelido]]` → `apelido`, `[[Nota]]` → `Nota`) e os embeds de anexo viram `(anexo: nome)`: o NotebookLM não segue links nem lê os anexos do vault. Um anexo importante (PDF da aula, por exemplo) pode ser subido à parte, direto da pasta `files`.
-- O vault não muda (nem o `log.md`). `--out` dentro do vault, ou numa pasta que já tem arquivos, sai com 2 e nada é escrito: o comando nunca sobrescreve. Para exportar de novo, use uma pasta nova.
+- Os wikilinks viram texto (`[[Nota|apelido]]` → `apelido`, `[[Nota]]` → `Nota`) e os embeds de anexo viram `(anexo: nome)`: o NotebookLM não segue links nem lê os anexos do vault. Dentro de código (cercas ``` ou ~~~ e código inline) os wikilinks ficam como estão. Um anexo importante (PDF da aula, por exemplo) pode ser subido à parte, direto da pasta `files`.
+- O vault não muda (nem o `log.md`). `--out` dentro do vault, ou numa pasta que já tem arquivos, sai com 2 e nada é escrito: o comando nunca sobrescreve. Para exportar de novo, use uma pasta nova. O pacote é gravado numa pasta temporária oculta ao lado de `--out` e movido para lá no final: se a escrita falha no meio (disco cheio, por exemplo), sai com 1, a mensagem diz o motivo e nada fica em `--out`, que continua servindo para uma nova tentativa. Os nomes dos arquivos são comparados como o APFS compara (NFC e sem caixa): dois títulos que só diferem nisso ganham " (2)".
 
 ## Passo a passo de envio
 

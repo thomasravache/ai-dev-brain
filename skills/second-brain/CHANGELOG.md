@@ -9,6 +9,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.11] - 2026-10-30
+
+### Fixed
+- `lint` e `doctor` (`scripts/brain.py`, `BRAIN_VERSION` 2026.10.11): padrão de `conflict_patterns` com quantificador aninhado (`(a+)+`, `(a*)*`, `(?:a+)+`, `(\w+\s?)+`...) ou com mais de 500 caracteres vira achado `config` e nunca é usado, em vez de travar; o padrão genérico de `conflict` ignora maiúsculas (`Plano Conflict.md`); `missing-file` diz "fora da pasta files" para caminho absoluto ou com `..`; `--only` vazio sai com 2 e "nenhuma regra em --only"; `.md` ocultos não são notas do `lint` (SPEC-0027).
+- `SKILL.md`: o `index` só resolve a órfã que tem contexto; nas demais, `relate` ou uma nota nova (SPEC-0027).
+- `export-notebooklm`: grava numa pasta temporária ao lado de `--out` e move no final (uma falha não deixa nada em `--out`); nomes comparados em NFC e sem caixa (`casefold`); `flatten_links` não mexe em código (cercas e inline); todo MOC de `layout.mocs` é bloqueado como caminho; `index` e `log` são recusados como MOC, com exit 2 (SPEC-0027).
+- Busca: uma cerca de fechamento só aceita espaços depois da marca (```` ```python ```` dentro de um bloco não o fecha); `index.md` e `log.md` (`layout.index` e `layout.log`) e as pastas do layout são comparados sem caixa e em NFC; `references/query-flow.md` diz que o `context` não expande pelo `index.md` nem pelo `log.md` (SPEC-0027).
+
 ## [2026.10.10] - 2026-10-30
 
 ### Fixed
