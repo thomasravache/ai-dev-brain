@@ -40,4 +40,5 @@ brain.py index --context college
 - `mocs/<contexto>.md`: região `notes` com as notas do contexto agrupadas por `type` (`### lecture`, `### note`...), ordenadas por título. MOC ausente é criado do modelo `moc`; MOC sem a região ganha a região no fim.
 - `index.md`: região `contexts` (link para cada MOC e o total de notas) e região `recent` (as 20 notas mais recentes pelo `created`).
 - Texto fora das regiões nunca muda. Com `--context C`, só o MOC de C (e o `index.md`) é regenerado.
-- Num vault de 5.000 notas termina em menos de 1 s.
+- Num vault de 5.000 notas termina em menos de 3 s (o limite garantido).
+- Marcadores de região quebrados (begin sem end, end antes do begin, região duplicada) ou um MOC que é link simbólico para fora do vault fazem o `index` parar com erro nomeando o arquivo, sem escrever nada.
