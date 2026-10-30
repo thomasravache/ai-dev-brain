@@ -57,16 +57,16 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01, UT-02 e IT-01 com a tag `SPEC-0024:<ID>`, falhando pelo motivo certo
-- [ ] Green: `flatten_links` e `export-notebooklm`; `references/notebooklm.md` com formatos e limites conferidos (data); linha no `SKILL.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: UT-01, UT-02 e IT-01 com a tag `SPEC-0024:<ID>`, falhando pelo motivo certo
+- [x] Green: `flatten_links` e `export-notebooklm`; `references/notebooklm.md` com formatos e limites conferidos (data); linha no `SKILL.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado (skill distribuída por cópia)
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -77,9 +77,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — f42962d | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — f42962d | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (f42962d; 4 minor encaminhados para a SPEC-0027) — f42962d | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 61ff40c | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -91,28 +91,45 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+`brain.py export-notebooklm MOC --out PASTA` monta, fora do vault, um pacote pronto para subir no NotebookLM. O pacote tem:
+- o MOC, as notas que ele cita e os vizinhos até `--hops`, um `.md` por nota;
+- `sources.md`, com a origem de cada nota;
+- `combined.md`, com `--combined`.
+
+Os wikilinks viram texto. O `SKILL.md` oferece a exportação ao preparar uma prova, só com o sim do usuário.
 
 ### Como foi feito
+`brain.py` (versão 2026.10.8) ganhou `flatten_links`, `export_notes`, `export_text`, `export_name` e `export_package`. A seleção reusa `neighbors` e `link_graph` do `context`, com o MOC, o `index.md` e o `log.md` bloqueados. Todas as checagens rodam antes de qualquer escrita, e os arquivos são criados de forma exclusiva. Nada é escrito no vault, nem no `log.md`.
+
+O guia `references/notebooklm.md` traz os formatos e limites conferidos na ajuda oficial do Google em 2026-10-30 (support.google.com/notebooklm, respostas 16215270 e 16213268): 500 mil palavras ou 200 MB por fonte; 50 fontes no plano gratuito e de 100 a 600 nos pagos. O produto aparece lá como "Gemini Notebook".
+
+A revisão G4 aprovou com 4 minor, encaminhados para a SPEC-0027.
 
 ### Prova de Correção
 <!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | flatten_links transforma wikilinks e anexos em texto | PASS | `test_notebooklm.py::FlattenLinksTest.test_flatten_links_turns_wikilinks_into_text_and_embeds_into_attachment_marks` — CI do PR #15 em 61ff40c (run 41095215379, Python 3.9 e 3.15) e suíte local (G5) |
+| UT-02 | SKILL.md diz quando oferecer e o guia traz passos, formatos e limites com data | PASS | `test_notebooklm_instructions.py::NotebookLMInstructionsTest.test_skill_says_when_to_offer_the_export_and_the_guide_has_steps_formats_and_limits` — CI do PR #15 em 61ff40c (run 41095215379, Python 3.9 e 3.15) e suíte local (G5) |
+| IT-01 | Exportação de um MOC com vizinhos, sources.md e combined.md, sem alterar o vault e sem sobrescrever | PASS | `test_notebooklm.py::ExportNotebookLMCliTest.test_export_writes_one_file_per_note_sources_and_combined_without_touching_the_vault` — CI do PR #15 em 61ff40c (run 41095215379, Python 3.9 e 3.15) e suíte local (G5) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6)
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #15. Versão da skill: 2026.10.8. Rollback: revert do merge.
 
 ### Pendências
+SPEC-0027 recebe os 4 minor da revisão: pacote parcial quando a escrita falha no meio, nomes que diferem só na normalização Unicode, links dentro de código e MOCs de outros contextos ou `index.md` usados como caminho.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
