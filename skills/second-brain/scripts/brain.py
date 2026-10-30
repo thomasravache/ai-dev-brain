@@ -19,7 +19,9 @@ file exclusively, and does not touch log.md (SPEC-0024).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
+import errno
 import html
 import json
 import math
@@ -39,7 +41,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.10"
+BRAIN_VERSION = "2026.10.11"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -87,6 +89,7 @@ SNIPPET_WIDTH, SNIPPET_LEAD = 160, 40  # snippet length and how much of it comes
 REASON_TERMS = 5  # shared terms listed in the "termos:" reason
 FRONTMATTER_END_RE = re.compile(r"^(?:---|\.\.\.)[ \t\r]*$", re.MULTILINE)
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+CLOSING_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})\s*$")  # CommonMark: only spaces after a closing fence
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 WIKILINK_RE = re.compile(r"!?\[\[([^\[\]\n]+?)\]\]")
 HEADING_RE = re.compile(r"^#[ \t]+(.+?)[ \t#]*$")
@@ -156,7 +159,8 @@ SUBTITLE_TAG_RE = re.compile(r"<[^>\n]*>")
 LINT_SEVERITY = {"broken-link": "error", "conflict-copy": "error", "missing-file": "error", "orphan": "warn",
                  "stale-inbox": "warn", "frontmatter": "warn", "config": "error"}
 LINT_LABELS = {"error": "ERRO", "warn": "AVISO"}
-GENERIC_CONFLICT_PATTERNS = (r"(?P<base>.+) \(\d+\)\.md$", r"(?P<base>.+)[ _-]conflict.*\.md$")
+GENERIC_CONFLICT_PATTERNS = (r"(?P<base>.+) \(\d+\)\.md$", r"(?i)(?P<base>.+)[ _-]conflict.*\.md$")
+MAX_CONFLICT_PATTERN = 500  # characters of a conflict pattern; longer ones are refused (never matched)
 CONFLICT_PATTERNS = {provider: GENERIC_CONFLICT_PATTERNS for provider in PROVIDERS}
 REQUIRED_FIELDS = ("title", "created")  # frontmatter of a note of the skill's types (references/note-types.md)
 
@@ -777,21 +781,27 @@ def read_frontmatter(text: str):
     return data, body, None
 
 
-def prose(body: str) -> str:
-    """Body without fenced code blocks (``` or ~~~) and inline code: where tags, links and headings count. A fence
-    closes only with the same character and at least the same length (```` is not closed by ```)."""
-    lines, fence = [], None
-    for line in body.splitlines():
-        m = FENCE_RE.match(line)
-        if m:
-            mark = m.group(1)
-            if fence is None:
-                fence = mark
-            elif mark[0] == fence[0] and len(mark) >= len(fence):
-                fence = None
-            continue
+def fenced_lines(lines):
+    """(line, in_code) of each line: True for the fence lines and the lines inside a fenced code block (``` or ~~~).
+    A fence closes only with the same character, at least the same length (```` is not closed by ```) and nothing
+    but spaces after the mark ("```python" inside a ``` block is code, as in CommonMark)."""
+    fence = None
+    for line in lines:
         if fence is None:
-            lines.append(line)
+            m = FENCE_RE.match(line)
+            if m:
+                fence = m.group(1)
+            yield line, fence is not None
+            continue
+        m = CLOSING_FENCE_RE.match(line)
+        if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+            fence = None
+        yield line, True
+
+
+def prose(body: str) -> str:
+    """Body without fenced code blocks (fenced_lines) and inline code: where tags, links and headings count."""
+    lines = [line for line, code in fenced_lines(body.splitlines()) if not code]
     return INLINE_CODE_RE.sub(" ", "\n".join(lines))
 
 
@@ -1028,9 +1038,22 @@ def link_graph(notes: list, index: LinkIndex) -> dict:
 
 
 def generated_paths(values=None) -> set:
-    """Paths of the generated index.md and log.md (layout.index and layout.log; the defaults when values is None)."""
+    """_link_key of the generated index.md and log.md (layout.index and layout.log; the defaults when values is
+    None): "Index.md" or a name in NFD is still the generated file."""
     layout = values["layout"] if values else {"index": "index.md", "log": "log.md"}
-    return set(layout_paths(layout, LAYOUT_FILES))
+    return {_link_key(path) for path in layout_paths(layout, LAYOUT_FILES)}
+
+
+def generated_notes(paths, values=None) -> set:
+    """The paths (of notes) that are the generated index.md or log.md, compared with _link_key."""
+    keys = generated_paths(values)
+    return {path for path in paths if _link_key(path) in keys}
+
+
+def moc_notes(paths, values=None) -> set:
+    """The paths (of notes) under layout.mocs ("mocs" when values is None), compared with _link_key."""
+    folder = _link_key(posixpath.normpath(str(values["layout"]["mocs"] if values else "mocs").replace("\\", "/")))
+    return {path for path in paths if _link_key(path).startswith(folder + "/")}
 
 
 def related(notes: list, note=None, text=None, limit=10, values=None) -> list:
@@ -1038,7 +1061,7 @@ def related(notes: list, note=None, text=None, limit=10, values=None) -> list:
     + 0.1 * same context + 0.2 * neighborhood (1 direct link, 0.5 two hops). Excludes the note itself and the
     generated index.md and log.md (never results nor a path between neighbors); descending; each result says why
     (reasons)."""
-    generated = generated_paths(values)
+    generated = generated_notes((n.path for n in notes), values)
     index = LinkIndex(n.path for n in notes)
     graph = link_graph(notes, index)
     if note is not None:
@@ -1145,7 +1168,7 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     results = search(notes, query, context=context, limit=limit)
     moc = moc_path(context, values) if context and results else None
     picked = [(moc, "moc")] if moc in by_path else []  # (path, reason) in the contract order
-    generated = generated_paths(values)
+    generated = generated_notes(by_path, values)
     seeds = [r["path"] for r in results if r["path"] != moc and r["path"] not in generated]
     picked += [(r["path"], f"search:{r['score']}") for r in results if r["path"] != moc]
     blocked = ([moc] if moc else []) + sorted(generated)  # the MOC comes first but is never walked through
@@ -1170,7 +1193,8 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
 
 def flatten_links(text: str) -> str:
     """Wikilinks as plain text ([[Nota]] -> "Nota", [[Nota|apelido]] -> "apelido", [[Nota#seção]] -> "Nota >
-    seção") and attachment embeds as "(anexo: nome)" (![[grafico.png]]); the rest of the text does not change."""
+    seção") and attachment embeds as "(anexo: nome)" (![[grafico.png]]); code (fenced blocks of fenced_lines and
+    inline `code`) and the rest of the text do not change."""
     def plain(match) -> str:
         target, _, alias = match.group(1).partition("|")
         target = target.rstrip("\\").strip()
@@ -1182,16 +1206,21 @@ def flatten_links(text: str) -> str:
         if alias.strip():
             return alias.strip()
         return f"{page} > {section}" if page and section else page or section
-    return WIKILINK_RE.sub(plain, text)
+
+    def outside_code(line: str) -> str:
+        parts = re.split(f"({INLINE_CODE_RE.pattern})", line)  # odd items: inline code, kept as is
+        return "".join(part if i % 2 else WIKILINK_RE.sub(plain, part) for i, part in enumerate(parts))
+    return "".join(line if code else outside_code(line) for line, code in fenced_lines(text.splitlines(True)))
 
 
 def export_notes(notes: list, moc: str, hops: int, values=None) -> list:
     """[(path, origin)] of the NotebookLM package of the MOC at `moc`: the MOC, the notes it cites (in its order)
     and their link neighbors up to `hops` steps, by distance and title (neighbors of build_context). The MOC is
-    never walked through, nor the generated index.md and log.md: notes reached only through them stay out."""
+    never walked through, nor any other MOC of layout.mocs, nor the generated index.md and log.md: notes reached
+    only through them stay out."""
     by_path = {note.path: note for note in notes}
     index = LinkIndex(by_path)
-    blocked = [moc] + sorted(generated_paths(values))
+    blocked = [moc] + sorted((generated_notes(by_path, values) | moc_notes(by_path, values)) - {moc})
     cited = unique(path for path in (index.resolve(target) for target in by_path[moc].links)
                    if path and path not in blocked)
     found = neighbors(cited, link_graph(notes, index), hops, blocked) if cited and hops > 0 else {}
@@ -1215,18 +1244,23 @@ def export_text(note: Note) -> str:
     return body + "\n"
 
 
+def export_key(name: str) -> str:
+    """How the file system (APFS) compares two exported names: NFC and casefold ("Straße" = "STRASSE")."""
+    return unicodedata.normalize("NFC", name).casefold()
+
+
 def export_name(title: str, path: str, taken: set) -> str:
     """File name of an exported note: the sanitized title (else the vault file name), with " (2)", " (3)"... when
-    the name, ignoring case, is already taken (by another note, sources.md or combined.md)."""
+    the name is already taken (by another note, sources.md or combined.md); taken holds export_key of the names."""
     try:
         stem = sanitize_title(title)
     except BrainError:
         stem = posixpath.splitext(posixpath.basename(path))[0]
     name, n = f"{stem}.md", 1
-    while name.lower() in taken:
+    while export_key(name) in taken:
         n += 1
         name = f"{stem} ({n}).md"
-    taken.add(name.lower())
+    taken.add(export_key(name))
     return name
 
 
@@ -1234,7 +1268,7 @@ def export_package(notes: list, moc: str, hops: int, values=None) -> dict:
     """{"notes": [{"path", "title", "origin", "file"}], "files": {name: text}}: one .md per note of export_notes,
     sources.md (where each one came from) and combined.md (every note in one file; dropped without --combined)."""
     by_path = {note.path: note for note in notes}
-    taken = {name.lower() for name in EXPORT_EXTRA}
+    taken = {export_key(name) for name in EXPORT_EXTRA}
     items, files = [], {}
     for path, origin in export_notes(notes, moc, hops, values):
         note = by_path[path]
@@ -1883,14 +1917,15 @@ def cmd_context(args, config_home=None) -> int:
 
 
 def find_moc(ref: str, values: dict, index: LinkIndex) -> str:
-    """Path of the MOC named by a context name (<layout.mocs>/<name>.md) or by a note path or name."""
-    if CONTEXT_NAME_RE.match(ref):
-        path = index.resolve(moc_path(ref, values))
-        if path:
-            return path
-    path = index.resolve(ref)
+    """Path of the MOC named by a context name (<layout.mocs>/<name>.md) or by a note path or name; the generated
+    index.md or log.md = BrainError (code 2): they list the whole vault and are not a MOC."""
+    path = index.resolve(moc_path(ref, values)) if CONTEXT_NAME_RE.match(ref) else None
+    path = path or index.resolve(ref)
     if path is None:
         raise BrainError(f"MOC não encontrado: {ref}")
+    if generated_notes([path], values):
+        raise BrainError(f"{one_line(path)} não é um MOC: index.md e log.md são gerados e listam o vault inteiro "
+                         "— use o MOC de um contexto")
     return path
 
 
@@ -1906,6 +1941,47 @@ def export_folder(out: str, vault: Path) -> Path:
     return folder
 
 
+def export_staging(folder: Path) -> Path:
+    """A new hidden folder next to --out (same file system, so the final move is a rename)."""
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    while True:
+        staging = folder.parent / f".{folder.name}.brain-{os.urandom(4).hex()}"
+        try:
+            staging.mkdir()
+            return staging
+        except FileExistsError:
+            continue
+
+
+def write_export(folder: Path, files: dict):
+    """Write the package into a temporary folder next to --out and move it into --out at the end: a failure
+    leaves nothing in --out (an existing empty --out stays usable) = BrainError (code 1), without a traceback."""
+    staging, moved = None, []
+    try:
+        staging = export_staging(folder)
+        for name, text in files.items():  # exclusive create inside a new folder: nothing is overwritten
+            with open(staging / name, "x", encoding="utf-8") as handle:
+                handle.write(text)
+        if folder.is_dir():  # empty, or only OS metadata (export_folder): move each file
+            for name in files:
+                if (folder / name).exists():
+                    raise FileExistsError(errno.EEXIST, "já existe", str(folder / name))
+                os.replace(staging / name, folder / name)
+                moved.append(folder / name)
+            staging.rmdir()
+        else:
+            os.replace(staging, folder)
+    except OSError as e:
+        for path in moved:
+            with contextlib.suppress(OSError):
+                path.unlink()
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
+        where = Path(os.fsdecode(e.filename)).name if e.filename else folder.name
+        raise BrainError(f"não consegui gravar {one_line(str(where))} em {one_line(str(folder))}: "
+                         f"{e.strerror or e} — nada ficou em --out", 1) from e
+
+
 def cmd_export_notebooklm(args, config_home=None) -> int:
     if not 0 <= args.hops <= MAX_HOPS:
         raise BrainError(f"--hops precisa estar entre 0 e {MAX_HOPS}: {args.hops}")
@@ -1914,15 +1990,7 @@ def cmd_export_notebooklm(args, config_home=None) -> int:
     moc = find_moc(args.moc, values, LinkIndex(note.path for note in notes))
     data = export_package(notes, moc, args.hops, values)
     files = {name: text for name, text in data["files"].items() if args.combined or name != "combined.md"}
-    folder.mkdir(parents=True, exist_ok=True)
-    for name, text in files.items():  # exclusive create: nothing is ever overwritten
-        try:
-            with open(folder / name, "x", encoding="utf-8") as handle:
-                handle.write(text)
-        except FileExistsError as e:
-            raise BrainError(f"já existe: {folder / name}") from e
-        except OSError as e:
-            raise BrainError(f"não consegui gravar {folder / name}: {e.strerror or e}", 1) from e
+    write_export(folder, files)
     if args.json:
         print_json({"moc": moc, "out": str(folder), "notes": data["notes"], "files": list(files),
                     "warnings": warnings})
@@ -2757,11 +2825,17 @@ def frontmatter_files(value) -> list:
 
 
 def check_missing_file(notes: list, files: Path) -> list:
-    """One error per item of frontmatter.files (relative to the files folder) that does not exist there."""
-    return [Finding("missing-file", note.path, f"{one_line(item)} não existe na pasta files",
-                    "confira se o arquivo foi sincronizado ou corrija o caminho em files")
-            for note in notes for item in frontmatter_files(note.frontmatter.get("files"))
-            if outside_vault(item) or not (files / item).exists()]
+    """One error per item of frontmatter.files (relative to the files folder) that does not exist there; an
+    absolute item or one that climbs with ".." is "fora da pasta files"."""
+    found = []
+    for note in notes:
+        for item in frontmatter_files(note.frontmatter.get("files")):
+            outside = outside_vault(item)
+            if outside or not (files / item).exists():
+                found.append(Finding("missing-file", note.path,
+                                     f"{one_line(item)} {'fora da' if outside else 'não existe na'} pasta files",
+                                     "confira se o arquivo foi sincronizado ou corrija o caminho em files"))
+    return found
 
 
 def layout_paths(layout: dict, keys) -> list:
@@ -2772,7 +2846,8 @@ def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
     """One warning per note with no outgoing link that resolves, no incoming link and outside any MOC (a MOC's
     links are incoming links). Notes of raw/, inbox/, mocs/ and templates/ and index.md and log.md are not judged;
     the lists of index.md and log.md do not count as incoming links."""
-    folders, generated = layout_paths(layout, LAYOUT_DIRS), set(layout_paths(layout, LAYOUT_FILES))
+    folders = [_link_key(folder) + "/" for folder in layout_paths(layout, LAYOUT_DIRS)]
+    generated = generated_notes((note.path for note in notes), {"layout": layout})
     linked = set()
     for note in notes:
         if note.path in generated:
@@ -2783,7 +2858,7 @@ def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
     return [Finding("orphan", note.path, "sem links de entrada nem de saída e fora de qualquer MOC",
                     "relacione com relate, ponha no MOC com index ou ligue a uma nota nova")
             for note in notes if note.path not in linked and note.path not in generated
-            and not any(note.path.startswith(folder + "/") for folder in folders)]
+            and not _link_key(note.path).startswith(tuple(folders))]
 
 
 def check_stale_inbox(entries: list, stale_after: int) -> list:
@@ -2816,16 +2891,57 @@ def check_frontmatter(notes: list) -> list:
     return found
 
 
+def nested_quantifier(pattern: str) -> bool:
+    """True when a group with a repeated item inside ("+", "*" or "{n,}") is itself repeated: (a+)+, (a*)*, (a+)*,
+    (?:a+)+, (\\w+\\s?)+... the shapes that backtrack catastrophically. Read on the text, before compiling:
+    escapes and [classes] are skipped."""
+    repeat = re.compile(r"[+*]|\{\d*,\d*\}")
+    stack, i, n = [], 0, len(pattern)
+    while i < n:
+        char = pattern[i]
+        if char == "\\":
+            i += 2
+            continue
+        if char == "[":
+            i += 1
+            i += 1 if i < n and pattern[i] == "^" else 0
+            i += 1 if i < n and pattern[i] == "]" else 0
+            while i < n and pattern[i] != "]":
+                i += 2 if pattern[i] == "\\" else 1
+        elif char == "(":
+            stack.append(False)
+        elif char == ")" and stack:
+            inner = stack.pop()
+            if inner and repeat.match(pattern, i + 1):
+                return True
+            if stack:
+                stack[-1] = stack[-1] or inner
+        elif stack and repeat.match(pattern, i):
+            stack[-1] = True
+        i += 1
+    return False
+
+
 def compile_conflict_patterns(value):
     """(compiled patterns, problems) of conflict_patterns: a list of regex (a single string is one) with the group
-    "base"; an invalid regex or one without "base" is a problem and the others still count."""
+    "base"; an invalid regex, one without "base", one longer than MAX_CONFLICT_PATTERN or with a nested
+    quantifier (nested_quantifier) is a problem, never compiled nor matched, and the others still count."""
     items = [value] if isinstance(value, str) else value if isinstance(value, list) else [] if not value else None
     if items is None:
         return [], [f"conflict_patterns precisa ser uma lista de regex: {one_line(value)}"]
     compiled, problems = [], []
     for item in items:
+        text = str(item)
+        if len(text) > MAX_CONFLICT_PATTERN:
+            problems.append(f"conflict_patterns: regex com {len(text)} caracteres {one_line(text[:40])!r}... "
+                            f"(limite {MAX_CONFLICT_PATTERN}) — não usado")
+            continue
+        if nested_quantifier(text):
+            problems.append(f"conflict_patterns: regex com quantificador aninhado {one_line(text)!r} — como "
+                            "(a+)+, trava a busca; não usado")
+            continue
         try:
-            pattern = re.compile(str(item))
+            pattern = re.compile(text)
         except re.error as e:
             problems.append(f"conflict_patterns: regex inválido {one_line(item)!r} ({e})")
             continue
@@ -2849,6 +2965,8 @@ class LintVault:
         self.values, self.paths, self.notes, self.config = values, [], [], []
         attachments, inbox_items = [], []
         for path, rel in walk_vault(values):
+            if is_note(rel) and path.name.startswith("."):  # hidden .md: not a note (walk_notes), not judged
+                continue
             self.paths.append(rel)
             if is_note(rel):
                 self.notes.append(read_note(path, rel, contexts))
@@ -2891,10 +3009,11 @@ def lint_rules(only=None) -> list:
     if only is None:
         return list(LINT_SEVERITY)
     given = [rule.strip() for rule in str(only).split(",") if rule.strip()]
+    if not given:
+        raise BrainError(f"nenhuma regra em --only — regras: {', '.join(LINT_SEVERITY)}")
     unknown = [rule for rule in given if rule not in LINT_SEVERITY]
-    if unknown or not given:
-        raise BrainError(f"regra desconhecida: {one_line(', '.join(unknown) or only)} — regras: "
-                         f"{', '.join(LINT_SEVERITY)}")
+    if unknown:
+        raise BrainError(f"regra desconhecida: {one_line(', '.join(unknown))} — regras: {', '.join(LINT_SEVERITY)}")
     return [rule for rule in LINT_SEVERITY if rule in given]
 
 
