@@ -95,7 +95,7 @@ O atlas (SPEC-0029) é o que torna isso útil: ele sabe que o serviço X é o de
 ## 8. Questões em Aberto
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
 - [x] Probe é outra skill? — Não: comando da `org-atlas`, porque depende do mapa e da configuração dela; com ADR próprio e desligado por padrão (thomas, 2026-10-30)
-- [x] Nome da capacidade? — **Muon** (múons "radiografaram" a Grande Pirâmide sem mover uma pedra: ver por dentro sem alterar); o comando continua `probe`; nomes finais na SPEC-0031 (thomas, 2026-10-30)
+- [x] Nome da capacidade? — **Muon** (múons "radiografaram" a Grande Pirâmide sem mover uma pedra: ver por dentro sem alterar); o comando continua `probe`; se um dia virar skill, `muon-probe`; nomes finais na SPEC-0031 (thomas, 2026-10-30)
 - [ ] Produção pode ser alvo de probe, mesmo com confirmação, ou só réplica e staging? (thomas)
 - [ ] Onde fica o registro de probes: só local ou também no atlas (sem resultados)? (thomas)
 - [ ] Quais categorias entram primeiro? (thomas)

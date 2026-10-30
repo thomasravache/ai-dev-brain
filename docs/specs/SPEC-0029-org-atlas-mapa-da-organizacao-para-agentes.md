@@ -120,7 +120,7 @@ Os IDs dos testes entram quando as filhas forem criadas.
 - [x] Skill separada ou feature da `sdd-management`? — Skill separada, ligada por arquivo e CLI (thomas, 2026-10-30)
 - [x] Agnóstica de organização e provedor? — Sim; GitHub, Argo CD, AWS e PostgreSQL foram só exemplos (thomas, 2026-10-30)
 - [x] Onde fica o atlas? — Repositório próprio da organização como preferido, com modo local também suportado (thomas, 2026-10-30)
-- [x] Nome de trabalho? — `org-atlas`; o nome futuro é `gaia-atlas`, na marca `hadron` (SPEC-0031); renomear fica para depois (thomas, 2026-10-30)
+- [x] Nome de trabalho? — `org-atlas`; o nome futuro é `boson-atlas`, na marca Hadron (`hadron-lab`, SPEC-0031); renomear fica para depois (thomas, 2026-10-30)
 - [ ] Quais provedores o MVP entrega em código e em entrega, além do `generic`? (thomas)
 - [ ] Idioma da estrutura do atlas (pastas, chaves) — inglês, como a `second-brain`? (thomas)
 - [ ] Valor padrão de `stale_days`? (thomas)
