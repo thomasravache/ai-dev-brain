@@ -9,6 +9,16 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.12] - 2026-10-30
+
+### Added
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.10.12): `kebab(name)` — minúsculas, sem acento, cada sequência fora de `[a-z0-9]` vira `-` (`Cálculo_II` → `calculo-ii`) (SPEC-0032).
+- `doctor`: AVISO, sem renomear nada, quando a pasta do vault, a de `files` ou a pasta que contém cada uma não está em kebab-case, e para contexto gravado com nome ou pasta fora do padrão (SPEC-0032).
+
+### Changed
+- `init --context` e `context add`: o nome do contexto e cada parte da pasta passam a ser kebab-case, com o aviso "nome ajustado para kebab-case: `<de>` → `<para>`"; nome ou parte só de símbolos sai com 2; o título do MOC fica como foi escrito; as pastas de `--adopt --map` não mudam (SPEC-0032).
+- `SKILL.md`, `references/config.md` e `references/vault-layout.md`: o onboarding sugere `~/second-brain/vault` e `~/second-brain/files`, e a regra do kebab-case está documentada (SPEC-0032).
+
 ## [2026.10.11] - 2026-10-30
 
 ### Fixed

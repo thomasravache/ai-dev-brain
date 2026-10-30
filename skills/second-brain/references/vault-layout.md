@@ -19,6 +19,14 @@ A estrutura é sempre em inglês; o conteúdo das notas fica no idioma da pessoa
 
 Arquivos pesados (PDFs, vídeos) ficam na pasta `files`, fora do vault (configuração local).
 
+## Pastas em kebab-case
+
+Toda pasta que a skill cria tem nome em kebab-case: minúsculas, sem acento, palavras separadas por `-` (`second-brain`, e não `SecondBrain`). A estrutura padrão acima já segue o padrão, e o nome e a pasta de cada contexto do `init --context` e do `context add` são ajustados com aviso (`Projects/Faculdade` → `projects/faculdade`).
+
+- Pastas de um vault adotado (`--adopt --map inbox=Inbox`) não mudam: são da pessoa e não são renomeadas.
+- Os caminhos do vault e de `files` são escolha da pessoa; o onboarding sugere `~/second-brain/vault` e `~/second-brain/files`. O `doctor` mostra AVISO quando a pasta do vault, a de `files` ou a pasta que contém cada uma não está em kebab-case (`.../SecondBrain/vault` avisa sobre `SecondBrain`), sem virar ERRO e sem renomear.
+- Nomes de arquivos de nota seguem o título e não mudam.
+
 ## Vault novo e vault adotado
 
 - `init` num vault novo cria tudo acima que falta, copia os modelos de `assets/templates/` e cria a pasta e o MOC de cada `--context`.
