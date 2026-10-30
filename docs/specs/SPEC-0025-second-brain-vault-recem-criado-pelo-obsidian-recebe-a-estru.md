@@ -4,7 +4,7 @@ title: "second-brain: vault recÃ©m-criado pelo Obsidian recebe a estrutura padrÃ
 tier: lite
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-30
 parent: SPEC-0016
 depends_on: [SPEC-0017]
