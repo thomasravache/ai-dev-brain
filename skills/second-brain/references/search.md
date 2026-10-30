@@ -7,24 +7,29 @@ termina bem abaixo de 2 s.
 ## O que é lido
 
 - **Pastas ignoradas:** `.obsidian/`, `.trash/` (e qualquer outra pasta oculta, que o Obsidian também não indexa), a
-  pasta `layout.templates` e todo arquivo que não termina em `.md`.
+  pasta `layout.templates`, todo arquivo oculto (nome começando com `.`) e todo arquivo que não termina em `.md`.
 - **Frontmatter:** o bloco YAML entre a primeira linha `---` e o próximo `---`. Frontmatter inválido vira `{}`; arquivo
   que não é UTF-8 é lido com caracteres substituídos. Os dois casos aparecem em `warnings` no `--json` (e como
   `aviso:` no stderr da saída em texto) e o comando continua.
 - **Título:** `title` do frontmatter, senão o primeiro `# Título`, senão o nome do arquivo sem `.md`.
 - **Tags:** `tags` do frontmatter (lista ou texto) e cada `#tag` do texto, sem `#` e em minúsculas. Não contam `#` em
-  blocos de código, em código inline, em títulos (`# Título`) nem o `#seção` de um wikilink.
+  blocos de código, em código inline, em títulos (`# Título`) nem o `#seção` de um wikilink. Um bloco de código
+  só fecha com uma cerca do mesmo caractere (`` ` `` ou `~`) e com pelo menos o mesmo tamanho.
 - **Links:** `[[Nota]]`, `[[Nota|apelido]]`, `[[Nota#seção]]` e `![[anexo]]` → o alvo sem seção nem apelido.
 - **Contexto:** `context` do frontmatter, senão o contexto do `brain-config.yml` cuja pasta contém a nota.
 - **Tipo:** `type` do frontmatter.
-- **Termos:** palavras em minúsculas e sem acentos (`integração` = `integracao`), sem stopwords em português e em
-  inglês. A busca é por termos, não semântica.
+- **Termos:** palavras de 2 ou mais caracteres, em minúsculas e sem acentos (`integração` = `integracao`), sem
+  stopwords em português e em inglês. A busca é por termos, não semântica.
 
 ## Resolução de links (como o Obsidian)
 
 - Alvo sem `/` → a nota com o mesmo nome de arquivo, sem diferenciar maiúsculas (`[[nota]]` acha `a/Nota.md`).
 - Alvo com `/` → caminho relativo ao vault, com ou sem `.md` (`[[b/c/Nota]]`); vale também o final do caminho.
-- Vários candidatos → o de caminho mais curto. Nenhum → link quebrado (anexos fora do vault aparecem como quebrados).
+- Alvo e caminhos são comparados em NFC: `[[Ação]]` digitado em NFC acha `Ação.md` gravado em NFD (macOS e
+  provedores de sincronização), e o contrário.
+- Vários candidatos → o de caminho mais curto. Nenhum → link quebrado.
+- Só notas `.md` são resolvidas: todo `![[anexo]]` aparece sempre em `broken` do `links`, exista ou não o arquivo.
+  Separar anexo de nota quebrada é tarefa do `lint` (SPEC-0023).
 
 ## search
 
@@ -54,7 +59,8 @@ Pontuação, de 0 a 1:
 | 0,1 | mesmo contexto | `mesmo contexto` |
 | 0,2 | vizinhança de links, em qualquer sentido: 1 se link direto, 0,5 se a dois passos | `link direto` ou `link a dois passos` |
 
-A própria nota não aparece. Com `--text`, as tags (`#tag`) e os `[[links]]` do texto também contam, e não há
+A própria nota não aparece, nem o `index.md` e o `log.md` (`layout.index` e `layout.log`), que também não contam na
+vizinhança de links; o `search` continua achando os dois. Com `--text`, as tags (`#tag`) e os `[[links]]` do texto também contam, e não há
 contexto. `--note` aceita o caminho ou o nome da nota; inexistente sai com 2 (`nota não encontrada: CAMINHO`).
 
 ## links

@@ -39,7 +39,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.9"
+BRAIN_VERSION = "2026.10.10"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -86,13 +86,13 @@ TWO_HOPS = 0.5  # neighborhood of a note two links away (a direct link is 1)
 SNIPPET_WIDTH, SNIPPET_LEAD = 160, 40  # snippet length and how much of it comes before the term
 REASON_TERMS = 5  # shared terms listed in the "termos:" reason
 FRONTMATTER_END_RE = re.compile(r"^(?:---|\.\.\.)[ \t\r]*$", re.MULTILINE)
-FENCE_RE = re.compile(r"^\s*(```|~~~)")
+FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 WIKILINK_RE = re.compile(r"!?\[\[([^\[\]\n]+?)\]\]")
 HEADING_RE = re.compile(r"^#[ \t]+(.+?)[ \t#]*$")
 TAG_RE = re.compile(r"(?<!\S)#([\w/-]+)")
 TOKEN_RE = re.compile(r"[^\W_]+")
-COMBINING_RE = re.compile(r"[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]")
+MIN_TERM = 2  # shorter terms ("s" of [[Ref#s]], "x" of "x = 1") do not count
 STOPWORDS_TEXT = """  # Portuguese and English, already folded (no accents)
 a o as os um uma uns umas de do da dos das no na nos nas num numa em ao aos pelo pela pelos pelas por para pra
 com sem sob sobre entre ate apos e ou mas porem nem que se como mais menos muito muita muitos muitas pouco ja nao
@@ -720,12 +720,16 @@ def add_context_text(text: str, name: str, item: dict) -> str:
 
 def fold(text: str) -> str:
     """Lowercase without accents (NFKD minus combining marks): "Integração" -> "integracao"."""
-    return COMBINING_RE.sub("", unicodedata.normalize("NFKD", text.lower()))
+    lowered = text.lower()
+    if lowered.isascii():
+        return lowered
+    return "".join(char for char in unicodedata.normalize("NFKD", lowered) if not unicodedata.combining(char))
 
 
 def tokenize(text: str) -> list:
-    """Terms of a text: folded words (letters and digits) that are not Portuguese or English stopwords."""
-    return [term for term in TOKEN_RE.findall(fold(text)) if term not in STOPWORDS]
+    """Terms of a text: folded words (letters and digits) of MIN_TERM or more characters that are not Portuguese or
+    English stopwords."""
+    return [term for term in TOKEN_RE.findall(fold(text)) if len(term) >= MIN_TERM and term not in STOPWORDS]
 
 
 def unique(items) -> list:
@@ -736,11 +740,14 @@ class Note:
     """A note of the vault as parse_note reads it (path relative to the vault, with "/"). `terms` counts every term
     (title, tags and body: the vector of related); title_terms, tag_terms and body_terms are the fields of search;
     `text` is the whole note (frontmatter included), the content of the context package. A plain class, not a
-    dataclass: the tests load brain.py by path, outside sys.modules."""
+    dataclass: the tests load brain.py by path, outside sys.modules. An unknown field = TypeError."""
     __slots__ = ("body", "body_terms", "context", "frontmatter", "links", "path", "tag_terms", "tags", "terms",
                  "text", "title", "title_terms", "warnings")
 
     def __init__(self, **fields):
+        unknown = sorted(set(fields) - set(self.__slots__))
+        if unknown:
+            raise TypeError(f"Note: campos desconhecidos: {', '.join(unknown)}")
         for name in self.__slots__:
             setattr(self, name, fields.get(name))
 
@@ -771,14 +778,16 @@ def read_frontmatter(text: str):
 
 
 def prose(body: str) -> str:
-    """Body without fenced code blocks (``` or ~~~) and inline code: where tags, links and headings count."""
+    """Body without fenced code blocks (``` or ~~~) and inline code: where tags, links and headings count. A fence
+    closes only with the same character and at least the same length (```` is not closed by ```)."""
     lines, fence = [], None
     for line in body.splitlines():
         m = FENCE_RE.match(line)
         if m:
+            mark = m.group(1)
             if fence is None:
-                fence = m.group(1)
-            elif m.group(1) == fence:
+                fence = mark
+            elif mark[0] == fence[0] and len(mark) >= len(fence):
                 fence = None
             continue
         if fence is None:
@@ -847,7 +856,9 @@ def parse_note(path: str, text: str, contexts=None) -> Note:
 
 
 def _link_key(target: str) -> str:
-    key = target.strip().replace("\\", "/")
+    """Comparison key of a link target or a note path: NFC (a name typed in NFC finds a file stored in NFD), "/",
+    without a leading "./" or "/" nor ".md", lowercased."""
+    key = unicodedata.normalize("NFC", target.strip().replace("\\", "/"))
     while key.startswith(("./", "/")):
         key = key[1:] if key.startswith("/") else key[2:]
     if key.lower().endswith(".md"):
@@ -934,13 +945,14 @@ def is_note(rel: str) -> bool:
 
 
 def walk_notes(values: dict):
-    """(absolute path, path relative to the vault) of every .md note of walk_vault."""
-    return ((path, rel) for path, rel in walk_vault(values) if is_note(rel))
+    """(absolute path, path relative to the vault) of every .md note of walk_vault, except hidden files (name
+    starting with "."), which Obsidian does not index."""
+    return ((path, rel) for path, rel in walk_vault(values) if is_note(rel) and not path.name.startswith("."))
 
 
 def scan_vault(config: dict) -> list:
-    """Every .md note of the vault of load_config(), in path order, except .obsidian/, .trash/ and the
-    layout.templates folder. Only reads; the problems of each note are in Note.warnings."""
+    """Every .md note of the vault of load_config(), in path order, except hidden files, .obsidian/, .trash/ and
+    the layout.templates folder. Only reads; the problems of each note are in Note.warnings."""
     values = config["values"]
     contexts = values["contexts"] if isinstance(values["contexts"], dict) else {}
     return [read_note(path, rel, contexts) for path, rel in walk_notes(values)]
@@ -1015,21 +1027,29 @@ def link_graph(notes: list, index: LinkIndex) -> dict:
     return graph
 
 
-def related(notes: list, note=None, text=None, limit=10) -> list:
+def generated_paths(values=None) -> set:
+    """Paths of the generated index.md and log.md (layout.index and layout.log; the defaults when values is None)."""
+    layout = values["layout"] if values else {"index": "index.md", "log": "log.md"}
+    return set(layout_paths(layout, LAYOUT_FILES))
+
+
+def related(notes: list, note=None, text=None, limit=10, values=None) -> list:
     """Notes like `note` (a Note.path) or like a free `text`, by 0.5 * TF-IDF cosine + 0.2 * tag Jaccard
-    + 0.1 * same context + 0.2 * neighborhood (1 direct link, 0.5 two hops). Excludes the note itself; descending;
-    each result says why (reasons)."""
+    + 0.1 * same context + 0.2 * neighborhood (1 direct link, 0.5 two hops). Excludes the note itself and the
+    generated index.md and log.md (never results nor a path between neighbors); descending; each result says why
+    (reasons)."""
+    generated = generated_paths(values)
     index = LinkIndex(n.path for n in notes)
     graph = link_graph(notes, index)
     if note is not None:
         ref = next((n for n in notes if n.path == note), None)
         if ref is None:
             raise BrainError(f"nota não encontrada: {note}")
-        direct = graph[ref.path]
+        direct = graph[ref.path] - generated
     else:
         ref = parse_note("", text or "")
-        direct = {index.resolve(target) for target in ref.links} - {None}
-    two_hops = set().union(*(graph[p] for p in direct)) - direct - {ref.path} if direct else set()
+        direct = {index.resolve(target) for target in ref.links} - {None} - generated
+    two_hops = set().union(*(graph[p] for p in direct)) - direct - {ref.path} - generated if direct else set()
 
     df = Counter()
     for n in notes:
@@ -1041,7 +1061,7 @@ def related(notes: list, note=None, text=None, limit=10) -> list:
 
     scored = []
     for n in notes:
-        if n.path == ref.path:
+        if n.path == ref.path or n.path in generated:
             continue
         shared = ref_vector.keys() & n.terms.keys() if ref_norm else set()
         contributions = {t: ref_vector[t] * n.terms[t] * idf[t] for t in shared}
@@ -1115,7 +1135,8 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     """Package of notes that answer the query: the MOC of `context` (when given), the search results by score and
     their link neighbors (outgoing links and backlinks) up to `hops` steps, by distance and title; no note repeats.
     The MOC is never walked through (it would bring the whole context): notes reached only through it stay out;
-    without `context` the MOC is an ordinary note. In that priority order each note goes in whole when it still
+    without `context` the MOC is an ordinary note. The generated index.md and log.md may be search results but are
+    never walked through either. In that priority order each note goes in whole when it still
     fits max_chars (sum of len(content)); one that does not fit goes to "omitted" (path, title, reason) and the
     next ones are still tried. "broken" lists the broken links of the notes in the package. Nothing found by
     the search = empty package (no MOC alone)."""
@@ -1124,9 +1145,10 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     results = search(notes, query, context=context, limit=limit)
     moc = moc_path(context, values) if context and results else None
     picked = [(moc, "moc")] if moc in by_path else []  # (path, reason) in the contract order
-    seeds = [r["path"] for r in results if r["path"] != moc]
+    generated = generated_paths(values)
+    seeds = [r["path"] for r in results if r["path"] != moc and r["path"] not in generated]
     picked += [(r["path"], f"search:{r['score']}") for r in results if r["path"] != moc]
-    blocked = [moc] if moc else []  # with context the MOC comes first but is never walked through
+    blocked = ([moc] if moc else []) + sorted(generated)  # the MOC comes first but is never walked through
     found = neighbors(seeds, link_graph(notes, index), hops, blocked) if seeds and hops > 0 else {}
     picked += [(path, f"link:{distance}")
                for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
@@ -1169,8 +1191,7 @@ def export_notes(notes: list, moc: str, hops: int, values=None) -> list:
     never walked through, nor the generated index.md and log.md: notes reached only through them stay out."""
     by_path = {note.path: note for note in notes}
     index = LinkIndex(by_path)
-    layout = values["layout"] if values else {"index": "index.md", "log": "log.md"}
-    blocked = [moc] + layout_paths(layout, LAYOUT_FILES)
+    blocked = [moc] + sorted(generated_paths(values))
     cited = unique(path for path in (index.resolve(target) for target in by_path[moc].links)
                    if path and path not in blocked)
     found = neighbors(cited, link_graph(notes, index), hops, blocked) if cited and hops > 0 else {}
@@ -1790,12 +1811,12 @@ def cmd_search(args, config_home=None) -> int:
 
 def cmd_related(args, config_home=None) -> int:
     check_limit(args.limit)
-    notes, warnings = load_notes(config_home)
+    values, notes, warnings = load_vault(config_home)
     if args.note is not None:
         path = find_note(args.note, LinkIndex(n.path for n in notes))
-        results = related(notes, note=path, limit=args.limit)
+        results = related(notes, note=path, limit=args.limit, values=values)
     else:
-        results = related(notes, text=args.text, limit=args.limit)
+        results = related(notes, text=args.text, limit=args.limit, values=values)
     if args.json:
         print_json({"results": results, "warnings": warnings})
         return 0

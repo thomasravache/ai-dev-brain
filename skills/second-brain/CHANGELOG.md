@@ -9,6 +9,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.10] - 2026-10-30
+
+### Fixed
+- Busca (`scripts/brain.py`, `BRAIN_VERSION` 2026.10.10): arquivos `.md` ocultos (nome começando com `.`) não são mais lidos, como no Obsidian; alvo de link e caminhos são comparados em NFC (`[[Ação]]` acha `Ação.md` gravado em NFD); uma cerca de código só fecha com outra do mesmo caractere e com pelo menos o mesmo tamanho; termos com menos de 2 caracteres não contam; `fold` filtra as marcas combinantes com `unicodedata.combining` (SPEC-0026).
+- `related` não lista o `index.md` nem o `log.md` (`layout.index` e `layout.log`), nem passa por eles na vizinhança de links; o `context` não expande vizinhos através deles; o `search` continua achando os dois (SPEC-0026).
+- `Note` recusa campo desconhecido com `TypeError` (SPEC-0026).
+- `references/search.md`: todo `![[anexo]]` aparece em `broken` do `links`; separar anexo de nota quebrada fica para o `lint` (SPEC-0026, SPEC-0023).
+
 ## [2026.10.9] - 2026-10-30
 
 ### Fixed
