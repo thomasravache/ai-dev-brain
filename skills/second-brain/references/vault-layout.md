@@ -21,7 +21,7 @@ Arquivos pesados (PDFs, vídeos) ficam na pasta `files`, fora do vault (configur
 
 ## Pastas em kebab-case
 
-Toda pasta que a skill cria tem nome em kebab-case: minúsculas, sem acento, palavras separadas por `-` (`second-brain`, e não `SecondBrain`). A estrutura padrão acima já segue o padrão, e o nome e a pasta de cada contexto do `init --context` e do `context add` são ajustados com aviso (`Projects/Faculdade` → `projects/faculdade`).
+Toda pasta que a skill cria tem nome em kebab-case: minúsculas, sem acento, palavras separadas por `-` (`second-brain`, e não `SecondBrain`). A estrutura padrão acima já segue o padrão, e o nome e a pasta de cada contexto do `init --context` e do `context add` são ajustados com aviso (`Projects/Faculdade` → `projects/faculdade`). As partes iniciais que já são uma pasta do `layout`/`para` mantêm a grafia configurada (com `--map projects=Projects`, `Projects/Faculdade` → `Projects/faculdade`), e nomes sem letras a–z nem dígitos 0–9 (só outros alfabetos, ex.: `数学`) não são aceitos (`references/config.md`).
 
 - Pastas de um vault adotado (`--adopt --map inbox=Inbox`) não mudam: são da pessoa e não são renomeadas.
 - Os caminhos do vault e de `files` são escolha da pessoa; o onboarding sugere `~/second-brain/vault` e `~/second-brain/files`. O `doctor` mostra AVISO quando a pasta do vault, a de `files` ou a pasta que contém cada uma não está em kebab-case (`.../SecondBrain/vault` avisa sobre `SecondBrain`), sem virar ERRO e sem renomear.
