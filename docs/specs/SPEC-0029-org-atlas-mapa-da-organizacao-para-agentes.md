@@ -46,7 +46,7 @@ Ao final do MVP, o fluxo é:
 - **Credenciais:** os coletores usam credenciais só de leitura da própria máquina ou da CI; o atlas guarda só metadados (schema, recursos, nomes), nunca dados nem valores de segredo; o `atlas.py` mascara o que parecer segredo antes de gravar e o `lint` acusa vazamento como erro.
 - **Onde fica o atlas:** modo repositório (preferido — repo git próprio da organização, revisão por PR, CI agendada rodando `scan` e abrindo PR com o diff) e modo local (pasta da máquina com `git init` sem remote, mesmo formato; migrar para repo = adicionar um remote).
 - **Envelhecimento:** `seen_at` em todo fato, `stale_days` na configuração, aviso no `context` a cada uso, `lint` acusando fato velho e `vendor --ci` instalando o scan agendado no modo repositório.
-- **MVP de coletores:** categorias **código** e **entrega** (2–3 provedores cada + `generic`), que já dão o grafo de dependências quase sem credencial sensível.
+- **MVP de coletores:** categorias **código** (GitHub) e **entrega** (Argo CD), cada uma com o coletor `generic`, que já dão o grafo de dependências quase sem credencial sensível.
 - **Integração com a `sdd-management`** por arquivo e CLI, sem import: chave opcional `org_context` no `sdd-config.yml`; com ela, o DISCOVER roda `atlas.py context` automaticamente. Sem ela, nada muda.
 
 **Não-objetivos (fora do escopo):**
@@ -80,8 +80,8 @@ Planejada (as filhas ganham ID com `new --parent SPEC-0029` depois das respostas
 |---|---|---|---|---|---|---|
 | a criar | Esqueleto: `atlas.py`, configuração em duas camadas, `init`, `doctor`, testes de arquitetura e CI | full | feature | M | — | — |
 | a criar | Modelo neutro, contrato dos coletores, `scan` com snapshots e diff | full | feature | M | esqueleto | — |
-| a criar | Coletores de código (ex.: GitHub, GitLab, `generic`): repos, stack, CI, histórico de PRs | full | feature | M | — | contrato dos coletores |
-| a criar | Coletores de entrega (ex.: Argo CD, Flux, `generic`): apps, ambientes, configuração | full | feature | M | — | contrato dos coletores |
+| a criar | Coletores de código (GitHub e `generic`): repos, stack, CI, histórico de PRs | full | feature | M | — | contrato dos coletores |
+| a criar | Coletores de entrega (Argo CD e `generic`): apps, ambientes, configuração | full | feature | M | — | contrato dos coletores |
 | a criar | Cruzamento de fontes: `graph.json`, `services/`, `platform/` | full | feature | M | scan | — |
 | a criar | Curadoria: `curate`, `inferred` → `confirmed` | full | feature | S | cruzamento | — |
 | a criar | `context QUERY` com aviso de envelhecimento | full | feature | S | cruzamento | — |
@@ -121,10 +121,10 @@ Os IDs dos testes entram quando as filhas forem criadas.
 - [x] Agnóstica de organização e provedor? — Sim; GitHub, Argo CD, AWS e PostgreSQL foram só exemplos (thomas, 2026-10-30)
 - [x] Onde fica o atlas? — Repositório próprio da organização como preferido, com modo local também suportado (thomas, 2026-10-30)
 - [x] Nome de trabalho? — `org-atlas`; o nome futuro é `boson-atlas`, na marca Hadron (`hadron-lab`, SPEC-0031); renomear fica para depois (thomas, 2026-10-30)
-- [ ] Quais provedores o MVP entrega em código e em entrega, além do `generic`? (thomas)
-- [ ] Idioma da estrutura do atlas (pastas, chaves) — inglês, como a `second-brain`? (thomas)
-- [ ] Valor padrão de `stale_days`? (thomas)
-- [ ] Quem pode confirmar uma convenção: qualquer revisor do PR do atlas ou um papel definido na configuração? (thomas)
+- [x] Quais provedores o MVP entrega em código e em entrega, além do `generic`? — GitHub (código) e Argo CD (entrega); GitLab e Flux entram depois como guias em `references/collectors/` (thomas, 2026-10-30)
+- [x] Idioma da estrutura do atlas (pastas, chaves)? — Inglês, como a `second-brain`; o conteúdo fica no idioma da organização (thomas, 2026-10-30)
+- [x] Valor padrão de `stale_days`? — 14 dias: com o scan semanal, perder dois scans seguidos já gera aviso (thomas, 2026-10-30)
+- [x] Quem pode confirmar uma convenção? — No modo repositório, quem aprova o PR do atlas que muda a convenção para `confirmed`; no modo local, quem roda o `curate` (thomas, 2026-10-30)
 
 ## 9. Aprovação (H1)
 Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com ele. Registrada no frontmatter (`approved_by`, `approved_at`) do épico e de cada filha.
