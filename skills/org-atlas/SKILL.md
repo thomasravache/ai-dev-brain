@@ -1,7 +1,7 @@
 ---
 name: org-atlas
 description: >-
-  Atlas de como uma organização desenvolve e opera software — serviços, plataforma, convenções, processo e glossário em Markdown, mantido junto com os agentes num repositório compartilhado ou numa pasta local, com a configuração em duas camadas (compartilhada no atlas, local por máquina com as credenciais só pelo nome). Use quando o usuário quiser mapear a organização para os agentes, configurar o atlas pela primeira vez (onboarding: organização, modo repo ou local, onde fica o atlas, credenciais por nome), ligar uma máquina nova a um atlas existente (init --join), ver a configuração (config) ou diagnosticar o que está configurado, o que funciona e o que falta (doctor).
+  Atlas de como uma organização desenvolve e opera software — serviços, plataforma, convenções, processo e glossário em Markdown, mantido junto com os agentes num repositório compartilhado ou numa pasta local, com a configuração em duas camadas (compartilhada no atlas, local por máquina com as credenciais só pelo nome). Use quando o usuário quiser mapear a organização para os agentes, configurar o atlas pela primeira vez (onboarding: organização, modo repo ou local, onde fica o atlas, credenciais por nome), ligar uma máquina nova a um atlas existente (init --join), ver a configuração (config), diagnosticar o que está configurado, o que funciona e o que falta (doctor) ou atualizar o atlas com os dados dos coletores declarados (scan: roda os coletores, valida o contrato, mascara segredos, grava os snapshots e mostra o que mudou).
 ---
 
 # Org Atlas
@@ -20,8 +20,9 @@ Rode `python3 <skill-dir>/scripts/atlas.py <comando>`, onde `<skill-dir>` é a p
 | `init --atlas P --org NOME --mode repo\|local [--force]` | Cria um atlas novo numa pasta vazia ou inexistente: estrutura, `atlas-config.yml` e a configuração local. Mesmo `atlas-config.yml` = "Atlas já configurado" (só a configuração local). `atlas-config.yml` diferente sai com 2, a menos que `--force` (o anterior vai para `atlas-config.yml.bak`, ou `.bak.1`, `.bak.2`… sem apagar backup antigo). Pasta com conteúdo e sem `atlas-config.yml` sai com 2 |
 | `init --join --atlas P` | Máquina nova para um atlas que já tem `atlas-config.yml`: grava só a configuração local; sem ele sai com 2. Não aceita `--org`, `--mode` nem `--force` (sai com 2): organização e modo vêm do atlas |
 | `doctor [--json]` | Uma linha `OK\|AVISO\|ERRO <item> — <detalhe>` por item: configuração local, pasta do atlas, `atlas-config.yml`, estrutura, git, cada coletor e cada credencial (`definida` ou `não definida`, nunca o valor). Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração |
+| `scan [--only id,...] [--json]` | Roda cada coletor habilitado em `collectors` (ou só os de `--only`), valida a saída contra o contrato `org-atlas/collector@1`, mascara segredos (`[REDACTED]`), grava `snapshots/<id>.json` e `snapshots/_scan.json` e imprime por coletor `OK <id> — +A entidades, -R, ~C; +a relações, -r`, `OK <id> — sem mudanças`, `N valor(es) mascarado(s)` ou `FALHA <id> — <motivo>`. Exit 0 sem falha, 1 com alguma falha (os outros coletores seguem), 2 com configuração inválida ou `--only` com id não declarado |
 
-Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do atlas e regiões geradas: `references/atlas-layout.md`.
+Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do atlas e regiões geradas: `references/atlas-layout.md`. Contrato dos coletores e o `scan`: `references/collector-contract.md`. Padrões de mascaramento: `references/redaction.md`.
 
 ## Antes de qualquer fluxo
 
@@ -64,9 +65,26 @@ python3 <skill-dir>/scripts/atlas.py init --join --atlas <pasta do atlas>
 
 Depois declare as credenciais desta máquina pelo nome (passo 5) e rode `doctor`.
 
+## Scan (atualizar o atlas com os coletores)
+
+1. Rode `atlas.py config` (Antes de qualquer fluxo). Sem coletores em `collectors`, ajude a pessoa a declarar cada um no `atlas-config.yml` (`id`, `category`, `command` como lista, `timeout`, `enabled`) usando `{skill}` e `{atlas}` no lugar de caminhos absolutos (`references/collector-contract.md`), e rode `atlas.py doctor` para conferir os executáveis.
+2. Rode:
+
+   ```bash
+   python3 <skill-dir>/scripts/atlas.py scan            # todos os coletores habilitados
+   python3 <skill-dir>/scripts/atlas.py scan --only github,argocd
+   ```
+
+3. Mostre o resultado por coletor:
+   - `OK <id> — ...` → o snapshot foi gravado; resuma o que entrou, saiu e mudou. Com `N valor(es) mascarado(s)` ou chave descartada, avise que o coletor está emitindo algo com cara de segredo e sugira corrigir o coletor (nunca tente recuperar o valor).
+   - `FALHA <id> — <motivo>` → o snapshot anterior e o `seen_at` desse coletor ficam como estavam; os outros seguem. Mostre o motivo e as linhas de violação ou do stderr, e ajude a corrigir (credencial não definida, timeout curto, coletor fora do contrato).
+   - Exit 2 → configuração inválida (por exemplo caminho absoluto em `command`) ou `--only` com id não declarado: nada rodou; mostre a mensagem e corrija o `atlas-config.yml`.
+4. No modo `repo`, os snapshots são arquivos do atlas: lembre a pessoa de fazer commit (o diff do PR é o que o scan mostrou).
+
 ## Regras
 
 - **Nunca** grave nem mostre o valor de uma credencial: a configuração local guarda só nomes de variável (`^[A-Z_][A-Z0-9_]*$`) e de profile, e o `doctor` só diz `definida` ou `não definida`.
 - O `atlas-config.yml` vai junto com o atlas: nunca coloque nele um caminho absoluto nem um segredo.
+- Não edite `snapshots/` à mão: são do `atlas.py scan`. Nunca copie para o atlas, para a conversa ou para outro lugar um valor que o scan mascarou.
 - Não edite à mão as regiões `<!-- atlas:begin <nome> -->` … `<!-- atlas:end <nome> -->`: são do `atlas.py`. O texto fora delas é de quem mantém o atlas.
 - Não sobrescreva um `atlas-config.yml` diferente sem a pessoa pedir; o `--force` guarda o anterior em `atlas-config.yml.bak` (ou `.bak.1`, `.bak.2`…, nunca sobrescrevendo um backup).

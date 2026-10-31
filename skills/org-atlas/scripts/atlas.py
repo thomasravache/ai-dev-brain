@@ -11,14 +11,18 @@ run_collector is the only function allowed to run an external process (SPEC-0033
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import re
 import shutil
+import signal
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-ATLAS_VERSION = "2026.10.1"
+ATLAS_VERSION = "2026.10.2"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -403,10 +407,665 @@ def existing_credentials(path: Path) -> dict:
     return credentials if isinstance(credentials, dict) else {}
 
 
+# ---------------------------------------------------------------- collector contract (ADR-0011)
+
+CONTRACT = "org-atlas/collector@1"
+SUPPORTED_CONTRACTS = (CONTRACT,)  # a breaking @2 keeps accepting the previous version (ADR-0011)
+CATEGORIES = ("code", "ci", "delivery", "runtime", "data", "messaging", "observability", "tracker", "docs",
+              "secrets")
+KINDS = ("repository", "service", "environment", "deployment", "cluster", "datastore", "queue", "topic", "bucket",
+         "secret-ref", "pipeline", "team")
+RELATION_TYPES = ("builds", "sourced_from", "deploys", "runs_in", "reads", "writes", "publishes", "consumes",
+                  "depends_on", "owns")
+OUTPUT_FIELDS = ("contract", "collector", "category", "collected_at", "entities", "relations")
+OUTPUT_ALLOWED = OUTPUT_FIELDS + ("signals",)
+ENTITY_FIELDS = ("kind", "id", "name", "attrs", "source")
+RELATION_FIELDS = ("from", "to", "type", "source")
+RELATION_ALLOWED = RELATION_FIELDS + ("inferred",)
+SIGNAL_ALLOWED = ("type", "repository", "total", "pattern_counts", "sample", "counts", "present")
+# keys whose name says "secret": dropped and reported, never a violation (ADR-0011); fields outside the contract
+# get the same treatment (G4 review): only the contract's fields reach the snapshot
+FORBIDDEN_WORDS = ("password", "passwd", "secret", "token", "credential")  # anywhere in the name (api_token)
+FORBIDDEN_PARTS = ("key", "keys", "private", "pwd")  # a whole part of the name (api_key, db_pwd), or ...key at the end
+ENTITY_REF_RE = re.compile(r"^([a-z][a-z-]*):(.+)$")
+COLLECTED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$")
+NAME_PARTS_RE = re.compile(r"[a-z0-9]+")
+SCALARS = (str, int, float, bool, type(None))
+
+
+def is_scalar_value(value) -> bool:
+    """attrs value allowed by the contract: a scalar or a list of scalars."""
+    return isinstance(value, SCALARS) or (isinstance(value, list) and all(isinstance(v, SCALARS) for v in value))
+
+
+def is_forbidden_key(name) -> bool:
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(name)).lower()  # camelCase -> camel_case
+    parts = NAME_PARTS_RE.findall(text)
+    return (any(word in text for word in FORBIDDEN_WORDS) or any(part in FORBIDDEN_PARTS for part in parts)
+            or text.endswith(("key", "keys")))
+
+
+def entity_ref_problem(value) -> bool:
+    """True when value is not kind:id with a kind of the contract."""
+    m = ENTITY_REF_RE.match(value) if isinstance(value, str) else None
+    return not m or m.group(1) not in KINDS
+
+
+def _keep_fields(obj: dict, allowed, where: str, dropped: list) -> dict:
+    """obj with only the contract's fields; each other field is dropped and reported by name (never by value)."""
+    kept = {}
+    for name, value in obj.items():
+        if name not in allowed:
+            dropped.append(f"{where}: campo {name} descartado (fora do contrato)")
+        elif is_forbidden_key(name):
+            dropped.append(f"{where}: {name} descartada (chave proibida)")
+        else:
+            kept[name] = value
+    return kept
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _text_fields(obj: dict, fields, where: str, violations: list) -> None:
+    """Each present field of `fields` must be text; the message never repeats the value (it may be a secret)."""
+    for name in fields:
+        if name in obj and not isinstance(obj[name], str):
+            violations.append(f"{where}: {name} precisa ser texto")
+
+
+def _check_entity(index: int, entity, seen: set, violations: list, dropped: list):
+    where = f"entities[{index}]"
+    if not isinstance(entity, dict):
+        violations.append(f"{where}: precisa ser um objeto {{kind, id, name, attrs, source}}")
+        return entity
+    missing = [field for field in ENTITY_FIELDS if field not in entity]
+    if missing:
+        violations.append(f"{where}: faltam campos: {', '.join(missing)}")
+    _text_fields(entity, ("kind", "id", "name", "source"), where, violations)
+    kind, eid = entity.get("kind"), entity.get("id")
+    if isinstance(kind, str) and kind not in KINDS:
+        violations.append(f"{where}: kind desconhecido: {kind}")
+    named = isinstance(kind, str) and isinstance(eid, str)
+    key = f"{kind}:{eid}" if named else where
+    if named:
+        if key in seen:
+            violations.append(f"{where}: chave repetida: {key}")
+        seen.add(key)
+    clean = _keep_fields(entity, ENTITY_FIELDS, key, dropped)
+    attrs = entity.get("attrs", {})
+    if not isinstance(attrs, dict):
+        violations.append(f"{where}: attrs precisa ser um objeto")
+        return clean
+    kept = {}
+    for name, value in attrs.items():
+        if is_forbidden_key(name):
+            dropped.append(f"{key}: attrs.{name} descartada (chave proibida)")
+            continue
+        if not is_scalar_value(value):
+            violations.append(f"{where}: attrs.{name} não é escalar")
+        kept[name] = value
+    if "attrs" in clean:
+        clean["attrs"] = kept
+    return clean
+
+
+def _check_relation(index: int, relation, violations: list, dropped: list):
+    where = f"relations[{index}]"
+    if not isinstance(relation, dict):
+        violations.append(f"{where}: precisa ser um objeto {{from, to, type, source}}")
+        return relation
+    missing = [field for field in RELATION_FIELDS if field not in relation]
+    if missing:
+        violations.append(f"{where}: faltam campos: {', '.join(missing)}")
+    _text_fields(relation, RELATION_FIELDS, where, violations)
+    if "inferred" in relation and not isinstance(relation["inferred"], bool):
+        violations.append(f"{where}: inferred precisa ser true ou false")
+    if isinstance(relation.get("type"), str) and relation["type"] not in RELATION_TYPES:
+        violations.append(f"{where}: type desconhecido: {relation['type']}")
+    for end in ("from", "to"):
+        if isinstance(relation.get(end), str) and entity_ref_problem(relation[end]):
+            violations.append(f"{where}: {end} fora do formato kind:id: {relation[end]}")
+    return _keep_fields(relation, RELATION_ALLOWED, where, dropped)
+
+
+def _flat_object(value, allowed) -> bool:
+    return isinstance(value, dict) and all(allowed(v) for v in value.values())
+
+
+def _check_signal(index: int, signal, violations: list, dropped: list):
+    where = f"signals[{index}]"
+    if not isinstance(signal, dict) or not isinstance(signal.get("type"), str):
+        violations.append(f"{where}: precisa ser um objeto com type")
+        return signal
+    _text_fields(signal, ("repository",), where, violations)
+    if "sample" in signal and not (isinstance(signal["sample"], list)
+                                   and all(isinstance(item, str) for item in signal["sample"])):
+        violations.append(f"{where}: sample precisa ser uma lista de textos")
+    if "total" in signal and not _is_number(signal["total"]):
+        violations.append(f"{where}: total precisa ser um número")
+    if "pattern_counts" in signal and not _flat_object(signal["pattern_counts"], _is_number):
+        violations.append(f"{where}: pattern_counts precisa ser um objeto de números")
+    if "counts" in signal and not _flat_object(signal["counts"], _is_number):
+        violations.append(f"{where}: counts precisa ser um objeto de números")
+    if "present" in signal and not _flat_object(signal["present"], lambda v: isinstance(v, bool)):
+        violations.append(f"{where}: present precisa ser um objeto de booleanos")
+    return _keep_fields(signal, SIGNAL_ALLOWED, where, dropped)
+
+
+def validate_collector_output(data) -> tuple:
+    """(clean, violations, dropped) of a collector output against org-atlas/collector@1 (ADR-0011).
+
+    violations empty = valid. A relation to an entity of another collector is valid (only the kind:id format is
+    checked; dangling references are a lint warning, SPEC-0039). Only the contract's fields stay in `clean`
+    (output, entity, relation and signal); any other field and every forbidden key (password, passwd, pwd, secret,
+    token, key, credential, private — in attrs and in a signal) is dropped and reported in `dropped` by where it
+    was and its name, never its value. Dropping is not a violation."""
+    if not isinstance(data, dict):
+        return data, ["a saída não é um objeto JSON"], []
+    violations, dropped = [], []
+    missing = [field for field in OUTPUT_FIELDS if field not in data]
+    if missing:
+        violations.append(f"faltam campos: {', '.join(missing)}")
+    _text_fields(data, ("contract", "category", "collected_at"), "saída", violations)
+    if isinstance(data.get("contract"), str) and data["contract"] not in SUPPORTED_CONTRACTS:
+        violations.append(f"contract não suportado: {data['contract']}")
+    if "collector" in data and not (isinstance(data["collector"], str) and data["collector"]):
+        violations.append("collector precisa ser um texto não vazio")
+    if isinstance(data.get("category"), str) and data["category"] not in CATEGORIES:
+        violations.append(f"category desconhecida: {data['category']}")
+    if isinstance(data.get("collected_at"), str) and not COLLECTED_AT_RE.match(data["collected_at"]):
+        violations.append(f"collected_at fora do formato ISO 8601 UTC (AAAA-MM-DDTHH:MM:SSZ): {data['collected_at']}")
+    clean = _keep_fields(data, OUTPUT_ALLOWED, "saída", dropped)
+    entities = data.get("entities", [])
+    if not isinstance(entities, list):
+        violations.append("entities precisa ser uma lista")
+    else:
+        seen = set()
+        clean["entities"] = [_check_entity(i, e, seen, violations, dropped) for i, e in enumerate(entities)]
+    relations = data.get("relations", [])
+    if not isinstance(relations, list):
+        violations.append("relations precisa ser uma lista")
+    else:
+        clean["relations"] = [_check_relation(i, r, violations, dropped) for i, r in enumerate(relations)]
+    if "signals" in data:
+        signals = data["signals"]
+        if not isinstance(signals, list):
+            violations.append("signals precisa ser uma lista")
+        else:
+            clean["signals"] = [_check_signal(i, s, violations, dropped) for i, s in enumerate(signals)]
+    return clean, violations, dropped
+
+
+# ---------------------------------------------------------------- redaction (references/redaction.md)
+
+REDACTED = "[REDACTED]"
+PRIVATE_KEY_HEADER = r"[A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----"  # PEM (RSA, EC, OPENSSH...) and PGP blocks
+SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and masks only the password
+    ("private-key", rf"-----BEGIN {PRIVATE_KEY_HEADER}(?:.*?-----END {PRIVATE_KEY_HEADER}|.*\Z)"),
+    # user may be empty (redis://:pw@host); the password runs up to the last @ before a space, so / and @
+    # inside it are masked too (when in doubt, more is masked, never less)
+    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]*:)(?:[^\s@]*@)+"),
+    # tokens glued to punctuation (_ghp_, =ghp_, token:ghp_) are masked too
+    ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),
+    # GitHub: standalone (not inside a word: laughs_...) or, glued to text, the exact 36-character body
+    ("github", r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{36}(?![A-Za-z0-9])"),
+    ("slack", r"xox[abposr]-[A-Za-z0-9-]{10,}"),
+    ("aws-access-key", r"(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),  # not ASIAPACIFIC...1
+    ("jwt", r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+)
+SECRET_RE = re.compile("|".join(f"(?:{regex})" for _, regex in SECRET_PATTERNS), re.DOTALL)
+_EXTRA_CACHE = {}
+
+
+def compile_extra_patterns(extra_patterns) -> list:
+    """Compiled redaction.extra_patterns; an invalid one = AtlasError (code 2) naming its position, not its text."""
+    key = tuple(p if isinstance(p, str) else p.pattern for p in extra_patterns or ())
+    if key not in _EXTRA_CACHE:
+        compiled = []
+        for index, pattern in enumerate(extra_patterns or ()):
+            if hasattr(pattern, "subn"):
+                compiled.append(pattern)
+                continue
+            if not isinstance(pattern, str) or not pattern:
+                raise AtlasError(f"redaction.extra_patterns[{index}] precisa ser uma regex (texto não vazio)", 2)
+            try:
+                regex = re.compile(pattern)
+            except re.error as e:
+                raise AtlasError(f"redaction.extra_patterns[{index}] não é uma regex válida: {e}", 2) from e
+            if regex.search("") is not None:  # would insert [REDACTED] between every character
+                raise AtlasError(f"redaction.extra_patterns[{index}] casa com o texto vazio — "
+                                 "exija ao menos um caractere", 2)
+            compiled.append(regex)
+        _EXTRA_CACHE[key] = compiled
+    return _EXTRA_CACHE[key]
+
+
+def _mask(match) -> str:
+    prefix = match.group("url")
+    return f"{prefix}{REDACTED}@" if prefix else REDACTED
+
+
+def _redact_text(text: str, extras: list) -> tuple:
+    text, count = SECRET_RE.subn(_mask, text)
+    for pattern in extras:
+        text, n = _sub_non_empty(pattern, text)
+        count += n
+    return text, count
+
+
+def _sub_non_empty(pattern, text: str) -> tuple:
+    """pattern.subn(REDACTED, text) that ignores zero-width matches (\\b, lookarounds): they never mask."""
+    count = 0
+
+    def mask(match):
+        nonlocal count
+        if not match.group(0):
+            return ""
+        count += 1
+        return REDACTED
+
+    return pattern.sub(mask, text), count
+
+
+def _redact_keys(item: dict, extras: list) -> tuple:
+    """({original key: masked key}, count) for the keys of a dict. Masked keys that collide in the same object
+    are kept apart with "#2", "#3"... in the order of the original keys (deterministic, whatever the input
+    order); a key equal to an existing one is avoided the same way."""
+    masked, count = {}, 0
+    for key in item:
+        if isinstance(key, str):
+            masked[key], n = _redact_text(key, extras)
+            count += n
+        else:
+            masked[key] = key
+    changed = sorted((k for k in item if masked[k] != k), key=str)
+    taken = {k for k in item if masked[k] == k}
+    for key in changed:
+        base, candidate, n = masked[key], masked[key], 1
+        while candidate in taken:
+            n += 1
+            candidate = f"{base}#{n}"
+        masked[key] = candidate
+        taken.add(candidate)
+    return masked, count
+
+
+def redact(value, extra_patterns=()) -> tuple:
+    """(redacted, count): every piece of a string (also dict keys and values, and lists) that matches a secret
+    pattern or an extra pattern becomes [REDACTED]; count = occurrences. Other scalars stay as they are."""
+    extras = compile_extra_patterns(extra_patterns)
+
+    def walk(item):
+        if isinstance(item, str):
+            return _redact_text(item, extras)
+        if isinstance(item, dict):
+            keys, total = _redact_keys(item, extras)
+            result = {}
+            for key, child in item.items():
+                result[keys[key]], n = walk(child)
+                total += n
+            return result, total
+        if isinstance(item, list):
+            result, total = [], 0
+            for child in item:
+                masked, n = walk(child)
+                result.append(masked)
+                total += n
+            return result, total
+        return item, 0
+
+    return walk(value)
+
+
+# ---------------------------------------------------------------- snapshots and diff
+
+def entity_key(entity) -> str:
+    return f"{entity.get('kind')}:{entity.get('id')}"
+
+
+def relation_key(relation) -> str:
+    return f"{relation.get('from')} {relation.get('type')} {relation.get('to')}"
+
+
+def _canonical(value) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def normalize(data) -> str:
+    """Snapshot text (snapshots/<id>.json): entities sorted by kind:id, relations by from/type/to, signals by
+    content, sorted keys, 2-space indentation, final newline. Same state = same text (idempotent)."""
+    snapshot = dict(data)
+    snapshot["entities"] = sorted(data.get("entities", []), key=lambda e: (entity_key(e), _canonical(e)))
+    snapshot["relations"] = sorted(data.get("relations", []),
+                                   key=lambda r: (str(r.get("from")), str(r.get("type")), str(r.get("to")),
+                                                  _canonical(r)))
+    if "signals" in data:
+        snapshot["signals"] = sorted(data["signals"], key=_canonical)
+    return json.dumps(snapshot, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+
+
+def diff_snapshots(old, new) -> dict:
+    """Entities added/removed/changed (by kind:id) and relations added/removed ("<from> <type> <to>") from old to
+    new; old None = first scan (everything added)."""
+    old = old or {}
+    old_entities = {entity_key(e): e for e in old.get("entities", [])}
+    new_entities = {entity_key(e): e for e in new.get("entities", [])}
+    old_relations = {relation_key(r) for r in old.get("relations", [])}
+    new_relations = {relation_key(r) for r in new.get("relations", [])}
+    return {
+        "entities": {
+            "added": sorted(set(new_entities) - set(old_entities)),
+            "removed": sorted(set(old_entities) - set(new_entities)),
+            "changed": sorted(k for k in set(new_entities) & set(old_entities) if new_entities[k] != old_entities[k]),
+        },
+        "relations": {
+            "added": sorted(new_relations - old_relations),
+            "removed": sorted(old_relations - new_relations),
+        },
+    }
+
+
+def has_changes(diff: dict) -> bool:
+    return any(diff["entities"].values()) or any(diff["relations"].values())
+
+
 # ---------------------------------------------------------------- collectors
 
-def run_collector(argv):
-    raise NotImplementedError("run_collector (SPEC-0033)")
+COLLECTOR_ID_RE = re.compile(r"^[a-z0-9-]+$")
+COLLECTOR_TIMEOUT = 300
+ABSOLUTE_MESSAGE = "command não pode ter caminho absoluto — use {skill} ou {atlas}"
+ABSOLUTE_ARG_RE = re.compile(r"(^|=|^-[A-Za-z0-9])(/|~|[A-Za-z]:[\\/]|\\\\)")  # also --out=/x, -o/x
+STDERR_LINES = 20
+STDERR_LINE_MAX = 500
+BOOLEANS = {"true": True, "false": False}
+
+
+class CollectorError(Exception):
+    """A collector that could not run or failed: `reason` and the last lines of its stderr (not yet redacted)."""
+
+    def __init__(self, reason, stderr=""):
+        super().__init__(reason)
+        self.reason = reason
+        self.stderr = stderr
+
+
+def _timeout_of(name, value) -> int:
+    if value in (None, ""):
+        return COLLECTOR_TIMEOUT
+    text = str(value).strip()
+    if isinstance(value, bool) or not re.match(r"^\d+$", text) or int(text) < 1:
+        raise AtlasError(f"coletor {name}: timeout precisa ser um número inteiro de segundos (≥ 1): {value}", 2)
+    return int(text)
+
+
+def _enabled_of(name, value) -> bool:
+    if value in (None, ""):
+        return True
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text not in BOOLEANS:
+        raise AtlasError(f"coletor {name}: enabled precisa ser true ou false: {value}", 2)
+    return BOOLEANS[text]
+
+
+def validate_collectors(collectors) -> list:
+    """The `collectors` key of atlas-config.yml, validated, with defaults (timeout 300, enabled true). Scalars may
+    come as text from parse_yaml. Invalid = AtlasError (code 2)."""
+    if collectors in (None, ""):
+        return []
+    if not isinstance(collectors, list):
+        raise AtlasError("collectors precisa ser uma lista (references/collector-contract.md)", 2)
+    result, ids = [], set()
+    for index, item in enumerate(collectors):
+        if not isinstance(item, dict):
+            raise AtlasError(f"collectors[{index}] precisa ser um mapa com id, category e command", 2)
+        cid = item.get("id")
+        if not isinstance(cid, str) or not COLLECTOR_ID_RE.match(cid):
+            raise AtlasError(f"collectors[{index}]: id inválido: {cid} — use letras minúsculas, números e '-'", 2)
+        if cid in ids:
+            raise AtlasError(f"collectors: id repetido: {cid}", 2)
+        ids.add(cid)
+        category = item.get("category")
+        if category not in CATEGORIES:
+            raise AtlasError(f"coletor {cid}: category desconhecida: {category} — use um de: "
+                             f"{' | '.join(CATEGORIES)}", 2)
+        command = item.get("command")
+        if (not isinstance(command, list) or not command
+                or any(not isinstance(arg, str) or not arg for arg in command)):
+            raise AtlasError(f"coletor {cid}: command precisa ser uma lista não vazia [executável, argumentos...] "
+                             "(sem shell)", 2)
+        if any(ABSOLUTE_ARG_RE.search(arg) for arg in command):
+            raise AtlasError(f"coletor {cid}: {ABSOLUTE_MESSAGE}", 2)
+        result.append(dict(item, command=list(command), timeout=_timeout_of(cid, item.get("timeout")),
+                           enabled=_enabled_of(cid, item.get("enabled"))))
+    return result
+
+
+def resolve_command(command, skill, atlas) -> list:
+    """command with {skill} (the skill folder) and {atlas} (the atlas folder) replaced in each argument."""
+    return [str(arg).replace("{skill}", str(skill)).replace("{atlas}", str(atlas)) for arg in command]
+
+
+def _kill(proc) -> None:
+    """Kills the collector and what it started (its process group on POSIX), then reaps it."""
+    try:
+        if os.name != "nt":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except OSError:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.communicate(timeout=5)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+
+def run_collector(argv, timeout=COLLECTOR_TIMEOUT) -> tuple:
+    """The only function of atlas.py that runs an external process (ADR-0010): argv as a list, never a shell, in a
+    temporary folder and its own process group, with a timeout (the whole group is killed when it expires) and the
+    output captured. Returns (stdout, stderr); exit ≠ 0, timeout or missing executable = CollectorError."""
+    with tempfile.TemporaryDirectory(prefix="atlas-collector-") as tmp:
+        try:
+            proc = subprocess.Popen(argv, cwd=tmp, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
+                                    start_new_session=os.name != "nt")
+        except FileNotFoundError as e:
+            raise CollectorError(f"executável não encontrado: {argv[0]}") from e
+        except OSError as e:
+            raise CollectorError(f"não consegui executar {argv[0]}: {e.strerror or e}") from e
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            _kill(proc)
+            raise CollectorError(f"tempo esgotado ({timeout} s); processo encerrado") from e
+        except BaseException:
+            _kill(proc)
+            raise
+    if proc.returncode != 0:
+        raise CollectorError(f"saiu com {proc.returncode}", stderr or "")
+    return stdout or "", stderr or ""
+
+
+def stderr_tail(text: str, extras: list) -> list:
+    """Last STDERR_LINES lines of a collector's stderr, each cut to STDERR_LINE_MAX characters. The whole text is
+    redacted first, so a multi-line key block or a token at the cut never leaks a piece."""
+    masked, _ = _redact_text(text or "", extras)
+    return [line[:STDERR_LINE_MAX] for line in masked.rstrip().splitlines()[-STDERR_LINES:]]
+
+
+# ---------------------------------------------------------------- scan
+
+SNAPSHOTS_DIR = "snapshots"
+SCAN_STATE = "_scan.json"
+
+
+def write_atomic(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def read_json_file(path: Path):
+    """Parsed JSON of a file, or None when it does not exist or is not valid JSON (unreadable = AtlasError)."""
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(read_text(path))
+    except ValueError:
+        return None
+
+
+def _without_collected_at(snapshot) -> dict:
+    return {k: v for k, v in (snapshot or {}).items() if k != "collected_at"}
+
+
+def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
+    """Runs, validates, redacts, normalizes and writes one collector; returns its report (never raises for a
+    failure of the collector: the previous snapshot is kept)."""
+    cid = collector["id"]
+    report = {"id": cid, "status": "failed", "reason": "", "violations": [], "stderr": [], "dropped": [],
+              "redacted": 0, "diff": None}
+    try:
+        argv = resolve_command(collector["command"], SKILL_DIR, atlas)
+        stdout, _ = run_collector(argv, collector["timeout"])
+    except CollectorError as e:
+        report["reason"] = _redact_text(e.reason, extras)[0]
+        report["stderr"] = stderr_tail(e.stderr, extras)
+        return report
+    try:
+        data = json.loads(stdout)
+    except ValueError as e:
+        report["reason"] = f"JSON inválido na saída: {e.msg} (linha {e.lineno}, coluna {e.colno})"
+        return report
+    clean, violations, dropped = validate_collector_output(data)
+    if violations:
+        report["reason"] = f"saída fora do contrato {CONTRACT} ({len(violations)} violação(ões))"
+        report["violations"] = [_redact_text(v, extras)[0] for v in violations]
+        return report
+    snapshot, count = redact(clean, extras)
+    text = normalize(snapshot)
+    snapshot = json.loads(text)
+    path = atlas / SNAPSHOTS_DIR / f"{cid}.json"
+    previous = read_json_file(path)
+    diff = diff_snapshots(previous, snapshot)
+    try:
+        # same state (collected_at aside) = the file stays as it is: no noise in the atlas history
+        if previous is None or _without_collected_at(previous) != _without_collected_at(snapshot):
+            write_atomic(path, text)
+    except OSError as e:
+        report["reason"] = f"não consegui gravar {path.name}: {e.strerror or e}"
+        return report
+    report.update(status="ok", dropped=[_redact_text(d, extras)[0] for d in dropped], redacted=count, diff=diff,
+                  seen_at=today, entities=len(snapshot["entities"]), relations=len(snapshot["relations"]))
+    return report
+
+
+def scan_line(report: dict) -> str:
+    if report["status"] != "ok":
+        return f"FALHA {report['id']} — {report['reason']}"
+    diff = report["diff"]
+    if not has_changes(diff):
+        return f"OK {report['id']} — sem mudanças"
+    e, r = diff["entities"], diff["relations"]
+    return (f"OK {report['id']} — +{len(e['added'])} entidades, -{len(e['removed'])}, ~{len(e['changed'])}; "
+            f"+{len(r['added'])} relações, -{len(r['removed'])}")
+
+
+def print_scan(reports: list) -> None:
+    for report in reports:
+        print(scan_line(report))
+        for violation in report["violations"]:
+            print(f"  {violation}")
+        if report["stderr"]:
+            print(f"  stderr (últimas {STDERR_LINES} linhas):")
+            for line in report["stderr"]:
+                print(f"    {line}")
+        for item in report["dropped"]:
+            print(f"  {item}")
+        if report["redacted"]:
+            print(f"  {report['redacted']} valor(es) mascarado(s)")
+    failed = sum(1 for r in reports if r["status"] != "ok")
+    print(f"{len(reports)} coletor(es), {failed} com falha")
+
+
+def scan_config():
+    """(atlas folder, shared configuration) of this machine for scan; problems = AtlasError."""
+    path, local = read_local()
+    atlas = local.get("atlas")
+    if not isinstance(atlas, str) or not atlas:
+        raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
+    shared_path = Path(atlas) / SHARED_FILE
+    if not shared_path.is_file():
+        raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared_path}", 2)
+    return Path(atlas), read_yaml(shared_path)
+
+
+def selected_collectors(collectors: list, only) -> list:
+    if not only:
+        return [c for c in collectors if c["enabled"]]
+    wanted = [name.strip() for name in str(only).split(",") if name.strip()]
+    by_id = {c["id"]: c for c in collectors}
+    unknown = [name for name in wanted if name not in by_id]
+    if unknown:
+        raise AtlasError(f"coletor não declarado em atlas-config.yml: {', '.join(unknown)}", 2)
+    disabled = [name for name in wanted if not by_id[name]["enabled"]]
+    if disabled:
+        raise AtlasError(f"coletor com enabled: false: {', '.join(disabled)} — habilite no atlas-config.yml", 2)
+    return [by_id[name] for name in dict.fromkeys(wanted)]
+
+
+def cmd_scan(only=None, as_json=False):
+    """scan [--only id,...] [--json]: each enabled collector (or the --only ones) is run, validated, redacted,
+    normalized and written to snapshots/<id>.json; snapshots/_scan.json keeps seen_at (date of the last good scan),
+    status and counts. A failing collector keeps its previous snapshot and seen_at and does not stop the others.
+    Exit 0 without failure, 1 with a failure, 2 with an invalid configuration or an unknown --only id."""
+    atlas, shared = scan_config()
+    collectors = validate_collectors(shared.get("collectors"))
+    redaction = shared.get("redaction")
+    extra = redaction.get("extra_patterns") if isinstance(redaction, dict) else None
+    if extra not in (None, "") and not isinstance(extra, list):
+        raise AtlasError("redaction.extra_patterns precisa ser uma lista de regex", 2)
+    extras = compile_extra_patterns(extra or [])
+    selected = selected_collectors(collectors, only)
+    if not selected:  # nothing runs, nothing is written (not even snapshots/)
+        if as_json:
+            print(json.dumps({"version": ATLAS_VERSION, "ok": True, "collectors": []}, ensure_ascii=False, indent=2))
+        else:
+            print("nenhum coletor habilitado em atlas-config.yml (references/collector-contract.md)")
+        return 0
+    snapshots = atlas / SNAPSHOTS_DIR
+    snapshots.mkdir(parents=True, exist_ok=True)
+    state_path = snapshots / SCAN_STATE
+    state = read_json_file(state_path)
+    state = state if isinstance(state, dict) else {}
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    reports = []
+    for collector in selected:
+        report = scan_one(collector, atlas, extras, today)
+        previous = state.get(collector["id"]) if isinstance(state.get(collector["id"]), dict) else {}
+        if report["status"] == "ok":
+            state[collector["id"]] = {"seen_at": today, "status": "ok", "entities": report["entities"],
+                                      "relations": report["relations"]}
+        else:  # seen_at does not move: the facts of this collector are as old as its last good scan
+            state[collector["id"]] = {"seen_at": previous.get("seen_at"), "status": "failed",
+                                      "entities": previous.get("entities", 0),
+                                      "relations": previous.get("relations", 0)}
+        reports.append(report)
+    write_atomic(state_path, json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+    failed = any(r["status"] != "ok" for r in reports)
+    if as_json:
+        print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports},
+                         ensure_ascii=False, indent=2))
+    else:
+        print_scan(reports)
+    return 1 if failed else 0
 
 
 # ---------------------------------------------------------------- init
@@ -685,6 +1344,9 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("scan", help="roda os coletores, valida, mascara, grava snapshots/ e mostra o diff")
+    p.add_argument("--only", help="ids dos coletores separados por vírgula")
+    p.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -694,6 +1356,8 @@ def main(argv=None):
             return cmd_config(args.json)
         if args.command == "doctor":
             return cmd_doctor(args.json)
+        if args.command == "scan":
+            return cmd_scan(args.only, args.json)
     except AtlasError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code

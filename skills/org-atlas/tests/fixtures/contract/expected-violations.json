@@ -1,0 +1,11 @@
+{
+  "invalid/contract-version.json": "contract não suportado: org-atlas/collector@9",
+  "invalid/missing-field.json": "faltam campos: collected_at",
+  "invalid/category-unknown.json": "category desconhecida: billing",
+  "invalid/kind-unknown.json": "entities[2]: kind desconhecido: widget",
+  "invalid/type-unknown.json": "relations[0]: type desconhecido: calls",
+  "invalid/duplicate-key.json": "entities[2]: chave repetida: repository:acme/api",
+  "invalid/from-format.json": "relations[0]: from fora do formato kind:id: acme/api/ci",
+  "invalid/to-format.json": "relations[0]: to fora do formato kind:id: acme/api",
+  "invalid/attrs-not-scalar.json": "entities[0]: attrs.owner não é escalar"
+}
