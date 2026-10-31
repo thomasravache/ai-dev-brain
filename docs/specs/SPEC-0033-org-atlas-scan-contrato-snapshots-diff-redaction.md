@@ -4,7 +4,7 @@ title: "org-atlas: scan com contrato dos coletores, snapshots, diff e redaction"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0032]
