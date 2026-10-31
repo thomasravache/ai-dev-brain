@@ -11,14 +11,18 @@ run_collector is the only function allowed to run an external process (SPEC-0033
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import re
 import shutil
+import signal
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-ATLAS_VERSION = "2026.10.1"
+ATLAS_VERSION = "2026.10.2"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -403,40 +407,554 @@ def existing_credentials(path: Path) -> dict:
     return credentials if isinstance(credentials, dict) else {}
 
 
-# ---------------------------------------------------------------- collectors
+# ---------------------------------------------------------------- collector contract (ADR-0011)
 
-def run_collector(argv):
-    raise NotImplementedError("run_collector (SPEC-0033)")
+CONTRACT = "org-atlas/collector@1"
+SUPPORTED_CONTRACTS = (CONTRACT,)  # a breaking @2 keeps accepting the previous version (ADR-0011)
+CATEGORIES = ("code", "ci", "delivery", "runtime", "data", "messaging", "observability", "tracker", "docs",
+              "secrets")
+KINDS = ("repository", "service", "environment", "deployment", "cluster", "datastore", "queue", "topic", "bucket",
+         "secret-ref", "pipeline", "team")
+RELATION_TYPES = ("builds", "sourced_from", "deploys", "runs_in", "reads", "writes", "publishes", "consumes",
+                  "depends_on", "owns")
+OUTPUT_FIELDS = ("contract", "collector", "category", "collected_at", "entities", "relations")
+ENTITY_FIELDS = ("kind", "id", "name", "attrs", "source")
+RELATION_FIELDS = ("from", "to", "type", "source")
+# attrs keys whose name says "secret": dropped and reported, never a violation (ADR-0011)
+FORBIDDEN_WORDS = ("password", "secret", "token", "credential")  # anywhere in the name (api_token, passwords)
+FORBIDDEN_PARTS = ("key", "keys", "private")  # a whole part of the name (api_key, private), or ...key at the end
+ENTITY_REF_RE = re.compile(r"^([a-z][a-z-]*):(.+)$")
+COLLECTED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$")
+NAME_PARTS_RE = re.compile(r"[a-z0-9]+")
+SCALARS = (str, int, float, bool, type(None))
 
 
-def validate_collectors(collectors) -> list:
-    raise NotImplementedError("validate_collectors (SPEC-0033)")
+def is_scalar_value(value) -> bool:
+    """attrs value allowed by the contract: a scalar or a list of scalars."""
+    return isinstance(value, SCALARS) or (isinstance(value, list) and all(isinstance(v, SCALARS) for v in value))
 
 
-def resolve_command(command, skill, atlas) -> list:
-    raise NotImplementedError("resolve_command (SPEC-0033)")
+def is_forbidden_key(name) -> bool:
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(name)).lower()  # camelCase -> camel_case
+    parts = NAME_PARTS_RE.findall(text)
+    return (any(word in text for word in FORBIDDEN_WORDS) or any(part in FORBIDDEN_PARTS for part in parts)
+            or text.endswith(("key", "keys")))
+
+
+def entity_ref_problem(value) -> bool:
+    """True when value is not kind:id with a kind of the contract."""
+    m = ENTITY_REF_RE.match(value) if isinstance(value, str) else None
+    return not m or m.group(1) not in KINDS
+
+
+def _check_entity(index: int, entity, seen: set, violations: list, dropped: list):
+    where = f"entities[{index}]"
+    if not isinstance(entity, dict):
+        violations.append(f"{where}: precisa ser um objeto {{kind, id, name, attrs, source}}")
+        return entity
+    missing = [field for field in ENTITY_FIELDS if field not in entity]
+    if missing:
+        violations.append(f"{where}: faltam campos: {', '.join(missing)}")
+    kind = entity.get("kind")
+    if "kind" in entity and kind not in KINDS:
+        violations.append(f"{where}: kind desconhecido: {kind}")
+    key = f"{kind}:{entity.get('id')}"
+    if "kind" in entity and "id" in entity:
+        if key in seen:
+            violations.append(f"{where}: chave repetida: {key}")
+        seen.add(key)
+    attrs = entity.get("attrs", {})
+    if not isinstance(attrs, dict):
+        violations.append(f"{where}: attrs precisa ser um objeto")
+        return entity
+    kept = {}
+    for name, value in attrs.items():
+        if is_forbidden_key(name):
+            dropped.append(f"{key}: attrs.{name} descartada (chave proibida)")
+            continue
+        if not is_scalar_value(value):
+            violations.append(f"{where}: attrs.{name} não é escalar")
+        kept[name] = value
+    return dict(entity, attrs=kept)
+
+
+def _check_relation(index: int, relation, violations: list):
+    where = f"relations[{index}]"
+    if not isinstance(relation, dict):
+        violations.append(f"{where}: precisa ser um objeto {{from, to, type, source}}")
+        return
+    missing = [field for field in RELATION_FIELDS if field not in relation]
+    if missing:
+        violations.append(f"{where}: faltam campos: {', '.join(missing)}")
+    if "type" in relation and relation["type"] not in RELATION_TYPES:
+        violations.append(f"{where}: type desconhecido: {relation['type']}")
+    for end in ("from", "to"):
+        if end in relation and entity_ref_problem(relation[end]):
+            violations.append(f"{where}: {end} fora do formato kind:id: {relation[end]}")
 
 
 def validate_collector_output(data) -> tuple:
-    raise NotImplementedError("validate_collector_output (SPEC-0033)")
+    """(clean, violations, dropped) of a collector output against org-atlas/collector@1 (ADR-0011).
+
+    violations empty = valid. A relation to an entity of another collector is valid (only the kind:id format is
+    checked; dangling references are a lint warning, SPEC-0039). Forbidden attrs keys (password, secret, token,
+    key, credential, private) leave `clean` and are reported in `dropped` by entity key and name, never value."""
+    if not isinstance(data, dict):
+        return data, ["a saída não é um objeto JSON"], []
+    violations, dropped = [], []
+    missing = [field for field in OUTPUT_FIELDS if field not in data]
+    if missing:
+        violations.append(f"faltam campos: {', '.join(missing)}")
+    if "contract" in data and data["contract"] not in SUPPORTED_CONTRACTS:
+        violations.append(f"contract não suportado: {data['contract']}")
+    if "collector" in data and not (isinstance(data["collector"], str) and data["collector"]):
+        violations.append("collector precisa ser um texto não vazio")
+    if "category" in data and data["category"] not in CATEGORIES:
+        violations.append(f"category desconhecida: {data['category']}")
+    if "collected_at" in data and not (isinstance(data["collected_at"], str)
+                                       and COLLECTED_AT_RE.match(data["collected_at"])):
+        violations.append(f"collected_at fora do formato ISO 8601 UTC (AAAA-MM-DDTHH:MM:SSZ): {data['collected_at']}")
+    clean = dict(data)
+    entities = data.get("entities", [])
+    if not isinstance(entities, list):
+        violations.append("entities precisa ser uma lista")
+    else:
+        seen = set()
+        clean["entities"] = [_check_entity(i, e, seen, violations, dropped) for i, e in enumerate(entities)]
+    relations = data.get("relations", [])
+    if not isinstance(relations, list):
+        violations.append("relations precisa ser uma lista")
+    else:
+        for i, relation in enumerate(relations):
+            _check_relation(i, relation, violations)
+    if "signals" in data:
+        signals = data["signals"]
+        if not isinstance(signals, list):
+            violations.append("signals precisa ser uma lista")
+        else:
+            for i, signal in enumerate(signals):
+                if not isinstance(signal, dict) or not isinstance(signal.get("type"), str):
+                    violations.append(f"signals[{i}]: precisa ser um objeto com type")
+    return clean, violations, dropped
+
+
+# ---------------------------------------------------------------- redaction (references/redaction.md)
+
+REDACTED = "[REDACTED]"
+SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and masks only the password
+    ("private-key", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?:.*?-----END [A-Z0-9 ]*PRIVATE KEY-----|.*\Z)"),
+    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:)[^\s/@]+@"),
+    ("github-pat", r"\bgithub_pat_[A-Za-z0-9_]{20,}"),
+    ("github", r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    ("slack", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
+    ("aws-access-key", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+)
+SECRET_RE = re.compile("|".join(f"(?:{regex})" for _, regex in SECRET_PATTERNS), re.DOTALL)
+_EXTRA_CACHE = {}
+
+
+def compile_extra_patterns(extra_patterns) -> list:
+    """Compiled redaction.extra_patterns; an invalid one = AtlasError (code 2) naming its position, not its text."""
+    key = tuple(p if isinstance(p, str) else p.pattern for p in extra_patterns or ())
+    if key not in _EXTRA_CACHE:
+        compiled = []
+        for index, pattern in enumerate(extra_patterns or ()):
+            if hasattr(pattern, "subn"):
+                compiled.append(pattern)
+                continue
+            if not isinstance(pattern, str) or not pattern:
+                raise AtlasError(f"redaction.extra_patterns[{index}] precisa ser uma regex (texto não vazio)", 2)
+            try:
+                compiled.append(re.compile(pattern))
+            except re.error as e:
+                raise AtlasError(f"redaction.extra_patterns[{index}] não é uma regex válida: {e}", 2) from e
+        _EXTRA_CACHE[key] = compiled
+    return _EXTRA_CACHE[key]
+
+
+def _mask(match) -> str:
+    prefix = match.group("url")
+    return f"{prefix}{REDACTED}@" if prefix else REDACTED
+
+
+def _redact_text(text: str, extras: list) -> tuple:
+    text, count = SECRET_RE.subn(_mask, text)
+    for pattern in extras:
+        text, n = pattern.subn(REDACTED, text)
+        count += n
+    return text, count
 
 
 def redact(value, extra_patterns=()) -> tuple:
-    raise NotImplementedError("redact (SPEC-0033)")
+    """(redacted, count): every piece of a string (also inside dict values and lists; keys stay) that matches a
+    secret pattern or an extra pattern becomes [REDACTED]; count = occurrences. Other scalars stay as they are."""
+    extras = compile_extra_patterns(extra_patterns)
+
+    def walk(item):
+        if isinstance(item, str):
+            return _redact_text(item, extras)
+        if isinstance(item, dict):
+            result, total = {}, 0
+            for key, child in item.items():
+                result[key], n = walk(child)
+                total += n
+            return result, total
+        if isinstance(item, list):
+            result, total = [], 0
+            for child in item:
+                masked, n = walk(child)
+                result.append(masked)
+                total += n
+            return result, total
+        return item, 0
+
+    return walk(value)
+
+
+# ---------------------------------------------------------------- snapshots and diff
+
+def entity_key(entity) -> str:
+    return f"{entity.get('kind')}:{entity.get('id')}"
+
+
+def relation_key(relation) -> str:
+    return f"{relation.get('from')} {relation.get('type')} {relation.get('to')}"
+
+
+def _canonical(value) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
 def normalize(data) -> str:
-    raise NotImplementedError("normalize (SPEC-0033)")
+    """Snapshot text (snapshots/<id>.json): entities sorted by kind:id, relations by from/type/to, signals by
+    content, sorted keys, 2-space indentation, final newline. Same state = same text (idempotent)."""
+    snapshot = dict(data)
+    snapshot["entities"] = sorted(data.get("entities", []), key=lambda e: (entity_key(e), _canonical(e)))
+    snapshot["relations"] = sorted(data.get("relations", []),
+                                   key=lambda r: (str(r.get("from")), str(r.get("type")), str(r.get("to")),
+                                                  _canonical(r)))
+    if "signals" in data:
+        snapshot["signals"] = sorted(data["signals"], key=_canonical)
+    return json.dumps(snapshot, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
 
 
 def diff_snapshots(old, new) -> dict:
-    raise NotImplementedError("diff_snapshots (SPEC-0033)")
+    """Entities added/removed/changed (by kind:id) and relations added/removed ("<from> <type> <to>") from old to
+    new; old None = first scan (everything added)."""
+    old = old or {}
+    old_entities = {entity_key(e): e for e in old.get("entities", [])}
+    new_entities = {entity_key(e): e for e in new.get("entities", [])}
+    old_relations = {relation_key(r) for r in old.get("relations", [])}
+    new_relations = {relation_key(r) for r in new.get("relations", [])}
+    return {
+        "entities": {
+            "added": sorted(set(new_entities) - set(old_entities)),
+            "removed": sorted(set(old_entities) - set(new_entities)),
+            "changed": sorted(k for k in set(new_entities) & set(old_entities) if new_entities[k] != old_entities[k]),
+        },
+        "relations": {
+            "added": sorted(new_relations - old_relations),
+            "removed": sorted(old_relations - new_relations),
+        },
+    }
+
+
+def has_changes(diff: dict) -> bool:
+    return any(diff["entities"].values()) or any(diff["relations"].values())
+
+
+# ---------------------------------------------------------------- collectors
+
+COLLECTOR_ID_RE = re.compile(r"^[a-z0-9-]+$")
+COLLECTOR_TIMEOUT = 300
+ABSOLUTE_MESSAGE = "command não pode ter caminho absoluto — use {skill} ou {atlas}"
+ABSOLUTE_ARG_RE = re.compile(r"(^|=)(/|~|[A-Za-z]:[\\/]|\\\\)")  # also --out=/x
+STDERR_LINES = 20
+STDERR_LINE_MAX = 500
+BOOLEANS = {"true": True, "false": False}
+
+
+class CollectorError(Exception):
+    """A collector that could not run or failed: `reason` and the last lines of its stderr (not yet redacted)."""
+
+    def __init__(self, reason, stderr=""):
+        super().__init__(reason)
+        self.reason = reason
+        self.stderr = stderr
+
+
+def _timeout_of(name, value) -> int:
+    if value in (None, ""):
+        return COLLECTOR_TIMEOUT
+    text = str(value).strip()
+    if isinstance(value, bool) or not re.match(r"^\d+$", text) or int(text) < 1:
+        raise AtlasError(f"coletor {name}: timeout precisa ser um número inteiro de segundos (≥ 1): {value}", 2)
+    return int(text)
+
+
+def _enabled_of(name, value) -> bool:
+    if value in (None, ""):
+        return True
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text not in BOOLEANS:
+        raise AtlasError(f"coletor {name}: enabled precisa ser true ou false: {value}", 2)
+    return BOOLEANS[text]
+
+
+def validate_collectors(collectors) -> list:
+    """The `collectors` key of atlas-config.yml, validated, with defaults (timeout 300, enabled true). Scalars may
+    come as text from parse_yaml. Invalid = AtlasError (code 2)."""
+    if collectors in (None, ""):
+        return []
+    if not isinstance(collectors, list):
+        raise AtlasError("collectors precisa ser uma lista (references/collector-contract.md)", 2)
+    result, ids = [], set()
+    for index, item in enumerate(collectors):
+        if not isinstance(item, dict):
+            raise AtlasError(f"collectors[{index}] precisa ser um mapa com id, category e command", 2)
+        cid = item.get("id")
+        if not isinstance(cid, str) or not COLLECTOR_ID_RE.match(cid):
+            raise AtlasError(f"collectors[{index}]: id inválido: {cid} — use letras minúsculas, números e '-'", 2)
+        if cid in ids:
+            raise AtlasError(f"collectors: id repetido: {cid}", 2)
+        ids.add(cid)
+        category = item.get("category")
+        if category not in CATEGORIES:
+            raise AtlasError(f"coletor {cid}: category desconhecida: {category} — use um de: "
+                             f"{' | '.join(CATEGORIES)}", 2)
+        command = item.get("command")
+        if (not isinstance(command, list) or not command
+                or any(not isinstance(arg, str) or not arg for arg in command)):
+            raise AtlasError(f"coletor {cid}: command precisa ser uma lista não vazia [executável, argumentos...] "
+                             "(sem shell)", 2)
+        if any(ABSOLUTE_ARG_RE.search(arg) for arg in command):
+            raise AtlasError(f"coletor {cid}: {ABSOLUTE_MESSAGE}", 2)
+        result.append(dict(item, command=list(command), timeout=_timeout_of(cid, item.get("timeout")),
+                           enabled=_enabled_of(cid, item.get("enabled"))))
+    return result
+
+
+def resolve_command(command, skill, atlas) -> list:
+    """command with {skill} (the skill folder) and {atlas} (the atlas folder) replaced in each argument."""
+    return [str(arg).replace("{skill}", str(skill)).replace("{atlas}", str(atlas)) for arg in command]
+
+
+def _kill(proc) -> None:
+    """Kills the collector and what it started (its process group on POSIX), then reaps it."""
+    try:
+        if os.name != "nt":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except OSError:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.communicate(timeout=5)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+
+def run_collector(argv, timeout=COLLECTOR_TIMEOUT) -> tuple:
+    """The only function of atlas.py that runs an external process (ADR-0010): argv as a list, never a shell, in a
+    temporary folder and its own process group, with a timeout (the whole group is killed when it expires) and the
+    output captured. Returns (stdout, stderr); exit ≠ 0, timeout or missing executable = CollectorError."""
+    with tempfile.TemporaryDirectory(prefix="atlas-collector-") as tmp:
+        try:
+            proc = subprocess.Popen(argv, cwd=tmp, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
+                                    start_new_session=os.name != "nt")
+        except FileNotFoundError as e:
+            raise CollectorError(f"executável não encontrado: {argv[0]}") from e
+        except OSError as e:
+            raise CollectorError(f"não consegui executar {argv[0]}: {e.strerror or e}") from e
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            _kill(proc)
+            raise CollectorError(f"tempo esgotado ({timeout} s); processo encerrado") from e
+        except BaseException:
+            _kill(proc)
+            raise
+    if proc.returncode != 0:
+        raise CollectorError(f"saiu com {proc.returncode}", stderr or "")
+    return stdout or "", stderr or ""
+
+
+def stderr_tail(text: str, extras: list) -> list:
+    """Last STDERR_LINES lines of a collector's stderr, each cut to STDERR_LINE_MAX characters and redacted."""
+    lines = (text or "").rstrip().splitlines()[-STDERR_LINES:]
+    return [_redact_text(line[:STDERR_LINE_MAX], extras)[0] for line in lines]
 
 
 # ---------------------------------------------------------------- scan
 
+SNAPSHOTS_DIR = "snapshots"
+SCAN_STATE = "_scan.json"
+
+
+def write_atomic(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def read_json_file(path: Path):
+    """Parsed JSON of a file, or None when it does not exist or is not valid JSON (unreadable = AtlasError)."""
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(read_text(path))
+    except ValueError:
+        return None
+
+
+def _without_collected_at(snapshot) -> dict:
+    return {k: v for k, v in (snapshot or {}).items() if k != "collected_at"}
+
+
+def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
+    """Runs, validates, redacts, normalizes and writes one collector; returns its report (never raises for a
+    failure of the collector: the previous snapshot is kept)."""
+    cid = collector["id"]
+    report = {"id": cid, "status": "failed", "reason": "", "violations": [], "stderr": [], "dropped": [],
+              "redacted": 0, "diff": None}
+    try:
+        argv = resolve_command(collector["command"], SKILL_DIR, atlas)
+        stdout, _ = run_collector(argv, collector["timeout"])
+    except CollectorError as e:
+        report["reason"] = _redact_text(e.reason, extras)[0]
+        report["stderr"] = stderr_tail(e.stderr, extras)
+        return report
+    try:
+        data = json.loads(stdout)
+    except ValueError as e:
+        report["reason"] = f"JSON inválido na saída: {e.msg} (linha {e.lineno}, coluna {e.colno})"
+        return report
+    clean, violations, dropped = validate_collector_output(data)
+    if violations:
+        report["reason"] = f"saída fora do contrato {CONTRACT} ({len(violations)} violação(ões))"
+        report["violations"] = [_redact_text(v, extras)[0] for v in violations]
+        return report
+    snapshot, count = redact(clean, extras)
+    text = normalize(snapshot)
+    snapshot = json.loads(text)
+    path = atlas / SNAPSHOTS_DIR / f"{cid}.json"
+    previous = read_json_file(path)
+    diff = diff_snapshots(previous, snapshot)
+    try:
+        # same state (collected_at aside) = the file stays as it is: no noise in the atlas history
+        if previous is None or _without_collected_at(previous) != _without_collected_at(snapshot):
+            write_atomic(path, text)
+    except OSError as e:
+        report["reason"] = f"não consegui gravar {path.name}: {e.strerror or e}"
+        return report
+    report.update(status="ok", dropped=[_redact_text(d, extras)[0] for d in dropped], redacted=count, diff=diff,
+                  seen_at=today, entities=len(snapshot["entities"]), relations=len(snapshot["relations"]))
+    return report
+
+
+def scan_line(report: dict) -> str:
+    if report["status"] != "ok":
+        return f"FALHA {report['id']} — {report['reason']}"
+    diff = report["diff"]
+    if not has_changes(diff):
+        return f"OK {report['id']} — sem mudanças"
+    e, r = diff["entities"], diff["relations"]
+    return (f"OK {report['id']} — +{len(e['added'])} entidades, -{len(e['removed'])}, ~{len(e['changed'])}; "
+            f"+{len(r['added'])} relações, -{len(r['removed'])}")
+
+
+def print_scan(reports: list) -> None:
+    for report in reports:
+        print(scan_line(report))
+        for violation in report["violations"]:
+            print(f"  {violation}")
+        if report["stderr"]:
+            print(f"  stderr (últimas {STDERR_LINES} linhas):")
+            for line in report["stderr"]:
+                print(f"    {line}")
+        for item in report["dropped"]:
+            print(f"  {item}")
+        if report["redacted"]:
+            print(f"  {report['redacted']} valor(es) mascarado(s)")
+    failed = sum(1 for r in reports if r["status"] != "ok")
+    print(f"{len(reports)} coletor(es), {failed} com falha")
+
+
+def scan_config():
+    """(atlas folder, shared configuration) of this machine for scan; problems = AtlasError."""
+    path, local = read_local()
+    atlas = local.get("atlas")
+    if not isinstance(atlas, str) or not atlas:
+        raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
+    shared_path = Path(atlas) / SHARED_FILE
+    if not shared_path.is_file():
+        raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared_path}", 2)
+    return Path(atlas), read_yaml(shared_path)
+
+
+def selected_collectors(collectors: list, only) -> list:
+    if not only:
+        return [c for c in collectors if c["enabled"]]
+    wanted = [name.strip() for name in str(only).split(",") if name.strip()]
+    by_id = {c["id"]: c for c in collectors}
+    unknown = [name for name in wanted if name not in by_id]
+    if unknown:
+        raise AtlasError(f"coletor não declarado em atlas-config.yml: {', '.join(unknown)}", 2)
+    disabled = [name for name in wanted if not by_id[name]["enabled"]]
+    if disabled:
+        raise AtlasError(f"coletor com enabled: false: {', '.join(disabled)} — habilite no atlas-config.yml", 2)
+    return [by_id[name] for name in dict.fromkeys(wanted)]
+
+
 def cmd_scan(only=None, as_json=False):
-    raise NotImplementedError("scan (SPEC-0033)")
+    """scan [--only id,...] [--json]: each enabled collector (or the --only ones) is run, validated, redacted,
+    normalized and written to snapshots/<id>.json; snapshots/_scan.json keeps seen_at (date of the last good scan),
+    status and counts. A failing collector keeps its previous snapshot and seen_at and does not stop the others.
+    Exit 0 without failure, 1 with a failure, 2 with an invalid configuration or an unknown --only id."""
+    atlas, shared = scan_config()
+    collectors = validate_collectors(shared.get("collectors"))
+    redaction = shared.get("redaction")
+    extra = redaction.get("extra_patterns") if isinstance(redaction, dict) else None
+    if extra not in (None, "") and not isinstance(extra, list):
+        raise AtlasError("redaction.extra_patterns precisa ser uma lista de regex", 2)
+    extras = compile_extra_patterns(extra or [])
+    selected = selected_collectors(collectors, only)
+    snapshots = atlas / SNAPSHOTS_DIR
+    snapshots.mkdir(parents=True, exist_ok=True)
+    state_path = snapshots / SCAN_STATE
+    state = read_json_file(state_path)
+    state = state if isinstance(state, dict) else {}
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    reports = []
+    for collector in selected:
+        report = scan_one(collector, atlas, extras, today)
+        previous = state.get(collector["id"]) if isinstance(state.get(collector["id"]), dict) else {}
+        if report["status"] == "ok":
+            state[collector["id"]] = {"seen_at": today, "status": "ok", "entities": report["entities"],
+                                      "relations": report["relations"]}
+        else:  # seen_at does not move: the facts of this collector are as old as its last good scan
+            state[collector["id"]] = {"seen_at": previous.get("seen_at"), "status": "failed",
+                                      "entities": previous.get("entities", 0),
+                                      "relations": previous.get("relations", 0)}
+        reports.append(report)
+    if selected:
+        write_atomic(state_path, json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+    failed = any(r["status"] != "ok" for r in reports)
+    if as_json:
+        print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports},
+                         ensure_ascii=False, indent=2))
+    elif not selected:
+        print("nenhum coletor habilitado em atlas-config.yml (references/collector-contract.md)")
+    else:
+        print_scan(reports)
+    return 1 if failed else 0
 
 
 # ---------------------------------------------------------------- init

@@ -7,5 +7,15 @@ mode: repo                # repo (o atlas é um repositório compartilhado) | lo
 language: auto            # idioma do conteúdo; a estrutura do atlas é sempre em inglês
 stale_days: 14            # dias até um fato coletado aparecer como desatualizado
 categories: [code, delivery]   # categorias de coletores habilitadas (ADR-0011)
-collectors: []            # coletores declarados: - id, category, command: [executável, argumentos...] (SPEC-0033)
-redaction: {extra_patterns: []}   # regex extras de mascaramento antes de gravar (SPEC-0033)
+# collectors: coletores que o `atlas.py scan` roda (references/collector-contract.md). Cada item:
+#   - id: github                 # ^[a-z0-9-]+$, único; o snapshot fica em snapshots/<id>.json
+#     category: code             # code | ci | delivery | runtime | data | messaging | observability | tracker | docs | secrets
+#     command: ["python3", "{skill}/assets/collectors/github.py", "--org", "acme"]
+#                                # lista [executável, argumentos...], roda sem shell; nunca caminho absoluto:
+#                                # {skill} = pasta da skill, {atlas} = pasta do atlas (trocados em cada máquina)
+#     timeout: 300               # segundos (padrão 300); estourou = FALHA e o processo é encerrado
+#     enabled: true              # padrão true; false = o scan não roda este coletor
+collectors: []
+# redaction.extra_patterns: regex (Python, entre aspas simples) mascaradas como [REDACTED] antes de gravar, além
+# dos padrões embutidos (references/redaction.md). Ex.: {extra_patterns: ['acme-internal-[0-9]{4}']}
+redaction: {extra_patterns: []}

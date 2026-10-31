@@ -9,6 +9,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.10.2] - 2026-10-30
+
+### Added
+- Comando `scan [--only id,...] [--json]` (`ATLAS_VERSION` 2026.10.2): roda os coletores declarados em `collectors` (`id`, `category`, `command` como lista sem shell, `timeout` padrão 300 s, `enabled`; marcadores `{skill}` e `{atlas}`; caminho absoluto em `command` sai com 2), valida a saída contra o contrato `org-atlas/collector@1` (ADR-0011), descarta e reporta chaves de `attrs` proibidas, mascara segredos (`[REDACTED]`, só a contagem no relatório), grava `snapshots/<id>.json` normalizado e `snapshots/_scan.json` (`seen_at`, `status`, contagens) e mostra o diff por coletor. Um coletor com falha (exit ≠ 0, timeout, JSON inválido, violação do contrato) mantém o snapshot anterior e o `seen_at`, não para os outros e faz o scan sair com 1; o stderr aparece só nas últimas 20 linhas, já mascarado (SPEC-0033).
+- `run_collector`, a única função do `atlas.py` que executa processo externo: lista de argumentos, sem shell, pasta temporária, grupo de processos próprio encerrado no timeout (SPEC-0033).
+- Funções `validate_collector_output`, `redact`, `normalize` e `diff_snapshots`, reaproveitadas pelo `lint` (SPEC-0033).
+- `references/collector-contract.md` (contrato, mensagens de violação e exemplos válidos e inválidos) e `references/redaction.md` (padrões embutidos e `redaction.extra_patterns`); `assets/atlas-config.yml` documenta `collectors` e `redaction` (SPEC-0033).
+
 ## [2026.10.1] - 2026-10-30
 
 ### Added
