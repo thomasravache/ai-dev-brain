@@ -16,7 +16,7 @@ O atlas guarda só metadados, nunca valor de segredo (ADR-0010). Por isso o `atl
 | Token fine-grained do GitHub | `github_pat_[A-Za-z0-9_]{20,}` | o token |
 | Tokens do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) | `(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}` ou, colado a letras ou dígitos, `gh[pousr]_[A-Za-z0-9]{36}(?![A-Za-z0-9])` (o formato exato do token) | o token |
 | Tokens do Slack (`xoxb-`, `xoxp-`, `xoxa-`...) | `xox[abposr]-[A-Za-z0-9-]{10,}` | o token |
-| Chave de acesso da AWS (`AKIA`, `ASIA`) | `(?<![A-Za-z0-9])(?:AKIA\|ASIA)[0-9A-Z]{16}(?![0-9A-Z])` | a chave |
+| Chave de acesso da AWS (`AKIA`, `ASIA`) | `(?:AKIA\|ASIA)[0-9A-Z]{16}(?![0-9A-Z])` | a chave |
 | JWT | `eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}` | o token inteiro (cabeçalho, corpo e assinatura) |
 
 Token colado a pontuação (`_ghp_…`, `=ghp_…`, `token:ghp_…`) é mascarado. Dentro de uma palavra comum não há falso positivo: `laughs_abcdefghijklmnopqrstuvwxyz` e `ASIAPACIFICNORTHEAST1` ficam como estão. Um token do GitHub colado a letras (por exemplo no meio de uma linha longa de log) só é mascarado com o tamanho exato do token (36 caracteres depois do prefixo).

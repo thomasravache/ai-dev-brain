@@ -547,9 +547,10 @@ def _check_signal(index: int, signal, violations: list, dropped: list):
         violations.append(f"{where}: total precisa ser um número")
     if "pattern_counts" in signal and not _flat_object(signal["pattern_counts"], _is_number):
         violations.append(f"{where}: pattern_counts precisa ser um objeto de números")
-    for name in ("counts", "present"):
-        if name in signal and not _flat_object(signal[name], lambda v: isinstance(v, SCALARS)):
-            violations.append(f"{where}: {name} precisa ser um objeto de escalares")
+    if "counts" in signal and not _flat_object(signal["counts"], _is_number):
+        violations.append(f"{where}: counts precisa ser um objeto de números")
+    if "present" in signal and not _flat_object(signal["present"], lambda v: isinstance(v, bool)):
+        violations.append(f"{where}: present precisa ser um objeto de booleanos")
     return _keep_fields(signal, SIGNAL_ALLOWED, where, dropped)
 
 
@@ -611,7 +612,7 @@ SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and mas
     # GitHub: standalone (not inside a word: laughs_...) or, glued to text, the exact 36-character body
     ("github", r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{36}(?![A-Za-z0-9])"),
     ("slack", r"xox[abposr]-[A-Za-z0-9-]{10,}"),
-    ("aws-access-key", r"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),  # not ASIAPACIFIC...1
+    ("aws-access-key", r"(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),  # not ASIAPACIFIC...1
     ("jwt", r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
 )
 SECRET_RE = re.compile("|".join(f"(?:{regex})" for _, regex in SECRET_PATTERNS), re.DOTALL)
