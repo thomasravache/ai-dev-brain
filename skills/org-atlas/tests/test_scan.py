@@ -31,8 +31,8 @@ Contrato esperado das funções de scripts/atlas.py (o Implementer segue estes t
         ou no sinal) recebe o mesmo tratamento: descartado e reportado (decisão do Architect, revisão G4).
         Tipo errado num campo do contrato é violação (decisão do Architect, revisão G4 2), sem repetir o valor:
         name, id e source da entidade e source da relação são texto; inferred é bool; signals[].sample é lista
-        de textos; total é número; pattern_counts é objeto plano de números; counts e present são objetos
-        planos de escalares.
+        de textos; total é número; pattern_counts e counts são objetos planos de números; present é objeto
+        plano de booleanos (revisão G4 3).
 
     redact(value, extra_patterns=()) -> (redacted, count: int)
         Percorre str, dict (valores e chaves) e list; demais escalares ficam como estão. Cada trecho que casa com
@@ -254,6 +254,25 @@ class ValidateCollectorOutputTest(unittest.TestCase):
                 mutate(data)
                 _, violations, dropped = validate(data)
                 self.assertGreaterEqual(len(violations), 1, f"tipo errado precisa ser violação: {violations}")
+                self.assertNotIn(value, json.dumps([violations, dropped], ensure_ascii=False),
+                                 "o valor não aparece no relatório")
+
+    def test_signal_counts_are_numbers_and_present_are_booleans(self):
+        """SPEC-0033:UT-02"""
+        value = "hunter" + "2"
+        cases = {
+            "counts com texto sob chave de segredo": {"counts": {"password": value}},
+            "present com texto sob chave de segredo": {"present": {"db_secret": value}},
+            "counts com texto sob chave comum": {"counts": {"dockerfile": value}},
+            "present com número": {"present": {"dockerfile": 1}},
+        }
+        validate = f("validate_collector_output")
+        for name, fields in cases.items():
+            with self.subTest(name):
+                data = base_output()
+                data["signals"].append(dict({"type": "t"}, **fields))
+                _, violations, dropped = validate(data)
+                self.assertGreaterEqual(len(violations), 1, f"precisa ser violação: {violations}")
                 self.assertNotIn(value, json.dumps([violations, dropped], ensure_ascii=False),
                                  "o valor não aparece no relatório")
 
