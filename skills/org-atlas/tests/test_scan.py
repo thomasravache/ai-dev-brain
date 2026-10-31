@@ -29,6 +29,10 @@ Contrato esperado das funções de scripts/atlas.py (o Implementer segue estes t
         as chaves de um sinal) não é violação: sai de `clean` e entra em `dropped` como texto com a chave da
         entidade e o nome da chave (nunca o valor). Campo fora do contrato (na saída, na entidade, na relação
         ou no sinal) recebe o mesmo tratamento: descartado e reportado (decisão do Architect, revisão G4).
+        Tipo errado num campo do contrato é violação (decisão do Architect, revisão G4 2), sem repetir o valor:
+        name, id e source da entidade e source da relação são texto; inferred é bool; signals[].sample é lista
+        de textos; total é número; pattern_counts é objeto plano de números; counts e present são objetos
+        planos de escalares.
 
     redact(value, extra_patterns=()) -> (redacted, count: int)
         Percorre str, dict (valores e chaves) e list; demais escalares ficam como estão. Cada trecho que casa com
@@ -36,6 +40,9 @@ Contrato esperado das funções de scripts/atlas.py (o Implementer segue estes t
         JWT, credencial em URL, inclusive usuário vazio e senha com / ou @) ou com um extra_pattern vira
         "[REDACTED]"; `count` é o número de ocorrências. O resto do texto fica. extra_pattern inválido ou que
         casa com o texto vazio -> AtlasError(code=2) com a posição (extra_patterns[i]), nunca o texto.
+        Padrão extra de largura zero (\\b, (?=a)) nunca insere [REDACTED]: é rejeitado (code 2, só a posição) ou
+        ignorado. Sem falso positivo dentro de palavras (laughs_..., ASIAPACIFICNORTHEAST1); token colado a
+        pontuação (_ghp_, =ghp_, token:ghp_) continua mascarado.
 
     normalize(data: dict) -> str
         Texto JSON do snapshot (o que vai para snapshots/<id>.json): entidades ordenadas por kind:id, relações
@@ -223,6 +230,43 @@ class ValidateCollectorOutputTest(unittest.TestCase):
         self.assertEqual(len(violations), 1, violations)
         self.assertIn("entities[0]: attrs.topics não é escalar", violations[0])
 
+    def test_wrong_types_in_contract_fields_are_violations(self):
+        """SPEC-0033:UT-02"""
+        value = "hunter" + "2"
+        nested = {"password": value}
+        cases = {
+            "entity name objeto": lambda d: d["entities"][0].update(name=dict(nested)),
+            "entity id objeto": lambda d: d["entities"][0].update(id=dict(nested)),
+            "entity source objeto": lambda d: d["entities"][0].update(source=dict(nested)),
+            "relation source objeto": lambda d: d["relations"][0].update(source=dict(nested)),
+            "relation inferred não booleano": lambda d: d["relations"][0].update(inferred=value),
+            "sample com item não texto": lambda d: d["signals"][0].update(sample=[dict(nested)]),
+            "total não numérico": lambda d: d["signals"][0].update(total=value),
+            "pattern_counts aninhado": lambda d: d["signals"][0].update(pattern_counts={"db": dict(nested)}),
+            "counts aninhado": lambda d: d["signals"][0].update(counts={"db": dict(nested)}),
+            "present aninhado": lambda d: d["signals"][0].update(present={"db": dict(nested)}),
+            "pattern_counts com valor não numérico": lambda d: d["signals"][0].update(pattern_counts={"x": value}),
+        }
+        validate = f("validate_collector_output")
+        for name, mutate in cases.items():
+            with self.subTest(name):
+                data = base_output()
+                mutate(data)
+                _, violations, dropped = validate(data)
+                self.assertGreaterEqual(len(violations), 1, f"tipo errado precisa ser violação: {violations}")
+                self.assertNotIn(value, json.dumps([violations, dropped], ensure_ascii=False),
+                                 "o valor não aparece no relatório")
+
+    def test_right_types_in_optional_fields_are_valid(self):
+        """SPEC-0033:UT-02"""
+        data = base_output()
+        data["relations"][0]["inferred"] = True
+        data["signals"][0]["counts"] = {"dockerfile": 3, "helm": 0}
+        data["signals"][0]["present"] = {"dockerfile": True, "codeowners": False}
+        _, violations, dropped = f("validate_collector_output")(data)
+        self.assertEqual(violations, [])
+        self.assertEqual(dropped, [])
+
     def test_forbidden_attr_key_is_dropped_and_reported(self):
         """SPEC-0033:UT-03"""
         secret = "pw-" + "fake-0033"
@@ -399,6 +443,36 @@ class RedactTest(unittest.TestCase):
         self.assertNotIn(token, f("normalize")(result))
         self.assertEqual(result["entities"][0]["attrs"]["default_branch"], "main")
         self.assertEqual(result["signals"][0]["pattern_counts"]["conventional"], 1)
+
+    def test_zero_width_extra_pattern_never_inserts_redacted(self):
+        """SPEC-0033:UT-04"""
+        text = "abacate acme api"
+        for pattern in (r"\b", r"(?=a)"):
+            with self.subTest(pattern):
+                try:
+                    result, count = f("redact")(text, [pattern])
+                except error_class() as e:  # rejeitar na configuração também cumpre o contrato
+                    self.assertEqual(e.code, 2)
+                    self.assertIn("extra_patterns[0]", str(e))
+                    self.assertNotIn(pattern, str(e), "a mensagem só aponta a posição")
+                    continue
+                self.assertEqual((result, count), (text, 0), "casamento de largura zero não mascara nada")
+
+    def test_ordinary_words_that_resemble_tokens_are_untouched(self):
+        """SPEC-0033:UT-04"""
+        for text in ("laughs_abcdefghijklmnopqrstuvwxyz", "ASIAPACIFICNORTHEAST1"):
+            with self.subTest(text):
+                self.assertEqual(f("redact")(text), (text, 0))
+
+    def test_tokens_glued_to_punctuation_are_still_redacted(self):
+        """SPEC-0033:UT-04"""
+        token = self.secrets()["ghp_"]
+        for prefix in ("_", "=", "token:"):
+            with self.subTest(prefix):
+                result, count = f("redact")(prefix + token)
+                self.assertEqual(count, 1, result)
+                self.assertNotIn(token, result)
+                self.assertEqual(result, prefix + REDACTED)
 
     def test_extra_pattern_matching_the_empty_string_is_rejected(self):
         """SPEC-0033:UT-04"""
@@ -667,6 +741,19 @@ class RedactionScanTest(ScanCase):
         for path in self.atlas.rglob("*"):
             if path.is_file():
                 self.assertNotIn(FAKE_TOKEN, path.read_text(encoding="utf-8", errors="replace"), path)
+
+    def test_wrong_type_in_a_contract_field_fails_without_snapshot_or_value(self):
+        """SPEC-0033:IT-03"""
+        value = "hunter" + "2"
+        self.configure([("fake-bad-types", "bad_types.py", ["fake-bad-types"], 10)])
+        result = self.scan()
+        self.assertEqual(result.returncode, 1, output(result))
+        self.assert_line(result, r"^FALHA fake-bad-types — \S")
+        self.assertFalse((self.snapshots / "fake-bad-types.json").exists())
+        self.assertNotIn(value, output(result))
+        for path in self.atlas.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(value, path.read_text(encoding="utf-8", errors="replace"), path)
 
     def test_extra_pattern_matching_the_empty_string_exits_2(self):
         """SPEC-0033:IT-03"""
