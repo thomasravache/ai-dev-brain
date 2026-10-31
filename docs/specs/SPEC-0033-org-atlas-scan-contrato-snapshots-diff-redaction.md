@@ -196,7 +196,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
-| G1 Red | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=10, errors=50)) — 1edf72c | 2026-10-30 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
