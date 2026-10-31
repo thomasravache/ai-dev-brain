@@ -25,13 +25,17 @@ Contrato esperado das funções de scripts/atlas.py (o Implementer segue estes t
             relations[<i>]: type desconhecido: <valor>
             relations[<i>]: from fora do formato kind:id: <valor>
             relations[<i>]: to fora do formato kind:id: <valor>
-        Chave de attrs proibida (password, secret, token, key, credential, private) não é violação: sai de
-        `clean` e entra em `dropped` como texto com a chave da entidade e o nome da chave (nunca o valor).
+        Chave de attrs proibida (password, passwd, pwd, secret, token, key, credential, private; vale também para
+        as chaves de um sinal) não é violação: sai de `clean` e entra em `dropped` como texto com a chave da
+        entidade e o nome da chave (nunca o valor). Campo fora do contrato (na saída, na entidade, na relação
+        ou no sinal) recebe o mesmo tratamento: descartado e reportado (decisão do Architect, revisão G4).
 
     redact(value, extra_patterns=()) -> (redacted, count: int)
-        Percorre str, dict (só os valores) e list; demais escalares ficam como estão. Cada trecho que casa com
-        um padrão de segredo (ghp_, gho_, github_pat_, xoxb-, AKIA, bloco PRIVATE KEY, JWT, credencial em URL)
-        ou com um extra_pattern vira "[REDACTED]"; `count` é o número de ocorrências. O resto do texto fica.
+        Percorre str, dict (valores e chaves) e list; demais escalares ficam como estão. Cada trecho que casa com
+        um padrão de segredo (ghp_, gho_, github_pat_, xoxb-, AKIA, bloco PRIVATE KEY e PGP PRIVATE KEY BLOCK,
+        JWT, credencial em URL, inclusive usuário vazio e senha com / ou @) ou com um extra_pattern vira
+        "[REDACTED]"; `count` é o número de ocorrências. O resto do texto fica. extra_pattern inválido ou que
+        casa com o texto vazio -> AtlasError(code=2) com a posição (extra_patterns[i]), nunca o texto.
 
     normalize(data: dict) -> str
         Texto JSON do snapshot (o que vai para snapshots/<id>.json): entidades ordenadas por kind:id, relações
@@ -45,8 +49,10 @@ Contrato esperado das funções de scripts/atlas.py (o Implementer segue estes t
 CLI (seção 6; mensagens podem ir para stdout ou stderr):
     scan [--only id,...] [--json]
     "OK <id> — +A entidades, -R, ~C; +a relações, -r" | "OK <id> — sem mudanças" | "N valor(es) mascarado(s)"
-    "FALHA <id> — <motivo>"; exit 0 sem falha, 1 com falha, 2 com configuração inválida ou --only desconhecido.
-    snapshots/<id>.json e snapshots/_scan.json {"<id>": {"seen_at", "status", "entities", "relations"}}.
+    "FALHA <id> — <motivo>", com as últimas 20 linhas do stderr mascaradas como um todo (bloco PEM em várias
+    linhas, token no limite do corte da linha); exit 0 sem falha, 1 com falha, 2 com configuração inválida ou --only desconhecido.
+    snapshots/<id>.json e snapshots/_scan.json {"<id>": {"seen_at", "status", "entities", "relations"}};
+    sem coletor habilitado não grava nada (nem a pasta snapshots/).
 
 Valores de segredo dos testes são montados em tempo de execução (nunca literais no arquivo).
 """
@@ -54,11 +60,12 @@ import copy
 import datetime
 import json
 import re
+import shutil
 import time
 import unittest
 from pathlib import Path
 
-from helpers import SKILL, TESTS, Sandbox, fn, output
+from helpers import SKILL, TESTS, Sandbox, fn, output, snapshot
 
 SPEC = "SPEC-0033"
 CONTRACT = "org-atlas/collector@1"
@@ -234,6 +241,43 @@ class ValidateCollectorOutputTest(unittest.TestCase):
         self.assertNotIn(secret, json.dumps([clean, dropped]), "o valor da chave proibida não aparece")
 
 
+    def test_forbidden_key_rule_covers_passwd_and_pwd(self):
+        """SPEC-0033:UT-03"""
+        data = base_output()
+        data["entities"][0]["attrs"]["passwd"] = "pw-" + "fake-0033a"
+        data["entities"][0]["attrs"]["pwd"] = "pw-" + "fake-0033b"
+        clean, violations, dropped = f("validate_collector_output")(data)
+        self.assertEqual(violations, [])
+        attrs = clean["entities"][0]["attrs"]
+        self.assertNotIn("passwd", attrs)
+        self.assertNotIn("pwd", attrs)
+        self.assertTrue(any("passwd" in d for d in dropped), dropped)
+        self.assertTrue(any("pwd" in d and "passwd" not in d for d in dropped), dropped)
+        self.assertNotIn("fake-0033", json.dumps([clean, dropped]))
+
+    def test_fields_outside_the_contract_are_dropped_and_reported(self):
+        """SPEC-0033:UT-03"""
+        secret = "pw-" + "fake-0033-field"
+        data = base_output()
+        data["debug"] = {"password": secret}  # campo fora do contrato no topo da saída
+        data["entities"][0]["password"] = secret  # campo fora do contrato direto na entidade
+        data["relations"][0]["note"] = secret  # campo fora do contrato na relação
+        data["signals"][0]["password"] = secret  # chave proibida num sinal
+        clean, violations, dropped = f("validate_collector_output")(data)
+        self.assertEqual(violations, [], "campo fora do contrato é descartado, não é violação")
+        self.assertNotIn("debug", clean)
+        self.assertNotIn("password", clean["entities"][0])
+        self.assertNotIn("note", clean["relations"][0])
+        self.assertNotIn("password", clean["signals"][0])
+        self.assertEqual(clean["entities"][0]["attrs"]["default_branch"], "main", "o resto da entidade fica")
+        self.assertEqual(clean["signals"][0]["total"], 200, "o resto do sinal fica")
+        for name in ("debug", "password", "note"):
+            self.assertTrue(any(name in d for d in dropped), f"{name} não foi reportado: {dropped}")
+        self.assertGreaterEqual(len(dropped), 4, dropped)
+        self.assertNotIn(secret, json.dumps(dropped), "o relatório não mostra o valor")
+        self.assertNotIn(secret, f("normalize")(clean), "o valor não chega ao snapshot")
+
+
 class RedactTest(unittest.TestCase):
     EXTRA = (r"acme-internal-[0-9]{4}",)
 
@@ -311,6 +355,58 @@ class RedactTest(unittest.TestCase):
         result, count = f("redact")(copy.deepcopy(data))
         self.assertEqual(count, 0)
         self.assertEqual(result, data)
+
+
+    def test_url_credential_variants_leave_no_part_of_the_password(self):
+        """SPEC-0033:UT-04"""
+        cases = {
+            "usuário vazio": ("redis://:" + "r3dis-" + "pw0033" + "@cache:6379", ("pw0033",)),
+            "barra na senha": ("https://user:" + "p4ss" + "/" + "w0rd0033" + "@host.example/x",
+                               ("p4ss", "w0rd0033")),
+            "@ na senha": ("https://user:" + "p" + "@" + "ss0033" + "@host.example/x", ("ss0033", "p@ss")),
+        }
+        for name, (url, parts) in cases.items():
+            with self.subTest(name):
+                result, count = f("redact")(f"conecta {url} agora")
+                self.assertGreaterEqual(count, 1, result)
+                self.assertIn(REDACTED, result)
+                for part in parts:
+                    self.assertNotIn(part, result)
+                self.assertTrue(result.startswith("conecta "), result)
+                self.assertTrue(result.endswith(" agora"), result)
+
+    def test_pgp_private_key_block_is_redacted(self):
+        """SPEC-0033:UT-04"""
+        block = ("-----BEGIN " + "PGP PRIVATE KEY BLOCK-----\n\n" + "lQOYBF" + "pgpbody0033fake\n" + "=AbCd\n"
+                 + "-----END " + "PGP PRIVATE KEY BLOCK-----")
+        result, count = f("redact")(f"antes {block} depois")
+        self.assertEqual(count, 1, result)
+        self.assertIn(REDACTED, result)
+        self.assertNotIn("pgpbody0033fake", result)
+        self.assertNotIn("PGP PRIVATE KEY BLOCK", result)
+
+    def test_secret_used_as_a_key_is_redacted(self):
+        """SPEC-0033:UT-04"""
+        token = self.secrets()["ghp_"]
+        data = {"entities": [{"kind": "repository", "id": "acme/api", "name": "api",
+                              "attrs": {token: "valor", "default_branch": "main"}, "source": "github"}],
+                "relations": [],
+                "signals": [{"type": "pr-titles", "repository": "acme/api", "total": 3,
+                             "pattern_counts": {token: 3, "conventional": 1}, "sample": []}]}
+        result, count = f("redact")(data)
+        self.assertEqual(count, 2)
+        self.assertNotIn(token, json.dumps(result))
+        self.assertNotIn(token, f("normalize")(result))
+        self.assertEqual(result["entities"][0]["attrs"]["default_branch"], "main")
+        self.assertEqual(result["signals"][0]["pattern_counts"]["conventional"], 1)
+
+    def test_extra_pattern_matching_the_empty_string_is_rejected(self):
+        """SPEC-0033:UT-04"""
+        with self.assertRaises(error_class()) as ctx:
+            f("redact")("texto", ["acme-[0-9]+", "z*"])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("extra_patterns[1]", str(ctx.exception))
+        self.assertNotIn("z*", str(ctx.exception), "a mensagem só aponta a posição")
 
 
 class NormalizeTest(unittest.TestCase):
@@ -403,6 +499,7 @@ class CollectorsConfigTest(unittest.TestCase):
             "script absoluto": ["python3", "/opt/collectors/github.py"],
             "home": ["python3", "~/collectors/github.py"],
             "windows": ["python3", "C:\\collectors\\github.py"],
+            "opção curta colada": ["python3", "{skill}/assets/collectors/github.py", "-o/etc/x"],
         }
         for name, command in commands.items():
             with self.subTest(name):
@@ -488,6 +585,21 @@ class FirstScanTest(ScanCase):
         self.assertFalse((self.snapshots / "fake-off.json").exists(), "coletor com enabled: false não roda")
         self.assertNotIn("fake-off", state)
 
+    def test_scan_without_enabled_collectors_writes_nothing(self):
+        """SPEC-0033:IT-01"""
+        shutil.rmtree(self.snapshots)
+        for collectors in ([], [("fake-off", "static.py", ["fake-off"], 10, "false")]):
+            with self.subTest(collectors=len(collectors)):
+                if collectors:
+                    self.configure(collectors)
+                else:
+                    self.configure_raw("collectors: []")
+                before = snapshot(self.atlas)
+                result = self.scan()
+                self.assertEqual(result.returncode, 0, output(result))
+                self.assertFalse(self.snapshots.exists(), "nem a pasta snapshots/ vazia é criada")
+                self.assertEqual(snapshot(self.atlas), before, "scan sem coletor habilitado não grava nada")
+
     def test_scan_json_prints_a_json_report(self):
         """SPEC-0033:IT-01"""
         self.configure([("fake-ok", "static.py", ["fake-ok"], 10)])
@@ -540,6 +652,30 @@ class RedactionScanTest(ScanCase):
             for path in self.atlas.rglob("*"):
                 if path.is_file():
                     self.assertNotIn(secret, path.read_text(encoding="utf-8", errors="replace"), path)
+
+
+    def test_secret_used_as_attrs_or_signal_key_never_reaches_the_snapshot(self):
+        """SPEC-0033:IT-03"""
+        self.configure([("fake-secrets", "planted_secrets.py", ["fake-secrets", "--keys"], 10)])
+        result = self.scan()
+        self.assertEqual(result.returncode, 0, output(result))
+        self.assert_line(result, r"^OK fake-secrets — ")
+        text = self.snapshot_of("fake-secrets")
+        self.assertIn(REDACTED, text)
+        self.assertNotIn(FAKE_TOKEN, text)
+        self.assertNotIn(FAKE_TOKEN, output(result))
+        for path in self.atlas.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(FAKE_TOKEN, path.read_text(encoding="utf-8", errors="replace"), path)
+
+    def test_extra_pattern_matching_the_empty_string_exits_2(self):
+        """SPEC-0033:IT-03"""
+        self.configure([("fake-ok", "static.py", ["fake-ok"], 10)], extra_patterns='["z*"]')
+        result = self.scan()
+        self.assertEqual(result.returncode, 2, output(result))
+        self.assertIn("extra_patterns[0]", output(result))
+        self.assertNotIn("z*", output(result), "a mensagem só aponta a posição")
+        self.assertFalse((self.snapshots / "fake-ok.json").exists())
 
 
 class FailingCollectorsTest(ScanCase):
@@ -597,6 +733,29 @@ class FailingCollectorsTest(ScanCase):
         self.assertIn("stderr-linha-06", text)
         self.assertNotIn("stderr-linha-05", text)
         self.assertNotIn(FAKE_TOKEN, text)
+
+
+    def test_multiline_private_key_in_stderr_is_redacted(self):
+        """SPEC-0033:IT-04"""
+        self.configure([("fake-leaky", "leaky_stderr.py", ["pem"], 10)])
+        result = self.scan()
+        self.assertEqual(result.returncode, 1, output(result))
+        self.assert_line(result, r"^FALHA fake-leaky — \S")
+        text = output(result)
+        self.assertIn("depois-0033", text, "o stderr é mostrado")
+        self.assertNotIn("IBAAKCAQEAbodyline0033", text)
+        self.assertNotIn("c2Vjb25kYm9keWxpbmUwMDMz", text)
+
+    def test_token_cut_by_the_line_limit_leaks_no_prefix(self):
+        """SPEC-0033:IT-04"""
+        self.configure([("fake-leaky", "leaky_stderr.py", ["long"], 10)])
+        result = self.scan()
+        self.assertEqual(result.returncode, 1, output(result))
+        self.assert_line(result, r"^FALHA fake-leaky — \S")
+        text = output(result)
+        self.assertIn("depois-0033", text, "o stderr é mostrado")
+        self.assertIn("x" * 100, text, "a linha longa é mostrada (cortada)")
+        self.assertNotIn("ghp_", text, "nenhum pedaço do token aparece")
 
 
 class OnlyOptionTest(ScanCase):
