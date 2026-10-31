@@ -1,0 +1,11 @@
+# org-atlas — configuração compartilhada padrão (copiada para <atlas>/atlas-config.yml pelo init).
+# Vai junto com o atlas: nunca guarde segredo nem caminho absoluto aqui (ADR-0010). Detalhes: references/config.md
+# Credenciais ficam na configuração local de cada máquina, só pelo nome da variável ou do profile.
+version: 1                # versão do schema deste arquivo
+organization: ""          # nome da organização (init --org)
+mode: repo                # repo (o atlas é um repositório compartilhado) | local (pasta só desta máquina)
+language: auto            # idioma do conteúdo; a estrutura do atlas é sempre em inglês
+stale_days: 14            # dias até um fato coletado aparecer como desatualizado
+categories: [code, delivery]   # categorias de coletores habilitadas (ADR-0011)
+collectors: []            # coletores declarados: - id, category, command: [executável, argumentos...] (SPEC-0033)
+redaction: {extra_patterns: []}   # regex extras de mascaramento antes de gravar (SPEC-0033)
