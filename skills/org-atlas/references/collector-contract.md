@@ -60,6 +60,8 @@ O coletor imprime na **saída padrão um único objeto JSON** e sai com 0. O que
 
 ## Violações
 
+**Tipos:** um campo do contrato com o tipo errado é violação (o coletor falha e nada é gravado), porque um objeto aninhado nele poderia carregar um segredo. Na saída, `contract`, `category` e `collected_at` são texto. Na entidade, `kind`, `id`, `name` e `source` são texto. Na relação, `from`, `to`, `type` e `source` são texto e `inferred`, booleano. No sinal, `type` e `repository` são texto, `sample` é lista de textos, `total` é número, `pattern_counts` é objeto plano de números e `counts` e `present` são objetos planos de escalares. A mensagem de tipo nunca repete o valor recebido.
+
 Uma saída com violação não é gravada: o `scan` mostra `FALHA <id> — saída fora do contrato org-atlas/collector@1 (N violação(ões))` e uma linha por violação, mantém o snapshot anterior e não avança o `seen_at`. As mensagens:
 
 | Mensagem | Quando |
@@ -78,7 +80,13 @@ Uma saída com violação não é gravada: o `scan` mostra `FALHA <id> — saíd
 | `relations[<i>]: type desconhecido: <valor>` | `type` fora da lista |
 | `relations[<i>]: from fora do formato kind:id: <valor>` | `from` sem `kind:` ou com `kind` fora da lista |
 | `relations[<i>]: to fora do formato kind:id: <valor>` | `to` sem `kind:` ou com `kind` fora da lista |
-| `signals[<i>]: precisa ser um objeto com type` | sinal sem `type` |
+| `signals[<i>]: precisa ser um objeto com type` | sinal sem `type` (ou com `type` que não é texto) |
+| `<lugar>: <campo> precisa ser texto` | `contract`, `category` ou `collected_at` da saída (lugar `saída`), `kind`, `id`, `name` ou `source` de `entities[<i>]`, `from`, `to`, `type` ou `source` de `relations[<i>]`, ou `repository` de `signals[<i>]`, com outro tipo (objeto, lista, número) |
+| `relations[<i>]: inferred precisa ser true ou false` | `inferred` que não é booleano |
+| `signals[<i>]: sample precisa ser uma lista de textos` | `sample` que não é lista ou tem item que não é texto |
+| `signals[<i>]: total precisa ser um número` | `total` que não é número |
+| `signals[<i>]: pattern_counts precisa ser um objeto de números` | `pattern_counts` aninhado ou com valor que não é número |
+| `signals[<i>]: counts precisa ser um objeto de escalares`, `signals[<i>]: present precisa ser um objeto de escalares` | `counts` ou `present` aninhado |
 
 Falhas que não são do contrato também aparecem como `FALHA <id> — <motivo>`: `saiu com <código>` (com as últimas 20 linhas do stderr, mascaradas), `tempo esgotado (<timeout> s); processo encerrado`, `JSON inválido na saída: ...`, `executável não encontrado: <executável>`.
 

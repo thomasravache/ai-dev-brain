@@ -464,6 +464,17 @@ def _keep_fields(obj: dict, allowed, where: str, dropped: list) -> dict:
     return kept
 
 
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _text_fields(obj: dict, fields, where: str, violations: list) -> None:
+    """Each present field of `fields` must be text; the message never repeats the value (it may be a secret)."""
+    for name in fields:
+        if name in obj and not isinstance(obj[name], str):
+            violations.append(f"{where}: {name} precisa ser texto")
+
+
 def _check_entity(index: int, entity, seen: set, violations: list, dropped: list):
     where = f"entities[{index}]"
     if not isinstance(entity, dict):
@@ -472,11 +483,13 @@ def _check_entity(index: int, entity, seen: set, violations: list, dropped: list
     missing = [field for field in ENTITY_FIELDS if field not in entity]
     if missing:
         violations.append(f"{where}: faltam campos: {', '.join(missing)}")
-    kind = entity.get("kind")
-    if "kind" in entity and kind not in KINDS:
+    _text_fields(entity, ("kind", "id", "name", "source"), where, violations)
+    kind, eid = entity.get("kind"), entity.get("id")
+    if isinstance(kind, str) and kind not in KINDS:
         violations.append(f"{where}: kind desconhecido: {kind}")
-    key = f"{kind}:{entity.get('id')}"
-    if "kind" in entity and "id" in entity:
+    named = isinstance(kind, str) and isinstance(eid, str)
+    key = f"{kind}:{eid}" if named else where
+    if named:
         if key in seen:
             violations.append(f"{where}: chave repetida: {key}")
         seen.add(key)
@@ -506,12 +519,19 @@ def _check_relation(index: int, relation, violations: list, dropped: list):
     missing = [field for field in RELATION_FIELDS if field not in relation]
     if missing:
         violations.append(f"{where}: faltam campos: {', '.join(missing)}")
-    if "type" in relation and relation["type"] not in RELATION_TYPES:
+    _text_fields(relation, RELATION_FIELDS, where, violations)
+    if "inferred" in relation and not isinstance(relation["inferred"], bool):
+        violations.append(f"{where}: inferred precisa ser true ou false")
+    if isinstance(relation.get("type"), str) and relation["type"] not in RELATION_TYPES:
         violations.append(f"{where}: type desconhecido: {relation['type']}")
     for end in ("from", "to"):
-        if end in relation and entity_ref_problem(relation[end]):
+        if isinstance(relation.get(end), str) and entity_ref_problem(relation[end]):
             violations.append(f"{where}: {end} fora do formato kind:id: {relation[end]}")
     return _keep_fields(relation, RELATION_ALLOWED, where, dropped)
+
+
+def _flat_object(value, allowed) -> bool:
+    return isinstance(value, dict) and all(allowed(v) for v in value.values())
 
 
 def _check_signal(index: int, signal, violations: list, dropped: list):
@@ -519,6 +539,17 @@ def _check_signal(index: int, signal, violations: list, dropped: list):
     if not isinstance(signal, dict) or not isinstance(signal.get("type"), str):
         violations.append(f"{where}: precisa ser um objeto com type")
         return signal
+    _text_fields(signal, ("repository",), where, violations)
+    if "sample" in signal and not (isinstance(signal["sample"], list)
+                                   and all(isinstance(item, str) for item in signal["sample"])):
+        violations.append(f"{where}: sample precisa ser uma lista de textos")
+    if "total" in signal and not _is_number(signal["total"]):
+        violations.append(f"{where}: total precisa ser um número")
+    if "pattern_counts" in signal and not _flat_object(signal["pattern_counts"], _is_number):
+        violations.append(f"{where}: pattern_counts precisa ser um objeto de números")
+    for name in ("counts", "present"):
+        if name in signal and not _flat_object(signal[name], lambda v: isinstance(v, SCALARS)):
+            violations.append(f"{where}: {name} precisa ser um objeto de escalares")
     return _keep_fields(signal, SIGNAL_ALLOWED, where, dropped)
 
 
@@ -536,14 +567,14 @@ def validate_collector_output(data) -> tuple:
     missing = [field for field in OUTPUT_FIELDS if field not in data]
     if missing:
         violations.append(f"faltam campos: {', '.join(missing)}")
-    if "contract" in data and data["contract"] not in SUPPORTED_CONTRACTS:
+    _text_fields(data, ("contract", "category", "collected_at"), "saída", violations)
+    if isinstance(data.get("contract"), str) and data["contract"] not in SUPPORTED_CONTRACTS:
         violations.append(f"contract não suportado: {data['contract']}")
     if "collector" in data and not (isinstance(data["collector"], str) and data["collector"]):
         violations.append("collector precisa ser um texto não vazio")
-    if "category" in data and data["category"] not in CATEGORIES:
+    if isinstance(data.get("category"), str) and data["category"] not in CATEGORIES:
         violations.append(f"category desconhecida: {data['category']}")
-    if "collected_at" in data and not (isinstance(data["collected_at"], str)
-                                       and COLLECTED_AT_RE.match(data["collected_at"])):
+    if isinstance(data.get("collected_at"), str) and not COLLECTED_AT_RE.match(data["collected_at"]):
         violations.append(f"collected_at fora do formato ISO 8601 UTC (AAAA-MM-DDTHH:MM:SSZ): {data['collected_at']}")
     clean = _keep_fields(data, OUTPUT_ALLOWED, "saída", dropped)
     entities = data.get("entities", [])
@@ -575,11 +606,12 @@ SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and mas
     # user may be empty (redis://:pw@host); the password runs up to the last @ before a space, so / and @
     # inside it are masked too (when in doubt, more is masked, never less)
     ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]*:)(?:[^\s@]*@)+"),
-    # no word boundary: a token glued to other text (x...ghp_...) is masked as well
+    # tokens glued to punctuation (_ghp_, =ghp_, token:ghp_) are masked too
     ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),
-    ("github", r"gh[pousr]_[A-Za-z0-9]{20,}"),
+    # GitHub: standalone (not inside a word: laughs_...) or, glued to text, the exact 36-character body
+    ("github", r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{36}(?![A-Za-z0-9])"),
     ("slack", r"xox[abposr]-[A-Za-z0-9-]{10,}"),
-    ("aws-access-key", r"(?:AKIA|ASIA)[0-9A-Z]{16}"),
+    ("aws-access-key", r"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),  # not ASIAPACIFIC...1
     ("jwt", r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
 )
 SECRET_RE = re.compile("|".join(f"(?:{regex})" for _, regex in SECRET_PATTERNS), re.DOTALL)
@@ -617,9 +649,23 @@ def _mask(match) -> str:
 def _redact_text(text: str, extras: list) -> tuple:
     text, count = SECRET_RE.subn(_mask, text)
     for pattern in extras:
-        text, n = pattern.subn(REDACTED, text)
+        text, n = _sub_non_empty(pattern, text)
         count += n
     return text, count
+
+
+def _sub_non_empty(pattern, text: str) -> tuple:
+    """pattern.subn(REDACTED, text) that ignores zero-width matches (\\b, lookarounds): they never mask."""
+    count = 0
+
+    def mask(match):
+        nonlocal count
+        if not match.group(0):
+            return ""
+        count += 1
+        return REDACTED
+
+    return pattern.sub(mask, text), count
 
 
 def _redact_keys(item: dict, extras: list) -> tuple:
