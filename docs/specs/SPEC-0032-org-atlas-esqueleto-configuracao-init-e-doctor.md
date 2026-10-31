@@ -220,9 +220,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 6faff6c | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6faff6c | 2026-10-30 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (2ª rodada; 1 major e 5 minor da 1ª rodada corrigidos em 6faff6c; 1 minor nova e a regra de processo viram spec de pendência) — 6faff6c | 2026-10-30 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 819e966 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-10-30 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
