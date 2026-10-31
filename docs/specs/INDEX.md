@@ -6,7 +6,13 @@
 
 - Validação (G0): **3 erro(s), 17 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 2, approved 8, in-progress 1, implemented 27
-- Impedimentos: **0 aberto(s)**, 14 resolvido(s)
+- Impedimentos: **1 aberto(s)**, 14 resolvido(s)
+
+## Impedimentos Abertos
+
+| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
+|---|---|---|---|---|---|---|---|
+| SPEC-0033 | IMP-01 | falha | G4 | thomas | 2026-10-30 | 0d | 3 FAILs seguidos no G4 (revisão independente): cada rodada fechou os achados anteriores e achou um vazamento novo de segredo na validação dos sinais. Falta só o F1: counts/present aceitam texto sob chave como password. |
 
 ## Cobertura de Pilares
 
@@ -23,13 +29,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0033  
-**Paradas por impedimento:** —  
+**Em andamento:** —  
+**Paradas por impedimento:** SPEC-0033  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | in-progress | 🚧 parada por impedimento: IMP-01 (falha → thomas, 0d) |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0033 |
 | 3 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0033; saiu da onda 2: arquivos em comum com SPEC-0034 |

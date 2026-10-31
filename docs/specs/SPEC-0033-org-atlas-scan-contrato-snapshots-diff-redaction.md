@@ -197,9 +197,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=10, errors=50)) — 1edf72c | 2026-10-30 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a8cc346 | 2026-10-30 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — a8cc346 | 2026-10-30 |
-| G4 Review | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 7146ed2 | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 7146ed2 | 2026-10-30 |
+| G4 Review | FAIL | 3ª rodada de review CHANGES_REQUESTED em 7146ed2: signals[].counts e present aceitam texto sob chave de segredo (F1, major). Rodadas anteriores: a8cc346 (4 majors de vazamento, corrigidos em 92cd1c4) e 92cd1c4 (R1 major, corrigido em 7146ed2) | 2026-10-30 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -209,6 +209,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-30 | G4 | falha | 3 FAILs seguidos no G4 (revisão independente): cada rodada fechou os achados anteriores e achou um vazamento novo de segredo na validação dos sinais. Falta só o F1: counts/present aceitam texto sob chave como password. | 3 rodadas red→fix→review (a825540/92cd1c4, 2a48800/7146ed2); M1–M4, R1, R2, R4 corrigidos; F2 e F3 aceitos pelo Reviewer | thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
