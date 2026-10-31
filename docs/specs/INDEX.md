@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 15 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 10, implemented 26
+- Validação (G0): **3 erro(s), 16 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 9, in-progress 1, implemented 26
 - Impedimentos: **0 aberto(s)**, 14 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0032  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0032
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0032 | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0032 | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | approved | ⛔ aguarda implementação de SPEC-0032 |  |
 | 3 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033 |
@@ -62,7 +62,7 @@ flowchart LR
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
-    S0032["SPEC-0032<br/>org-atlas: esqueleto, configuração em d…"]:::approved
+    S0032["SPEC-0032<br/>org-atlas: esqueleto, configuração em d…"]:::inprogress
     S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::approved
     S0034["SPEC-0034<br/>org-atlas: coletores generic e GitHub"]:::approved
     S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::approved
@@ -129,7 +129,7 @@ flowchart LR
 | [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | approved | 2026-10-30 | — | — | — |
 | [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | org-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | proposed | 2026-10-30 | — | SPEC-0029 | — |
 | [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | proposed | 2026-10-30 | — | — | — |
-| [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | approved | 2026-10-30 | SPEC-0029 | — | — |
+| [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | in-progress | 2026-10-30 | SPEC-0029 | — | — |
 | [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
 | [SPEC-0034](SPEC-0034-org-atlas-coletores-generic-e-github.md) | org-atlas: coletores generic e GitHub | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
