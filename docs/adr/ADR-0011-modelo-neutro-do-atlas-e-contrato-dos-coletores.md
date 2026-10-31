@@ -47,7 +47,7 @@ A `org-atlas` (SPEC-0029) precisa juntar informação de provedores diferentes (
 - **Ruim**, porque tipos fechados podem não cobrir um caso novo; ampliar a lista exige mudança do contrato (aditiva).
 
 ### Confirmação (G3)
-Testes de contrato da SPEC-0033 (CT): o validador do `scan` aceita a saída de cada coletor entregue (SPEC-0034, SPEC-0035) e rejeita entidade com tipo fora da lista, `attrs` com chave proibida e relação apontando para chave inexistente.
+Testes de contrato da SPEC-0033 (CT): o validador do `scan` aceita a saída de cada coletor entregue (SPEC-0034, SPEC-0035) e rejeita entidade com tipo fora da lista e relação com `from`/`to` fora do formato `kind:id`; `attrs` com chave proibida é descartada e reportada. Relação para uma entidade de outro coletor é válida (é o que o cruzamento usa); a que não casa com nenhum nó do grafo vira aviso `broken-ref` do `lint` (SPEC-0039). Esclarecimento de 2026-10-30, durante o G1 da SPEC-0033.
 
 ## Prós e Contras das Opções
 | Critério (peso) | A — JSON próprio | B — módulos Python | C — catálogo do Backstage |
