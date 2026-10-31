@@ -14,15 +14,15 @@ credentials:                          # só NOMES; nunca valores
     profile: acme-prod
 ```
 
-- `atlas` — pasta do atlas. Cada máquina grava o seu caminho (o `init` e o `init --join` gravam o caminho absoluto).
-- `credentials` — por id de coletor: `env` (lista de nomes de variável de ambiente) e `profile` (nome de um profile da ferramenta, por exemplo da AWS CLI ou do `gh`). Cada nome de variável precisa seguir `^[A-Z_][A-Z0-9_]*$`; qualquer outra coisa (por exemplo um token colado no lugar do nome) faz `config` sair com 2 e `doctor` mostrar ERRO com "credentials aceita só nomes de variável: <coletor>", sem repetir o valor e sem gravar nada.
+- `atlas` — pasta do atlas. Cada máquina grava o seu caminho **absoluto** (o `init` e o `init --join` gravam assim); um caminho relativo editado à mão vira ERRO no `doctor`.
+- `credentials` — por id de coletor: `env` (lista de nomes de variável de ambiente) e `profile` (nome de um profile da ferramenta, por exemplo da AWS CLI ou do `gh`). Cada nome de variável precisa seguir `^[A-Z_][A-Z0-9_]*$`; qualquer outra coisa (por exemplo um token colado no lugar do nome) faz `config` sair com 2 e `doctor` mostrar ERRO com "credentials aceita só nomes de variável: <coletor>", sem repetir o valor e sem gravar nada. Um `profile` com espaços sai do mesmo jeito, com "credentials aceita só um nome de profile, sem espaços: <coletor>".
 - O `atlas.py` nunca lê o valor de uma variável: o `doctor` só confere se o nome existe no ambiente (`definida` ou `não definida`) e mostra o nome do profile sem verificá-lo.
 
-É escrita pelo `atlas.py init` (e pelo `init --join` numa máquina nova), que mantém as `credentials` já declaradas. `ATLAS_CONFIG_HOME` troca a pasta, útil para testes ou para mais de um atlas.
+É escrita pelo `atlas.py init` (e pelo `init --join` numa máquina nova, que não aceita `--org`, `--mode` nem `--force`), que mantém as `credentials` já declaradas. `ATLAS_CONFIG_HOME` troca a pasta, útil para testes ou para mais de um atlas.
 
 ## Camada compartilhada — `atlas-config.yml`
 
-Fica na raiz do atlas e vai junto com ele (no repositório, no modo `repo`). **Nunca tem caminho absoluto nem segredo.** O `init` gera o arquivo a partir de `assets/atlas-config.yml`, com os comentários do modelo; só mudam `organization` e `mode`:
+Fica na raiz do atlas e vai junto com ele (no repositório, no modo `repo`). **Nunca tem caminho absoluto nem segredo.** O `init` gera o arquivo a partir de `assets/atlas-config.yml`, com os comentários do modelo; só mudam `organization` e `mode`. Um `atlas-config.yml` diferente só é substituído com `init --force`, que guarda o anterior em `atlas-config.yml.bak` (ou `.bak.1`, `.bak.2`…, sem sobrescrever um backup antigo):
 
 ```yaml
 version: 1
@@ -59,7 +59,7 @@ Chave ausente usa o padrão (origem `padrão` no `config`).
 | Item | OK | AVISO | ERRO |
 |---|---|---|---|
 | `configuração local` | arquivo lido, credenciais só com nomes | — | credencial com valor |
-| `pasta do atlas` | a pasta existe | — | `atlas` vazio ou pasta inexistente (mostra o caminho) |
+| `pasta do atlas` | a pasta existe e pode ser lida | — | `atlas` vazio, caminho relativo, pasta inexistente ou sem permissão de leitura (mostra o caminho) |
 | `atlas-config.yml` | versão, chaves e formato certos | — | ausente, ilegível, `version` diferente de 1, sem `organization`/`mode`, `mode` inválido, caminho absoluto |
 | `estrutura` | todas as pastas e páginas | — | o que falta |
 | `git` | `.git` na pasta do atlas | a pasta não é repositório git | — |
@@ -67,3 +67,13 @@ Chave ausente usa o padrão (origem `padrão` no `config`).
 | `credencial <coletor> <NOME>` | `definida` | `não definida` | — |
 
 O `doctor` não executa nenhum processo: usa só arquivos, `shutil.which` e `os.environ`. Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração local.
+
+`doctor --json` imprime o mesmo diagnóstico como objeto:
+
+```json
+{"version": "2026.10.1", "ok": false, "checks": [{"status": "ERRO", "item": "coletor github", "detail": "executável gh-atlas-collector não encontrado no PATH"}]}
+```
+
+- `version` — `ATLAS_VERSION` da skill; `ok` — `true` quando não há nenhum ERRO; `checks` — uma entrada por linha do texto, na mesma ordem.
+
+Erros de sistema de arquivos (sem permissão, disco só de leitura, `atlas-config.yml` que não é UTF-8) saem com 1 e uma mensagem `erro: ...`, sem traceback.

@@ -235,10 +235,18 @@ def dump_yaml(data: dict, indent: int = 0) -> str:
     return "".join(lines)
 
 
+def read_text(path: Path) -> str:
+    """Text of a UTF-8 file; unreadable or not UTF-8 = AtlasError (code 1) naming the file, without a traceback."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise AtlasError(f"não consegui ler {path}: {e}", 1) from e
+
+
 def read_yaml(path: Path) -> dict:
     try:
-        return parse_yaml(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError) as e:
+        return parse_yaml(read_text(path))
+    except ValueError as e:
         raise AtlasError(f"não consegui ler {path}: {e}", 1) from e
 
 
@@ -340,7 +348,7 @@ def validate_credentials(credentials) -> None:
             raise AtlasError(problem, 2)
         profile = entry.get("profile", "")
         if not isinstance(profile, str) or any(c.isspace() for c in profile):
-            raise AtlasError(problem, 2)
+            raise AtlasError(f"credentials aceita só um nome de profile, sem espaços: {collector}", 2)
 
 
 def read_local(config_home=None):
@@ -403,6 +411,15 @@ def run_collector(argv):
 
 # ---------------------------------------------------------------- init
 
+def backup_path(path: Path) -> Path:
+    """atlas-config.yml.bak, or .bak.1, .bak.2... so an older backup is never overwritten."""
+    candidate, n = path.with_name(path.name + ".bak"), 0
+    while candidate.exists():
+        n += 1
+        candidate = path.with_name(f"{path.name}.bak.{n}")
+    return candidate
+
+
 def page_text(name: str, organization: str) -> str:
     return (PAGES_DIR / name).read_text(encoding="utf-8").replace("{organization}", organization)
 
@@ -445,6 +462,11 @@ def cmd_init(args):
     atlas_path = absolute(args.atlas)
     local_path = local_config_path()
     if args.join:
+        extra = [flag for flag, given in (("--org", args.org), ("--mode", args.mode), ("--force", args.force))
+                 if given]
+        if extra:
+            raise AtlasError(f"init --join não aceita {', '.join(extra)}: a organização e o modo vêm do "
+                             "atlas-config.yml do atlas", 2)
         return join_atlas(atlas_path, local_path)
     if not args.org or not args.mode:
         raise AtlasError("init precisa de --org NOME e --mode repo|local (ou --join para um atlas existente)", 2)
@@ -457,7 +479,7 @@ def cmd_init(args):
     local_text = render_local_config(atlas_path, credentials)
 
     if shared.is_file():
-        current = shared.read_text(encoding="utf-8")
+        current = read_text(shared)
         if current == shared_text:
             write_local_config(local_path, local_text)
             print(f"Atlas já configurado em {atlas_path}")
@@ -465,7 +487,7 @@ def cmd_init(args):
             return 0
         if not args.force:
             raise AtlasError("atlas-config.yml já existe — use --join ou --force", 2)
-        backup = atlas / (SHARED_FILE + ".bak")
+        backup = backup_path(shared)
         backup.write_text(current, encoding="utf-8")
         shared.write_text(shared_text, encoding="utf-8")
         write_local_config(local_path, local_text)
@@ -619,11 +641,19 @@ def doctor_rows(config_home=None) -> list:
     if not isinstance(atlas, str) or not atlas:
         rows.append(("ERRO", "pasta do atlas", f"atlas não definido em {path} — rode init (ou init --join)"))
         return rows + credential_checks(credentials)
-    if not Path(atlas).is_dir():
-        rows.append(("ERRO", "pasta do atlas", f"não existe: {atlas}"))
+    if not Path(atlas).is_absolute():
+        detail = f"caminho relativo: {atlas} — use o caminho absoluto em {path} (ou rode init --join)"
+        rows.append(("ERRO", "pasta do atlas", detail))
+        return rows + credential_checks(credentials)
+    try:
+        if not Path(atlas).is_dir():
+            rows.append(("ERRO", "pasta do atlas", f"não existe: {atlas}"))
+            return rows + credential_checks(credentials)
+        found, shared = atlas_checks(Path(atlas))
+    except OSError as e:
+        rows.append(("ERRO", "pasta do atlas", f"não consegui ler {atlas}: {e.strerror or e}"))
         return rows + credential_checks(credentials)
     rows.append(("OK", "pasta do atlas", atlas))
-    found, shared = atlas_checks(Path(atlas))
     rows += found + collector_checks((shared or {}).get("collectors"))
     return rows + credential_checks(credentials)
 
@@ -667,6 +697,9 @@ def main(argv=None):
     except AtlasError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
+    except OSError as e:  # permission, read-only disk...: a clear message, never a traceback
+        print(f"erro: {e}", file=sys.stderr)
+        return 1
     return 2
 
 

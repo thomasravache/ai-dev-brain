@@ -17,8 +17,8 @@ Rode `python3 <skill-dir>/scripts/atlas.py <comando>`, onde `<skill-dir>` é a p
 | Comando | Uso |
 |---|---|
 | `config [--json]` | Configuração efetiva, com a origem de cada valor (`local`, `atlas` ou `padrão`); credenciais só pelo nome. Exit 3 = não configurado nesta máquina; exit 2 = `credentials` com algo que não é nome de variável |
-| `init --atlas P --org NOME --mode repo\|local [--force]` | Cria um atlas novo numa pasta vazia ou inexistente: estrutura, `atlas-config.yml` e a configuração local. Mesmo `atlas-config.yml` = "Atlas já configurado" (só a configuração local). `atlas-config.yml` diferente sai com 2, a menos que `--force` (o anterior vai para `atlas-config.yml.bak`). Pasta com conteúdo e sem `atlas-config.yml` sai com 2 |
-| `init --join --atlas P` | Máquina nova para um atlas que já tem `atlas-config.yml`: grava só a configuração local; sem ele sai com 2 |
+| `init --atlas P --org NOME --mode repo\|local [--force]` | Cria um atlas novo numa pasta vazia ou inexistente: estrutura, `atlas-config.yml` e a configuração local. Mesmo `atlas-config.yml` = "Atlas já configurado" (só a configuração local). `atlas-config.yml` diferente sai com 2, a menos que `--force` (o anterior vai para `atlas-config.yml.bak`, ou `.bak.1`, `.bak.2`… sem apagar backup antigo). Pasta com conteúdo e sem `atlas-config.yml` sai com 2 |
+| `init --join --atlas P` | Máquina nova para um atlas que já tem `atlas-config.yml`: grava só a configuração local; sem ele sai com 2. Não aceita `--org`, `--mode` nem `--force` (sai com 2): organização e modo vêm do atlas |
 | `doctor [--json]` | Uma linha `OK\|AVISO\|ERRO <item> — <detalhe>` por item: configuração local, pasta do atlas, `atlas-config.yml`, estrutura, git, cada coletor e cada credencial (`definida` ou `não definida`, nunca o valor). Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração |
 
 Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do atlas e regiões geradas: `references/atlas-layout.md`.
@@ -69,4 +69,4 @@ Depois declare as credenciais desta máquina pelo nome (passo 5) e rode `doctor`
 - **Nunca** grave nem mostre o valor de uma credencial: a configuração local guarda só nomes de variável (`^[A-Z_][A-Z0-9_]*$`) e de profile, e o `doctor` só diz `definida` ou `não definida`.
 - O `atlas-config.yml` vai junto com o atlas: nunca coloque nele um caminho absoluto nem um segredo.
 - Não edite à mão as regiões `<!-- atlas:begin <nome> -->` … `<!-- atlas:end <nome> -->`: são do `atlas.py`. O texto fora delas é de quem mantém o atlas.
-- Não sobrescreva um `atlas-config.yml` diferente sem a pessoa pedir; o `--force` guarda o anterior em `atlas-config.yml.bak`.
+- Não sobrescreva um `atlas-config.yml` diferente sem a pessoa pedir; o `--force` guarda o anterior em `atlas-config.yml.bak` (ou `.bak.1`, `.bak.2`…, nunca sobrescrevendo um backup).
