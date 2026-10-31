@@ -8,10 +8,11 @@ Skills e materiais de apoio para desenvolvimento com agentes de IA (Claude Code,
 |---|---|
 | [`sdd-management`](skills/sdd-management/SKILL.md) | Spec-Driven Development de ponta a ponta: specs com dependências, aprovação humana antes do código, execução multiagente em ondas, TDD verificado no git, gates de qualidade até o deploy, pilares de entrega e relatório de entrega. Agnóstica de tecnologia e de ferramenta. |
 | [`second-brain`](skills/second-brain/SKILL.md) | Segundo cérebro num vault do Obsidian mantido com uma LLM. Faz o onboarding de um vault novo ou existente e guarda notas, PDFs e vídeos: o texto é extraído por yt-dlp, Whisper ou pdftotext, as notas são ligadas às relacionadas e entram no MOC e no log. Também consulta o vault citando as notas, captura pelo celular via `inbox/`, faz manutenção com `lint` e exporta para o NotebookLM. Agnóstica de provedor (Google Drive, OneDrive, iCloud ou pasta local) e de LLM. |
+| [`org-atlas`](skills/org-atlas/SKILL.md) | Atlas de como uma organização desenvolve e opera software (serviços, plataforma, convenções, processo e glossário), mantido com os agentes num repositório compartilhado ou numa pasta local. Faz o onboarding (`init`, `init --join` numa máquina nova), mostra a configuração em duas camadas com a origem de cada valor e diagnostica o atlas com `doctor`. Credenciais só pelo nome da variável ou do profile, nunca o valor. Agnóstica de organização e de provedor. |
 
 ## Próximos passos e nomes futuros
 
-Em rascunho, ainda sem aprovação: a skill `org-atlas`, que mapeia como uma organização desenvolve e opera software para os agentes usarem (SPEC-0029), com probes só de leitura na infraestrutura (SPEC-0030), e a distribuição como plugin e servidor MCP (SPEC-0031).
+Em andamento: a skill `org-atlas` (SPEC-0029), que já tem o esqueleto, a configuração e o `doctor` (SPEC-0032); coletores, páginas de serviço, `context` e `lint` vêm nas próximas specs. Em rascunho, ainda sem aprovação: probes só de leitura na infraestrutura (SPEC-0030) e a distribuição como plugin e servidor MCP (SPEC-0031).
 
 O conjunto vai ganhar a marca **Hadron** (`hadron-lab` no repositório, marketplace e domínio; `hadron` como plugin). A troca de nomes fica para depois, e os nomes atuais continuam valendo como apelidos na transição. O tema é **partículas**: cada parte é uma partícula cujo papel na física espelha o papel dela. Cada skill segue o padrão `<nome>-<função>`, porque o nome é o que ajuda o agente a entender quando usá-la.
 
@@ -32,9 +33,10 @@ Copie a pasta da skill para o diretório de skills da sua ferramenta, por exempl
 ```bash
 cp -R skills/sdd-management ~/.claude/skills/
 cp -R skills/second-brain ~/.claude/skills/
+cp -R skills/org-atlas ~/.claude/skills/
 ```
 
-A ferramenta da `sdd-management` (`scripts/spec_graph.py`) só precisa de Python 3.9+ e git; a da `second-brain` (`scripts/brain.py`), só de Python 3.9+. O CHANGELOG da `second-brain` fica em [`skills/second-brain/CHANGELOG.md`](skills/second-brain/CHANGELOG.md).
+A ferramenta da `sdd-management` (`scripts/spec_graph.py`) só precisa de Python 3.9+ e git; a da `second-brain` (`scripts/brain.py`) e a da `org-atlas` (`scripts/atlas.py`), só de Python 3.9+. O CHANGELOG da `second-brain` fica em [`skills/second-brain/CHANGELOG.md`](skills/second-brain/CHANGELOG.md) e o da `org-atlas` em [`skills/org-atlas/CHANGELOG.md`](skills/org-atlas/CHANGELOG.md).
 
 Num repositório compartilhado com um time que não usa SDD, ative o **modo privado** (`spec_graph.py private init`): specs e registros ficam numa pasta fora do repositório, e o time só vê código, commits e PRs normais. Detalhes em [`references/private-mode.md`](skills/sdd-management/references/private-mode.md).
 
@@ -49,6 +51,7 @@ O CHANGELOG da skill fica em [`skills/sdd-management/CHANGELOG.md`](skills/sdd-m
 ```bash
 python3 -m unittest discover -s skills/sdd-management/tests   # suíte completa, inclui os testes de arquitetura
 python3 -m unittest discover -s skills/second-brain/tests     # suíte da second-brain, inclui os testes de arquitetura
+python3 -m unittest discover -s skills/org-atlas/tests        # suíte da org-atlas, inclui os testes de arquitetura
 uvx ruff check                                                 # lint (Ruff 0.17, configurado em ruff.toml)
 ```
 

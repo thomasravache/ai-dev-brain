@@ -4,7 +4,7 @@ title: "org-atlas: scan com contrato dos coletores, snapshots, diff e redaction"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0032]
@@ -169,82 +169,111 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e redaction**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, CT-01 com a tag `SPEC-0033:<ID>`, falhando pelo motivo certo
-- [ ] Green: `validate_collector_output`, `redact`, `references/collector-contract.md`, `references/redaction.md` e fixtures do contrato
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04, CT-01 com a tag `SPEC-0033:<ID>`, falhando pelo motivo certo
+- [x] Green: `validate_collector_output`, `redact`, `references/collector-contract.md`, `references/redaction.md` e fixtures do contrato
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Normalização e diff**
-- [ ] Red: UT-05, UT-06, UT-07 com a tag `SPEC-0033:<ID>`, falhando pelo motivo certo
-- [ ] Green: `normalize`, `diff_snapshots`, validação de `collectors` e marcadores `{skill}`/`{atlas}`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-05, UT-06, UT-07 com a tag `SPEC-0033:<ID>`, falhando pelo motivo certo
+- [x] Green: `normalize`, `diff_snapshots`, validação de `collectors` e marcadores `{skill}`/`{atlas}`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Comando scan**
-- [ ] Red: IT-01, IT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0033:<ID>`, falhando pelo motivo certo
-- [ ] Green: `run_collector` (sem shell, timeout), `scan`, `snapshots/` e `_scan.json`; coletores falsos
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: IT-01, IT-02, IT-03, IT-04, IT-05 com a tag `SPEC-0033:<ID>`, falhando pelo motivo certo
+- [x] Green: `run_collector` (sem shell, timeout), `scan`, `snapshots/` e `_scan.json`; coletores falsos
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=10, errors=50)) — 1edf72c | 2026-10-30 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — dbc517c | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — dbc517c | 2026-10-30 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (4ª rodada, liberada pelo thomas após IMP-01; M1–M4, R1, R2, R4 e F1 corrigidos; F2, F3 e n1 aceitos; m3 e m4 viram pendência na SPEC-0043) — dbc517c | 2026-10-30 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — af60635 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-10-30 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — ffe8892 | 2026-10-30 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-30 | G4 | falha | 3 FAILs seguidos no G4 (revisão independente): cada rodada fechou os achados anteriores e achou um vazamento novo de segredo na validação dos sinais. Falta só o F1: counts/present aceitam texto sob chave como password. | 3 rodadas red→fix→review (a825540/92cd1c4, 2a48800/7146ed2); M1–M4, R1, R2, R4 corrigidos; F2 e F3 aceitos pelo Reviewer | thomas | decisão do thomas: liberar a 4ª rodada red → fix → review para fechar o F1 (counts só números, present só booleanos) | 2026-10-30 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+O `atlas.py scan` roda os coletores declarados no `atlas-config.yml`, valida a saída de cada um contra o contrato `org-atlas/collector@1` (ADR-0011), mascara o que parecer segredo, grava um snapshot normalizado por coletor e mostra o diff desde o scan anterior. Um coletor com falha não para os outros, mantém o snapshot anterior e não avança o `seen_at`. O contrato, os exemplos e os padrões de redaction estão documentados para quem escrever um coletor próprio.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `skills/org-atlas/scripts/atlas.py` (`ATLAS_VERSION` 2026.10.2): `run_collector` (único ponto com processo externo: lista de argumentos, sem shell, timeout, pasta temporária, grupo de processos encerrado no timeout), `validate_collectors`, `resolve_command` (`{skill}`/`{atlas}`, caminho absoluto recusado inclusive em `--opt=/x` e `-o/x`), `validate_collector_output`, `redact`, `normalize`, `diff_snapshots`, `cmd_scan`.
+- `references/collector-contract.md` (contrato, tipos, tabela de violações e cada exemplo de `tests/fixtures/contract/`) e `references/redaction.md` (padrões, `extra_patterns`, o que fazer se um segredo escapar).
+- **Esclarecimento do ADR-0011 (G1):** relação para entidade de outro coletor é válida; o validador rejeita só `from`/`to` fora do formato `kind:id`, e a referência pendente vira aviso do `lint` (SPEC-0039).
+- **Revisão G4 em 4 rodadas**, cada uma com um red novo antes da correção:
+  - rodada 1 (a8cc346): 4 majors de vazamento — chave privada no stderr, segredo como chave de objeto, campos fora do contrato, URL `redis://:senha@host` — red a825540, correção 92cd1c4;
+  - rodada 2 (92cd1c4): campos do contrato sem checagem de tipo — red 2a48800, correção 7146ed2;
+  - rodada 3 (7146ed2): `counts`/`present` dos sinais aceitavam texto — G4 FAIL, impedimento IMP-01 (3 FAILs), 4ª rodada liberada pelo thomas — red 8e1bd4a, correção dbc517c;
+  - rodada 4 (dbc517c): APPROVED.
+- **Decisões do Architect:** campos fora do contrato são descartados e reportados (não violação); tipo errado num campo do contrato é violação; `counts` só números e `present` só booleanos.
+- **Aceitos pela revisão:** URL com porta e `@` adiante é mascarada a mais (falha segura); token do GitHub colado em letras só é mascarado com corpo de 36 caracteres; identificador todo em maiúsculas com `ASIA` seguido de 16 caracteres pode ser mascarado.
+- **Desempenho:** 10.000 entidades e 10.000 relações validadas, mascaradas, normalizadas e gravadas em ~0,7 s (limite 5 s).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Saída válida aceita | PASS | `test_scan.py::ValidateCollectorOutputTest (saída válida, com e sem signals)` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| UT-02 | Cada violação do contrato reportada, incluindo tipos errados nos campos do contrato e nos sinais | PASS | `test_scan.py::ValidateCollectorOutputTest (violações, tipos dos campos, counts/present)` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| UT-03 | Chave proibida e campo fora do contrato descartados e reportados | PASS | `test_scan.py::ValidateCollectorOutputTest (chave proibida, passwd/pwd, campos fora do contrato)` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| UT-04 | Redaction de cada padrão, de chaves de objeto, de URLs com credencial, de blocos PGP; padrões extras vazios e de largura zero | PASS | `test_scan.py::RedactTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| UT-05 | Normalização determinística | PASS | `test_scan.py::NormalizeTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| UT-06 | Diff de entidades e relações | PASS | `test_scan.py::DiffSnapshotsTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| UT-07 | Configuração de coletores, marcadores e caminho absoluto recusado | PASS | `test_scan.py::CollectorsConfigTest, ScanAbsoluteCommandTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| IT-01 | Primeiro scan grava snapshot e _scan.json; sem coletor habilitado nada é gravado | PASS | `test_scan.py::FirstScanTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| IT-02 | Segundo scan mostra só o diff; terceiro sem mudanças | PASS | `test_scan.py::RepeatedScanTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| IT-03 | Segredos plantados nunca chegam ao snapshot nem à saída; tipo errado falha sem gravar | PASS | `test_scan.py::RedactionScanTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| IT-04 | Coletores com falha mantêm o snapshot anterior; stderr mascarado inteiro antes do corte | PASS | `test_scan.py::FailingCollectorsTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| IT-05 | --only com id desconhecido sai com 2; --only roda só os pedidos | PASS | `test_scan.py::OnlyOptionTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
+| CT-01 | Exemplos válidos e inválidos do contrato documentados e validados | PASS | `test_scan.py::ContractExamplesTest` — CI do PR #20 em 3b30405 (run 41160506150, Python 3.9 e 3.15) e suíte local (G5, af60635) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — 4ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — ~0,7 s para 10.000 entidades; nenhum segredo de teste chegou a snapshot ou saída (revisões G4)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — relatório do `scan` e `_scan.json`; rollback por revert
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `skills/org-atlas/CHANGELOG.md` 2026.10.2, `SKILL.md` e referências; não há CHANGELOG na raiz
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0043
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; versão 2026.10.2 na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0043 — ruído da regra de chave proibida e conferência de `collector`/`category` com a configuração (além das pendências da SPEC-0032).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0033`. -->

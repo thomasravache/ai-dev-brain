@@ -4,7 +4,7 @@ title: "org-atlas: esqueleto, configuração em duas camadas, init e doctor"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: []
@@ -183,47 +183,47 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Arquitetura e parser**
-- [ ] Red: UT-05, UT-04 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
-- [ ] Green: `tests/architecture_rules.py` e `test_architecture.py` com as regras do ADR-0010; `atlas.py` com `argparse` e parser/escritor de YAML
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-05, UT-04 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
+- [x] Green: `tests/architecture_rules.py` e `test_architecture.py` com as regras do ADR-0010; `atlas.py` com `argparse` e parser/escritor de YAML
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Configuração em duas camadas**
-- [ ] Red: UT-01, UT-02, UT-03, IT-04 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
-- [ ] Green: `load_config` com origem dos valores, validação de `credentials`, `config`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, IT-04 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
+- [x] Green: `load_config` com origem dos valores, validação de `credentials`, `config`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: init e doctor**
-- [ ] Red: IT-01, IT-02, IT-03, IT-05 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
-- [ ] Green: `init` (repo, local, `--force`, `--join`), `doctor`, `assets/atlas-config.yml` e `assets/pages/`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: IT-01, IT-02, IT-03, IT-05 com a tag `SPEC-0032:<ID>`, falhando pelo motivo certo
+- [x] Green: `init` (repo, local, `--force`, `--join`), `doctor`, `assets/atlas-config.yml` e `assets/pages/`
+- [x] Refactor mantendo tudo verde
 
 **Fase 4: Instruções, CI e docs**
-- [ ] Red: N/A — fase de instruções, CI e docs, sem comportamento novo; o passo da CI é provado pela suíte rodando no próprio PR
-- [ ] Green: `SKILL.md` (antes de qualquer fluxo, onboarding), `references/config.md` e `atlas-layout.md`; passo da suíte em `.github/workflows/ci.yml`; README
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
-- [ ] Architect: `test` e `arch_test` do `docs/specs/sdd-config.yml` passam a incluir `skills/org-atlas/tests`
+- [x] Red: N/A — fase de instruções, CI e docs, sem comportamento novo; o passo da CI é provado pela suíte rodando no próprio PR
+- [x] Green: `SKILL.md` (antes de qualquer fluxo, onboarding), `references/config.md` e `atlas-layout.md`; passo da suíte em `.github/workflows/ci.yml`; README
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Architect: `test` e `arch_test` do `docs/specs/sdd-config.yml` passam a incluir `skills/org-atlas/tests`
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c | 2026-10-30 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=17, errors=17)) — 04e58b5 | 2026-10-30 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 6faff6c | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6faff6c | 2026-10-30 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (2ª rodada; 1 major e 5 minor da 1ª rodada corrigidos em 6faff6c; 1 minor nova e a regra de processo viram spec de pendência) — 6faff6c | 2026-10-30 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 819e966 | 2026-10-30 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-10-30 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 1e8906c | 2026-10-30 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -235,36 +235,60 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+A skill `org-atlas` existe, com a base para as outras filhas do épico SPEC-0029:
+- estrutura do atlas em inglês (`ATLAS.md`, `atlas-config.yml`, `glossary.md`, `services/`, `platform/`, `conventions/`, `process/`, `snapshots/`);
+- configuração em duas camadas: `atlas-config.yml` no atlas (sem caminho absoluto) e `config.yml` local por máquina (`ATLAS_CONFIG_HOME`), com credenciais só pelo nome;
+- `init` (modo repo ou local, `--force` com backup, `--join`), `config` (com a origem de cada valor) e `doctor` (um item por linha, sem nunca imprimir o valor de uma variável).
+
+O `SKILL.md` manda o agente rodar `atlas.py config` antes de qualquer fluxo e conduzir o onboarding quando não há configuração. A CI roda a suíte nova e o README lista a skill.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `skills/org-atlas/scripts/atlas.py`: arquivo único só com a biblioteca padrão (ADR-0010), `ATLAS_VERSION` 2026.10.1, no desenho do `brain.py`: parser e escritor de YAML próprios (com listas de mapas para `collectors`), `load_config` com origens `local`/`atlas`/`padrão`, `validate_credentials`, `cmd_init`, `cmd_config`, `cmd_doctor`. Nenhum processo externo; `run_collector` fica para a SPEC-0033.
+- Também foram criados `assets/atlas-config.yml`, `assets/pages/` (`ATLAS.md`, `glossary.md` com regiões `atlas:`), `SKILL.md`, `references/config.md`, `references/atlas-layout.md`, `CHANGELOG.md` da skill, o passo na CI e a linha no README. O Architect incluiu a suíte da skill em `test` e `arch_test` do `docs/specs/sdd-config.yml`.
+- **Revisão G4:** a primeira rodada achou 1 major (erros de sistema de arquivos com traceback) e 6 minor. A correção (6faff6c) trata `OSError`/`UnicodeDecodeError` na fronteira (exit 1, sem traceback), usa backups `.bak`, `.bak.1`…, recusa `--join` com `--org`/`--mode`/`--force`, dá ERRO para `atlas` relativo, mensagem própria para profile com espaço e documenta o `doctor --json`. A segunda rodada aprovou.
+- **Decisões aceitas na revisão:** escalares do YAML ficam texto; "mesma configuração" é igualdade de texto; pasta com só `.git`/`.DS_Store` conta como vazia; `.gitkeep` nas pastas da estrutura; credenciais locais existentes mantidas no `init`; flag `--version`.
+- **Dívida assumida:** os comportamentos do endurecimento foram verificados à mão e a regra de processo não pega `subprocess` importado com alias — SPEC-0043.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Configuração efetiva com a origem de cada valor | PASS | `test_config.py::LoadConfigTest (3 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| UT-02 | Credencial com valor recusada sem ecoar e sem gravar | PASS | `test_config.py::ValidateCredentialsTest (3 testes); ConfigTest.test_config_with_a_credential_value_exits_2_and_writes_nothing` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| UT-03 | atlas-config.yml sem caminho absoluto | PASS | `test_config.py::AtlasConfigWithoutAbsolutePathsTest.test_generated_atlas_config_has_no_absolute_path` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| UT-04 | Parser e escritor de YAML preservando o modelo | PASS | `test_config.py::YamlTest (3 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| UT-05 | Regras de arquitetura do ADR-0010 | PASS | `test_architecture.py::ImportRulesTest, CollectorRulesTest, ProcessRulesTest, PersonalPathRulesTest (9 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| IT-01 | Atlas novo com estrutura e duas configurações; modo inválido | PASS | `test_config.py::NewAtlasTest (3 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| IT-02 | init repetido, configuração diferente, --force com backup, pasta ocupada | PASS | `test_config.py::ReinitTest (3 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| IT-03 | init --join numa máquina nova | PASS | `test_config.py::JoinTest (2 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| IT-04 | config sem configuração (exit 3) e --json com origens | PASS | `test_config.py::ConfigTest (2 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
+| IT-05 | doctor por item sem imprimir valor de credencial; pasta ausente sem traceback | PASS | `test_config.py::DoctorTest (2 testes)` — CI do PR #20 em 4d0ba7a (run 41153305882, Python 3.9 e 3.15) e suíte local (G5, 819e966) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — `config` 0,085 s e `doctor` 0,083 s com 500 serviços; valor de credencial nunca impresso (revisão G4)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — saída do `doctor`; rollback por revert
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README e `skills/org-atlas/CHANGELOG.md`; não há CHANGELOG na raiz do repositório
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0043
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia (`cp -R skills/org-atlas ~/.claude/skills/`); versão 2026.10.1 na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0043 — testes do endurecimento do `init`/`doctor` e regra de processo com alias.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0032`. -->

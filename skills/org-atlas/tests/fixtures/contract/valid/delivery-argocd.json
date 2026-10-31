@@ -1,0 +1,79 @@
+{
+  "contract": "org-atlas/collector@1",
+  "collector": "argocd",
+  "category": "delivery",
+  "collected_at": "2026-10-30T12:05:00Z",
+  "entities": [
+    {
+      "kind": "deployment",
+      "id": "prod/api",
+      "name": "api",
+      "attrs": {
+        "sync_status": "Synced",
+        "revision": "a1b2c3d"
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "service",
+      "id": "api",
+      "name": "api",
+      "attrs": {
+        "replicas": 3
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "environment",
+      "id": "prod",
+      "name": "prod",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "cluster",
+      "id": "eks-prod-1",
+      "name": "eks-prod-1",
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "secret-ref",
+      "id": "prod/api/db-url",
+      "name": "db-url",
+      "attrs": {
+        "store": "aws-secrets-manager",
+        "path": "prod/api/db-url"
+      },
+      "source": "argocd"
+    }
+  ],
+  "relations": [
+    {
+      "from": "deployment:prod/api",
+      "to": "service:api",
+      "type": "deploys",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:prod/api",
+      "to": "environment:prod",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:prod/api",
+      "to": "cluster:eks-prod-1",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "service:api",
+      "to": "secret-ref:prod/api/db-url",
+      "type": "depends_on",
+      "source": "argocd"
+    }
+  ]
+}
