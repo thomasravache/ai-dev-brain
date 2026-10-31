@@ -15,7 +15,7 @@ redaction: {extra_patterns: []}    # regex extras de mascaramento (references/re
 ```
 
 - `command` é uma **lista**: o executável e os argumentos. Roda **sem shell** (nada de `|`, `>`, `$VAR`, `~`), numa pasta temporária, com as variáveis de ambiente da máquina (as credenciais ficam na configuração local, só pelo nome).
-- Nenhum argumento pode ter caminho absoluto (`/x`, `~`, `C:\`, `C:/`, `\\servidor`, nem `--opcao=/x`): o `atlas-config.yml` vai junto com o atlas e é usado em várias máquinas. Use os marcadores, trocados em cada argumento antes de rodar:
+- Nenhum argumento pode ter caminho absoluto (`/x`, `~`, `C:\`, `C:/`, `\\servidor`, nem `--opcao=/x` ou `-o/x` colado): o `atlas-config.yml` vai junto com o atlas e é usado em várias máquinas. Use os marcadores, trocados em cada argumento antes de rodar:
   - `{skill}` — a pasta da skill `org-atlas` nesta máquina;
   - `{atlas}` — a pasta do atlas nesta máquina.
 - Configuração inválida faz o `scan` sair com 2 sem rodar nada: `id` fora do formato ou repetido, `category` desconhecida, `command` que não é lista não vazia, `timeout` que não é inteiro ≥ 1, `enabled` que não é `true`/`false`, `redaction.extra_patterns` com regex inválida, ou caminho absoluto em `command`, com a mensagem:
@@ -45,17 +45,18 @@ O coletor imprime na **saída padrão um único objeto JSON** e sai com 0. O que
 - `attrs`: objeto só com valores escalares (texto, número, booleano, `null`) ou listas de escalares. Nada de objeto aninhado.
 - Um `secret-ref` guarda só o nome e onde o segredo vive (`store`, `path`), **nunca o valor**.
 
-**Relação** — `{from, to, type, source}`:
+**Relação** — `{from, to, type, source}` e, opcional, `inferred` (`true` só nas relações inferidas pelo cruzamento, SPEC-0036):
 
 - `from` e `to` no formato `kind:id`, com um `kind` da lista acima. A relação pode apontar para uma entidade de **outro** coletor (por exemplo um deployment do Argo CD → `repository:acme/api` do GitHub): isso é válido; referência que não existe em nenhum snapshot é aviso do `lint` (SPEC-0039), não erro do `scan`.
 - `type`: `builds` (pipeline → repository), `sourced_from` (deployment → repository), `deploys` (deployment → service), `runs_in` (deployment → environment ou cluster), `reads`/`writes` (service → datastore ou bucket), `publishes`/`consumes` (service → queue ou topic), `depends_on` (service → qualquer entidade, quando a direção não é conhecida) e `owns` (team → repository ou service).
 
-**Sinal** — objeto com `type` (por exemplo `{type: "pr-titles", repository, total, pattern_counts, sample}`): só contagens e uma amostra limitada, **nunca** o texto inteiro de PRs ou commits.
+**Sinal** — objeto com `type` e só os campos `repository`, `total`, `pattern_counts`, `sample`, `counts` e `present` (por exemplo `{type: "pr-titles", repository, total, pattern_counts, sample}`): só contagens e uma amostra limitada, **nunca** o texto inteiro de PRs ou commits.
 
 ## O que o contrato proíbe
 
-- **Chave de `attrs` que indica segredo:** nome que contém `password`, `secret`, `token` ou `credential`, que tem `key`/`keys` ou `private` como parte (`api_key`, `privateKey`, `private`) ou que termina em `key` (`apikey`). A chave é **descartada** do snapshot e reportada (`repository:acme/api: attrs.password descartada (chave proibida)`), sem mostrar o valor e **sem falhar** o coletor.
-- **Valor que parece segredo** (token, chave privada, JWT, URL com senha e os `extra_patterns`): vira `[REDACTED]` antes de gravar; o relatório mostra só a contagem (`references/redaction.md`).
+- **Campo fora do contrato:** só os campos listados acima chegam ao snapshot — na saída (`contract`, `collector`, `category`, `collected_at`, `entities`, `relations`, `signals`), na entidade (`kind`, `id`, `name`, `attrs`, `source`), na relação (`from`, `to`, `type`, `source`, `inferred`) e no sinal (`type`, `repository`, `total`, `pattern_counts`, `sample`, `counts`, `present`). Qualquer outro campo é **descartado** e reportado pelo lugar e pelo nome (`saída: campo debug descartado (fora do contrato)`, `repository:acme/api: campo password descartado (fora do contrato)`, `relations[0]: campo note descartado (fora do contrato)`), sem mostrar o valor e **sem falhar** o coletor.
+- **Chave que indica segredo**, em `attrs` e nos campos de um sinal: nome que contém `password`, `passwd`, `secret`, `token` ou `credential`, que tem `key`/`keys`, `private` ou `pwd` como parte (`api_key`, `privateKey`, `private`, `db_pwd`) ou que termina em `key` (`apikey`). A chave é **descartada** e reportada (`repository:acme/api: attrs.password descartada (chave proibida)`), sem mostrar o valor e **sem falhar** o coletor.
+- **Valor que parece segredo** (token, chave privada PEM ou PGP, JWT, URL com senha e os `extra_patterns`), também quando aparece como **chave** de um objeto (`attrs`, `pattern_counts`): vira `[REDACTED]` antes de gravar; o relatório mostra só a contagem (`references/redaction.md`). Os nomes reportados como descartados passam pela mesma máscara antes de aparecer na tela.
 
 ## Violações
 
@@ -97,6 +98,7 @@ Para cada coletor habilitado (ou só os de `--only`): executa, valida, mascara, 
 - O snapshot é normalizado: entidades ordenadas por `kind:id`, relações por `from`/`type`/`to`, chaves ordenadas, indentação de 2 espaços. O mesmo estado gera o mesmo arquivo; se só `collected_at` mudou, o arquivo não é regravado (o histórico do atlas não ganha ruído).
 - Saída por coletor: `OK <id> — +A entidades, -R, ~C; +a relações, -r` (adicionadas, removidas e alteradas desde o scan anterior), `OK <id> — sem mudanças`, `N valor(es) mascarado(s)` e as chaves descartadas, ou `FALHA <id> — <motivo>`. `--json` imprime `{"version", "ok", "collectors": [...]}` com o diff completo de cada coletor.
 - Exit 0 sem falha, 1 com alguma falha, 2 com configuração inválida, `--only` com id não declarado ou com coletor `enabled: false` (nada roda).
+- Sem nenhum coletor habilitado, o `scan` só avisa e sai com 0, sem gravar nada (nem cria `snapshots/`).
 
 ## Versões
 

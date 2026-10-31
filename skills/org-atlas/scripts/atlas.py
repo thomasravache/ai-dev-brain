@@ -418,11 +418,15 @@ KINDS = ("repository", "service", "environment", "deployment", "cluster", "datas
 RELATION_TYPES = ("builds", "sourced_from", "deploys", "runs_in", "reads", "writes", "publishes", "consumes",
                   "depends_on", "owns")
 OUTPUT_FIELDS = ("contract", "collector", "category", "collected_at", "entities", "relations")
+OUTPUT_ALLOWED = OUTPUT_FIELDS + ("signals",)
 ENTITY_FIELDS = ("kind", "id", "name", "attrs", "source")
 RELATION_FIELDS = ("from", "to", "type", "source")
-# attrs keys whose name says "secret": dropped and reported, never a violation (ADR-0011)
-FORBIDDEN_WORDS = ("password", "secret", "token", "credential")  # anywhere in the name (api_token, passwords)
-FORBIDDEN_PARTS = ("key", "keys", "private")  # a whole part of the name (api_key, private), or ...key at the end
+RELATION_ALLOWED = RELATION_FIELDS + ("inferred",)
+SIGNAL_ALLOWED = ("type", "repository", "total", "pattern_counts", "sample", "counts", "present")
+# keys whose name says "secret": dropped and reported, never a violation (ADR-0011); fields outside the contract
+# get the same treatment (G4 review): only the contract's fields reach the snapshot
+FORBIDDEN_WORDS = ("password", "passwd", "secret", "token", "credential")  # anywhere in the name (api_token)
+FORBIDDEN_PARTS = ("key", "keys", "private", "pwd")  # a whole part of the name (api_key, db_pwd), or ...key at the end
 ENTITY_REF_RE = re.compile(r"^([a-z][a-z-]*):(.+)$")
 COLLECTED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$")
 NAME_PARTS_RE = re.compile(r"[a-z0-9]+")
@@ -447,6 +451,19 @@ def entity_ref_problem(value) -> bool:
     return not m or m.group(1) not in KINDS
 
 
+def _keep_fields(obj: dict, allowed, where: str, dropped: list) -> dict:
+    """obj with only the contract's fields; each other field is dropped and reported by name (never by value)."""
+    kept = {}
+    for name, value in obj.items():
+        if name not in allowed:
+            dropped.append(f"{where}: campo {name} descartado (fora do contrato)")
+        elif is_forbidden_key(name):
+            dropped.append(f"{where}: {name} descartada (chave proibida)")
+        else:
+            kept[name] = value
+    return kept
+
+
 def _check_entity(index: int, entity, seen: set, violations: list, dropped: list):
     where = f"entities[{index}]"
     if not isinstance(entity, dict):
@@ -463,10 +480,11 @@ def _check_entity(index: int, entity, seen: set, violations: list, dropped: list
         if key in seen:
             violations.append(f"{where}: chave repetida: {key}")
         seen.add(key)
+    clean = _keep_fields(entity, ENTITY_FIELDS, key, dropped)
     attrs = entity.get("attrs", {})
     if not isinstance(attrs, dict):
         violations.append(f"{where}: attrs precisa ser um objeto")
-        return entity
+        return clean
     kept = {}
     for name, value in attrs.items():
         if is_forbidden_key(name):
@@ -475,14 +493,16 @@ def _check_entity(index: int, entity, seen: set, violations: list, dropped: list
         if not is_scalar_value(value):
             violations.append(f"{where}: attrs.{name} não é escalar")
         kept[name] = value
-    return dict(entity, attrs=kept)
+    if "attrs" in clean:
+        clean["attrs"] = kept
+    return clean
 
 
-def _check_relation(index: int, relation, violations: list):
+def _check_relation(index: int, relation, violations: list, dropped: list):
     where = f"relations[{index}]"
     if not isinstance(relation, dict):
         violations.append(f"{where}: precisa ser um objeto {{from, to, type, source}}")
-        return
+        return relation
     missing = [field for field in RELATION_FIELDS if field not in relation]
     if missing:
         violations.append(f"{where}: faltam campos: {', '.join(missing)}")
@@ -491,14 +511,25 @@ def _check_relation(index: int, relation, violations: list):
     for end in ("from", "to"):
         if end in relation and entity_ref_problem(relation[end]):
             violations.append(f"{where}: {end} fora do formato kind:id: {relation[end]}")
+    return _keep_fields(relation, RELATION_ALLOWED, where, dropped)
+
+
+def _check_signal(index: int, signal, violations: list, dropped: list):
+    where = f"signals[{index}]"
+    if not isinstance(signal, dict) or not isinstance(signal.get("type"), str):
+        violations.append(f"{where}: precisa ser um objeto com type")
+        return signal
+    return _keep_fields(signal, SIGNAL_ALLOWED, where, dropped)
 
 
 def validate_collector_output(data) -> tuple:
     """(clean, violations, dropped) of a collector output against org-atlas/collector@1 (ADR-0011).
 
     violations empty = valid. A relation to an entity of another collector is valid (only the kind:id format is
-    checked; dangling references are a lint warning, SPEC-0039). Forbidden attrs keys (password, secret, token,
-    key, credential, private) leave `clean` and are reported in `dropped` by entity key and name, never value."""
+    checked; dangling references are a lint warning, SPEC-0039). Only the contract's fields stay in `clean`
+    (output, entity, relation and signal); any other field and every forbidden key (password, passwd, pwd, secret,
+    token, key, credential, private — in attrs and in a signal) is dropped and reported in `dropped` by where it
+    was and its name, never its value. Dropping is not a violation."""
     if not isinstance(data, dict):
         return data, ["a saída não é um objeto JSON"], []
     violations, dropped = [], []
@@ -514,7 +545,7 @@ def validate_collector_output(data) -> tuple:
     if "collected_at" in data and not (isinstance(data["collected_at"], str)
                                        and COLLECTED_AT_RE.match(data["collected_at"])):
         violations.append(f"collected_at fora do formato ISO 8601 UTC (AAAA-MM-DDTHH:MM:SSZ): {data['collected_at']}")
-    clean = dict(data)
+    clean = _keep_fields(data, OUTPUT_ALLOWED, "saída", dropped)
     entities = data.get("entities", [])
     if not isinstance(entities, list):
         violations.append("entities precisa ser uma lista")
@@ -525,30 +556,31 @@ def validate_collector_output(data) -> tuple:
     if not isinstance(relations, list):
         violations.append("relations precisa ser uma lista")
     else:
-        for i, relation in enumerate(relations):
-            _check_relation(i, relation, violations)
+        clean["relations"] = [_check_relation(i, r, violations, dropped) for i, r in enumerate(relations)]
     if "signals" in data:
         signals = data["signals"]
         if not isinstance(signals, list):
             violations.append("signals precisa ser uma lista")
         else:
-            for i, signal in enumerate(signals):
-                if not isinstance(signal, dict) or not isinstance(signal.get("type"), str):
-                    violations.append(f"signals[{i}]: precisa ser um objeto com type")
+            clean["signals"] = [_check_signal(i, s, violations, dropped) for i, s in enumerate(signals)]
     return clean, violations, dropped
 
 
 # ---------------------------------------------------------------- redaction (references/redaction.md)
 
 REDACTED = "[REDACTED]"
+PRIVATE_KEY_HEADER = r"[A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----"  # PEM (RSA, EC, OPENSSH...) and PGP blocks
 SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and masks only the password
-    ("private-key", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?:.*?-----END [A-Z0-9 ]*PRIVATE KEY-----|.*\Z)"),
-    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:)[^\s/@]+@"),
-    ("github-pat", r"\bgithub_pat_[A-Za-z0-9_]{20,}"),
-    ("github", r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
-    ("slack", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
-    ("aws-access-key", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
-    ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+    ("private-key", rf"-----BEGIN {PRIVATE_KEY_HEADER}(?:.*?-----END {PRIVATE_KEY_HEADER}|.*\Z)"),
+    # user may be empty (redis://:pw@host); the password runs up to the last @ before a space, so / and @
+    # inside it are masked too (when in doubt, more is masked, never less)
+    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]*:)(?:[^\s@]*@)+"),
+    # no word boundary: a token glued to other text (x...ghp_...) is masked as well
+    ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),
+    ("github", r"gh[pousr]_[A-Za-z0-9]{20,}"),
+    ("slack", r"xox[abposr]-[A-Za-z0-9-]{10,}"),
+    ("aws-access-key", r"(?:AKIA|ASIA)[0-9A-Z]{16}"),
+    ("jwt", r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
 )
 SECRET_RE = re.compile("|".join(f"(?:{regex})" for _, regex in SECRET_PATTERNS), re.DOTALL)
 _EXTRA_CACHE = {}
@@ -566,9 +598,13 @@ def compile_extra_patterns(extra_patterns) -> list:
             if not isinstance(pattern, str) or not pattern:
                 raise AtlasError(f"redaction.extra_patterns[{index}] precisa ser uma regex (texto não vazio)", 2)
             try:
-                compiled.append(re.compile(pattern))
+                regex = re.compile(pattern)
             except re.error as e:
                 raise AtlasError(f"redaction.extra_patterns[{index}] não é uma regex válida: {e}", 2) from e
+            if regex.search("") is not None:  # would insert [REDACTED] between every character
+                raise AtlasError(f"redaction.extra_patterns[{index}] casa com o texto vazio — "
+                                 "exija ao menos um caractere", 2)
+            compiled.append(regex)
         _EXTRA_CACHE[key] = compiled
     return _EXTRA_CACHE[key]
 
@@ -586,18 +622,42 @@ def _redact_text(text: str, extras: list) -> tuple:
     return text, count
 
 
+def _redact_keys(item: dict, extras: list) -> tuple:
+    """({original key: masked key}, count) for the keys of a dict. Masked keys that collide in the same object
+    are kept apart with "#2", "#3"... in the order of the original keys (deterministic, whatever the input
+    order); a key equal to an existing one is avoided the same way."""
+    masked, count = {}, 0
+    for key in item:
+        if isinstance(key, str):
+            masked[key], n = _redact_text(key, extras)
+            count += n
+        else:
+            masked[key] = key
+    changed = sorted((k for k in item if masked[k] != k), key=str)
+    taken = {k for k in item if masked[k] == k}
+    for key in changed:
+        base, candidate, n = masked[key], masked[key], 1
+        while candidate in taken:
+            n += 1
+            candidate = f"{base}#{n}"
+        masked[key] = candidate
+        taken.add(candidate)
+    return masked, count
+
+
 def redact(value, extra_patterns=()) -> tuple:
-    """(redacted, count): every piece of a string (also inside dict values and lists; keys stay) that matches a
-    secret pattern or an extra pattern becomes [REDACTED]; count = occurrences. Other scalars stay as they are."""
+    """(redacted, count): every piece of a string (also dict keys and values, and lists) that matches a secret
+    pattern or an extra pattern becomes [REDACTED]; count = occurrences. Other scalars stay as they are."""
     extras = compile_extra_patterns(extra_patterns)
 
     def walk(item):
         if isinstance(item, str):
             return _redact_text(item, extras)
         if isinstance(item, dict):
-            result, total = {}, 0
+            keys, total = _redact_keys(item, extras)
+            result = {}
             for key, child in item.items():
-                result[key], n = walk(child)
+                result[keys[key]], n = walk(child)
                 total += n
             return result, total
         if isinstance(item, list):
@@ -669,7 +729,7 @@ def has_changes(diff: dict) -> bool:
 COLLECTOR_ID_RE = re.compile(r"^[a-z0-9-]+$")
 COLLECTOR_TIMEOUT = 300
 ABSOLUTE_MESSAGE = "command não pode ter caminho absoluto — use {skill} ou {atlas}"
-ABSOLUTE_ARG_RE = re.compile(r"(^|=)(/|~|[A-Za-z]:[\\/]|\\\\)")  # also --out=/x
+ABSOLUTE_ARG_RE = re.compile(r"(^|=|^-[A-Za-z0-9])(/|~|[A-Za-z]:[\\/]|\\\\)")  # also --out=/x, -o/x
 STDERR_LINES = 20
 STDERR_LINE_MAX = 500
 BOOLEANS = {"true": True, "false": False}
@@ -787,9 +847,10 @@ def run_collector(argv, timeout=COLLECTOR_TIMEOUT) -> tuple:
 
 
 def stderr_tail(text: str, extras: list) -> list:
-    """Last STDERR_LINES lines of a collector's stderr, each cut to STDERR_LINE_MAX characters and redacted."""
-    lines = (text or "").rstrip().splitlines()[-STDERR_LINES:]
-    return [_redact_text(line[:STDERR_LINE_MAX], extras)[0] for line in lines]
+    """Last STDERR_LINES lines of a collector's stderr, each cut to STDERR_LINE_MAX characters. The whole text is
+    redacted first, so a multi-line key block or a token at the cut never leaks a piece."""
+    masked, _ = _redact_text(text or "", extras)
+    return [line[:STDERR_LINE_MAX] for line in masked.rstrip().splitlines()[-STDERR_LINES:]]
 
 
 # ---------------------------------------------------------------- scan
@@ -926,6 +987,12 @@ def cmd_scan(only=None, as_json=False):
         raise AtlasError("redaction.extra_patterns precisa ser uma lista de regex", 2)
     extras = compile_extra_patterns(extra or [])
     selected = selected_collectors(collectors, only)
+    if not selected:  # nothing runs, nothing is written (not even snapshots/)
+        if as_json:
+            print(json.dumps({"version": ATLAS_VERSION, "ok": True, "collectors": []}, ensure_ascii=False, indent=2))
+        else:
+            print("nenhum coletor habilitado em atlas-config.yml (references/collector-contract.md)")
+        return 0
     snapshots = atlas / SNAPSHOTS_DIR
     snapshots.mkdir(parents=True, exist_ok=True)
     state_path = snapshots / SCAN_STATE
@@ -944,14 +1011,11 @@ def cmd_scan(only=None, as_json=False):
                                       "entities": previous.get("entities", 0),
                                       "relations": previous.get("relations", 0)}
         reports.append(report)
-    if selected:
-        write_atomic(state_path, json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+    write_atomic(state_path, json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
     failed = any(r["status"] != "ok" for r in reports)
     if as_json:
         print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports},
                          ensure_ascii=False, indent=2))
-    elif not selected:
-        print("nenhum coletor habilitado em atlas-config.yml (references/collector-contract.md)")
     else:
         print_scan(reports)
     return 1 if failed else 0
