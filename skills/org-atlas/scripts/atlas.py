@@ -409,6 +409,36 @@ def run_collector(argv):
     raise NotImplementedError("run_collector (SPEC-0033)")
 
 
+def validate_collectors(collectors) -> list:
+    raise NotImplementedError("validate_collectors (SPEC-0033)")
+
+
+def resolve_command(command, skill, atlas) -> list:
+    raise NotImplementedError("resolve_command (SPEC-0033)")
+
+
+def validate_collector_output(data) -> tuple:
+    raise NotImplementedError("validate_collector_output (SPEC-0033)")
+
+
+def redact(value, extra_patterns=()) -> tuple:
+    raise NotImplementedError("redact (SPEC-0033)")
+
+
+def normalize(data) -> str:
+    raise NotImplementedError("normalize (SPEC-0033)")
+
+
+def diff_snapshots(old, new) -> dict:
+    raise NotImplementedError("diff_snapshots (SPEC-0033)")
+
+
+# ---------------------------------------------------------------- scan
+
+def cmd_scan(only=None, as_json=False):
+    raise NotImplementedError("scan (SPEC-0033)")
+
+
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
@@ -685,6 +715,9 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("scan", help="roda os coletores, valida, mascara, grava snapshots/ e mostra o diff")
+    p.add_argument("--only", help="ids dos coletores separados por vírgula")
+    p.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -694,6 +727,8 @@ def main(argv=None):
             return cmd_config(args.json)
         if args.command == "doctor":
             return cmd_doctor(args.json)
+        if args.command == "scan":
+            return cmd_scan(args.only, args.json)
     except AtlasError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
