@@ -39,7 +39,7 @@ Perfil: **minimo**
 | 7 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 5: arquivos em comum com SPEC-0037; saiu da onda 6: arquivos em comum com SPEC-0038 |
 | 7 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ⛔ aguarda implementação de SPEC-0038 |  |
 | 8 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
-| 9 | SPEC-0043 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0033; saiu da onda 2: arquivos em comum com SPEC-0034; saiu da onda 3: arquivos em comum com SPEC-0035; saiu da onda 4: arquivos em comum com SPEC-0036; saiu da onda 5: arquivos em comum com SPEC-0037; saiu da onda 6: arquivos em comum com SPEC-0038; saiu da onda 7: arquivos em comum com SPEC-0039; saiu da onda 8: arquivos em comum com SPEC-0040 |
+| 9 | SPEC-0043 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 2: arquivos em comum com SPEC-0034; saiu da onda 3: arquivos em comum com SPEC-0035; saiu da onda 4: arquivos em comum com SPEC-0036; saiu da onda 5: arquivos em comum com SPEC-0037; saiu da onda 6: arquivos em comum com SPEC-0038; saiu da onda 7: arquivos em comum com SPEC-0039; saiu da onda 8: arquivos em comum com SPEC-0040 |
 
 ## Épicos
 
@@ -88,7 +88,7 @@ flowchart LR
   S0037 -. contrato v1 .-> S0039
   S0039 --> S0040
   S0038 --> S0041
-  S0032 --> S0043
+  S0033 --> S0043
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -142,7 +142,7 @@ flowchart LR
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
-| [SPEC-0043](SPEC-0043-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
+| [SPEC-0043](SPEC-0043-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
 
 ## ADRs
 

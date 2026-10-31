@@ -197,9 +197,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=10, errors=50)) — 1edf72c | 2026-10-30 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 7146ed2 | 2026-10-30 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 7146ed2 | 2026-10-30 |
-| G4 Review | FAIL | 3ª rodada de review CHANGES_REQUESTED em 7146ed2: signals[].counts e present aceitam texto sob chave de segredo (F1, major). Rodadas anteriores: a8cc346 (4 majors de vazamento, corrigidos em 92cd1c4) e 92cd1c4 (R1 major, corrigido em 7146ed2) | 2026-10-30 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — dbc517c | 2026-10-30 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — dbc517c | 2026-10-30 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (4ª rodada, liberada pelo thomas após IMP-01; M1–M4, R1, R2, R4 e F1 corrigidos; F2, F3 e n1 aceitos; m3 e m4 viram pendência na SPEC-0043) — dbc517c | 2026-10-30 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |

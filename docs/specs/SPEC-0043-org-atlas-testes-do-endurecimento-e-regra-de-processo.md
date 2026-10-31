@@ -7,9 +7,9 @@ user_facing: false
 status: proposed
 created: 2026-10-30
 parent: SPEC-0029
-depends_on: [SPEC-0032]
+depends_on: [SPEC-0033]
 consumes_contract: []
-touches: [skills/org-atlas/tests/architecture_rules.py, skills/org-atlas/tests/test_architecture.py, skills/org-atlas/tests/test_hardening.py, skills/org-atlas/scripts/atlas.py, skills/org-atlas/CHANGELOG.md]
+touches: [skills/org-atlas/tests/architecture_rules.py, skills/org-atlas/tests/test_architecture.py, skills/org-atlas/tests/test_hardening.py, skills/org-atlas/references/collector-contract.md, skills/org-atlas/references/redaction.md, skills/org-atlas/scripts/atlas.py, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0010, ADR-0002]
 external: []
 size: S
@@ -22,6 +22,7 @@ approved_at:
 ## 1. Problema
 Duas pendências da revisão (G4) da SPEC-0032:
 - **Regra de processo incompleta:** o checador de arquitetura do ADR-0010 (`skills/org-atlas/tests/architecture_rules.py`) só pega `subprocess.run(...)` e `os.system(...)` chamados pelo nome do módulo. `from subprocess import run`, `import subprocess as sp` e `from os import system` passam pela SPEC-0032:UT-05 sem aviso. Hoje o `atlas.py` não usa nada disso, mas a regra não protege contra o caso.
+- **Pendências da revisão da SPEC-0033 (minor):** a regra de chave proibida tem ruído nos dois sentidos (descarta `monkey`, `primary_key`, `sort_keys`, `tokenizer`, `public_key`; não pega `auth`) e o `scan` não confere se `collector` e `category` da saída batem com o id e a categoria configurados.
 - **Endurecimento sem teste:** a correção do G4 (commit 6faff6c) trouxe comportamentos verificados só à mão: erro de sistema de arquivos sem traceback (exit 1), backups `.bak`, `.bak.1`…, `init --join` recusando `--org`/`--mode`/`--force`, ERRO para `atlas` relativo e mensagem própria para profile com espaço.
 
 ## 2. Causa Raiz
@@ -30,7 +31,7 @@ Os testes da SPEC-0032 foram congelados no commit red (04e58b5), antes da revis�
 ## 3. Mudança Proposta
 - `architecture_rules.py`: a regra de processo também reporta, fora de `run_collector`, imports de nomes de `subprocess` (`from subprocess import ...`), módulos com alias (`import subprocess as x`) e `from os import system`/`popen`/`exec*`/`spawn*`.
 - `tests/test_hardening.py`: testes de regressão para cada comportamento do endurecimento, pela CLI, em diretórios temporários.
-- `atlas.py`: só se algum teste mostrar diferença entre o que foi verificado à mão e o comportamento real.
+- `atlas.py`: só se algum teste mostrar diferença entre o que foi verificado à mão e o comportamento real; afinar a regra de chave proibida; `collector`/`category` diferentes da configuração viram violação (mudança aditiva no contrato `org-atlas/collector@1`, a confirmar no H1 desta spec).
 - **Não muda:** o contrato da SPEC-0032.
 
 **Padrão seguido:** `skills/second-brain/tests/brain_architecture_rules.py` e os testes de CLI da SPEC-0032 (`skills/org-atlas/tests/test_config.py`).
@@ -43,6 +44,8 @@ Os testes da SPEC-0032 foram congelados no commit red (04e58b5), antes da revis�
 - Caracterização: N/A — os comportamentos já existem e os testes novos são de regressão.
 - **UT-01** — Dado código de exemplo com `from subprocess import run`, `import subprocess as sp` e `from os import system` fora de `run_collector`, quando a regra de processo roda, então os três são reportados; dentro de `run_collector`, nenhum.
 - **IT-01** — Pela CLI: `init` em pasta sem permissão de escrita, `init` com `atlas-config.yml` que não é UTF-8 e `doctor` em pasta sem permissão saem com 1, com "erro:" ou ERRO, e sem traceback (guarda: passa antes da mudança).
+- **UT-02** — Dado chaves `monkey`, `primary_key`, `sort_keys`, `tokenizer`, `public_key` e `auth`, quando a regra de chave proibida roda, então só `auth` é descartada.
+- **UT-03** — Dado uma saída com `collector` ou `category` diferentes da declaração no `atlas-config.yml`, quando o `scan` valida, então há violação e o snapshot não é gravado.
 - **IT-02** — Pela CLI: dois `init --force` seguidos geram `.bak` e `.bak.1` com o conteúdo certo; `init --join --mode x` sai com 2; `atlas` relativo na configuração local gera ERRO no `doctor`; profile com espaço gera a mensagem própria sem ecoar o valor (guarda: passa antes da mudança).
 
 ## 5. Questões em Aberto
