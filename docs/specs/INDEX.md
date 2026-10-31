@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 17 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 8, in-progress 1, implemented 27
+- Validação (G0): **3 erro(s), 18 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, approved 8, implemented 28
 - Impedimentos: **0 aberto(s)**, 15 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,23 +23,22 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0033  
+**Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** —
+**Próximo lote:** SPEC-0034
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ✅ pronta |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0033 |
-| 3 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0033; saiu da onda 2: arquivos em comum com SPEC-0034 |
-| 4 | SPEC-0036 | org-atlas: cruzamento de fontes, grafo e páginas geradas | full/M | approved | ⛔ aguarda implementação de SPEC-0033 | saiu da onda 2: arquivos em comum com SPEC-0034; saiu da onda 3: arquivos em comum com SPEC-0035 |
-| 5 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | approved | ⛔ aguarda implementação de SPEC-0036 |  |
-| 6 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 5: arquivos em comum com SPEC-0037 |
-| 7 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 5: arquivos em comum com SPEC-0037; saiu da onda 6: arquivos em comum com SPEC-0038 |
-| 7 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ⛔ aguarda implementação de SPEC-0038 |  |
-| 8 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
-| 9 | SPEC-0043 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 2: arquivos em comum com SPEC-0034; saiu da onda 3: arquivos em comum com SPEC-0035; saiu da onda 4: arquivos em comum com SPEC-0036; saiu da onda 5: arquivos em comum com SPEC-0037; saiu da onda 6: arquivos em comum com SPEC-0038; saiu da onda 7: arquivos em comum com SPEC-0039; saiu da onda 8: arquivos em comum com SPEC-0040 |
+| 2 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0034 |
+| 3 | SPEC-0036 | org-atlas: cruzamento de fontes, grafo e páginas geradas | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0034; saiu da onda 2: arquivos em comum com SPEC-0035 |
+| 4 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | approved | ⛔ aguarda implementação de SPEC-0036 |  |
+| 5 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 4: arquivos em comum com SPEC-0037 |
+| 6 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 4: arquivos em comum com SPEC-0037; saiu da onda 5: arquivos em comum com SPEC-0038 |
+| 6 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ⛔ aguarda implementação de SPEC-0038 |  |
+| 7 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
+| 8 | SPEC-0043 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0034; saiu da onda 2: arquivos em comum com SPEC-0035; saiu da onda 3: arquivos em comum com SPEC-0036; saiu da onda 4: arquivos em comum com SPEC-0037; saiu da onda 5: arquivos em comum com SPEC-0038; saiu da onda 6: arquivos em comum com SPEC-0039; saiu da onda 7: arquivos em comum com SPEC-0040 |
 
 ## Épicos
 
@@ -47,7 +46,7 @@ Perfil: **minimo**
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
-| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 1/11 implementadas |
+| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 2/11 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/0 implementadas |
 
@@ -63,7 +62,7 @@ flowchart LR
   end
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
     S0032["SPEC-0032<br/>org-atlas: esqueleto, configuração em d…"]:::implemented
-    S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::inprogress
+    S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::implemented
     S0034["SPEC-0034<br/>org-atlas: coletores generic e GitHub"]:::approved
     S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::approved
     S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::approved
@@ -132,7 +131,7 @@ flowchart LR
 | [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | org-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | proposed | 2026-10-30 | — | SPEC-0029 | — |
 | [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | proposed | 2026-10-30 | — | — | — |
 | [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | implemented | 2026-10-30 | SPEC-0029 | — | — |
-| [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | in-progress | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
+| [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
 | [SPEC-0034](SPEC-0034-org-atlas-coletores-generic-e-github.md) | org-atlas: coletores generic e GitHub | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
