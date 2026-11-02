@@ -170,7 +170,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=1, skipped=1)); nota: a falha da cadeia é o SPEC-0004:IT-10 (tempo, sob carga), que interrompe antes da org-atlas; red da org-atlas conferido em worktree limpa em 4cfb2ab: FAILED (failures=27, errors=37), só testes da SPEC-0035 — 4cfb2ab | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — e7539bf | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — e7539bf | 2026-11-02 |
-| G4 Review | FAIL | Reviewer (rodada 1, 2dc68bc): CHANGES_REQUESTED — B1: host_of devolve trecho da senha quando ela tem @ seguido de / ? # (ex.: DB_URL=Pass); M1: IndexError com # ou ? na senha derruba o coletor; menores: 'server address unspecified' sem mensagem guiada, Application duplicada descartada sem aviso | 2026-11-02 |
+| G4 Review | FAIL | Reviewer (rodada 2, e7539bf): CHANGES_REQUESTED — N1: a regra do último @ (decisão do Architect na rodada 1) vaza trechos de path/query/fragmento com @ (ex.: ?password=Pa55@word → word); B1, M1 e menores 3/4 corrigidos | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
