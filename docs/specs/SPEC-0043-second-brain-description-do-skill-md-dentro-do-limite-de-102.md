@@ -4,7 +4,7 @@ title: "second-brain: description do SKILL.md dentro do limite de 1024 caractere
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: []
