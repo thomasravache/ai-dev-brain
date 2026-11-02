@@ -1,5 +1,5 @@
 ---
-id: SPEC-0045
+id: SPEC-0050
 title: "second-brain: itens confidenciais e cofre de senhas"
 tier: full
 type: feature
@@ -18,7 +18,7 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0045 — second-brain: itens confidenciais e cofre de senhas
+# SPEC-0050 — second-brain: itens confidenciais e cofre de senhas
 
 > Rascunho no radar (pedido do usuário em 2026-11-02). Desenho proposto abaixo; contrato e testes são detalhados depois das Questões em Aberto.
 

@@ -1,5 +1,5 @@
 ---
-id: SPEC-0046
+id: SPEC-0051
 title: "second-brain: versionamento e backup do vault"
 tier: full
 type: feature
@@ -18,7 +18,7 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0046 — second-brain: versionamento e backup do vault
+# SPEC-0051 — second-brain: versionamento e backup do vault
 
 > Rascunho no radar (pedido do usuário em 2026-11-02). Desenho proposto abaixo; contrato e testes são detalhados depois das Questões em Aberto.
 
@@ -72,7 +72,7 @@ A proposta é dar ao vault um histórico e cópias restauráveis, sem depender d
 
 ## 5. Requisitos Não-Funcionais
 - **Desempenho e escala:** a definir (ex.: backup de 5.000 notas em poucos segundos).
-- **Segurança:** o backup inclui itens confidenciais (SPEC-0045)? A definir; se incluir, o destino precisa ser tão protegido quanto o vault.
+- **Segurança:** o backup inclui itens confidenciais (SPEC-0050)? A definir; se incluir, o destino precisa ser tão protegido quanto o vault.
 - **Privacidade e dados pessoais:** o destino fica fora do repositório e é escolhido pela pessoa.
 - **Disponibilidade e resiliência:** `backup verify` prova que o arquivo abre; um backup que falha no meio não substitui o anterior.
 - **Acessibilidade (UI):** N/A — CLI.
@@ -197,6 +197,6 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
 
 ## 15. Emendas
-<!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0046`. -->
+<!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0051`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|

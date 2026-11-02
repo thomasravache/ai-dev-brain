@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 10, implemented 28
+- Validação (G0): **5 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 3, approved 10, implemented 28
 - Impedimentos: **0 aberto(s)**, 14 resolvido(s)
 
 ## Cobertura de Pilares
@@ -32,7 +32,9 @@ Perfil: **minimo**
 | 1 | SPEC-0032 | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full/M | approved | ✅ pronta |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | approved | ⛔ aguarda implementação de SPEC-0032 |  |
+| 2 | SPEC-0050 | second-brain: itens confidenciais e cofre de senhas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0028 |
 | 3 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033 |
+| 3 | SPEC-0051 | second-brain: versionamento e backup do vault | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0028; saiu da onda 2: arquivos em comum com SPEC-0050 |
 | 4 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033; saiu da onda 3: arquivos em comum com SPEC-0034 |
 | 5 | SPEC-0036 | org-atlas: cruzamento de fontes, grafo e páginas geradas | full/M | approved | ⛔ aguarda implementação de SPEC-0033 | saiu da onda 3: arquivos em comum com SPEC-0034; saiu da onda 4: arquivos em comum com SPEC-0035 |
 | 6 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | approved | ⛔ aguarda implementação de SPEC-0036 |  |
@@ -58,8 +60,13 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
+  S0044["SPEC-0044<br/>second-brain: captura e leitura pelo co…"]:::implemented
+  S0050["SPEC-0050<br/>second-brain: itens confidenciais e cof…"]:::proposed
+  S0051["SPEC-0051<br/>second-brain: versionamento e backup do…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
+    S0017["SPEC-0017<br/>second-brain: esqueleto, configuração e…"]:::implemented
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
+    S0024["SPEC-0024<br/>second-brain: exportação para o Noteboo…"]:::implemented
   end
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
     S0032["SPEC-0032<br/>org-atlas: esqueleto, configuração em d…"]:::approved
@@ -87,6 +94,10 @@ flowchart LR
   S0037 -. contrato v1 .-> S0039
   S0039 --> S0040
   S0038 --> S0041
+  S0023 --> S0050
+  S0024 --> S0050
+  S0044 --> S0050
+  S0017 --> S0051
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -142,6 +153,8 @@ flowchart LR
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
+| [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | proposed | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
+| [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | proposed | 2026-11-02 | — | SPEC-0017 | — |
 
 ## ADRs
 
