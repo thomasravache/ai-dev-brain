@@ -1971,20 +1971,322 @@ def cmd_curate(args):
 
 # ---------------------------------------------------------------- context (read-only package for a task)
 
+MAX_HOPS = 2
+NO_SCAN = "atlas ainda sem scan — rode scan"
+NOTHING_FOUND = "Nada encontrado no atlas para: {query}"
+DEFAULT_STALE_DAYS = 14
+CONTEXT_HEADINGS = {"warnings": "## Aviso de envelhecimento", "services": "## Serviços",
+                    "dependencies": "## Dependências", "rules": "## Convenções (regra)",
+                    "hints": "## Convenções (dica)", "omitted": "## Omitidos"}
+TERM_RE = re.compile(r"[\w.-]+", re.UNICODE)
+# weight of a query term found in: the name or id (whole), part of the name or id, the attrs, the team notes
+SCORE_EXACT, SCORE_PART, SCORE_ATTRS, SCORE_NOTES = 10, 6, 3, 1
+OMITTED_MAX = 50  # omitted items listed one by one; the rest becomes a single "… e mais N" line
+
+
+def _days_between(first: str, last: str):
+    try:
+        return (datetime.date.fromisoformat(last) - datetime.date.fromisoformat(first)).days
+    except (TypeError, ValueError):
+        return None
+
+
 def staleness_warnings(scan_state, stale_days, today) -> list:
-    raise NotImplementedError("SPEC-0038: staleness_warnings")
+    """Warnings from snapshots/_scan.json: a collector with status ok and seen_at more than stale_days days before
+    `today` -> "Atlas com D dias desde o último scan de: A, B (stale_days: N)" (one line per D, oldest first); a
+    collector whose last scan failed -> "Último scan falhou: C, D". Collectors sorted by id; deterministic."""
+    stale, failed = {}, []
+    for cid in sorted(scan_state if isinstance(scan_state, dict) else {}):
+        entry = scan_state[cid] if isinstance(scan_state[cid], dict) else {}
+        if entry.get("status") == "failed":
+            failed.append(cid)
+            continue
+        days = _days_between(str(entry.get("seen_at") or ""), today)
+        if days is not None and days > int(stale_days):
+            stale.setdefault(days, []).append(cid)
+    warnings = [f"Atlas com {days} dias desde o último scan de: {', '.join(stale[days])} (stale_days: {stale_days})"
+                for days in sorted(stale, reverse=True)]
+    if failed:
+        warnings.append(f"Último scan falhou: {', '.join(failed)}")
+    return warnings
+
+
+def _stale_days(shared: dict) -> int:
+    value = shared.get("stale_days", DEFAULT_STALE_DAYS)
+    if value in (None, ""):
+        return DEFAULT_STALE_DAYS
+    if isinstance(value, bool) or not re.match(r"^\d+$", str(value).strip()):
+        raise AtlasError(f"stale_days precisa ser um número inteiro de dias: {value}", 2)
+    return int(str(value).strip())
+
+
+def _query_terms(query: str) -> list:
+    return list(dict.fromkeys(t for t in TERM_RE.findall(query.casefold()) if len(t) > 1))
+
+
+def _team_text(text: str, template: str) -> str:
+    """The text of a service page written by people: outside the generated regions and without the template's
+    fixed lines (title, introduction, headings)."""
+    fixed = {line.strip() for line in template.splitlines() if line.strip()}
+    outside = REGION_SUB_RE.sub("", text)
+    return "\n".join(line for line in outside.splitlines() if line.strip() and line.strip() not in fixed)
+
+
+def _score_service(node, notes: str, terms) -> tuple:
+    """(score, reason) of a service for the query terms: name/id, attrs and the team notes of its page."""
+    eid = node["key"].split(":", 1)[1]
+    names = {node["name"].casefold(), eid.casefold()}
+    words = set(TERM_RE.findall(" ".join(names)))
+    attrs = " ".join(f"{k} {_fmt_value(v)}" for k, v in node["attrs"].items()).casefold()
+    notes = notes.casefold()
+    score, hits = 0, {"nome": [], "atributos": [], "notas": []}
+    for term in terms:
+        if term in names or term in words:
+            score += SCORE_EXACT
+            hits["nome"].append(term)
+        elif any(term in name for name in names):
+            score += SCORE_PART
+            hits["nome"].append(term)
+        if term in attrs:
+            score += SCORE_ATTRS
+            hits["atributos"].append(term)
+        if term in notes:
+            score += SCORE_NOTES
+            hits["notas"].append(term)
+    reason = "; ".join(f"{where}: {', '.join(found)}" for where, found in hits.items() if found)
+    return score, reason
+
+
+def _service_entry(key, index, page, score, reason) -> dict:
+    node = index.nodes[key]
+    deployments = []
+    for deployment in index.sources(key, "deploys", "deployment"):
+        envs = [index.name(e) for e in index.targets(deployment, "runs_in", "environment")]
+        deployments.append({"id": deployment.split(":", 1)[1], "environments": envs})
+    repositories = _union(index.targets(key, "sourced_from", "repository"))
+    owners = _union(*(index.sources(t, "owns", "team") for t in [key] + repositories))
+    return {"key": key, "name": node["name"], "score": score, "reason": reason, "page": page,
+            "repositories": [r.split(":", 1)[1] for r in repositories], "deployments": deployments,
+            "owners": [{"id": t.split(":", 1)[1], "name": index.name(t)} for t in owners], "attrs": node["attrs"],
+            "seen_at": node["seen_at"]}
+
+
+def _dependencies(starts, index, hops) -> list:
+    """Dependency edges (depends_on, reads, writes, publishes, consumes, both directions) reached in up to `hops`
+    steps from the found services; sorted by (from, type, to)."""
+    seen, frontier, edges = set(starts), list(starts), {}
+    for _ in range(hops):
+        following = []
+        for key in frontier:
+            for rtype in DEPENDENCY_TYPES:
+                for edge in index.out.get((key, rtype), []) + index.into.get((key, rtype), []):
+                    edges[(edge["from"], edge["type"], edge["to"])] = edge
+                    other = edge["to"] if edge["from"] == key else edge["from"]
+                    if other not in seen:
+                        seen.add(other)
+                        following.append(other)
+        frontier = sorted(following)
+    result = []
+    for key in sorted(edges):
+        edge = edges[key]
+        item = {"from": edge["from"], "to": edge["to"], "type": edge["type"], "inferred": bool(edge.get("inferred"))}
+        if edge.get("evidence"):
+            item["evidence"] = edge["evidence"]
+        result.append(item)
+    return result
+
+
+def _context_conventions(atlas: Path, repositories) -> tuple:
+    """(rules, hints): confirmed and inferred conventions of the organization scope and of `repositories`;
+    rejected never."""
+    scopes = {"organization"} | {f"repository:{r}" for r in repositories}
+    rules, hints = [], []
+    for cid, (meta, _) in _conventions(atlas).items():
+        if meta.get("scope") not in scopes:
+            continue
+        item = {key: meta.get(key, "") for key in CONVENTION_KEYS if key != "reason"}
+        item["id"], item["path"] = cid, f"{CONVENTIONS_DIR}/{cid}.md"
+        if meta.get("status") == "confirmed":
+            rules.append(item)
+        elif meta.get("status") == "inferred":
+            hints.append(item)
+    return rules, hints
+
+
+def _empty_package(query, warnings) -> dict:
+    return {"query": query, "warnings": warnings, "services": [], "dependencies": [], "rules": [], "hints": [],
+            "omitted": []}
+
+
+def _omitted_label(section, item) -> str:
+    if section == "services":
+        return f"serviço {item['name']} (`{item['key']}`, {item['page']})"
+    if section == "dependencies":
+        return f"dependência `{item['from']}` → `{item['to']}` ({item['type']})"
+    label = "convenção (regra)" if section == "rules" else "convenção (dica)"
+    return f"{label} `{item['id']}` ({item['path']})"
+
+
+def _fit(package: dict, max_chars: int) -> dict:
+    """The package with the longest prefix of its items (services, dependencies, rules, hints, in this order) whose
+    Markdown fits in max_chars; the rest goes to `omitted` (one line per item, the first OMITTED_MAX of them, then
+    one "… e mais N" line). Warnings are never omitted."""
+    order = ("services", "dependencies", "rules", "hints")
+    items = [(section, item) for section in order for item in package[section]]
+
+    def keep(count):
+        kept = dict(package, **{section: [] for section in order})
+        for section, item in items[:count]:
+            kept[section].append(item)
+        rest = items[count:]
+        kept["omitted"] = [_omitted_label(section, item) for section, item in rest[:OMITTED_MAX]]
+        if len(rest) > OMITTED_MAX:
+            kept["omitted"].append(f"… e mais {len(rest) - OMITTED_MAX} item(ns) — use termos mais específicos, "
+                                   "--hops menor ou --max-chars maior")
+        return kept
+
+    if len(render_context(keep(len(items)))) <= max_chars:
+        return keep(len(items))
+    low, high = 0, len(items) - 1  # the largest count that fits (0 if none)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if len(render_context(keep(middle))) <= max_chars:
+            low = middle
+        else:
+            high = middle - 1
+    return keep(low)
 
 
 def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, today=None) -> dict:
-    raise NotImplementedError("SPEC-0038: build_context")
+    """Read-only package for a task (references/context.md): staleness warnings, the services found by the query
+    terms (name, id, attrs and the team notes of their pages, by score), the dependency edges up to `hops` steps,
+    the confirmed (rules) and inferred (hints) conventions of the organization and of the services' repositories,
+    and what did not fit in max_chars (omitted). An atlas without scan = empty package with the warning."""
+    atlas = Path(atlas)
+    today = today or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    shared_path = atlas / SHARED_FILE
+    shared = read_yaml(shared_path) if shared_path.is_file() else {}
+    state = read_json_file(atlas / SNAPSHOTS_DIR / SCAN_STATE)
+    graph = read_json_file(atlas / GRAPH_FILE)
+    if not isinstance(state, dict) or not state or not isinstance(graph, dict) or not isinstance(
+            graph.get("nodes"), list) or not isinstance(graph.get("edges"), list):
+        return _empty_package(query, [NO_SCAN])
+    try:
+        declared = {c["id"] for c in validate_collectors(shared.get("collectors"))}
+    except AtlasError:
+        declared = set()
+    if declared:
+        state = {cid: entry for cid, entry in state.items() if cid in declared}
+    package = _empty_package(query, staleness_warnings(state, _stale_days(shared), today))
+    index = _Index(graph, _existing_service_pages(atlas))
+    organization = str(shared.get("organization") or graph.get("organization") or "")
+    terms = _query_terms(query)
+    found = []
+    for key, name in index.slugs.items():
+        node = index.nodes[key]
+        page = f"{SERVICES_DIR}/{name}.md"
+        path = atlas / page
+        notes = ""
+        if path.is_file():
+            eid = key.split(":", 1)[1]
+            title = eid if node["name"] == eid else f"{node['name']} ({eid})"
+            notes = _team_text(read_text(path), _template(SERVICE_PAGE, organization, title=title, key=key))
+        score, reason = _score_service(node, notes, terms)
+        if score > 0:
+            found.append((score, key, page, reason))
+    found.sort(key=lambda item: (-item[0], item[1]))
+    package["services"] = [_service_entry(key, index, page, score, reason)
+                           for score, key, page, reason in found[:limit]]
+    if not package["services"]:
+        return package
+    starts = [s["key"] for s in package["services"]]
+    package["dependencies"] = _dependencies(starts, index, hops)
+    repositories = _union(*(s["repositories"] for s in package["services"]))
+    package["rules"], package["hints"] = _context_conventions(atlas, repositories)
+    return _fit(package, max_chars)
+
+
+def _existing_service_pages(atlas: Path) -> dict:
+    folder = atlas / SERVICES_DIR
+    if not folder.is_dir():
+        return {}
+    return {f"{SERVICES_DIR}/{path.name}": read_text(path) for path in sorted(folder.glob("*.md"))}
+
+
+def _service_lines(service) -> list:
+    lines = [f"### {service['name']} (`{service['key']}`)", "",
+             f"- Página: {service['page']}",
+             f"- Encontrado por: {service['reason']} (pontuação {service['score']})"]
+    if service["repositories"]:
+        lines.append(f"- Repositório: {', '.join(service['repositories'])}")
+    if service["deployments"]:
+        parts = [f"{', '.join(d['environments']) or 'sem ambiente'}: {d['id']}" for d in service["deployments"]]
+        lines.append(f"- Deployments: {'; '.join(parts)}")
+    if service["owners"]:
+        lines.append("- Donos: " + ", ".join(f"{o['name']} ({o['id']})" for o in service["owners"]))
+    lines += [f"- {name}: {_fmt_value(value)}" for name, value in service["attrs"].items()]
+    lines.append(f"- Visto em: {service['seen_at']}")
+    return lines + [""]
+
+
+def _dependency_line(edge) -> str:
+    note = edge["type"]
+    if edge["inferred"]:
+        note += f", inferida de `{edge['evidence']}`" if edge.get("evidence") else ", inferida"
+    return f"- `{edge['from']}` → `{edge['to']}` — {note}"
+
+
+def _convention_line(item, hint) -> str:
+    where = item["scope"]
+    if hint:
+        return f"- `{item['id']}` — {item['title']} ({where}; {item['path']}) — não confirmada"
+    return (f"- `{item['id']}` — {item['title']} ({where}; confirmada por {item['confirmed_by']} em "
+            f"{item['confirmed_at']} via {item['confirmed_via']}; {item['path']})")
 
 
 def render_context(package: dict) -> str:
-    raise NotImplementedError("SPEC-0038: render_context")
+    """The package in Markdown, in the contract order; each section only when it has content (the warning, when
+    there is one, is always first)."""
+    parts = []
+
+    def add(section, lines):
+        if lines:
+            parts.append("\n".join([CONTEXT_HEADINGS[section], "", *lines]).rstrip() + "\n")
+
+    add("warnings", [f"- {w}" for w in package["warnings"]])
+    add("services", [line for s in package["services"] for line in _service_lines(s)])
+    add("dependencies", [_dependency_line(e) for e in package["dependencies"]])
+    add("rules", [_convention_line(c, False) for c in package["rules"]])
+    add("hints", [_convention_line(c, True) for c in package["hints"]])
+    add("omitted", [f"- {item}" for item in package["omitted"]])
+    return "\n".join(parts)
 
 
 def cmd_context(args):
-    raise NotImplementedError("SPEC-0038: context")
+    """context QUERY [--hops 0..2] [--limit N] [--max-chars N] [--json]: read-only package (never writes to the
+    atlas). Nothing found = the fixed message and exit 0; invalid argument = exit 2; not configured = exit 3."""
+    if not 0 <= args.hops <= MAX_HOPS:
+        raise AtlasError(f"--hops precisa estar entre 0 e {MAX_HOPS}: {args.hops}", 2)
+    if args.limit < 1:
+        raise AtlasError(f"--limit precisa ser maior que zero: {args.limit}", 2)
+    if args.max_chars < 1:
+        raise AtlasError(f"--max-chars precisa ser maior que zero: {args.max_chars}", 2)
+    atlas, _ = scan_config()
+    query = " ".join(args.query).strip()
+    package = build_context(atlas, query, args.hops, args.limit, args.max_chars)
+    nothing = not package["services"]
+    if args.json:
+        data = {"version": ATLAS_VERSION, **package}
+        if nothing:
+            data["message"] = NOTHING_FOUND.format(query=query)
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return 0
+    text = render_context(package)
+    if text:
+        print(text)
+    if nothing:
+        print(NOTHING_FOUND.format(query=query))
+    return 0
 
 
 # ---------------------------------------------------------------- init
