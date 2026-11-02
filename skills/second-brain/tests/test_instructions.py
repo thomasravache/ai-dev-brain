@@ -80,6 +80,7 @@ class InstructionsTest(unittest.TestCase):
         self.assertRegex(name, r"^[a-z0-9-]+$")
         match = re.search(r"(?ms)^description:[ \t]*(?:>-?|\|-?)?[ \t]*\n?(.*?)(?=^\S|\Z)", front)
         description = " ".join(line.strip() for line in match.group(1).splitlines() if line.strip())
+        self.assertTrue(description, "description vazia")
         self.assertLessEqual(len(description), 1024,
                              f"description com {len(description)} caracteres; o upload aceita no máximo 1024")
 
