@@ -1,0 +1,144 @@
+{
+  "category": "delivery",
+  "collected_at": "2026-11-02T16:23:26Z",
+  "collector": "generic",
+  "contract": "org-atlas/collector@1",
+  "entities": [
+    {
+      "attrs": {
+        "engine": "postgres",
+        "host": "db.interno"
+      },
+      "id": "payments-db",
+      "kind": "datastore",
+      "name": "payments-db",
+      "source": "facts"
+    },
+    {
+      "attrs": {
+        "config_refs": [
+          "PAYMENTS_URL=payments"
+        ]
+      },
+      "id": "backoffice-prod",
+      "kind": "deployment",
+      "name": "backoffice-prod",
+      "source": "facts"
+    },
+    {
+      "attrs": {
+        "config_refs": [
+          "DB_URL=db.interno"
+        ]
+      },
+      "id": "payments-prod",
+      "kind": "deployment",
+      "name": "payments-prod",
+      "source": "facts"
+    },
+    {
+      "attrs": {},
+      "id": "prod",
+      "kind": "environment",
+      "name": "prod",
+      "source": "facts"
+    },
+    {
+      "attrs": {},
+      "id": "acme/backoffice",
+      "kind": "repository",
+      "name": "backoffice",
+      "source": "facts"
+    },
+    {
+      "attrs": {},
+      "id": "acme/payments",
+      "kind": "repository",
+      "name": "payments",
+      "source": "facts"
+    },
+    {
+      "attrs": {},
+      "id": "backoffice",
+      "kind": "service",
+      "name": "backoffice",
+      "source": "facts"
+    },
+    {
+      "attrs": {
+        "description": "lançamentos do cashout"
+      },
+      "id": "ledger",
+      "kind": "service",
+      "name": "ledger",
+      "source": "facts"
+    },
+    {
+      "attrs": {
+        "description": "processa pagamentos"
+      },
+      "id": "payments",
+      "kind": "service",
+      "name": "payments",
+      "source": "facts"
+    },
+    {
+      "attrs": {},
+      "id": "search",
+      "kind": "service",
+      "name": "search",
+      "source": "facts"
+    },
+    {
+      "attrs": {},
+      "id": "acme/pay",
+      "kind": "team",
+      "name": "pay",
+      "source": "facts"
+    }
+  ],
+  "relations": [
+    {
+      "from": "deployment:backoffice-prod",
+      "source": "facts",
+      "to": "service:backoffice",
+      "type": "deploys"
+    },
+    {
+      "from": "deployment:backoffice-prod",
+      "source": "facts",
+      "to": "environment:prod",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:backoffice-prod",
+      "source": "facts",
+      "to": "repository:acme/backoffice",
+      "type": "sourced_from"
+    },
+    {
+      "from": "deployment:payments-prod",
+      "source": "facts",
+      "to": "service:payments",
+      "type": "deploys"
+    },
+    {
+      "from": "deployment:payments-prod",
+      "source": "facts",
+      "to": "environment:prod",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:payments-prod",
+      "source": "facts",
+      "to": "repository:acme/payments",
+      "type": "sourced_from"
+    },
+    {
+      "from": "team:acme/pay",
+      "source": "facts",
+      "to": "repository:acme/backoffice",
+      "type": "owns"
+    }
+  ]
+}

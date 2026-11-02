@@ -18,9 +18,11 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 ATLAS_VERSION = "2026.11.1"
@@ -626,21 +628,25 @@ def compile_extra_patterns(extra_patterns) -> list:
     if key not in _EXTRA_CACHE:
         compiled = []
         for index, pattern in enumerate(extra_patterns or ()):
-            if hasattr(pattern, "subn"):
-                compiled.append(pattern)
-                continue
-            if not isinstance(pattern, str) or not pattern:
-                raise AtlasError(f"redaction.extra_patterns[{index}] precisa ser uma regex (texto não vazio)", 2)
-            try:
-                regex = re.compile(pattern)
-            except re.error as e:
-                raise AtlasError(f"redaction.extra_patterns[{index}] não é uma regex válida: {e}", 2) from e
-            if regex.search("") is not None:  # would insert [REDACTED] between every character
-                raise AtlasError(f"redaction.extra_patterns[{index}] casa com o texto vazio — "
-                                 "exija ao menos um caractere", 2)
-            compiled.append(regex)
+            compiled.append(compile_extra_pattern(index, pattern))
         _EXTRA_CACHE[key] = compiled
     return _EXTRA_CACHE[key]
+
+
+def compile_extra_pattern(index: int, pattern):
+    """One compiled entry of redaction.extra_patterns (position `index`); invalid = AtlasError (code 2)."""
+    if hasattr(pattern, "subn"):
+        return pattern
+    if not isinstance(pattern, str) or not pattern:
+        raise AtlasError(f"redaction.extra_patterns[{index}] precisa ser uma regex (texto não vazio)", 2)
+    try:
+        regex = re.compile(pattern)
+    except re.error as e:
+        raise AtlasError(f"redaction.extra_patterns[{index}] não é uma regex válida: {e}", 2) from e
+    if regex.search("") is not None:  # would insert [REDACTED] between every character
+        raise AtlasError(f"redaction.extra_patterns[{index}] casa com o texto vazio — "
+                         "exija ao menos um caractere", 2)
+    return regex
 
 
 def _mask(match) -> str:
@@ -2327,6 +2333,530 @@ def cmd_context(args):
     return 0
 
 
+# ---------------------------------------------------------------- lint (read-only checks of the atlas)
+
+LINT_RULES = ("secret-leak", "config", "failed-collector", "stale", "broken-ref", "pending-convention",
+              "orphan-page")
+LINT_ERRORS = ("secret-leak", "config", "failed-collector")
+VCS_DIRS = (".git", ".hg", ".svn", ".bzr", "_darcs", ".jj")
+LINT_IGNORED_FILES = (".DS_Store", "Thumbs.db", "desktop.ini")
+LINT_MAX_BYTES = 32 * 1024 * 1024  # a bigger file is not read (config finding): the lint stays fast and bounded
+LINT_OPEN_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+SECRET_REGEXES = tuple((name, re.compile(regex, re.DOTALL)) for name, regex in SECRET_PATTERNS)
+LINK_RE = re.compile(r"!?\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?(?:\s+[\"'][^)]*[\"'])?\s*\)")
+CODE_SPAN_RE = re.compile(r"`[^`\n]*`")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+INDENTED_CODE_RE = re.compile(r"^(?: {4}|\t)")
+EXTERNAL_LINK_RE = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|//|#)")  # http:, https:, mailto:, //host, #anchor
+YAML_ERROR_RE = re.compile(r"^(aspas sem fechar|'.' sem fechar|chave sem ':'|texto depois do valor)")
+LINT_SUGGESTIONS = {
+    "secret-leak": "apague o valor do arquivo (o histórico do git também guarda) e troque a credencial; nunca copie "
+                   "o valor para outro lugar",
+    "failed-collector": "rode `atlas.py scan --only <id>` e veja o motivo da FALHA (credencial, timeout, contrato)",
+    "stale": "rode `atlas.py scan` (ou `scan --only <id>`) para atualizar os fatos desse coletor",
+    "pending-convention": "mostre a evidência a uma pessoa e registre a decisão: `atlas.py curate confirm <id> --by "
+                          "NOME --via \"PR #n\"|local` ou `curate reject <id> ...`",
+    "orphan-page": "confirme com o time se a entidade foi desligada; se sim, apague a página (decisão do time) ou "
+                   "mova as notas para outra página",
+}
+SHARED_SUGGESTION = "corrija o atlas-config.yml (references/config.md e references/collector-contract.md)"
+READ_SUGGESTION = ("regrave o arquivo em UTF-8 válido; se é gerado (snapshots/, graph.json, regiões), rode "
+                   "`atlas.py scan`")
+GENERATED_SUGGESTION = "arquivo gerado com formato inesperado: rode `atlas.py scan` (ou `build`) para refazê-lo"
+SPECIAL_SUGGESTION = ("o atlas só tem arquivos e pastas comuns: troque por uma cópia do conteúdo ou tire da pasta do "
+                      "atlas")
+PERMISSION_SUGGESTION = "dê permissão de leitura (e de listagem, numa pasta) ou tire da pasta do atlas"
+
+
+def lint_rules(only=None) -> list:
+    """The rules of --only ("a,b") in report order; None = all of them. Unknown rule = AtlasError (code 2)."""
+    if only in (None, ""):
+        return list(LINT_RULES)
+    wanted = [name.strip() for name in str(only).split(",") if name.strip()]
+    unknown = [name for name in wanted if name not in LINT_RULES]
+    if unknown:
+        raise AtlasError(f"regra desconhecida em --only: {', '.join(unknown)} — use: {', '.join(LINT_RULES)}", 2)
+    return [rule for rule in LINT_RULES if rule in wanted]
+
+
+def _finding(rule, path, detail, suggestion=None) -> dict:
+    return {"rule": rule, "severity": "error" if rule in LINT_ERRORS else "warn", "path": path, "detail": detail,
+            "suggestion": suggestion or LINT_SUGGESTIONS.get(rule, "")}
+
+
+def _special_kind(mode) -> str:
+    if stat.S_ISLNK(mode):
+        return "link simbólico"
+    if stat.S_ISFIFO(mode):
+        return "FIFO"
+    if stat.S_ISSOCK(mode):
+        return "socket"
+    if stat.S_ISCHR(mode) or stat.S_ISBLK(mode):
+        return "dispositivo"
+    return "arquivo especial"
+
+
+class _AtlasFiles:
+    """Every regular file of the atlas (VCS folders skipped), read once. Symlinks, FIFOs, sockets and devices are
+    never read nor followed; they, unreadable files and folders, non-UTF-8 files (also kept, decoded with
+    replacement, for secret-leak) and JSON with an invalid content or shape become `problems` (config findings)."""
+
+    def __init__(self, atlas: Path):
+        self.atlas, self.texts, self.lossy, self.names, self.problems, self._json = atlas, {}, {}, [], {}, {}
+        for root, dirs, files in os.walk(atlas, onerror=self._walk_error):
+            kept = []
+            for name in sorted(d for d in dirs if d not in VCS_DIRS):
+                path = os.path.join(root, name)
+                rel = self.rel(path)
+                self.names.append((rel + "/", name))
+                try:
+                    mode = os.lstat(path).st_mode
+                except OSError as e:
+                    self.problem(rel, f"pasta ilegível: {e.strerror or 'erro de leitura'}", PERMISSION_SUGGESTION)
+                    continue
+                if stat.S_ISDIR(mode):
+                    kept.append(name)
+                else:  # a symlink to a folder: listed by os.walk, never followed
+                    self.problem(rel, f"{_special_kind(mode)}: não é lido nem seguido", SPECIAL_SUGGESTION)
+            dirs[:] = kept
+            for name in sorted(files):
+                if name not in LINT_IGNORED_FILES:
+                    path = os.path.join(root, name)
+                    self.names.append((self.rel(path), name))
+                    self._read(path, self.rel(path))
+
+    def rel(self, path) -> str:
+        try:
+            rel = Path(path).relative_to(self.atlas).as_posix()
+        except ValueError:
+            return "."
+        return rel or "."
+
+    def problem(self, rel, detail, suggestion=READ_SUGGESTION) -> None:
+        self.problems.setdefault(rel, (detail, suggestion))
+
+    def _walk_error(self, error) -> None:
+        self.problem(self.rel(error.filename or self.atlas),
+                     f"pasta ilegível: {error.strerror or 'erro de leitura'}", PERMISSION_SUGGESTION)
+
+    def _read(self, path, rel) -> None:
+        try:
+            info = os.lstat(path)
+            if not stat.S_ISREG(info.st_mode):
+                self.problem(rel, f"{_special_kind(info.st_mode)}: não é lido nem seguido", SPECIAL_SUGGESTION)
+                return
+            if info.st_size > LINT_MAX_BYTES:
+                self.problem(rel, f"arquivo com mais de {LINT_MAX_BYTES // (1024 * 1024)} MB: não é lido",
+                             "tire o arquivo do atlas (o atlas guarda texto) ou divida-o")
+                return
+            # O_NOFOLLOW and O_NONBLOCK: a file swapped for a symlink or a FIFO after lstat is not followed nor waited
+            with os.fdopen(os.open(path, LINT_OPEN_FLAGS), "rb") as handle:
+                mode = os.fstat(handle.fileno()).st_mode
+                if not stat.S_ISREG(mode):
+                    self.problem(rel, f"{_special_kind(mode)}: não é lido nem seguido", SPECIAL_SUGGESTION)
+                    return
+                data = handle.read(LINT_MAX_BYTES + 1)
+        except OSError as e:
+            self.problem(rel, f"arquivo ilegível: {e.strerror or 'erro de leitura'}", PERMISSION_SUGGESTION)
+            return
+        if len(data) > LINT_MAX_BYTES:
+            self.problem(rel, f"arquivo com mais de {LINT_MAX_BYTES // (1024 * 1024)} MB: não é lido",
+                         "tire o arquivo do atlas (o atlas guarda texto) ou divida-o")
+            return
+        try:
+            self.texts[rel] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            self.lossy[rel] = data.decode("utf-8", "replace")  # still searched for secrets
+            self.problem(rel, "arquivo ilegível: não é UTF-8")
+
+    def json(self, rel):
+        """Parsed JSON of a file, or None (missing, unreadable or invalid: invalid is a problem). Parsed once."""
+        if rel not in self._json:
+            value = None
+            if rel in self.texts:
+                try:
+                    value = json.loads(self.texts[rel])
+                except ValueError as e:
+                    self.problem(rel, f"JSON inválido: {e.msg} (linha {e.lineno})")
+            self._json[rel] = value
+        return self._json[rel]
+
+
+def _lint_patterns(extras) -> list:
+    return list(SECRET_REGEXES) + [(f"extra_patterns[{index}]", regex) for index, regex in extras]
+
+
+def _matching_patterns(text, patterns) -> list:
+    return [name for name, regex in patterns if any(m.group(0) for m in regex.finditer(text))]
+
+
+def _name_patterns(name, patterns) -> list:
+    """Patterns that match a file or folder name, or its stem without the extension (^acme-[0-9a-f]{8}$ matches
+    acme-feedface.md): the same pieces _mask_path masks."""
+    stem = os.path.splitext(name)[0]
+    found = set(_matching_patterns(name, patterns)) | (set(_matching_patterns(stem, patterns)) if stem else set())
+    return [label for label, _ in patterns if label in found]
+
+
+def _lint_secrets(files: _AtlasFiles, extras) -> list:
+    """secret-leak: each match of a redaction pattern (built-in and extra_patterns) in any file, by file:line and
+    pattern name, and each file or folder whose name matches one; never the value."""
+    findings, seen = [], set()
+    patterns = _lint_patterns(extras)
+    for rel, name in files.names:
+        found = _name_patterns(name, patterns)
+        if found:
+            where = "da pasta" if rel.endswith("/") else "do arquivo"
+            findings.append(_finding("secret-leak", rel, f"padrão {', '.join(found)} no nome {where} (o valor não é "
+                                                         "mostrado)", "renomeie sem o valor e troque a credencial "
+                                                                      "(o histórico do git também guarda o nome)"))
+    for rel, text in (*files.texts.items(), *files.lossy.items()):
+        for name, regex in patterns:
+            for match in regex.finditer(text):
+                if not match.group(0):
+                    continue
+                line = text.count("\n", 0, match.start()) + 1
+                if (rel, line, name) in seen:
+                    continue
+                seen.add((rel, line, name))
+                findings.append(_finding("secret-leak", f"{rel}:{line}", f"padrão {name} (o valor não é mostrado)"))
+    return findings
+
+
+def _lint_config(files: _AtlasFiles, problems) -> list:
+    findings = [_finding("config", SHARED_FILE, problem, SHARED_SUGGESTION) for problem in problems]
+    for rel, (detail, suggestion) in sorted(files.problems.items()):
+        findings.append(_finding("config", rel, detail, suggestion))
+    return findings
+
+
+def _yaml_problem(error) -> str:
+    """The parser message repeats the text of the line (maybe a value): only its fixed kind is shown."""
+    kind = YAML_ERROR_RE.match(str(error))
+    return f"YAML inválido{f' ({kind.group(1)})' if kind else ''} — o trecho não é mostrado (pode ter um valor)"
+
+
+def _extra_patterns(shared) -> tuple:
+    """([(index, compiled)] of the valid redaction.extra_patterns, problems): one invalid entry is reported and the
+    valid ones are still used."""
+    redaction = shared.get("redaction")
+    extra = redaction.get("extra_patterns") if isinstance(redaction, dict) else None
+    if extra in (None, ""):
+        return [], []
+    if not isinstance(extra, list):
+        return [], ["redaction.extra_patterns precisa ser uma lista de regex"]
+    compiled, problems = [], []
+    for index, pattern in enumerate(extra):
+        try:
+            compiled.append((index, compile_extra_pattern(index, pattern)))
+        except AtlasError as e:
+            problems.append(str(e))
+    return compiled, problems
+
+
+def _shared_problems(files: _AtlasFiles) -> tuple:
+    """(shared configuration, problems, [(index, extra pattern)]) of atlas-config.yml: missing, invalid YAML,
+    check_shared, unknown keys, collectors and redaction. Unreadable or not UTF-8 is already a problem of files."""
+    if SHARED_FILE not in files.texts:
+        missing = SHARED_FILE not in files.problems
+        return {}, [f"{SHARED_FILE} não existe — rode init"] if missing else [], []
+    try:
+        shared = parse_yaml(files.texts[SHARED_FILE])
+    except ValueError as e:
+        return {}, [_yaml_problem(e)], []
+    problems = check_shared(shared)
+    problems += [f"chave desconhecida: {key} (válidas: {', '.join(SHARED_KEYS)})" for key in shared
+                 if key not in SHARED_KEYS]
+    if not problems:  # check_shared already names absolute paths and wrong shapes
+        try:
+            validate_collectors(shared.get("collectors"))
+        except AtlasError as e:
+            problems.append(str(e))
+    extras, extra_problems = _extra_patterns(shared)
+    return shared, problems + extra_problems, extras
+
+
+def _graph_shape(files: _AtlasFiles):
+    """(node keys, edges with text ends) of graph.json, or None (missing or invalid); a wrong shape is a problem."""
+    graph = files.json(GRAPH_FILE)
+    if graph is None:
+        return None
+    if not (isinstance(graph, dict) and isinstance(graph.get("nodes"), list) and isinstance(graph.get("edges"), list)):
+        files.problem(GRAPH_FILE, "formato inesperado: precisa ser um objeto com as listas nodes e edges "
+                                  "(references/graph.md)", GENERATED_SUGGESTION)
+        return None
+    nodes = [n for n in graph["nodes"] if isinstance(n, dict) and isinstance(n.get("key"), str)]
+    edges = [e for e in graph["edges"] if isinstance(e, dict) and isinstance(e.get("from"), str)
+             and isinstance(e.get("to"), str)]
+    keys, bad_nodes, bad_edges = {n["key"] for n in nodes}, len(graph["nodes"]) - len(nodes), len(graph["edges"]) - len(edges)
+    if bad_nodes or bad_edges:
+        files.problem(GRAPH_FILE, f"formato inesperado: {bad_nodes} nó(s) sem key de texto, {bad_edges} aresta(s) "
+                                  "sem from e to de texto (references/graph.md)", GENERATED_SUGGESTION)
+    return keys, edges
+
+
+def _scan_entries(files: _AtlasFiles, shared) -> tuple:
+    """(declared collector ids, {id: entry} of _scan.json for them); a wrong shape is a problem."""
+    try:
+        declared = [c["id"] for c in validate_collectors(shared.get("collectors"))]
+    except AtlasError:
+        declared = []
+    rel = f"{SNAPSHOTS_DIR}/{SCAN_STATE}"
+    state = files.json(rel)
+    if state is not None and not isinstance(state, dict):
+        files.problem(rel, "formato inesperado: precisa ser um objeto {id do coletor: {seen_at, status, ...}}",
+                      GENERATED_SUGGESTION)
+    state = state if isinstance(state, dict) else {}
+    bad = sum(1 for entry in state.values() if not isinstance(entry, dict))
+    if bad:
+        files.problem(rel, f"formato inesperado: {bad} entrada(s) de coletor que não são objeto", GENERATED_SUGGESTION)
+    if declared:
+        state = {cid: entry for cid, entry in state.items() if cid in declared}
+    return declared, {cid: entry if isinstance(entry, dict) else {} for cid, entry in sorted(state.items())}
+
+
+def _lint_collectors(declared, state, stale_days, today, rules, extras) -> list:
+    findings, path = [], f"{SNAPSHOTS_DIR}/{SCAN_STATE}"
+    shown = {cid: _mask_all(cid, extras) for cid in set(declared) | set(state)}  # an id may look like a secret
+    for cid, entry in state.items():
+        if entry.get("status") == "failed":
+            if "failed-collector" in rules:
+                seen = entry.get("seen_at") or "nunca"
+                findings.append(_finding("failed-collector", path,
+                                         f"coletor {shown[cid]}: o último scan falhou (último scan bom: {seen})",
+                                         LINT_SUGGESTIONS["failed-collector"].replace("<id>", shown[cid])))
+            continue
+        if "stale" not in rules:
+            continue
+        days = _days_between(str(entry.get("seen_at") or ""), today)
+        if days is None:
+            detail = f"coletor {shown[cid]}: sem data válida do último scan"
+        elif days > stale_days:
+            detail = f"coletor {shown[cid]}: {days} dias desde o último scan (stale_days: {stale_days})"
+        else:
+            continue
+        findings.append(_finding("stale", path, detail, LINT_SUGGESTIONS["stale"].replace("<id>", shown[cid])))
+    if "stale" in rules:
+        for cid in sorted(set(declared) - set(state)):
+            findings.append(_finding("stale", path, f"coletor {shown[cid]}: nunca escaneado",
+                                     LINT_SUGGESTIONS["stale"].replace("<id>", shown[cid])))
+    return findings
+
+
+def _without_code(text: str) -> str:
+    """Markdown text without fenced (``` and ~~~) and indented code blocks, nor code spans: links there are text."""
+    lines, fence, previous_blank, in_indented = [], None, True, False
+    for line in text.split("\n"):
+        opening = FENCE_RE.match(line)
+        if fence:
+            if opening and opening.group(1)[0] == fence[0] and len(opening.group(1)) >= len(fence) \
+                    and not line.strip().strip(fence[0]):
+                fence = None
+            lines.append("")
+            continue
+        if opening:
+            fence, in_indented = opening.group(1), False
+            lines.append("")
+            continue
+        blank = not line.strip()
+        if not blank and INDENTED_CODE_RE.match(line) and (previous_blank or in_indented):
+            in_indented = True
+            lines.append("")
+        else:
+            in_indented = in_indented and blank
+            lines.append(line)
+        previous_blank = blank
+    return CODE_SPAN_RE.sub("", "\n".join(lines))
+
+
+def _link_problem(atlas_root: str, base: str, target: str, problems=()):
+    """None when a relative link reaches an existing path inside the atlas, or a path under a folder that could not
+    be read (already a config finding: it cannot be checked); else why it is broken."""
+    local = urllib.parse.unquote(target.split("#", 1)[0].split("?", 1)[0])
+    if not local:
+        return None
+    resolved = os.path.normpath(os.path.join(base, local))
+    if resolved != atlas_root and not resolved.startswith(atlas_root.rstrip(os.sep) + os.sep):
+        return "aponta para fora do atlas"
+    parts = os.path.relpath(resolved, atlas_root).replace(os.sep, "/").split("/")
+    if any("/".join(parts[:i]) in problems for i in range(1, len(parts))):
+        return None
+    try:
+        found = os.path.lexists(resolved)
+    except (OSError, ValueError):
+        found = False
+    return None if found else "o arquivo não existe"
+
+
+def _lint_broken_refs(files: _AtlasFiles, extras) -> list:
+    findings = []
+    graph = _graph_shape(files)
+    if graph:
+        keys, edges = graph
+        for edge in edges:
+            for end in ("from", "to"):
+                if edge[end] not in keys:
+                    findings.append(_finding(
+                        "broken-ref", GRAPH_FILE,
+                        f"aresta {edge['from']} {edge.get('type')} {edge['to']}: {edge[end]} não existe",
+                        "rode o coletor que declara a entidade (scan) ou corrija o coletor que aponta para ela"))
+    atlas_root = os.path.normpath(os.path.abspath(files.atlas))
+    for rel in sorted(r for r in files.texts if r.endswith(".md")):
+        base = os.path.dirname(os.path.join(atlas_root, rel))
+        for target in sorted({m.group(1) for m in LINK_RE.finditer(_without_code(files.texts[rel]))}):
+            if EXTERNAL_LINK_RE.match(target):
+                continue
+            problem = _link_problem(atlas_root, base, target, files.problems)
+            if problem:
+                findings.append(_finding("broken-ref", rel, f"link para {_mask_path(target, extras)}: {problem}",
+                                         "corrija o link ou crie a página; links são relativos à página e ficam "
+                                         "dentro do atlas"))
+    return findings
+
+
+def _lint_conventions(files: _AtlasFiles, extras) -> list:
+    findings = []
+    for rel in sorted(r for r in files.texts if r.startswith(f"{CONVENTIONS_DIR}/") and r.endswith(".md")):
+        head, _ = split_frontmatter(files.texts[rel])
+        try:
+            meta = parse_yaml(head) if head else {}
+        except ValueError:
+            meta = {}
+        if str(meta.get("status") or "") == "inferred":
+            cid = _mask_all(rel[len(CONVENTIONS_DIR) + 1:-3], extras)
+            findings.append(_finding("pending-convention", rel, f"convenção {cid} esperando decisão (inferred)",
+                                     LINT_SUGGESTIONS["pending-convention"].replace("<id>", cid)))
+    return findings
+
+
+def _lint_orphans(files: _AtlasFiles, stale_days, today) -> list:
+    findings = []
+    for rel in sorted(r for r in files.texts if r.startswith(f"{SERVICES_DIR}/") and r.endswith(".md")):
+        found = NOT_SEEN_RE.match(page_regions(files.texts[rel]).get("summary", "").strip())
+        days = _days_between(found.group(1), today) if found else None
+        if days is not None and days > 2 * stale_days:
+            findings.append(_finding("orphan-page", rel, f"não visto há {days} dias (desde {found.group(1)}; "
+                                                         f"limite 2 × stale_days = {2 * stale_days})"))
+    return findings
+
+
+def _mask_all(text, extras) -> str:
+    """text with every piece that matches a secret pattern (built-in or extra) masked."""
+    return _redact_text(str(text), [regex for _, regex in extras])[0]
+
+
+def _mask_path(path, extras) -> str:
+    """path with each "/" component, and that component's stem without the extension, masked on its own: an
+    anchored pattern (^...$) that matches a name is masked exactly as it is detected (_name_patterns)."""
+    masked = []
+    for part in str(path).split("/"):
+        stem, ext = os.path.splitext(part)
+        masked.append(_mask_all(_mask_all(stem, extras) + ext if stem else part, extras))
+    return "/".join(masked)
+
+
+def _mask_finding_path(finding, extras) -> str:
+    """The path of a finding masked by _mask_path; the ":<line>" of secret-leak stays out of the last component."""
+    path, line = finding["path"], ""
+    if finding["rule"] == "secret-leak" and ":" in path and path.rsplit(":", 1)[1].isdigit():
+        path, line = path.rsplit(":", 1)
+        line = f":{line}"
+    return _mask_path(path, extras) + line
+
+
+def _finding_order(finding) -> tuple:
+    path, line = finding["path"], 0
+    if finding["rule"] == "secret-leak" and ":" in path:
+        head, number = path.rsplit(":", 1)
+        if number.isdigit():
+            path, line = head, int(number)
+    return (LINT_RULES.index(finding["rule"]), path, line, finding["detail"])
+
+
+def run_lint(atlas: Path, rules=None, today=None) -> list:
+    """Findings {rule, severity, path, detail, suggestion} of the rules (None = all), only reading the regular files
+    of the atlas (references/maintenance.md). An unreadable file is a config finding and the lint goes on. No value
+    of a secret ever shows: every text field is masked. Sorted by rule (report order), path, line and detail."""
+    atlas = Path(atlas)
+    rules = list(LINT_RULES) if rules is None else list(rules)
+    today = today or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    files = _AtlasFiles(atlas)
+    shared, problems, extras = _shared_problems(files)
+    try:
+        stale_days = _stale_days(shared)
+    except AtlasError:
+        stale_days = DEFAULT_STALE_DAYS  # check_shared already reported it
+    declared, state = _scan_entries(files, shared)
+    findings = []
+    if "secret-leak" in rules:
+        findings += _lint_secrets(files, extras)
+    findings += _lint_collectors(declared, state, stale_days, today, rules, extras)
+    if "broken-ref" in rules:
+        findings += _lint_broken_refs(files, extras)
+    if "pending-convention" in rules:
+        findings += _lint_conventions(files, extras)
+    if "orphan-page" in rules:
+        findings += _lint_orphans(files, stale_days, today)
+    if "config" in rules:  # last, after every JSON file was parsed and checked
+        _graph_shape(files)
+        for rel in sorted(r for r in files.texts if r.startswith(f"{SNAPSHOTS_DIR}/") and r.endswith(".json")):
+            files.json(rel)
+        findings += _lint_config(files, problems)
+    for finding in findings:  # a path, id, key or link that looks like a secret is never shown either
+        finding["path"] = _mask_finding_path(finding, extras)
+        for key in ("detail", "suggestion"):
+            finding[key] = _mask_all(finding[key], extras)
+    return sorted(findings, key=_finding_order)
+
+
+def lint_line(finding) -> str:
+    label = "ERRO" if finding["severity"] == "error" else "AVISO"
+    return f"{label} {finding['rule']} {finding['path']} — {finding['detail']} (sugestão: {finding['suggestion']})"
+
+
+def _lint_atlas() -> Path:
+    """The atlas folder, from the local configuration of this machine only (atlas-config.yml is read by run_lint,
+    as one more file of the atlas). Without configuration = AtlasError (code 3)."""
+    path = local_config_path()
+    if not path.is_file():
+        raise AtlasError(NOT_CONFIGURED, 3)
+    try:
+        local = parse_yaml(path.read_bytes().decode("utf-8"))
+    except (OSError, UnicodeDecodeError) as e:
+        reason = e.strerror if isinstance(e, OSError) and e.strerror else "não é UTF-8"
+        raise AtlasError(f"não consegui ler {path}: {reason}", 1) from None
+    except ValueError as e:
+        raise AtlasError(f"não consegui ler {path}: {_yaml_problem(e)}", 1) from None
+    atlas = local.get("atlas")
+    if not isinstance(atlas, str) or not atlas:
+        raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
+    if not os.path.isdir(atlas):
+        raise AtlasError(f"pasta do atlas não encontrada: {atlas} — rode init (ou init --join)", 3)
+    return Path(atlas)
+
+
+def cmd_lint(args):
+    """lint [--json] [--only rule,...]: read-only (never writes to the atlas). Exit 0 without ERRO, 1 with ERRO,
+    2 with an unknown rule in --only, 3 not configured. Messages on stderr are masked too."""
+    try:
+        rules = lint_rules(args.only)
+        findings = run_lint(_lint_atlas(), rules)
+    except AtlasError as e:
+        raise AtlasError(_mask_all(e, []), e.code) from None
+    except OSError as e:
+        raise AtlasError(_mask_all(f"não consegui ler o atlas: {e.strerror or 'erro de leitura'}", []), 1) from None
+    errors = sum(1 for x in findings if x["severity"] == "error")
+    warnings = len(findings) - errors
+    if args.json:
+        print(json.dumps({"version": ATLAS_VERSION, "ok": errors == 0, "rules": rules, "errors": errors,
+                          "warnings": warnings, "findings": findings}, ensure_ascii=False, indent=2))
+    else:
+        for finding in findings:
+            print(lint_line(finding))
+        print(f"{errors} erros, {warnings} avisos")
+    return 1 if errors else 0
+
+
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
@@ -2616,6 +3146,9 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("build", help="junta os snapshots no graph.json, infere relações e gera as páginas")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("lint", help="só lê e aponta o que precisa de atenção no atlas (segredos, coletores, referências)")
+    p.add_argument("--only", help="regras separadas por vírgula")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("context", help="pacote só de leitura do atlas para uma tarefa (serviços, dependências, convenções)")
     p.add_argument("query", nargs="+", help="termos da tarefa")
     p.add_argument("--hops", type=int, default=1, help="passos no grafo a partir dos serviços encontrados (0..2)")
@@ -2649,6 +3182,8 @@ def main(argv=None):
             return cmd_scan(args.only, args.json)
         if args.command == "build":
             return cmd_build(args.json)
+        if args.command == "lint":
+            return cmd_lint(args)
         if args.command == "context":
             return cmd_context(args)
         if args.command == "curate":
