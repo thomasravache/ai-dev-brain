@@ -149,27 +149,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Junção e inferência**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, CT-01 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
-- [ ] Green: `merge_snapshots`, `infer_relations`, `render_graph` e `references/graph.md`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, CT-01 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
+- [x] Green: `merge_snapshots`, `infer_relations`, `render_graph` e `references/graph.md`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Páginas**
-- [ ] Red: UT-06, IT-02, IT-03 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
-- [ ] Green: `render_pages` com regiões `atlas:` e esqueletos em `assets/pages/`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-06, IT-02, IT-03 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
+- [x] Green: `render_pages` com regiões `atlas:` e esqueletos em `assets/pages/`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Comando build**
-- [ ] Red: IT-01 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
-- [ ] Green: `build` e chamada no fim do `scan`; `SKILL.md` e `references/atlas-layout.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: IT-01 com a tag `SPEC-0036:<ID>`, falhando pelo motivo certo
+- [x] Green: `build` e chamada no fim do `scan`; `SKILL.md` e `references/atlas-layout.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -195,36 +195,55 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`atlas.py build`, que roda no fim de cada `scan` e pode ser chamado sozinho (`build [--json]`): junta os snapshots de todos os coletores num grafo único e determinístico (`graph.json` v1, documentado em `references/graph.md`), infere as ligações que nenhum coletor declara — serviço → repositório pelo deployment, e `depends_on` pelo host das `config_refs` contra datastores, filas, tópicos, buckets e outros serviços — e gera as páginas `ATLAS.md`, `services/<id>.md` e `platform/<categoria>.md`, reescrevendo só as regiões `atlas:` e preservando o texto do time.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Funções puras `merge_snapshots` → `infer_relations` → `render_graph` → `render_pages` no `atlas.py`, com a gravação no fim; `scan --json` continua um objeto só, com o relatório do build em `build`.
+- **Decisões do Architect na execução:** snapshots por id de coletor com a ordem da configuração (o primeiro vence conflitos); fontes = ids de coletor; aresta inferida serviço → repositório do tipo `sourced_from`; casamento de host por igualdade exata do texto depois do primeiro `=`; `graph.json` na raiz do atlas e não regravado quando só `built_at` mudaria.
+- **Revisão G4 (2 rodadas):** a 1ª achou que os nomes dos arquivos das páginas de serviço não eram estáveis nem seguros contra colisão — no Mac (sem diferença de caixa) `service:payments` sobrescrevia a página de `service:Payments` e apagava a nota do time, e o arquivo de um serviço que sumia passava para outro. Correção (testes 67506b2, código 4f98aa9): cada página pertence ao serviço da sua linha `- Chave:`, colisão comparada com `casefold()`, ids longos truncados com hash, nomes reservados do Windows com sufixo e erro do build dentro do `scan --json`.
+- `ATLAS_VERSION` 2026.11.1 com a seção do CHANGELOG (inclui as entradas das SPEC-0034/0035); `SKILL.md` com `build` e os links para `graph.md` e os guias dos coletores; `references/graph.md` e `atlas-layout.md`.
+- **Menores aceitos:** uma página escrita à mão com a linha de introdução de outro serviço, ou um `- Chave:` editado por uma pessoa, pode tomar a página de um serviço ativo (nenhum texto se perde; reversível à mão); `reads` declarado e `depends_on` inferido para o mesmo alvo aparecem os dois; regiões desconhecidas de um serviço que sumiu são esvaziadas (a spec permite).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Mesma entidade em dois coletores vira um nó com os atributos e as duas fontes; seen_at do `_scan.json` | PASS | `test_build.py::MergeSnapshotsTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| UT-02 | Conflito: vale o primeiro coletor da configuração e o conflito é registrado | PASS | `ConflictTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| UT-03 | Deployment com `sourced_from` e `deploys` liga o serviço ao repositório (`sourced_from` inferido) | PASS | `RepositoryOfServiceTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| UT-04 | `config_refs` com host de datastore e nome de serviço geram `depends_on` com evidência; host desconhecido não gera nada | PASS | `ConfigRefsTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| UT-05 | Mesmos snapshots em ordens diferentes dão `graph.json` idêntico | PASS | `DeterminismTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| UT-06 | Regenerar muda só as regiões; páginas novas com título, regiões e notas | PASS | `RenderPagesTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| IT-01 | `scan` monta repositório → deployment → serviço → banco e as páginas; `build` sozinho, `--json`, snapshot ilegível, ids longos, nomes reservados, erro do build no `scan --json` | PASS | `AtlasBuildTest`, `PageNamesTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| IT-02 | Nota do time sobrevive a um novo `scan`; nada é escrito fora das páginas e do `graph.json`; gêmeo só de caixa não apaga a nota | PASS | `TeamTextTest`, `PageNamesTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| IT-03 | Serviço que some mantém a página com "Não visto desde" e as notas; o arquivo nunca passa a outro serviço | PASS | `RemovedEntityTest`, `PageNamesTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
+| CT-01 | `graph.json` segue `references/graph.md` e é idêntico depois de `build` e de novo `scan` | PASS | `GraphContractTest` — CI do PR #20 em c370bfa (run 41434381652, Python 3.9 e 3.15) e suíte local no G5 (c370bfa) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em c370bfa
+- [x] Review independente sem achados blocker/major (G4) — 2ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — 500 serviços e 5.000 relações em 0,37 s (frio) e 0,32 s (quente) pela CLI, meta 5 s; snapshot ilegível vira aviso (IT-01); escrita só nas regiões e no `graph.json` (IT-02)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — linha `Grafo: …` e relatório `build` no `scan --json`; rollback por revert
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `SKILL.md`, `references/graph.md`, `atlas-layout.md` e `skills/org-atlas/CHANGELOG.md` 2026.11.1
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0047
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; versão 2026.11.1 na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0047 — ids de repositório sem diferença de caixa entre coletores, que afeta o cruzamento `sourced_from` deste `build`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0036`. -->
