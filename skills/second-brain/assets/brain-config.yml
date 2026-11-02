@@ -41,3 +41,9 @@ inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inb
 #   personal_data: [cpf, cnpj, card, labeled-document]
 #   personal_data_patterns:
 #     nif: '\bNIF:\s*\d{9}\b'
+# backup: opções do brain.py backup (references/backup.md). Ausente = keep 10, warn_days 7, with_files false. Os
+# destinos ficam na configuração local de cada máquina (backup_targets), nunca aqui. Para mudar, por exemplo:
+# backup:
+#   keep: 10          # backups mantidos por destino
+#   warn_days: 7      # o doctor avisa quando o último backup é mais velho
+#   with_files: false # true = inclui a pasta files
