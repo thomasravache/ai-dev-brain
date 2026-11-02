@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 5, approved 3, implemented 35
+- Validação (G0): **6 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 5, approved 1, in-progress 2, implemented 35
 - Impedimentos: **0 aberto(s)**, 17 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,14 +23,14 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0039, SPEC-0041  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0039, SPEC-0041
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ✅ pronta |  |
-| 1 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ✅ pronta |  |
+| 1 | SPEC-0039 | org-atlas: lint do atlas | full/S | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
 | 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: max_parallel=3 |
@@ -66,9 +66,9 @@ flowchart LR
     S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::implemented
     S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::implemented
     S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::implemented
-    S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::approved
+    S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::inprogress
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
-    S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::approved
+    S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::inprogress
     S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::proposed
     S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::proposed
     S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria e…"]:::proposed
@@ -138,9 +138,9 @@ flowchart LR
 | [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
 | [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
 | [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
-| [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
+| [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | in-progress | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
-| [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
+| [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | in-progress | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
