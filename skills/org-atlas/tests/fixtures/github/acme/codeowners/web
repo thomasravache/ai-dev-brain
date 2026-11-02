@@ -1,0 +1,3 @@
+# fake-gh-path: CODEOWNERS
+*               @acme/frontend
+/src/checkout/  @acme/payments @bruno-dev

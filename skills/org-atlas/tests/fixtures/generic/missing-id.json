@@ -1,0 +1,7 @@
+{
+  "entities": [
+    {"kind": "service", "id": "payments-api", "name": "payments-api", "attrs": {}},
+    {"kind": "datastore", "name": "payments-db", "attrs": {"engine": "postgres"}}
+  ],
+  "relations": []
+}

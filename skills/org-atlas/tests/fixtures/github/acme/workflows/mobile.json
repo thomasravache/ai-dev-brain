@@ -1,0 +1,17 @@
+{
+  "total_count": 1,
+  "workflows": [
+    {
+      "id": 5005,
+      "node_id": "W_kwDOacme5005",
+      "name": "Android CI",
+      "path": ".github/workflows/android.yml",
+      "state": "active",
+      "created_at": "2025-01-10T09:00:00Z",
+      "updated_at": "2026-09-01T09:00:00Z",
+      "url": "https://api.github.com/repos/acme/mobile/actions/workflows/5005",
+      "html_url": "https://github.com/acme/mobile/blob/main/.github/workflows/android.yml",
+      "badge_url": "https://github.com/acme/mobile/workflows/Android CI/badge.svg"
+    }
+  ]
+}

@@ -1,0 +1,378 @@
+{
+  "_comment": "Saída esperada de github.py --org acme sobre fixtures/github/acme, sem contract/collector/category/collected_at. Nos sinais pr-titles a amostra (sample) é conferida à parte: no máximo 10 títulos, todos do repositório.",
+  "entities": [
+    {
+      "kind": "repository",
+      "id": "acme/api",
+      "name": "api",
+      "attrs": {
+        "language": "Go",
+        "default_branch": "main",
+        "topics": [
+          "payments",
+          "go"
+        ],
+        "archived": false,
+        "visibility": "private"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "pipeline",
+      "id": "acme/api/ci",
+      "name": "CI",
+      "attrs": {
+        "file": ".github/workflows/ci.yml"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "pipeline",
+      "id": "acme/api/release",
+      "name": "Release",
+      "attrs": {
+        "file": ".github/workflows/release.yml"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "repository",
+      "id": "acme/web",
+      "name": "web",
+      "attrs": {
+        "language": "TypeScript",
+        "default_branch": "main",
+        "topics": [
+          "frontend"
+        ],
+        "archived": false,
+        "visibility": "public"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "pipeline",
+      "id": "acme/web/ci",
+      "name": "ci",
+      "attrs": {
+        "file": ".github/workflows/ci.yml"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "repository",
+      "id": "acme/infra",
+      "name": "infra",
+      "attrs": {
+        "language": "HCL",
+        "default_branch": "trunk",
+        "topics": [
+          "terraform",
+          "platform"
+        ],
+        "archived": false,
+        "visibility": "internal"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "pipeline",
+      "id": "acme/infra/terraform",
+      "name": "Terraform Plan",
+      "attrs": {
+        "file": ".github/workflows/terraform.yaml"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "repository",
+      "id": "acme/mobile",
+      "name": "mobile",
+      "attrs": {
+        "language": "Kotlin",
+        "default_branch": "develop",
+        "topics": [
+          "android"
+        ],
+        "archived": false,
+        "visibility": "private"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "pipeline",
+      "id": "acme/mobile/android",
+      "name": "Android CI",
+      "attrs": {
+        "file": ".github/workflows/android.yml"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "repository",
+      "id": "acme/legacy",
+      "name": "legacy",
+      "attrs": {
+        "language": null,
+        "default_branch": "master",
+        "topics": [],
+        "archived": true,
+        "visibility": "private"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "team",
+      "id": "acme/payments",
+      "name": "payments",
+      "attrs": {},
+      "source": "github"
+    },
+    {
+      "kind": "team",
+      "id": "acme/docs-team",
+      "name": "docs-team",
+      "attrs": {},
+      "source": "github"
+    },
+    {
+      "kind": "team",
+      "id": "acme/frontend",
+      "name": "frontend",
+      "attrs": {},
+      "source": "github"
+    }
+  ],
+  "relations": [
+    {
+      "from": "pipeline:acme/api/ci",
+      "to": "repository:acme/api",
+      "type": "builds",
+      "source": "github"
+    },
+    {
+      "from": "pipeline:acme/api/release",
+      "to": "repository:acme/api",
+      "type": "builds",
+      "source": "github"
+    },
+    {
+      "from": "pipeline:acme/web/ci",
+      "to": "repository:acme/web",
+      "type": "builds",
+      "source": "github"
+    },
+    {
+      "from": "pipeline:acme/infra/terraform",
+      "to": "repository:acme/infra",
+      "type": "builds",
+      "source": "github"
+    },
+    {
+      "from": "pipeline:acme/mobile/android",
+      "to": "repository:acme/mobile",
+      "type": "builds",
+      "source": "github"
+    },
+    {
+      "from": "team:acme/payments",
+      "to": "repository:acme/api",
+      "type": "owns",
+      "source": "github"
+    },
+    {
+      "from": "team:acme/docs-team",
+      "to": "repository:acme/api",
+      "type": "owns",
+      "source": "github"
+    },
+    {
+      "from": "team:acme/frontend",
+      "to": "repository:acme/web",
+      "type": "owns",
+      "source": "github"
+    },
+    {
+      "from": "team:acme/payments",
+      "to": "repository:acme/web",
+      "type": "owns",
+      "source": "github"
+    }
+  ],
+  "signals": [
+    {
+      "type": "pr-titles",
+      "repository": "acme/api",
+      "total": 14,
+      "pattern_counts": {
+        "conventional": 9,
+        "ticket_key": 3,
+        "other": 2
+      }
+    },
+    {
+      "type": "branch-prefixes",
+      "repository": "acme/api",
+      "total": 14,
+      "counts": {
+        "feat/": 5,
+        "fix/": 4,
+        "dependabot/": 1,
+        "docs/": 2,
+        "refactor/": 1,
+        "test/": 1
+      }
+    },
+    {
+      "type": "merge-methods",
+      "repository": "acme/api",
+      "present": {
+        "merge": false,
+        "squash": true,
+        "rebase": false
+      }
+    },
+    {
+      "type": "pr-template",
+      "repository": "acme/api",
+      "present": {
+        "pr_template": true
+      }
+    },
+    {
+      "type": "pr-titles",
+      "repository": "acme/web",
+      "total": 5,
+      "pattern_counts": {
+        "conventional": 3,
+        "ticket_key": 1,
+        "other": 1
+      }
+    },
+    {
+      "type": "branch-prefixes",
+      "repository": "acme/web",
+      "total": 5,
+      "counts": {
+        "feat/": 1,
+        "fix/": 1,
+        "feature/": 1,
+        "renovate/": 1,
+        "ci/": 1
+      }
+    },
+    {
+      "type": "merge-methods",
+      "repository": "acme/web",
+      "present": {
+        "merge": true,
+        "squash": true,
+        "rebase": true
+      }
+    },
+    {
+      "type": "pr-template",
+      "repository": "acme/web",
+      "present": {
+        "pr_template": true
+      }
+    },
+    {
+      "type": "pr-titles",
+      "repository": "acme/infra",
+      "total": 3,
+      "pattern_counts": {
+        "conventional": 1,
+        "ticket_key": 2,
+        "other": 0
+      }
+    },
+    {
+      "type": "branch-prefixes",
+      "repository": "acme/infra",
+      "total": 3,
+      "counts": {
+        "feature/": 2,
+        "chore/": 1
+      }
+    },
+    {
+      "type": "merge-methods",
+      "repository": "acme/infra",
+      "present": {
+        "merge": false,
+        "squash": false,
+        "rebase": true
+      }
+    },
+    {
+      "type": "pr-template",
+      "repository": "acme/infra",
+      "present": {
+        "pr_template": true
+      }
+    },
+    {
+      "type": "pr-titles",
+      "repository": "acme/mobile",
+      "total": 3,
+      "pattern_counts": {
+        "conventional": 2,
+        "ticket_key": 0,
+        "other": 1
+      }
+    },
+    {
+      "type": "branch-prefixes",
+      "repository": "acme/mobile",
+      "total": 3,
+      "counts": {
+        "feat/": 1,
+        "release/": 1,
+        "fix/": 1
+      }
+    },
+    {
+      "type": "merge-methods",
+      "repository": "acme/mobile",
+      "present": {
+        "merge": true,
+        "squash": false,
+        "rebase": false
+      }
+    },
+    {
+      "type": "pr-template",
+      "repository": "acme/mobile",
+      "present": {
+        "pr_template": false
+      }
+    },
+    {
+      "type": "pr-titles",
+      "repository": "acme/legacy",
+      "total": 2,
+      "pattern_counts": {
+        "conventional": 0,
+        "ticket_key": 0,
+        "other": 2
+      }
+    },
+    {
+      "type": "branch-prefixes",
+      "repository": "acme/legacy",
+      "total": 2,
+      "counts": {
+        "chore/": 1,
+        "cleanup/": 1
+      }
+    },
+    {
+      "type": "pr-template",
+      "repository": "acme/legacy",
+      "present": {
+        "pr_template": false
+      }
+    }
+  ]
+}
