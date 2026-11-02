@@ -166,22 +166,22 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: capture --print**
-- [ ] Red: UT-01, UT-02 e IT-01 com a tag `SPEC-0044:<ID>`, falhando pelo motivo certo
-- [ ] Green: opção `--print` (com `--json` e `--inbox`), sem escrever nada e sem exigir configuração
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02 e IT-01 com a tag `SPEC-0044:<ID>`, falhando pelo motivo certo
+- [x] Green: opção `--print` (com `--json` e `--inbox`), sem escrever nada e sem exigir configuração
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Ida e volta e instruções**
-- [ ] Red: IT-02 e UT-03 falhando pelo motivo certo
-- [ ] Green: modo "só conector" no `SKILL.md`, `references/connectors.md` e o canal em `mobile-capture.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: IT-02 e UT-03 falhando pelo motivo certo
+- [x] Green: modo "só conector" no `SKILL.md`, `references/connectors.md` e o canal em `mobile-capture.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -192,9 +192,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 5294eda | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 5294eda | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (5294eda; capture --print sem escrita com vault bloqueado/ausente/inbox ilegível, --inbox inválido recusado, precedência no SKILL.md; 2 nits de doc não bloqueantes) — 5294eda | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 84c40a0 | 2026-11-02 |
+| H2 Integração aprovada | PASS | aprovado por política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -203,40 +203,47 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|---|---|---|---|---|
 
 ## 14. Relatório de Entrega
-<!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Com o conector do provedor (por exemplo o do Google Drive no Claude), o agente consegue capturar e consultar o segundo cérebro sem a pasta do vault na máquina, como no celular ou numa conversa sem acesso ao disco. Para capturar, cria só um arquivo novo em `inbox/`, no formato do `capture`, que o `brain.py capture TEXTO --print` devolve sem escrever nada e sem exigir configuração. Para consultar, só lê, cita `[[nota]]` e avisa que a busca é parcial. As outras escritas são recusadas e ficam para o computador com a pasta. Quando o agente não consegue ler o vault (exit 3, ou exit 1 com a pasta bloqueada), o modo só conector tem prioridade, a menos que a pessoa queira configurar ou consertar a máquina.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.11.2): `capture_note()` monta o conteúdo usado pelo `capture` e pelo `capture --print`. O `--print` aceita `--json` e `--inbox`. Com o vault, o `brain-config.yml` ou a inbox ilegíveis, ele usa `layout.inbox` (se pôde ser lido), senão `inbox` ou o `--inbox`. Um `--inbox` na raiz do vault ou fora dele sai com 2, e o `--inbox` só vale com `--print`. A regra do ADR-0007 continua valendo: o `--print` não escreve nada, nem no `log.md`.
+- `SKILL.md` (seção "Modo só conector" e a precedência em "Antes de qualquer fluxo"), `references/connectors.md` (novo, com o Google Drive conferido em 2026-11-02) e `references/mobile-capture.md`. A decisão está no ADR-0013.
+- Achados da revisão (G4 FAIL em bd507a0) corrigidos com testes vermelhos primeiro (6f6df09, `test_connector_review.py`, com as tags IT-01, UT-02 e UT-03) e depois a correção (a2f5141, 5294eda). A segunda revisão aprovou.
+- Integração: conflito de versão com a SPEC-0043, que publicou a 2026.11.1 primeiro. A SPEC-0044 passou a ser a 2026.11.2 no merge 84c40a0.
+- Sem emendas e sem dívida assumida. O G2 falhou duas vezes só em testes de tempo, com a máquina carregada (carga ~12), e passou com a carga em ~3,5.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | conteúdo e nome iguais em `capture` e `capture --print` | PASS | CI run 41430633575 (ci 3.9 e 3.15) em 84c40a0; G2 local em 5294eda |
+| UT-02 | pasta da captura: `layout.inbox`, `--inbox` ou `inbox` | PASS | CI run 41430633575 (ci 3.9 e 3.15) em 84c40a0; G2 local em 5294eda |
+| UT-03 | modo só conector no `SKILL.md`, `connectors.md` e `mobile-capture.md` | PASS | CI run 41430633575 (ci 3.9 e 3.15) em 84c40a0; G2 local em 5294eda |
+| IT-01 | `--print` sem configuração não escreve nada; texto vazio sai com 2 | PASS | CI run 41430633575 (ci 3.9 e 3.15) em 84c40a0; G2 local em 5294eda |
+| IT-02 | arquivo gravado por fora aparece no `inbox list` e sai com `inbox done` | PASS | CI run 41430633575 (ci 3.9 e 3.15) em 84c40a0; G2 local em 5294eda |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado, a skill é distribuída por cópia da pasta
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não usa `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — sem deploy. A skill vale na máquina depois do merge, com a cópia de `skills/second-brain` para a pasta de skills do agente (README).
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma. Os dois detalhes da revisão ficam como observação, sem spec: com o vault ilegível, o `--print` usa `inbox/` mesmo que o vault use outra pasta (o agente pode passar `--inbox`), e o `--context` não é validado nesse caso.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0044`. -->
