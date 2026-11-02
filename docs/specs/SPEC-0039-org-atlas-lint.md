@@ -149,22 +149,22 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Regras**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, CT-01 com a tag `SPEC-0039:<ID>`, falhando pelo motivo certo
-- [ ] Green: as sete regras, com `secret-leak` reaproveitando `redact`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, CT-01 com a tag `SPEC-0039:<ID>`, falhando pelo motivo certo
+- [x] Green: as sete regras, com `secret-leak` reaproveitando `redact`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comando lint**
-- [ ] Red: IT-01, IT-02, IT-03 com a tag `SPEC-0039:<ID>`, falhando pelo motivo certo
-- [ ] Green: `lint` com `--only` e `--json`; `references/maintenance.md` e `SKILL.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: IT-01, IT-02, IT-03 com a tag `SPEC-0039:<ID>`, falhando pelo motivo certo
+- [x] Green: `lint` com `--only` e `--json`; `references/maintenance.md` e `SKILL.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`; o `ATLAS_VERSION` sobe no fim do épico, no mesmo PR #20
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -190,36 +190,54 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`atlas.py lint [--only REGRAS] [--json]`: diagnóstico só de leitura do atlas antes de compartilhar ou commitar. Regras `secret-leak` (padrões de segredo da redaction, em conteúdo e em nomes), `config`, `failed-collector`, `stale`, `broken-ref`, `pending-convention` e `orphan-page`, com ERRO ou AVISO, caminho, detalhe e sugestão. Sai com 1 só quando há erro. Nunca mostra o valor de um segredo, nem em parte, nem no `--json`.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `lint_rules`, `run_lint` e `cmd_lint` no `atlas.py`: uma passada pelo atlas com `os.walk`, só arquivos regulares (`lstat`, `O_NOFOLLOW|O_NONBLOCK`, `fstat`, limite de 32 MB), ignorando `.git` e outras pastas de VCS; reusa `SECRET_PATTERNS` e `extra_patterns` da redaction; lê só a configuração local para achar o atlas.
+- **Revisão G4 (3 rodadas):** a 1ª achou o token inteiro saindo no campo "sugestão" e na mensagem de YAML inválido, configuração quebrada derrubando o lint, symlinks seguidos para fora do atlas e `/dev/zero`/FIFO travando, e pasta ilegível dando "0 erros". A 2ª achou um padrão extra ancorado (`^…$`) acusando e imprimindo o valor, porque nomes eram verificados por componente e mascarados no caminho inteiro. A 3ª aprovou: todo campo mascarado, caminhos por componente e por radical, arquivo ilegível vira achado e o lint segue. Testes de regressão antes de cada correção (bb0fbcd/18db97f, af97e48/6bb888d).
+- **Incidente:** a primeira execução do teste com symlink para `/dev/zero` esgotou a memória da máquina e reiniciou a sessão — exatamente o defeito corrigido. O teste roda com timeout e limite de memória no Linux e é pulado no macOS, que não aplica esse limite.
+- Guia `references/maintenance.md`; `SKILL.md` com o fluxo "Manutenção (lint)"; CHANGELOG em `[Unreleased]`.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Cada padrão de segredo vira ERRO secret-leak com arquivo:linha e tipo, sem o valor; segredo em nome de arquivo ou pasta, em arquivo não UTF-8 e por padrão extra ancorado; nenhum campo nem a saída de erro mostra o valor | PASS | `test_lint.py::SecretLeakTest` e testes das rodadas 2 e 3 — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | atlas-config.yml com caminho absoluto, chave desconhecida, YAML inválido, não UTF-8, ilegível ou ausente vira ERRO config e o lint segue; arquivos especiais, symlinks e pastas ilegíveis viram achado sem serem lidos; formatos inválidos sem traceback | PASS | `ConfigTest` e testes das rodadas 2 e 3 — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Coletor failed vira ERRO; passado de stale_days vira AVISO stale | PASS | `CollectorTest` — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | Aresta para nó inexistente e link quebrado viram AVISO broken-ref; links em blocos de código ignorados; %xx decodificado; fora do atlas é broken-ref; links para pasta ilegível não são acusados | PASS | `BrokenRefTest` e testes das rodadas 2 e 3 — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-05 | Só convenções inferred viram AVISO pending-convention | PASS | `PendingConventionTest` — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-06 | Página "Não visto desde" há mais de 2 × stale_days vira AVISO orphan-page | PASS | `OrphanPageTest` — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Atlas limpo: exit 0, 0 erros, 0 avisos, nada escrito; sem configuração sai com 3; guia cobre todas as regras | PASS | `CleanFixtureTest`, `CleanAtlasTest` — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-02 | Token colado numa página: exit 1 com a linha do achado, sem o valor no texto nem no --json | PASS | `SecretInNoteTest` — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-03 | `--only` filtra e respeita a ordem; regra desconhecida sai com 2 | PASS | `OnlyTest` — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
+| CT-01 | Lê as convenções geradas pela curadoria (SPEC-0037@2): inferidas avisam, decididas não | PASS | `ConventionFilesContractTest` — CI do PR #20 em 6058173 (run 41494254877, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em 6058173
+- [x] Review independente sem achados blocker/major (G4) — 3ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — 500 serviços em 0,11–0,30 s pela CLI (meta 3 s); só leitura conferida por hash dos arquivos; arquivo ilegível vira achado e o lint segue (UT-02)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — relatório do próprio `lint` e `--json`; rollback por revert
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `SKILL.md`, `references/maintenance.md` e `skills/org-atlas/CHANGELOG.md`
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0048
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; em `[Unreleased]` na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0048 — máscara de padrões extras que atravessam `/`, radical de nomes com vários pontos e de arquivos ocultos, destinos de link com `#`/`?` (menores da 3ª rodada do G4).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0039`. -->
