@@ -247,11 +247,10 @@ class RepositoryOfServiceTest(unittest.TestCase):
     def test_deployment_with_sourced_from_and_deploys_links_the_service_to_the_repository(self):
         """SPEC-0036:UT-03"""
         graph = f("infer_relations")(self.merged())
-        relation_types = constant("RELATION_TYPES")
         for service, repository in (("service:api", "repository:acme/api"), ("service:web", "repository:acme/web")):
-            edges = find_edges(graph, service, repository, inferred=True)
+            edges = find_edges(graph, service, repository, "sourced_from", inferred=True)
             self.assertEqual(len(edges), 1, f"{service} -> {repository}: {graph['edges']}")
-            self.assertIn(edges[0]["type"], relation_types)
+            self.assertEqual(find_edges(graph, service, repository, inferred=True), edges)  # só sourced_from
         # ingress-nginx não tem sourced_from: nenhum repositório inventado
         self.assertEqual(find_edges(graph, "service:ingress-nginx", inferred=True), [])
 
@@ -470,6 +469,9 @@ class AtlasBuildTest(BuildCase):
         self.assertEqual(len(db), 1, graph["edges"])
         self.assertEqual(db[0]["evidence"], "DB_URL=db-prod.interno")
         self.assertEqual(inferred_pairs(graph), ACME_INFERRED)
+        for service, repository in (("service:api", "repository:acme/api"), ("service:web", "repository:acme/web")):
+            self.assertEqual(len(find_edges(graph, service, repository, "sourced_from", inferred=True)), 1,
+                             f"{service} sourced_from {repository} (inferida) não está no graph.json")
         self.assertEqual(nodes["datastore:payments-db"]["sources"], ["db-facts"])
         self.assertEqual(nodes["repository:acme/api"]["sources"], ["github"])
         self.assertIn(nodes["service:api"]["seen_at"], today_values())
@@ -668,7 +670,7 @@ class GraphContractTest(BuildCase):
         """SPEC-0036:CT-01"""
         self.assertTrue(GRAPH_REFERENCE.is_file(), "references/graph.md não existe")
         text = GRAPH_REFERENCE.read_text(encoding="utf-8")
-        for key in ("version", "organization", "built_at", "nodes", "edges", *NODE_KEYS, *EDGE_KEYS, "evidence"):
+        for key in ("version", "organization", "built_at", "nodes", "edges", *NODE_KEYS, *EDGE_KEYS, "evidence", "sourced_from"):
             self.assertRegex(text, rf"\b{re.escape(key)}\b", key)
 
 
