@@ -84,6 +84,28 @@ def per_repo_signals():
             mixed("acme/e")]
 
 
+def branch_prefixes(repo, total, counts):
+    return {"type": "branch-prefixes", "repository": repo, "total": total, "counts": counts}
+
+
+def merge_methods(repo, *allowed):
+    return {"type": "merge-methods", "repository": repo,
+            "present": {m: m in allowed for m in ("merge", "squash", "rebase")}}
+
+
+def pr_template(repo, present):
+    return {"type": "pr-template", "repository": repo, "present": {"pr_template": present}}
+
+
+def kind_signals():
+    """IT-01 v2: 70% de feat/ nos 5 repositórios, 4 só com squash e 1 com os três, template em 2 de 5."""
+    signals = [branch_prefixes(repo, 30, {"feat/": 21, "fix/": 6}) for repo in REPOS]
+    signals += [merge_methods(repo, "squash") for repo in REPOS[:4]] + [merge_methods("acme/e", "merge", "squash",
+                                                                                        "rebase")]
+    signals += [pr_template(repo, repo in ("acme/a", "acme/b")) for repo in REPOS]
+    return signals
+
+
 def frontmatter(text):
     """(frontmatter, resto) de um arquivo de convenção; sem frontmatter no início = AssertionError."""
     if not text.startswith("---\n"):
@@ -185,6 +207,69 @@ class ScopeTest(unittest.TestCase):
         two_of_four = [pr_titles(r, 30, 21) for r in REPOS[:2]] + [mixed(r) for r in REPOS[2:4]]
         self.assertEqual(sorted(p["scope"] for p in self.propose(two_of_four)),
                          ["repository:acme/a", "repository:acme/b"])
+
+
+class BranchPrefixTest(unittest.TestCase):
+    def propose(self, signals, curation=None):
+        return [p for p in f("propose_conventions")(signals, curation) if p["kind"] == "branch-prefix"]
+
+    def test_dominant_branch_prefix_becomes_branch_prefix_feat(self):
+        """SPEC-0037:UT-05"""
+        proposals = self.propose([branch_prefixes("acme/a", 50, {"feat/": 35, "fix/": 10})])
+        self.assertEqual([(p["id"], p["scope"]) for p in proposals], [("branch-prefix-feat", "organization")])
+        self.assertTrue(proposals[0]["title"].strip())
+        self.assertEqual(self.propose([branch_prefixes("acme/b", 50, {"feat/": 20, "fix/": 15})]), [])
+
+    def test_only_the_repository_with_70_percent_gets_the_proposal(self):
+        """SPEC-0037:UT-05"""
+        signals = [branch_prefixes("acme/a", 50, {"feat/": 35, "fix/": 10}),
+                   branch_prefixes("acme/b", 50, {"feat/": 20, "fix/": 15})]
+        proposals = self.propose(signals)
+        self.assertEqual(len(proposals), 1, proposals)
+        self.assertEqual(proposals[0]["scope"], "repository:acme/a")  # 1 de 2: não é mais da metade
+        self.assertTrue(proposals[0]["id"].startswith("branch-prefix-feat"), proposals[0]["id"])
+
+    def test_branch_prefix_uses_min_total_and_the_organization_rule(self):
+        """SPEC-0037:UT-05"""
+        self.assertEqual(self.propose([branch_prefixes("acme/a", 10, {"feat/": 9})]), [])  # só 10 branches
+        signals = [branch_prefixes(repo, 30, {"fix/": 21, "feat/": 3}) for repo in REPOS[:3]]
+        signals += [branch_prefixes(repo, 30, {"fix/": 9, "feat/": 9}) for repo in REPOS[3:]]
+        self.assertEqual([(p["id"], p["scope"]) for p in self.propose(signals)], [("branch-prefix-fix", "organization")])
+
+
+class RepositoryKindsTest(unittest.TestCase):
+    def propose(self, signals, curation=None):
+        return f("propose_conventions")(signals, curation)
+
+    def test_single_allowed_merge_method_in_most_repositories_gives_merge_method_squash(self):
+        """SPEC-0037:UT-06"""
+        signals = [merge_methods(repo, "squash") for repo in REPOS[:4]] + [merge_methods("acme/e", "merge", "squash")]
+        signals += [pr_template(repo, repo in ("acme/a", "acme/b")) for repo in REPOS]  # 2 de 5
+        proposals = self.propose(signals)
+        self.assertEqual([(p["id"], p["kind"], p["scope"]) for p in proposals],
+                         [("merge-method-squash", "merge-method", "organization")])
+
+    def test_below_min_repos_gives_no_proposal(self):
+        """SPEC-0037:UT-06"""
+        signals = [merge_methods(repo, "squash") for repo in REPOS[:2]] + [pr_template(r, True) for r in REPOS[:2]]
+        self.assertEqual(self.propose(signals), [])
+        curation = {"min_share": 0.6, "min_total": 20, "min_repos": 2}
+        self.assertEqual(sorted((p["id"], p["scope"]) for p in self.propose(signals, curation)),
+                         [("merge-method-squash", "organization"), ("pr-template-present", "organization")])
+
+    def test_pr_template_in_most_repositories_gives_pr_template_present(self):
+        """SPEC-0037:UT-06"""
+        proposals = self.propose([pr_template(repo, repo != "acme/e") for repo in REPOS])
+        self.assertEqual([(p["id"], p["kind"], p["scope"]) for p in proposals],
+                         [("pr-template-present", "pr-template", "organization")])
+
+    def test_repositories_allowing_several_methods_count_for_no_pattern(self):
+        """SPEC-0037:UT-06"""
+        signals = [merge_methods(repo, "merge", "squash") for repo in REPOS[:3]] + [merge_methods("acme/d", "squash"),
+                                                                                   merge_methods("acme/e", "rebase")]
+        self.assertEqual(self.propose(signals), [])  # squash só em 1 de 5
+        self.assertEqual(self.propose([merge_methods(repo, "merge") for repo in REPOS[:3]] + [merge_methods(
+            "acme/d", "merge", "rebase")])[0]["id"], "merge-method-merge")  # 3 de 4 = 75%
 
 
 # ---- UT-04: só confirm/reject gravam confirmed/rejected (checagem estática do atlas.py)
@@ -290,7 +375,8 @@ def curate_config(curation=None):
             "    command: [" + ", ".join(json.dumps(a) for a in command) + "]\n    timeout: 60\n"
             "redaction: {extra_patterns: []}\n")
     if curation:
-        text += f"curation: {{min_share: {curation[0]}, min_total: {curation[1]}}}\n"
+        extra = f", min_repos: {curation[2]}" if len(curation) > 2 else ""
+        text += f"curation: {{min_share: {curation[0]}, min_total: {curation[1]}{extra}}}\n"
     return text
 
 
@@ -420,6 +506,33 @@ class ProposeCliTest(CurateCase):
         for cid in scopes.values():
             self.assertEqual(self.meta(cid)["id"], cid)
             self.assertEqual(self.meta(cid)["status"], "inferred")
+
+
+class KindsCliTest(CurateCase):
+    def test_scan_creates_branch_prefix_and_merge_method_conventions(self):
+        """SPEC-0037:IT-01 (v2: padrão dominante por kind)"""
+        self.set_signals(kind_signals())
+        result = self.scan()
+        self.assertEqual(self.files(), ["branch-prefix-feat.md", "merge-method-squash.md"])
+        for cid, kind in (("branch-prefix-feat", "branch-prefix"), ("merge-method-squash", "merge-method")):
+            meta = self.meta(cid)
+            self.assertEqual((meta["id"], meta["kind"], meta["scope"], meta["status"]),
+                             (cid, kind, "organization", "inferred"))
+            evidence = regions(self.text(cid)).get("evidence", "")
+            self.assertTrue(evidence.strip(), cid)
+        for repo in REPOS[:4]:
+            self.assertIn(repo, regions(self.text("merge-method-squash"))["evidence"])
+        self.assertEqual(self.summary(result), [2, 0, 2])
+
+    def test_min_repos_comes_from_atlas_config(self):
+        """SPEC-0037:IT-01 (v2: curation.min_repos)"""
+        self.set_signals([merge_methods(repo, "squash") for repo in REPOS[:2]])
+        self.scan()
+        self.assertEqual(self.files(), [])
+        self.configure(curation=(0.6, 20, 2))
+        self.scan()
+        self.assertEqual(self.files(), ["merge-method-squash.md"])
+        self.assertEqual(self.meta("merge-method-squash")["scope"], "organization")
 
 
 class DecisionArgumentsTest(CurateCase):
@@ -647,6 +760,15 @@ class ConventionContractTest(CurateCase):
             with self.subTest(file=name):
                 self.assert_contract(self.conventions / name)
 
+    def test_branch_prefix_and_merge_method_conventions_follow_the_contract(self):
+        """SPEC-0037:CT-01 (v2)"""
+        self.set_signals(kind_signals())
+        self.scan()
+        self.assertEqual(self.files(), ["branch-prefix-feat.md", "merge-method-squash.md"])
+        for name in self.files():
+            with self.subTest(file=name):
+                self.assert_contract(self.conventions / name)
+
     def test_inferred_organization_convention_follows_the_contract(self):
         """SPEC-0037:CT-01"""
         self.set_signals(org_signals())
@@ -659,7 +781,7 @@ class ConventionContractTest(CurateCase):
         self.assertTrue(CURATION_REFERENCE.is_file(), "references/curation.md não existe")
         text = CURATION_REFERENCE.read_text(encoding="utf-8")
         for word in (*ALLOWED_KEYS, *KINDS, *STATUSES, "organization", "evidence", "min_share", "min_total",
-                     "PR #", "local"):
+                     "PR #", "local", "min_repos", "branch-prefix-", "merge-method-", "pr-template-present"):
             self.assertIn(word, text, word)
 
 
