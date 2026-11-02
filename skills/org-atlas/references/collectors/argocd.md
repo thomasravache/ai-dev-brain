@@ -64,7 +64,7 @@ Nothing else is called: no `app get`, `app manifests` or `app resources`, no Sec
 
 Relations: `deployment → service` (`deploys`), `deployment → environment` (`runs_in`), `deployment → cluster` (`runs_in`), and `deployment → repository:<owner>/<repo>` (`sourced_from`) when a `repoURL` is a GitHub repository — `https://github.com/o/r(.git)`, with or without a trailing `/` or credentials, `git@github.com:o/r.git` or `ssh://git@github.com/o/r.git`. Helm chart repositories and other Git hosts get no `sourced_from`. Multi-source Applications (`spec.sources`) contribute every source.
 
-Shared entities (a service, environment or cluster used by several Applications) appear once. When two Applications have the same name (Applications in several namespaces), the first one wins.
+Shared entities (a service, environment or cluster used by several Applications) appear once. When two Applications have the same name (Applications in several namespaces), the whole first one is kept: the later one adds no deployment and no relation, a warning naming it (`aviso: Application repetida ignorada: NAME (namespace NS) — fica a primeira`) goes to stderr, and the exit stays 0.
 
 ### `config_refs`
 
@@ -101,7 +101,7 @@ With `--input` the collector never calls a CLI.
 | Message | When |
 |---|---|
 | `<argocd\|kubectl> não encontrado — veja references/collectors/argocd.md` | the chosen CLI is not on the `PATH` |
-| `sem acesso às Applications (...)` | the CLI fails for a login or permission reason (argocd `Unauthenticated` / `PermissionDenied`, expired session; kubectl `Unauthorized` / `Forbidden`) |
+| `sem acesso às Applications (...) — veja references/collectors/argocd.md` | the CLI fails for a login, server or permission reason (argocd `Unauthenticated` / `PermissionDenied`, expired session, `server address unspecified` when no `argocd login` was done; kubectl `Unauthorized` / `Forbidden`) |
 | `resposta inválida da CLI (...)` | the CLI exits 0 but stdout is not JSON, or is not a list of Applications |
 | `<cli> falhou (saiu com N): <last stderr line>` | any other CLI failure (server unreachable, Argo CD CRD not installed) |
 | `<cli>: tempo esgotado (120 s)` | the call took longer than the timeout |
@@ -109,6 +109,7 @@ With `--input` the collector never calls a CLI.
 
 ## Privacy
 
+- Host rule: the scheme is dropped; when the value has an `@`, only what follows its **last** `@` is kept (a password may contain `@`, `/`, `#` or `?`, so no piece of the user or password can leave); that is cut at the first `/`, `?` or `#` and the port is stripped; the result must be a strict host name, IP or resource name, otherwise there is no reference. A value like `https://host/x?to=a@b` therefore gives `b`: when in doubt, the collector errs towards dropping the userinfo.
 - Only key names from the suffix list and bare hosts or resource names leave; never a whole configuration value, a key outside the list (`LOG_LEVEL`, `DB_PASSWORD`, `API_TOKEN`), a credential, a port, a path or a query string.
 - Secrets are never read: not through the CLI, and Secrets listed in `status.resources` are ignored.
 - Annotations are never read, so `last-applied-configuration` (which repeats the whole spec) never leaves.

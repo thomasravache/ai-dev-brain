@@ -40,9 +40,11 @@ COMMANDS = {
     "argocd": ("app", "list", "-o", "json"),
     "kubectl": ("get", "applications.argoproj.io", "-A", "-o", "json"),
 }
-# stderr of a CLI that failed for lack of a login or of permission (argocd gRPC codes, kubectl API errors)
+# stderr of a CLI that failed for lack of a login, a configured server or permission (argocd gRPC codes and
+# "server address unspecified", kubectl API errors)
 ACCESS_DENIED = re.compile(r"Unauthenticated|PermissionDenied|permission denied|Unauthorized|Forbidden|"
-                           r"must be logged in|token is expired|invalid session|not logged in", re.IGNORECASE)
+                           r"must be logged in|token is expired|invalid session|not logged in|"
+                           r"server address unspecified", re.IGNORECASE)
 # a host name, IPv4 or bracketed IPv6, or a resource name (queue, topic, bucket): nothing else leaves host_of
 HOST_RE = re.compile(r"^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)$")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
@@ -105,7 +107,11 @@ def _strip_port(hostport: str):
 def host_of(value):
     """Configuration value -> only the host or the resource name (no credential, port, path or query); None when
     nothing safe is left. A URL gives its host (s3://bucket/x gives the bucket); host:port and user:pass@host give
-    the host; a bare name stays as it is."""
+    the host; a bare name stays as it is.
+
+    Rule (G4 review): drop the scheme; when the value has an "@", keep only what follows its LAST "@" (a password
+    may hold "@", "/", "#" or "?", so nothing before that "@" can leave); cut at the first "/", "?" or "#"; strip
+    the port; the result must be a strict host name, IP or resource name, else None."""
     if not isinstance(value, str):
         return None
     value = value.strip().strip("\"'").strip()
@@ -113,13 +119,9 @@ def host_of(value):
         return None
     match = SCHEME_RE.match(value)
     rest = value[match.end():] if match else value
+    if "@" in rest:
+        rest = rest.rsplit("@", 1)[1]
     authority = re.split(r"[/?#]", rest, maxsplit=1)[0]
-    if "@" in authority:
-        authority = authority.rsplit("@", 1)[1]
-    elif match and ":" in authority and not authority.split(":", 1)[1].isdigit() and "@" in rest:
-        # user:pa/ss@host: the password has a "/", so the host follows the last "@" before the query
-        tail = re.split(r"[?#]", rest, maxsplit=1)[0].rsplit("@", 1)[1]
-        authority = re.split(r"[/?#]", tail, maxsplit=1)[0]
     host = _strip_port(authority)
     if not host or not HOST_RE.match(host):
         return None
@@ -296,12 +298,23 @@ def map_application(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERV
 
 
 def map_applications(apps, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL,
-                     suffixes=DEFAULT_REF_SUFFIXES):
+                     suffixes=DEFAULT_REF_SUFFIXES, warnings=None):
     """List of Applications -> (entities without a repeated kind:id, relations without repetition). Shared
-    entities (service, environment, cluster) appear once; a repeated Application name keeps the first one."""
-    entities, relations, seen, linked = [], [], set(), set()
+    entities (service, environment, cluster) appear once. A repeated Application name (Applications in several
+    namespaces) keeps the whole first Application: the later one adds no entity or relation, and a warning naming
+    it is appended to `warnings` when a list is given."""
+    entities, relations, seen, linked, names = [], [], set(), set(), set()
     for app in _list(apps):
+        name = _text(_dict(_dict(app).get("metadata")).get("name"))
+        if name in names:
+            if warnings is not None:
+                namespace = _text(_dict(_dict(app).get("metadata")).get("namespace"))
+                where = f" (namespace {namespace})" if namespace else ""
+                warnings.append(f"aviso: Application repetida ignorada: {name}{where} — fica a primeira")
+            continue
         app_entities, app_relations = map_application(app, env_label, service_label, suffixes)
+        if name:
+            names.add(name)
         for item in app_entities:
             key = (item["kind"], item["id"])
             if key not in seen:
@@ -409,10 +422,13 @@ def main(argv=None):
         parser.error("--ref-suffixes precisa de ao menos um sufixo")
     try:
         apps = read_input(args.input) if args.input else run_cli(args.source)
-        entities, relations = map_applications(apps, args.env_label, args.service_label, suffixes)
+        warnings = []
+        entities, relations = map_applications(apps, args.env_label, args.service_label, suffixes, warnings)
     except CollectorError as e:
         print(f"erro: {e}", file=sys.stderr)
         return 1
+    for warning in warnings:
+        print(warning, file=sys.stderr)
     data = {"contract": CONTRACT, "collector": COLLECTOR, "category": CATEGORY, "collected_at": utc_now(),
             "entities": entities, "relations": relations}
     print(json.dumps(data, ensure_ascii=False, indent=2))
