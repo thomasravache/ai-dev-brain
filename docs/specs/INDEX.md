@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 7, implemented 29
+- Validação (G0): **3 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, approved 6, in-progress 1, implemented 29
 - Impedimentos: **0 aberto(s)**, 16 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0035  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0035
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0036 | org-atlas: cruzamento de fontes, grafo e páginas geradas | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0035 |
 | 3 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | approved | ⛔ aguarda implementação de SPEC-0036 |  |
@@ -62,7 +62,7 @@ flowchart LR
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
     S0032["SPEC-0032<br/>org-atlas: esqueleto, configuração em d…"]:::implemented
     S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::implemented
-    S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::approved
+    S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::inprogress
     S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::approved
     S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::approved
     S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::approved
@@ -129,7 +129,7 @@ flowchart LR
 | [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | implemented | 2026-10-30 | SPEC-0029 | — | — |
 | [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
 | [SPEC-0034](SPEC-0034-org-atlas-coletores-generic-e-github.md) | org-atlas: coletores generic e GitHub | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
-| [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
+| [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | in-progress | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
 | [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
 | [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@1 |
