@@ -1,12 +1,12 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-10-31 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-02 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 16 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **3 erro(s), 17 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 2, approved 7, in-progress 1, implemented 28
-- Impedimentos: **0 aberto(s)**, 15 resolvido(s)
+- Impedimentos: **0 aberto(s)**, 16 resolvido(s)
 
 ## Cobertura de Pilares
 

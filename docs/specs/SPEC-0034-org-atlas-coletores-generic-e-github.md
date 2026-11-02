@@ -9,7 +9,7 @@ created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0032]
 consumes_contract: [SPEC-0033@1]
-contract_version: 1
+contract_version: 2
 touches: [skills/org-atlas/assets/collectors/generic.py, skills/org-atlas/assets/collectors/github.py, skills/org-atlas/references/collectors/generic.md, skills/org-atlas/references/collectors/github.md, skills/org-atlas/tests/test_collector_generic.py, skills/org-atlas/tests/test_collector_github.py, skills/org-atlas/tests/fixtures/generic/**, skills/org-atlas/tests/fixtures/github/**, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0010, ADR-0011]
 external: []
@@ -23,14 +23,14 @@ approved_at: 2026-10-30
 ## 1. Visão Geral
 Entrega os dois primeiros coletores, como scripts separados em `assets/collectors/`, que a organização declara no `atlas-config.yml`:
 - **`generic`:** transforma um arquivo de fatos escrito à mão (JSON) na saída do contrato. Serve para o que nenhum coletor cobre e é o exemplo de como escrever um coletor próprio.
-- **`github`:** categoria `code`. Lê, pelo `gh` da máquina, os repositórios de uma organização, os workflows de CI, os donos (CODEOWNERS) e uma amostra de PRs, que vira sinal para a curadoria (padrão de título, de branch e forma de merge).
+- **`github`:** categoria `code`. Lê, pelo `gh` da máquina, os repositórios de uma organização, os workflows de CI, os donos (CODEOWNERS) e uma amostra de PRs, que vira sinal para a curadoria (padrão de título e de branch, formas de merge permitidas e template de PR).
 
 ## 2. Motivação & Escopo
 **Motivação:** o MVP precisa de código e entrega para montar o grafo quase sem credencial sensível (SPEC-0029). GitHub é o provedor de código escolhido; o `generic` garante que qualquer organização comece mesmo sem coletor pronto.
 
 **Objetivos (dentro do escopo):**
 - `generic.py --facts ARQUIVO --category C [--source NOME]`.
-- `github.py --org ORG [--repos a,b] [--pr-sample N] [--input PASTA]`: repositórios, linguagem, branch padrão, tópicos, arquivado; workflows (`pipeline` + `builds`); CODEOWNERS (`team` + `owns`); sinais de PR (contagem de títulos em Conventional Commits, com chave de ticket `ABC-123`, prefixos de branch, forma de merge, presença de template de PR) e amostra de até 10 títulos.
+- `github.py --org ORG [--repos a,b] [--pr-sample N] [--input PASTA]`: repositórios, linguagem, branch padrão, tópicos, arquivado; workflows (`pipeline` + `builds`); CODEOWNERS (`team` + `owns`); sinais de PR (contagem de títulos em Conventional Commits, com chave de ticket `ABC-123`, prefixos de branch) e amostra de até 10 títulos; formas de merge permitidas no repositório e presença de template de PR (Emenda v2).
 - `--input PASTA` lê respostas gravadas em vez de chamar o `gh`, para testes e para quem roda sem acesso.
 - Guias `references/collectors/generic.md` e `github.md`: como declarar, permissões mínimas do token (só leitura), limites.
 
@@ -81,9 +81,15 @@ github.py --org ORG [--repos a,b] [--pr-sample N (padrão 100)] [--input PASTA]
   relações:  pipeline → repository (builds); team → repository (owns, via CODEOWNERS)
   sinais:    {type: "pr-titles", repository, total, pattern_counts: {conventional, ticket_key, other}, sample: [≤10]}
              {type: "branch-prefixes", repository, total, counts: {"feat/": n, ...}}
-             {type: "merge-methods", repository, total, counts: {merge, squash, rebase}}
-             {type: "pr-template", repository, present: true|false}
-  --input PASTA: lê repos.json, workflows/<repo>.json, codeowners/<repo>, pulls/<repo>.json em vez do gh
+             {type: "merge-methods", repository, present: {merge: bool, squash: bool, rebase: bool}}   (v2)
+               fonte: allow_merge_commit / allow_squash_merge / allow_rebase_merge de GET repos/{org}/{repo};
+               sem esses campos na resposta (token sem permissão): sinal omitido e aviso no stderr
+             {type: "pr-template", repository, present: {pr_template: bool}}   (v2)
+               fonte: contents API em .github/, raiz e docs/ — pull_request_template.md (qualquer caixa)
+               ou a pasta PULL_REQUEST_TEMPLATE/
+  --input PASTA: lê repos.json, workflows/<repo>.json, codeowners/<repo>, pulls/<repo>.json,
+               repo/<repo>.json (resposta de GET repos/{org}/{repo}) e pr-template/<repo> (arquivo existir = template
+               presente) em vez do gh   (v2)
   gh não encontrado: exit 1 "gh não encontrado — instale e autentique (references/collectors/github.md)"
   gh sem autenticação ou sem acesso: exit 1 "gh sem acesso à organização ORG"
   organização inexistente: exit 1 "organização não encontrada: ORG"
@@ -102,6 +108,7 @@ github.py --org ORG [--repos a,b] [--pr-sample N (padrão 100)] [--input PASTA]
 | Workflows | arquivos de workflow | `pipeline` + `builds` | UT-03, IT-01 |
 | Donos | CODEOWNERS | `team` + `owns` | UT-04, IT-01 |
 | Sinais de PR | amostra de PRs | contagens e amostra ≤ 10 | UT-01, IT-01 |
+| Política e template (v2) | `allow_*` do repositório e arquivos de template | `merge-methods` e `pr-template` com `present` de booleanos; sem `allow_*`, sinal omitido com aviso | UT-06, IT-01 |
 | Pelo `gh` | `gh` falso no PATH | mesma saída que com `--input` | IT-02, CT-01 |
 | Sem acesso | `gh` falso falhando autenticação | exit 1 com a mensagem | IT-03 |
 
@@ -114,6 +121,7 @@ github.py --org ORG [--repos a,b] [--pr-sample N (padrão 100)] [--input PASTA]
 - **UT-02** — Dado a resposta de um repositório, quando é mapeada, então vira `repository:<org>/<nome>` com os atributos do contrato e nenhum outro.
 - **UT-03** — Dado a lista de workflows de um repositório, quando é mapeada, então gera um `pipeline` por workflow e a relação `builds`.
 - **UT-04** — Dado um CODEOWNERS com times e usuários, quando é lido, então só times viram `team` com `owns`; usuários são ignorados.
+- **UT-06** — Dado a resposta de um repositório com `allow_merge_commit`, `allow_squash_merge` e `allow_rebase_merge`, e a presença ou não de template, quando os sinais são montados, então `merge-methods` e `pr-template` têm `present` só com booleanos; sem os campos `allow_*`, o sinal `merge-methods` é omitido e há um aviso (v2).
 - **UT-05** — Dado um arquivo de fatos, quando o `generic` converte, então a saída tem o cabeçalho do contrato e as entidades com `source`.
 
 ### 7.3 Testes de Integração
@@ -157,7 +165,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [ ] Refactor mantendo tudo verde
 
 **Fase 2: Coletor GitHub**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, IT-01, IT-02, IT-03 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
+- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-06, IT-01, IT-02, IT-03 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
 - [ ] Green: `assets/collectors/github.py` com `--input`, fixtures da organização `acme`, `gh` falso e `references/collectors/github.md`
 - [ ] Refactor mantendo tudo verde
 
@@ -192,6 +200,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-10-31 | G1 | spec | SPEC_DEFECT do Test-writer: o sinal merge-methods não tem fonte (a API de PRs não informa o método de merge) e o pr-template não tem entrada no --input nem fonte definida; o present de pr-template precisa ser objeto de booleanos (regra de tipos da SPEC-0033) | leitura da spec, ADR-0010/0011, collector-contract.md e do validador; nenhum teste escrito | thomas | Emenda v2 (aprovada por thomas em 2026-11-02): merge-methods vira política do repositório e pr-template ganha fonte e entrada | 2026-11-02 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -233,3 +242,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0034`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-10-31 | Sinal `merge-methods` passa a ser a política do repositório (`present` com `merge`/`squash`/`rebase` de `allow_*`), não a contagem por PR; `pr-template` com `present: {pr_template: bool}` e fonte definida; `--input` ganha `repo/<repo>.json` e `pr-template/<repo>`; UT-06 novo | SPEC_DEFECT no G1 (IMP-01): a API de PRs não informa o método de merge, o template não tinha fonte, e as regras de tipo da SPEC-0033 exigem `present` como objeto de booleanos | nenhuma (sem consumidores do contrato) | thomas, 2026-11-02 |
