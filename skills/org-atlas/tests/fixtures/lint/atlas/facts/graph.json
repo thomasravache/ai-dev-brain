@@ -1,0 +1,20 @@
+{"entities": [
+ {"kind": "service", "id": "backoffice", "name": "backoffice", "attrs": {}},
+ {"kind": "service", "id": "payments", "name": "payments", "attrs": {"description": "processa pagamentos"}},
+ {"kind": "service", "id": "ledger", "name": "ledger", "attrs": {"description": "lançamentos do cashout"}},
+ {"kind": "service", "id": "search", "name": "search", "attrs": {}},
+ {"kind": "datastore", "id": "payments-db", "name": "payments-db", "attrs": {"engine": "postgres", "host": "db.interno"}},
+ {"kind": "repository", "id": "acme/backoffice", "name": "backoffice", "attrs": {}},
+ {"kind": "repository", "id": "acme/payments", "name": "payments", "attrs": {}},
+ {"kind": "deployment", "id": "backoffice-prod", "name": "backoffice-prod", "attrs": {"config_refs": ["PAYMENTS_URL=payments"]}},
+ {"kind": "deployment", "id": "payments-prod", "name": "payments-prod", "attrs": {"config_refs": ["DB_URL=db.interno"]}},
+ {"kind": "environment", "id": "prod", "name": "prod", "attrs": {}},
+ {"kind": "team", "id": "acme/pay", "name": "pay", "attrs": {}}],
+ "relations": [
+ {"from": "deployment:backoffice-prod", "to": "service:backoffice", "type": "deploys"},
+ {"from": "deployment:backoffice-prod", "to": "repository:acme/backoffice", "type": "sourced_from"},
+ {"from": "deployment:backoffice-prod", "to": "environment:prod", "type": "runs_in"},
+ {"from": "deployment:payments-prod", "to": "service:payments", "type": "deploys"},
+ {"from": "deployment:payments-prod", "to": "repository:acme/payments", "type": "sourced_from"},
+ {"from": "deployment:payments-prod", "to": "environment:prod", "type": "runs_in"},
+ {"from": "team:acme/pay", "to": "repository:acme/backoffice", "type": "owns"}]}
