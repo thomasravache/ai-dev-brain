@@ -9,7 +9,7 @@ created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0039]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/org-atlas/references/modes.md, skills/org-atlas/assets/ci/**, skills/org-atlas/assets/atlas-config.yml, skills/org-atlas/tests/test_vendor.py, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0010]
 external: []
@@ -80,6 +80,13 @@ atlas.py vendor --ci github|generic [--schedule CRON] [--force]
   generic: ci/atlas-scan.sh — roda scan e lint; exit 0 sem mudança, 10 com mudança (para a CI decidir), 1 com falha
   arquivo existente igual: "já atualizado"; diferente sem --force: mantido, "customizado — N linha(s) diferem;
            use --force para sobrescrever"; com --force: sobrescrito
+  as duas formas também copiam a skill para .org-atlas/skill/ (scripts/atlas.py, assets/collectors/ e o que o scan
+           usa), sempre sobrescrita, como o vendor da sdd-management faz com a própria ferramenta; o workflow e o
+           script rodam python3 .org-atlas/skill/scripts/atlas.py, e {skill} aponta para essa cópia   (v2)
+  no CI: init --join --atlas "$PWD" com um ATLAS_CONFIG_HOME temporário (mantém o que já vier definido)   (v2)
+  "mudança" = árvore git do atlas diferente depois do scan (git status --porcelain não vazio)   (v2)
+  agenda: --schedule, senão ci.schedule, senão "0 6 * * 1"   (v2)
+  a chave ci é conhecida pelo config, doctor e lint; ci.env inválido sai com 2 também no config   (v2)
   mode: local: exit 2 "vendor --ci é do modo repo — veja references/modes.md"
   nome em ci.env fora de ^[A-Z_][A-Z0-9_]*$: exit 2
 ```
@@ -96,6 +103,8 @@ atlas.py vendor --ci github|generic [--schedule CRON] [--force]
 | Arquivo customizado | workflow diferente do modelo | mantido sem `--force`; sobrescrito com `--force` | IT-02 |
 | Modo local | `mode: local` | exit 2 | IT-02 |
 | Nome inválido | `ci.env` com valor de segredo | exit 2 | UT-02 |
+| Skill no atlas | `vendor --ci github\|generic` | cópia da skill em `.org-atlas/skill/`, sempre sobrescrita; workflow e script usam essa cópia (v2) | UT-03, IT-03 |
+| Chave `ci` | atlas com `ci` válido | `config`, `doctor` e `lint` aceitam; `ci.env` inválido sai com 2 no `config` (v2) | UT-04 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 ### 7.1 Testes de Caracterização
@@ -106,9 +115,11 @@ atlas.py vendor --ci github|generic [--schedule CRON] [--force]
 - **UT-02** — Dado `ci.env` com um valor que não é nome de variável, quando a configuração é validada, então sai com 2.
 
 ### 7.3 Testes de Integração
+- **UT-03** — Dado `vendor --ci github` e depois `vendor --ci generic`, quando os arquivos são gerados, então `.org-atlas/skill/scripts/atlas.py` é cópia do atlas.py da skill (e é sobrescrita se alterada), os coletores estão em `.org-atlas/skill/assets/collectors/`, e o workflow e o script chamam essa cópia (v2).
+- **UT-04** — Dado um `atlas-config.yml` com `ci` válido, quando `config`, `doctor` e `lint` rodam, então nenhum acusa chave desconhecida; com `ci.env` inválido, `config` sai com 2 (v2).
 - **IT-01** — `vendor --ci github` pela CLI num atlas no modo `repo` cria `.github/workflows/atlas-scan.yml`; rodar de novo diz "já atualizado".
 - **IT-02** — Com o workflow alterado à mão, `vendor` mantém o arquivo e mostra quantas linhas diferem; com `--force`, sobrescreve; num atlas `mode: local`, sai com 2.
-- **IT-03** — O `ci/atlas-scan.sh` gerado, rodado num atlas git com coletor falso, sai com 10 quando o coletor muda a saída e com 0 quando não muda.
+- **IT-03** — O `ci/atlas-scan.sh` gerado, rodado num atlas git com coletor falso e sem configuração local na máquina (ATLAS_CONFIG_HOME vazio), usa a cópia em `.org-atlas/skill/`, sai com 10 quando o coletor muda a saída e com 0 quando não muda (v2).
 
 ### 7.4 Testes de Contrato
 - N/A — não há contrato entre specs.
@@ -140,7 +151,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Modelos**
-- [ ] Red: UT-01, UT-02 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
+- [ ] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
 - [ ] Green: `assets/ci/` (workflow do GitHub fixado por SHA e script genérico) e chave `ci`
 - [ ] Refactor mantendo tudo verde
 
@@ -175,6 +186,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-02 | G1 | spec | SPEC_DEFECT do Test-writer: o contrato não diz de onde vem a skill (scripts/atlas.py e assets/collectors, para onde {skill} aponta) quando o workflow ou o ci/atlas-scan.sh rodam no repositório do atlas, que não contém a skill; sem isso o scan agendado não roda e a origem do código não é fixada (§5 pede SHA). Lacunas menores: configuração local no CI, o que é 'mudança', precedência da agenda, chave ci desconhecida para lint/config | Test-writer leu a spec, SPEC-0029, ADR-0010/0011/0012, SKILL.md e as referências; nenhum teste escrito | thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -216,3 +228,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0040`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-02 | `vendor --ci` copia a skill para `.org-atlas/skill/` (sempre sobrescrita) e o workflow e o script usam essa cópia; no CI, `init --join` com `ATLAS_CONFIG_HOME` temporário; "mudança" = árvore git alterada; precedência da agenda; chave `ci` conhecida por `config`/`doctor`/`lint`; UT-03 e UT-04 novos, IT-03 ajustado | IMP-01: o contrato não dizia de onde vem a skill no CI, então o scan agendado gerado não rodaria | nenhuma (sem consumidores) | pendente (H1) |

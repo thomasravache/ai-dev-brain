@@ -4,9 +4,15 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **6 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 5, in-progress 1, implemented 40
-- Impedimentos: **0 aberto(s)**, 18 resolvido(s)
+- Impedimentos: **1 aberto(s)**, 18 resolvido(s)
+
+## Impedimentos Abertos
+
+| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
+|---|---|---|---|---|---|---|---|
+| SPEC-0040 | IMP-01 | spec | G1 | thomas | 2026-11-02 | 0d | SPEC_DEFECT do Test-writer: o contrato não diz de onde vem a skill (scripts/atlas.py e assets/collectors, para onde {skill} aponta) quando o workflow ou o ci/atlas-scan.sh rodam no repositório do atlas, que não contém a skill; sem isso o scan agendado não roda e a origem do código não é fixada (§5 pede SHA). Lacunas menores: configuração local no CI, o que é 'mudança', precedência da agenda, chave ci desconhecida para lint/config |
 
 ## Cobertura de Pilares
 
@@ -23,13 +29,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0040  
-**Paradas por impedimento:** —  
+**Em andamento:** —  
+**Paradas por impedimento:** SPEC-0040  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | in-progress | 🚧 parada por impedimento: IMP-01 (spec → thomas, 0d) |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0040 |
