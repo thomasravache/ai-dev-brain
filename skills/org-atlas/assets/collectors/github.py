@@ -39,6 +39,10 @@ CONVENTIONAL = re.compile(r"^[A-Za-z]+(\([^)\n]*\))?!?: \S")
 TICKET_KEY = re.compile(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9]+-\d+(?![A-Za-z0-9])")
 # @org/team in CODEOWNERS; @user and e-mails are people and are ignored
 TEAM_OWNER = re.compile(r"^@([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9][A-Za-z0-9_.-]*)$")
+# branch prefixes that become keys of branch-prefixes: Conventional Commits types and common flow names. Any other
+# first segment (a login, a bot) counts only in total, so no author login leaves the collector (spec §5)
+KNOWN_BRANCH_PREFIXES = frozenset(("feat", "fix", "chore", "docs", "refactor", "test", "perf", "build", "ci", "style",
+                                   "revert", "feature", "bugfix", "hotfix", "release", "dependabot", "renovate"))
 WORKFLOW_EXTENSIONS = (".yml", ".yaml")
 MERGE_FIELDS = (("merge", "allow_merge_commit"), ("squash", "allow_squash_merge"), ("rebase", "allow_rebase_merge"))
 # where GitHub looks for CODEOWNERS and the PR template, in its order
@@ -47,6 +51,7 @@ TEMPLATE_DIRS = (".github", "", "docs")
 TEMPLATE_FILE = "pull_request_template.md"
 TEMPLATE_FOLDER = "pull_request_template"
 HTTP_STATUS = re.compile(r"HTTP (\d{3})")
+RATE_LIMITED = re.compile(r"rate limit", re.IGNORECASE)
 
 
 class CollectorError(Exception):
@@ -56,12 +61,13 @@ class CollectorError(Exception):
 class GhError(Exception):
     """A gh call that failed; status is the HTTP status (None when unknown), auth = gh has no usable login."""
 
-    def __init__(self, path: str, status=None, auth: bool = False, detail: str = ""):
+    def __init__(self, path: str, status=None, auth: bool = False, detail: str = "", rate_limited: bool = False):
         reason = f"HTTP {status}" if status else detail
         super().__init__(f"gh api {path} falhou" + (f" ({reason})" if reason else ""))
         self.path = path
         self.status = status
         self.auth = auth
+        self.rate_limited = rate_limited
 
 
 def utc_now() -> str:
@@ -96,29 +102,41 @@ def count_title_patterns(titles):
 
 
 def count_branch_prefixes(branches):
-    """PR branches -> {"total", "counts": {"feat/": n, ...}}; the prefix is the first segment plus "/".
-    A branch without "/" counts in total but has no prefix."""
+    """PR branches -> {"total", "counts": {"feat/": n, ...}}; the prefix is the first segment, lower case, plus "/",
+    only for KNOWN_BRANCH_PREFIXES. Any other branch (no "/", a login or a bot as first segment) counts in total
+    only."""
     counts = {}
     branches = [b for b in branches if isinstance(b, str)]
     for branch in branches:
         head, sep, _ = branch.partition("/")
-        if sep and head:
+        head = head.lower()
+        if sep and head in KNOWN_BRANCH_PREFIXES:
             counts[head + "/"] = counts.get(head + "/", 0) + 1
     return {"total": len(branches), "counts": counts}
 
 
 def map_repository(org, repo):
-    """One repository of the repos response -> entity repository:<org>/<name> with only the contract attrs."""
+    """One repository of the repos response -> entity repository:<org>/<name> with only the contract attrs.
+    The id is the canonical full_name of the API (the case of --org does not matter)."""
     name = repo["name"]
+    full_name = canonical_full_name(org, repo)
     visibility = repo.get("visibility") or ("private" if repo.get("private") else "public")
     topics = [t for t in repo.get("topics") or [] if isinstance(t, str)]
-    return entity("repository", f"{org}/{name}", name, {
+    return entity("repository", full_name, name, {
         "language": repo.get("language"),
         "default_branch": repo.get("default_branch"),
         "topics": topics,
         "archived": bool(repo.get("archived", False)),
         "visibility": visibility,
     })
+
+
+def canonical_full_name(org: str, repo: dict) -> str:
+    """<org>/<name> as the API spells it (full_name), else built from the arguments."""
+    full_name = repo.get("full_name")
+    if isinstance(full_name, str) and full_name.count("/") == 1:
+        return full_name
+    return f"{org}/{repo['name']}"
 
 
 def map_workflows(org, repo_name, response):
@@ -145,7 +163,8 @@ def map_workflows(org, repo_name, response):
 
 
 def parse_codeowners(org, repo_name, text):
-    """CODEOWNERS text -> (team entities, owns relations), each team once; users and e-mails are ignored."""
+    """CODEOWNERS text -> (team entities, owns relations), each team once; users and e-mails are ignored.
+    Team handles are case-insensitive on GitHub: @Acme/Payments and @acme/payments are one team, id lower case."""
     entities, relations, seen = [], [], set()
     for line in (text or "").splitlines():
         tokens = line.split()
@@ -157,11 +176,11 @@ def parse_codeowners(org, repo_name, text):
             match = TEAM_OWNER.match(owner)
             if not match:
                 continue
-            tid = f"{match.group(1)}/{match.group(2)}"
+            tid = f"{match.group(1)}/{match.group(2)}".lower()
             if tid in seen:
                 continue
             seen.add(tid)
-            entities.append(entity("team", tid, match.group(2), {}))
+            entities.append(entity("team", tid, match.group(2).lower(), {}))
             relations.append(relation(f"team:{tid}", f"repository:{org}/{repo_name}", "owns"))
     return entities, relations
 
@@ -184,7 +203,9 @@ def map_policy(full_name, repo_response, has_template):
 def has_template_entry(listing) -> bool:
     """A contents listing of a folder has pull_request_template.md (any case) or the PULL_REQUEST_TEMPLATE/ folder."""
     for item in listing if isinstance(listing, list) else []:
-        name = str(item.get("name", "")).lower() if isinstance(item, dict) else ""
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).lower()
         if (item.get("type") == "file" and name == TEMPLATE_FILE) or (item.get("type") == "dir"
                                                                       and name == TEMPLATE_FOLDER):
             return True
@@ -225,7 +246,12 @@ class InputSource:
 
     def codeowners(self, name: str):
         path = self.folder / "codeowners" / name
-        return path.read_text(encoding="utf-8") if path.is_file() else None
+        if not path.is_file():
+            return None
+        try:
+            return path.read_bytes().decode("utf-8", errors="replace")
+        except OSError as e:
+            raise CollectorError(f"--input: codeowners/{name}: não consegui ler ({e.strerror or e})") from None
 
     def pulls(self, name: str, limit: int) -> list:
         return (self._json(f"pulls/{name}.json", []) or [])[:limit]
@@ -265,8 +291,10 @@ def run_gh(gh: str, args: list, path: str) -> str:
     status = int(match.group(1)) if match else None
     # exit 4 = gh needs `gh auth login`; 401 = invalid token
     auth = proc.returncode == 4 or status == 401
+    # 403 (or 429) "API rate limit exceeded" is not a lack of access
+    rate_limited = status in (403, 429) and bool(RATE_LIMITED.search(proc.stderr or ""))
     detail = (proc.stderr or "").strip().splitlines()[-1:] or [f"saiu com {proc.returncode}"]
-    raise GhError(path, status=status, auth=auth, detail=detail[0][:200])
+    raise GhError(path, status=status, auth=auth, detail=detail[0][:200], rate_limited=rate_limited)
 
 
 class GhSource:
@@ -285,6 +313,9 @@ class GhSource:
         try:
             text = run_gh(self.gh, args + [path], path)
         except GhError as e:
+            if e.rate_limited:
+                raise CollectorError(f"gh api {path}: limite de requisições da API do GitHub excedido — "
+                                     "espere a janela do limite ou use --repos / --pr-sample menores") from None
             if e.auth or (org_call and e.status == 403):
                 raise CollectorError(f"gh sem acesso à organização {self.org}") from None
             if org_call and e.status == 404:
@@ -349,15 +380,16 @@ class GhSource:
 
 
 def selected(repos: list, wanted, org: str) -> list:
-    """The repositories of the response, only the --repos ones when given (a warning for an unknown name)."""
-    repos = [r for r in repos if isinstance(r, dict) and r.get("name")]
+    """The repositories of the response, only the --repos ones when given (names are case-insensitive, as on
+    GitHub; a warning for an unknown name)."""
+    repos = [r for r in repos if isinstance(r, dict) and isinstance(r.get("name"), str) and r["name"]]
     if not wanted:
         return repos
-    names = {r["name"] for r in repos}
-    for name in wanted:
-        if name not in names:
-            print(f"aviso: repositório não encontrado na organização {org}: {name}", file=sys.stderr)
-    return [r for r in repos if r["name"] in wanted]
+    wanted = {name.lower() for name in wanted}
+    names = {r["name"].lower() for r in repos}
+    for name in sorted(wanted - names):
+        print(f"aviso: repositório não encontrado na organização {org}: {name}", file=sys.stderr)
+    return [r for r in repos if r["name"].lower() in wanted]
 
 
 def collect(org: str, source, wanted=None, pr_sample: int = DEFAULT_PR_SAMPLE) -> tuple:
@@ -365,13 +397,14 @@ def collect(org: str, source, wanted=None, pr_sample: int = DEFAULT_PR_SAMPLE) -
     entities, relations, signals, warnings = [], [], [], []
     teams = set()
     for repo in selected(source.repos(), wanted, org):
-        name = repo["name"]
-        full_name = f"{org}/{name}"
+        # ids follow the API's spelling (full_name), whatever the case of --org and --repos
+        full_name = canonical_full_name(org, repo)
+        owner, name = full_name.split("/")
         entities.append(map_repository(org, repo))
-        pipelines, builds = map_workflows(org, name, source.workflows(name))
+        pipelines, builds = map_workflows(owner, name, source.workflows(name))
         entities += pipelines
         relations += builds
-        owners, owns = parse_codeowners(org, name, source.codeowners(name))
+        owners, owns = parse_codeowners(owner, name, source.codeowners(name))
         entities += [team for team in owners if team["id"] not in teams]
         teams.update(team["id"] for team in owners)
         relations += owns

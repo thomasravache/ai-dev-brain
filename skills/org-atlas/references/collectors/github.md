@@ -20,8 +20,8 @@ collectors:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--org ORG` | required | the GitHub organization |
-| `--repos a,b` | all | only these repositories (and their pipelines, owner teams and signals); an unknown name is a warning |
+| `--org ORG` | required | the GitHub organization (any case: ids use the API's `full_name`) |
+| `--repos a,b` | all | only these repositories, any case (and their pipelines, owner teams and signals); an unknown name is a warning |
 | `--pr-sample N` | 100 | the N most recent PRs (all states) read per repository |
 | `--input FOLDER` | — | read recorded responses instead of calling `gh` (tests, or running without access) |
 
@@ -44,20 +44,20 @@ A 404 on a per-repository resource means "absent" (no workflows, no CODEOWNERS, 
 
 | Entity | Attributes |
 |---|---|
-| `repository:<org>/<name>` | `language`, `default_branch`, `topics`, `archived`, `visibility` |
+| `repository:<org>/<name>` (the API's `full_name`) | `language`, `default_branch`, `topics`, `archived`, `visibility` |
 | `pipeline:<org>/<repo>/<workflow file without .yml/.yaml>` (name = workflow name) | `file` |
-| `team:<org>/<team>` (once, from `@org/team` in CODEOWNERS; users and e-mails are ignored) | none |
+| `team:<org>/<team>` (once, lower case, from `@org/team` in CODEOWNERS, which is case-insensitive; users and e-mails are ignored) | none |
 
 Relations: `pipeline → repository` (`builds`), `team → repository` (`owns`). Workflows without a file (`dynamic/...`, such as Pages) are skipped.
 
 Signals, one of each per repository:
 
 - `{type: "pr-titles", repository, total, pattern_counts: {conventional, ticket_key, other}, sample}` — each title counts once: Conventional Commits (`type(scope)!: ...`) first, then a ticket key (`ABC-123` anywhere), else `other`; `sample` has at most 10 titles (the most recent).
-- `{type: "branch-prefixes", repository, total, counts: {"feat/": n, ...}}` — prefix = first segment of the head branch plus `/`; a branch without `/` counts in `total` only.
+- `{type: "branch-prefixes", repository, total, counts: {"feat/": n, ...}}` — prefix = first segment of the head branch, lower case, plus `/`, and only known type prefixes become keys: the Conventional Commits types (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `style`, `revert`) and `feature`, `bugfix`, `hotfix`, `release`, `dependabot`, `renovate`. Any other branch (no `/`, or a login or bot as first segment, such as `ana-dev/x`) counts in `total` only, so no author login leaves the collector.
 - `{type: "merge-methods", repository, present: {merge, squash, rebase}}` — the repository's allowed merge methods. When the response lacks the `allow_*` fields (GitHub shows them only to tokens with enough access to the repository) the signal is left out and a warning naming `<org>/<repo>` goes to stderr; the exit stays 0.
 - `{type: "pr-template", repository, present: {pr_template}}` — `pull_request_template.md` (any case) or a `PULL_REQUEST_TEMPLATE/` folder in `.github/`, the root or `docs/`.
 
-Never collected: author logins, PR bodies, code contents, issues. PR titles may name people or customers, so only the 10-title sample leaves the collector, and the `scan` redacts it.
+Never collected: author logins (also not through branch names), PR bodies, code contents, issues. PR titles may name people or customers, so only the 10-title sample leaves the collector, and the `scan` redacts it.
 
 ## `--input` layout
 
@@ -71,16 +71,17 @@ FOLDER/
   pr-template/<repo>      # exists = the repository has a PR template
 ```
 
-Only `repos.json` is required; a missing file means "absent" (a missing `repo/<repo>.json` omits `merge-methods` with the warning). With `--input` the collector never calls `gh`.
+Only `repos.json` is required; a missing file means "absent" and a CODEOWNERS that is not UTF-8 is read with replacement characters (a missing `repo/<repo>.json` omits `merge-methods` with the warning). With `--input` the collector never calls `gh`.
 
 ## Failure modes (exit 1, message on stderr, nothing on stdout)
 
 | Message | When |
 |---|---|
 | `gh não encontrado — instale e autentique (references/collectors/github.md)` | `gh` is not on the `PATH` |
-| `gh sem acesso à organização ORG` | `gh` has no login, the token is invalid, or the organization denies access (401/403) |
+| `gh sem acesso à organização ORG` | `gh` has no login, the token is invalid (401), or `orgs/<org>/repos` answers 403 |
+| `gh api <path>: limite de requisições da API do GitHub excedido — ...` | any call answers 403/429 "API rate limit exceeded" |
 | `organização não encontrada: ORG` | `orgs/<org>/repos` answers 404 |
-| `gh api <path> falhou (HTTP <status>)` | any other failed call (rate limit, server error) |
+| `gh api <path> falhou (HTTP <status>)` | any other failed call (server error, 403 on a repository resource) |
 | `gh api <path>: tempo esgotado (120 s)` | one call took longer than the timeout |
 | `--input: repos.json não encontrado em FOLDER` | `--input` without `repos.json` |
 
