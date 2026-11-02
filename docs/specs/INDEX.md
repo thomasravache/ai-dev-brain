@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **3 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 3, approved 10, implemented 28
 - Impedimentos: **0 aberto(s)**, 14 resolvido(s)
 
@@ -172,3 +172,5 @@ flowchart LR
 | [ADR-0011](../adr/ADR-0011-modelo-neutro-do-atlas-e-contrato-dos-coletores.md) | Modelo neutro do atlas e contrato dos coletores | accepted | SPEC-0033 |
 | [ADR-0012](../adr/ADR-0012-curadoria-de-convencoes-do-atlas.md) | Curadoria de convenções do atlas | accepted | SPEC-0037 |
 | [ADR-0013](../adr/ADR-0013-conector-do-provedor-como-canal-de-captura-e-leitura.md) | Conector do provedor como canal de captura e leitura | accepted | SPEC-0044 |
+| [ADR-0014](../adr/ADR-0014-itens-confidenciais-referencia-ao-cofre-e-opacidade.md) | Itens confidenciais: referência ao cofre e opacidade | proposed | SPEC-0050 |
+| [ADR-0015](../adr/ADR-0015-rotacao-de-backups-como-unica-remocao-do-brain-py.md) | Rotação de backups como única remoção do brain.py | proposed | SPEC-0051 |
