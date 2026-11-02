@@ -179,7 +179,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=11, errors=17)); nota: red da org-atlas conferido em worktree limpa em ef6af55: FAILED (failures=11, errors=17), só testes da SPEC-0036; se a cadeia parar antes, é o SPEC-0004:IT-10 (tempo, sob carga) — ef6af55 | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 4f98aa9 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 4f98aa9 | 2026-11-02 |
-| G4 Review | FAIL | Reviewer (rodada 1, ba799c7): CHANGES_REQUESTED — M1: nomes das páginas de serviço não são estáveis nem seguros contra colisão (caixa em sistema de arquivos sem diferença de caixa apaga notas do time; nome muda de serviço quando um id colidente some); menores: id longo derruba o build, nomes reservados do Windows, scan --json sem objeto quando o build falha | 2026-11-02 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 2, 4f98aa9): APPROVED — M1 corrigido (casos do Mac reproduzidos, nenhuma nota perdida em ataques à regra de dono); menores: reivindicação fraca ou duplicada pode tomar a página de um serviço ativo quando uma pessoa edita o marcador — 4f98aa9 | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
