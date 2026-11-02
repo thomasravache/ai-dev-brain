@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.1] - 2026-11-02
+
+### Fixed
+- `SKILL.md`: `description` reescrita com 841 caracteres (antes 1149), dentro do limite de 1024 do upload de skills no claude.ai, mantendo todos os gatilhos e comandos; teste novo garante `description` ≤ 1024 e `name` ≤ 64 em `[a-z0-9-]` (SPEC-0043).
+
 ## [2026.10.12] - 2026-10-30
 
 ### Added
