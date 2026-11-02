@@ -75,7 +75,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — 3607a19 | 2026-11-02 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=1)) — 09281d9 | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 7a75b81 | 2026-11-02 |
-| G3 Arquitetura | PENDING | | |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 14d0c16 | 2026-11-02 |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
