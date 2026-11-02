@@ -71,9 +71,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — c22deb1 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — c22deb1 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 2, c22deb1): APPROVED — M1 fechado (atlas.py config --json conferido contra org_context; values.atlas confirmado num atlas descartável); menores aceitos: exit 2 do config --json (credencial colada) e comparação sem resolver symlinks — c22deb1 | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #20 em 3fc93b6 verde (run 41490752235 Python 3.9/3.15; run 41490752237 sdd/pr-check) — 8545bdd | 2026-11-02 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
