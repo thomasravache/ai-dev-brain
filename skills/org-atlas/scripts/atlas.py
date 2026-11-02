@@ -2327,6 +2327,20 @@ def cmd_context(args):
     return 0
 
 
+# ---------------------------------------------------------------- lint (read-only checks of the atlas)
+
+def lint_rules(only=None) -> list:
+    raise NotImplementedError("SPEC-0039: lint_rules")
+
+
+def run_lint(atlas: Path, rules=None, today=None) -> list:
+    raise NotImplementedError("SPEC-0039: run_lint")
+
+
+def cmd_lint(args):
+    raise NotImplementedError("SPEC-0039: lint")
+
+
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
@@ -2616,6 +2630,9 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("build", help="junta os snapshots no graph.json, infere relações e gera as páginas")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("lint", help="só lê e aponta o que precisa de atenção no atlas (segredos, coletores, referências)")
+    p.add_argument("--only", help="regras separadas por vírgula")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("context", help="pacote só de leitura do atlas para uma tarefa (serviços, dependências, convenções)")
     p.add_argument("query", nargs="+", help="termos da tarefa")
     p.add_argument("--hops", type=int, default=1, help="passos no grafo a partir dos serviços encontrados (0..2)")
@@ -2649,6 +2666,8 @@ def main(argv=None):
             return cmd_scan(args.only, args.json)
         if args.command == "build":
             return cmd_build(args.json)
+        if args.command == "lint":
+            return cmd_lint(args)
         if args.command == "context":
             return cmd_context(args)
         if args.command == "curate":
