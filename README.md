@@ -12,7 +12,7 @@ Skills e materiais de apoio para desenvolvimento com agentes de IA (Claude Code,
 
 ## Próximos passos e nomes futuros
 
-Em andamento: a skill `org-atlas` (SPEC-0029), que já tem o esqueleto, a configuração e o `doctor` (SPEC-0032); coletores, páginas de serviço, `context` e `lint` vêm nas próximas specs. Em rascunho, ainda sem aprovação: probes só de leitura na infraestrutura (SPEC-0030) e a distribuição como plugin e servidor MCP (SPEC-0031).
+Em andamento: a skill `org-atlas` (SPEC-0029), que já tem o esqueleto, a configuração e o `doctor` (SPEC-0032), o `scan` com o contrato dos coletores (SPEC-0033) e os coletores `generic` e GitHub (SPEC-0034); demais coletores, páginas de serviço, `context` e `lint` vêm nas próximas specs. Em rascunho, ainda sem aprovação: probes só de leitura na infraestrutura (SPEC-0030) e a distribuição como plugin e servidor MCP (SPEC-0031).
 
 O conjunto vai ganhar a marca **Hadron** (`hadron-lab` no repositório, marketplace e domínio; `hadron` como plugin). A troca de nomes fica para depois, e os nomes atuais continuam valendo como apelidos na transição. O tema é **partículas**: cada parte é uma partícula cujo papel na física espelha o papel dela. Cada skill segue o padrão `<nome>-<função>`, porque o nome é o que ajuda o agente a entender quando usá-la.
 

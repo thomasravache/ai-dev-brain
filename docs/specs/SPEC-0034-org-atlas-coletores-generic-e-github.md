@@ -160,27 +160,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Coletor generic**
-- [ ] Red: UT-05, IT-04 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
-- [ ] Green: `assets/collectors/generic.py` e `references/collectors/generic.md`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-05, IT-04 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
+- [x] Green: `assets/collectors/generic.py` e `references/collectors/generic.md`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Coletor GitHub**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-06, IT-01, IT-02, IT-03 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
-- [ ] Green: `assets/collectors/github.py` com `--input`, fixtures da organização `acme`, `gh` falso e `references/collectors/github.md`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-06, IT-01, IT-02, IT-03 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
+- [x] Green: `assets/collectors/github.py` com `--input`, fixtures da organização `acme`, `gh` falso e `references/collectors/github.md`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Contrato**
-- [ ] Red: CT-01 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
-- [ ] Green: ajustes para a saída passar no validador da SPEC-0033@1; teste de arquitetura cobrindo `assets/collectors/`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: CT-01 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
+- [x] Green: ajustes para a saída passar no validador da SPEC-0033@1; teste de arquitetura cobrindo `assets/collectors/` (biblioteca padrão pela SPEC-0032:UT-05; regra de `subprocess` na SPEC-0043)
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`; o `ATLAS_VERSION` sobe na SPEC-0036, no mesmo PR #20 (`atlas.py` fora do `touches`)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -207,36 +207,57 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Dois coletores da `org-atlas` chamados pelo `scan`: o `generic` converte um arquivo de fatos escrito à mão na saída `org-atlas/collector@1`; o `github` mapeia uma organização do GitHub (repositórios, pipelines dos workflows, times do CODEOWNERS) e gera os sinais de convenção `pr-titles`, `branch-prefixes`, `merge-methods` e `pr-template`, só com contagens e uma amostra de até 10 títulos — sem logins de autores, corpo de PR ou código. `--input` permite rodar com respostas gravadas, sem rede.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `assets/collectors/generic.py` e `github.py`: scripts de biblioteca padrão no padrão do `atlas.py` (funções puras de mapeamento, classe de erro, `main` que devolve o exit code, `erro:` no stderr). O `github.py` chama `gh api` por `subprocess` com lista de argumentos, sem shell, timeout de 120 s e prompts desligados; listas com `--paginate` lidas como fluxo de JSON; PRs paginados à mão até `--pr-sample`.
+- **Emenda v2** (IMP-01): `merge-methods` vira a política do repositório (`allow_*`) e `pr-template` ganha fonte (contents API em `.github/`, raiz e `docs/`) e entrada no `--input`; UT-06 novo.
+- **Revisão G4** (2 rodadas): a 1ª achou vazamento de logins em `branch-prefixes` (branches `<login>/...`), contra a seção 5. Correção sem mudar o contrato: só prefixos de tipo conhecidos viram chave; o resto conta só no total. Na mesma rodada: times, `--org` e `--repos` sem diferença de caixa, ids pelo `full_name`, mensagem própria para o limite de requisições e robustez a entradas estranhas, cada um com teste de regressão (3545a4d) antes da correção (0ef159b).
+- Guias em `references/collectors/generic.md` e `github.md`; entrada em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`.
+- **Dívidas conhecidas (cosméticas, da revisão):** ids de repositório mantêm a caixa da API enquanto os de time são minúsculos; o aviso de repositório não encontrado mostra o nome em minúsculas.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Padrões de título e prefixos de branch | PASS | `test_collector_github.py::TitlePatternsTest` (3 testes + `test_branch_prefixes_count_only_known_types`) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| UT-02 | Repositório só com os atributos do contrato, id pelo `full_name` | PASS | `MapRepositoryTest` (2 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| UT-03 | Um `pipeline` por workflow e `builds`; saída paginada | PASS | `MapWorkflowsTest` (3 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| UT-04 | Só times do CODEOWNERS viram `team` + `owns`, sem diferença de caixa | PASS | `ParseCodeownersTest` (3 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| UT-05 | Fatos viram a saída do contrato com `source` | PASS | `test_collector_generic.py::ConvertFactsTest` (2 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| UT-06 | `merge-methods` e `pr-template` com `present` de booleanos; omissão com aviso | PASS | `MapPolicyTest` (3 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| IT-01 | `--input` gera a saída esperada; `--pr-sample`, `--repos`, caixa, logins, CODEOWNERS não UTF-8 | PASS | `InputFolderTest` (7 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| IT-02 | `gh` falso no PATH dá a mesma saída; paginação real e mais de uma página | PASS | `FakeGhTest` (5 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| IT-03 | `gh` sem autenticação, ausente, organização inexistente, 403 e limite de requisições saem com 1 | PASS | `GhFailureTest` (5 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| IT-04 | `generic.py` válido sai com 0; arquivo inválido ou fato sem `kind`/`id` sai com 1 e o motivo | PASS | `GenericCliTest` (3 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
+| CT-01 | Saídas passam no `validate_collector_output` e o `scan` com os dois coletores termina OK | PASS | `GenericContractTest` + `GithubContractTest` (3 testes) — CI do PR #20 em b5c8120 (run 41415077562, Python 3.9 e 3.15) e suíte local em 0ef159b (G2) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em b5c8120
+- [x] Review independente sem achados blocker/major (G4) — 2ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — segurança, privacidade e resiliência provadas por IT-01/IT-03 e pela revisão; desempenho com 300 repositórios fica para o primeiro uso real, como a seção 5 prevê (sem bloquear o MVP)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — relatório do `scan`; rollback removendo o coletor do `atlas-config.yml`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `skills/org-atlas/CHANGELOG.md` e guias dos coletores
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0043 e SPEC-0036
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; na branch `sdd/SPEC-0029`, PR #20, em `[Unreleased]` do CHANGELOG da skill.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0043 — regra de arquitetura dos coletores (`subprocess` só para o executável do provedor, sem shell; UT-04 dela), que pedia `test_architecture.py`, fora do `touches` desta spec.
+- SPEC-0036 — sobe o `ATLAS_VERSION` e liga os guias novos no `SKILL.md` no mesmo PR #20 (ADR-0010: versão e CHANGELOG no mesmo PR); `atlas.py` e `SKILL.md` estão fora do `touches` desta spec.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0034`. -->
