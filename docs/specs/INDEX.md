@@ -1,11 +1,11 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-10-30 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-02 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 15 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 10, implemented 26
+- Validação (G0): **3 erro(s), 16 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 10, implemented 27
 - Impedimentos: **0 aberto(s)**, 14 resolvido(s)
 
 ## Cobertura de Pilares
@@ -140,6 +140,7 @@ flowchart LR
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
+| [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 
 ## ADRs
 
