@@ -22,6 +22,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ### Changed
 - Notas com `confidential: true` ficam fora de `search`, `related`, `context` e `links` (resultados, vizinhas, links de saída e backlinks; um link para elas não é "quebrado"), dos MOCs (região `notes`) e do `recent`/contagem do `index.md`, a menos que `--include-confidential`; `related --note` e `links` numa nota confidencial sem a opção saem com 2. O `export-notebooklm` nunca inclui nota confidencial e recusa um MOC confidencial (exit 2). O `lint` não acusa `orphan` numa nota confidencial. Notas sem a marca não mudam (SPEC-0050).
+- Revisão (Emenda v2): a marca `confidential: true` vale com fim de linha CRLF e com BOM do UTF-8 (busca, `context`, `links`, `index`, exportação e `doctor`; o frontmatter de notas com BOM passa a ser lido); na exportação, um wikilink para nota confidencial (com `#seção` ou `|apelido`) vira `[confidencial]`, sem o título; cartão com dígitos todos iguais não conta; `vault_ref` com caractere de controle é recusado; achados do `lint` de um mesmo arquivo saem pela linha em ordem numérica (SPEC-0050).
 
 ## [2026.11.2] - 2026-11-02
 

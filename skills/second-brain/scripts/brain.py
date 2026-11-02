@@ -173,9 +173,10 @@ CONFLICT_PATTERNS = {provider: GENERIC_CONFLICT_PATTERNS for provider in PROVIDE
 REQUIRED_FIELDS = ("title", "created")  # frontmatter of a note of the skill's types (references/note-types.md)
 # confidential items (SPEC-0050, ADR-0014; references/confidential.md)
 SECRET_REF_TYPE = "secret-ref"
-VAULT_REF_RE = re.compile(r"^[a-z][a-z0-9+.-]*://\S[^\x00-\x1f\x7f]*$")  # <esquema>://<caminho>, never opened
+VAULT_REF_RE = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\x00-\x1f\x7f][^\x00-\x1f\x7f]*")  # fullmatch; never opened
 CONFIDENTIAL_LINE_RE = re.compile(r"^confidential[ \t]*:[ \t]*(?:true|True|TRUE)[ \t]*(?:#.*)?$", re.MULTILINE)
 NOT_EXTRACTED = "_(confidential: not extracted)_"
+CONFIDENTIAL_LINK = "[confidencial]"  # what the export writes in place of a link to a confidential note
 INCLUDE_CONFIDENTIAL = "--include-confidential"
 CONFIDENTIAL_REFUSED = f"nota confidencial — use {INCLUDE_CONFIDENTIAL} só se a pessoa pedir para incluí-la"
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
@@ -811,9 +812,9 @@ class Note:
 
 
 def read_frontmatter(text: str):
-    """(frontmatter, body, problem): YAML between a first line "---" and the next "---" (or "..."). Invalid or
-    unclosed YAML gives {} and the problem, never an exception."""
-    first, sep, rest = text.partition("\n")
+    """(frontmatter, body, problem): YAML between a first line "---" and the next "---" (or "..."); a leading BOM
+    is ignored. Invalid or unclosed YAML gives {} and the problem, never an exception."""
+    first, sep, rest = text.lstrip("\ufeff").partition("\n")
     if first.rstrip() != "---" or not sep:
         return {}, text, None
     end = FRONTMATTER_END_RE.search(rest)
@@ -916,12 +917,13 @@ def parse_note(path: str, text: str, contexts=None) -> Note:
 def is_vault_ref(value) -> bool:
     """True only for "<esquema>://<caminho>": scheme [a-z][a-z0-9+.-]*, non-empty path. Only the format is checked:
     brain.py never resolves nor opens the reference (ADR-0014)."""
-    return isinstance(value, str) and bool(VAULT_REF_RE.match(value))
+    return isinstance(value, str) and bool(VAULT_REF_RE.fullmatch(value))
 
 
 def frontmatter_block(text: str) -> str:
-    """The raw YAML between the first "---" and the next "---" (or "..."); "" without a closed frontmatter."""
-    first, sep, rest = (text or "").partition("\n")
+    """The raw YAML between the first "---" and the next "---" (or "..."), with "\n" line endings (a leading BOM
+    and CRLF endings do not hide it); "" without a closed frontmatter."""
+    first, sep, rest = (text or "").lstrip("\ufeff").replace("\r\n", "\n").partition("\n")
     end = FRONTMATTER_END_RE.search(rest) if first.rstrip() == "---" and sep else None
     return rest[:end.start()] if end else ""
 
@@ -1022,9 +1024,9 @@ def valid_cnpj(text: str) -> bool:
 
 
 def valid_card(text: str) -> bool:
-    """13 to 19 digits that pass the Luhn check."""
+    """13 to 19 digits, not all the same, that pass the Luhn check."""
     d = _digits(text)
-    if not 13 <= len(d) <= 19:
+    if not 13 <= len(d) <= 19 or len(set(d)) == 1:
         return False
     total = sum(digit if i % 2 == 0 else (digit * 2 - 9 if digit > 4 else digit * 2)
                 for i, digit in enumerate(reversed(d)))
@@ -1472,15 +1474,18 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
 
 # ---------------------------------------------------------------- export: NotebookLM package (pure; SPEC-0024)
 
-def flatten_links(text: str) -> str:
+def flatten_links(text: str, hidden=None) -> str:
     """Wikilinks as plain text ([[Nota]] -> "Nota", [[Nota|apelido]] -> "apelido", [[Nota#seção]] -> "Nota >
     seção") and attachment embeds as "(anexo: nome)" (![[grafico.png]]); code (fenced blocks of fenced_lines and
-    inline `code` or ``code``) and the rest of the text do not change."""
+    inline `code` or ``code``) and the rest of the text do not change. hidden(page) True = the link (alias and
+    section included) becomes CONFIDENTIAL_LINK: the export never writes the title of a confidential note."""
     def plain(match) -> str:
         target, _, alias = match.group(1).partition("|")
         target = target.rstrip("\\").strip()
         page, _, section = target.partition("#")
         page, section = page.strip(), section.strip()
+        if hidden is not None and page and hidden(page):
+            return CONFIDENTIAL_LINK
         name = posixpath.basename(page)
         if match.group(0).startswith("!") and posixpath.splitext(name)[1].lower() not in ("", ".md"):
             return f"(anexo: {name})"
@@ -1518,11 +1523,11 @@ def export_notes(notes: list, moc: str, hops: int, values=None, include_confiden
     return picked
 
 
-def export_text(note: Note) -> str:
+def export_text(note: Note, hidden=None) -> str:
     """The note for the NotebookLM: the title as the first line (no frontmatter), the body without the
-    brain:begin/end markers and with flatten_links."""
+    brain:begin/end markers and with flatten_links (a link to a confidential note = CONFIDENTIAL_LINK)."""
     lines = [line for line in (note.body or "").splitlines() if not re.match(r"^\s*<!-- brain:(?:begin|end) ", line)]
-    body = flatten_links("\n".join(lines)).strip()
+    body = flatten_links("\n".join(lines), hidden).strip()
     title = flatten_links(note.title)
     first = body.splitlines()[0] if body else ""
     heading = HEADING_RE.match(first)
@@ -1561,12 +1566,14 @@ def export_package(notes: list, moc: str, hops: int, values=None) -> dict:
         raise BrainError("MOC confidencial — o export-notebooklm nunca exporta item confidencial")
     hidden = confidential_paths(notes)
     every = export_notes(notes, moc, hops, values, include_confidential=True) if hidden else []
+    index = LinkIndex(by_path)
+    secret = (lambda page: index.resolve(page) in hidden) if hidden else None
     taken = {export_key(name) for name in EXPORT_EXTRA}
     items, files = [], {}
     for path, origin in export_notes(notes, moc, hops, values):
         note = by_path[path]
         name = export_name(note.title, path, taken)
-        files[name] = export_text(note)
+        files[name] = export_text(note, secret)
         items.append({"path": path, "title": note.title, "origin": origin, "file": name})
     moc_title = flatten_links(by_path[moc].title)
     lines = [f"# Fontes — {moc_title}", "", f"Pacote para o NotebookLM exportado do MOC {moc} (hops: {hops}).", ""]
@@ -2739,7 +2746,7 @@ def cmd_index(args, config_home=None) -> int:
         paths.append(rel)
         if rel in own or (mocs and rel.startswith(mocs + "/")):
             continue
-        text = path.read_bytes().decode("utf-8", errors="replace")
+        text = path.read_bytes().decode("utf-8-sig", errors="replace")
         entry = index_entry(rel, text, contexts)
         if not entry.confidential:  # a confidential note is never listed (SPEC-0050)
             entries.append(entry)
@@ -3623,6 +3630,18 @@ def lint_rules(only=None) -> list:
     return [rule for rule in LINT_SEVERITY if rule in given]
 
 
+LINE_RULES = ("secret-in-note", "personal-data")  # rules whose path is "<caminho>:<linha>"
+
+
+def finding_place(finding: Finding) -> tuple:
+    """(path, line) to order findings: the line of LINE_RULES as a number (line 5 before line 17), else 0."""
+    if finding.rule in LINE_RULES:
+        path, _, line = finding.path.rpartition(":")
+        if path and line.isdigit():
+            return path, int(line)
+    return finding.path, 0
+
+
 def run_lint(values: dict, rules=None) -> list:
     """Findings of the rules (None = all) over a single scan of the vault, errors first; only reads."""
     rules = list(LINT_SEVERITY) if rules is None else rules
@@ -3631,7 +3650,7 @@ def run_lint(values: dict, rules=None) -> list:
     for rule in rules:
         found += LINT_CHECKS[rule](vault)
     order = {rule: i for i, rule in enumerate(LINT_SEVERITY)}
-    return sorted(found, key=lambda f: (f.severity != "error", order[f.rule], f.path, f.detail))
+    return sorted(found, key=lambda f: (f.severity != "error", order[f.rule]) + finding_place(f) + (f.detail,))
 
 
 def lint_summary(findings: list) -> dict:

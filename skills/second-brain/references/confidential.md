@@ -83,11 +83,13 @@ Com a marca, a nota:
 
 - fica fora de `search`, `related`, `context` e `links` (resultados, vizinhas, links de saída e backlinks). Um link para ela não vira "link quebrado": só não é listado. As saídas `--json` dizem quantas ficaram fora em `confidential_omitted`, sem citar nenhuma;
 - não aparece no MOC (região `notes`) nem no `recent` do `index.md`;
-- nunca vai para o pacote do `export-notebooklm` (não há opção para incluir); o texto que a pessoa escreveu no MOC fica como está;
+- nunca vai para o pacote do `export-notebooklm` (não há opção para incluir): um wikilink para ela em qualquer nota exportada (inclusive `[[Nota#parte]]` e `[[Nota|apelido]]`) vira o texto `[confidencial]`, então o título não aparece no pacote, no `combined.md` nem no `--json`. Um MOC confidencial não é exportado (exit 2);
 - não é acusada como `orphan` pelo `lint`;
 - só entra na contagem do `doctor`: `OK confidential — N notas confidenciais`, sem título nem caminho.
 
 `related --note` e `links` numa nota confidencial saem com 2 ("nota confidencial — use --include-confidential …").
+
+A marca vale com qualquer fim de linha (LF ou CRLF) e com o BOM do UTF-8 no início do arquivo. Links que a pessoa escreveu à mão em outras notas (no MOC, fora da região gerada, ou em qualquer nota comum) continuam mostrando o título dentro do vault: a proteção vale para o que os comandos devolvem e exportam. Depois de marcar uma nota como confidencial, rode `brain.py index` para tirá-la do MOC e do `index.md`.
 
 ## Regras para o agente
 
