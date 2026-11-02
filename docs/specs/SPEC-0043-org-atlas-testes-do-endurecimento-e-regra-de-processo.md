@@ -23,6 +23,7 @@ approved_at:
 Duas pendências da revisão (G4) da SPEC-0032:
 - **Regra de processo incompleta:** o checador de arquitetura do ADR-0010 (`skills/org-atlas/tests/architecture_rules.py`) só pega `subprocess.run(...)` e `os.system(...)` chamados pelo nome do módulo. `from subprocess import run`, `import subprocess as sp` e `from os import system` passam pela SPEC-0032:UT-05 sem aviso. Hoje o `atlas.py` não usa nada disso, mas a regra não protege contra o caso.
 - **Pendências da revisão da SPEC-0033 (minor):** a regra de chave proibida tem ruído nos dois sentidos (descarta `monkey`, `primary_key`, `sort_keys`, `tokenizer`, `public_key`; não pega `auth`) e o `scan` não confere se `collector` e `category` da saída batem com o id e a categoria configurados.
+- **Pendência da revisão da SPEC-0034 (G4, minor 7):** a SPEC-0034 pede o teste de arquitetura estendido aos coletores ("`subprocess` só para o executável do provedor", sem shell), mas `test_architecture.py` ficou fora do `touches` dela; hoje só a regra de biblioteca padrão cobre `assets/collectors/`.
 - **Endurecimento sem teste:** a correção do G4 (commit 6faff6c) trouxe comportamentos verificados só à mão: erro de sistema de arquivos sem traceback (exit 1), backups `.bak`, `.bak.1`…, `init --join` recusando `--org`/`--mode`/`--force`, ERRO para `atlas` relativo e mensagem própria para profile com espaço.
 
 ## 2. Causa Raiz
@@ -30,6 +31,7 @@ Os testes da SPEC-0032 foram congelados no commit red (04e58b5), antes da revis�
 
 ## 3. Mudança Proposta
 - `architecture_rules.py`: a regra de processo também reporta, fora de `run_collector`, imports de nomes de `subprocess` (`from subprocess import ...`), módulos com alias (`import subprocess as x`) e `from os import system`/`popen`/`exec*`/`spawn*`.
+- `architecture_rules.py`/`test_architecture.py`: em `assets/collectors/*.py`, `subprocess` só dentro da função que chama o executável do provedor (`run_gh` no `github.py`), sempre com lista de argumentos e sem `shell=True`; `os.system`/`popen` proibidos.
 - `tests/test_hardening.py`: testes de regressão para cada comportamento do endurecimento, pela CLI, em diretórios temporários.
 - `atlas.py`: só se algum teste mostrar diferença entre o que foi verificado à mão e o comportamento real; afinar a regra de chave proibida; `collector`/`category` diferentes da configuração viram violação (mudança aditiva no contrato `org-atlas/collector@1`, a confirmar no H1 desta spec).
 - **Não muda:** o contrato da SPEC-0032.
@@ -43,6 +45,7 @@ Os testes da SPEC-0032 foram congelados no commit red (04e58b5), antes da revis�
 ## 4. Plano de Testes (TDD)
 - Caracterização: N/A — os comportamentos já existem e os testes novos são de regressão.
 - **UT-01** — Dado código de exemplo com `from subprocess import run`, `import subprocess as sp` e `from os import system` fora de `run_collector`, quando a regra de processo roda, então os três são reportados; dentro de `run_collector`, nenhum.
+- **UT-04** — Dado um coletor de exemplo em `assets/collectors/` com `subprocess.run` fora da função do provedor, ou com `shell=True`, quando a regra de arquitetura roda, então ele é reportado; o `github.py` real não gera achado.
 - **IT-01** — Pela CLI: `init` em pasta sem permissão de escrita, `init` com `atlas-config.yml` que não é UTF-8 e `doctor` em pasta sem permissão saem com 1, com "erro:" ou ERRO, e sem traceback (guarda: passa antes da mudança).
 - **UT-02** — Dado chaves `monkey`, `primary_key`, `sort_keys`, `tokenizer`, `public_key` e `auth`, quando a regra de chave proibida roda, então só `auth` é descartada.
 - **UT-03** — Dado uma saída com `collector` ou `category` diferentes da declaração no `atlas-config.yml`, quando o `scan` valida, então há violação e o snapshot não é gravado.
