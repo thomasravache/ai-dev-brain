@@ -1,0 +1,223 @@
+{
+  "_comment": "Saída esperada de argocd.py sobre fixtures/argocd/acme (padrões de --env-label, --service-label e --ref-suffixes), sem contract/collector/category/collected_at.",
+  "entities": [
+    {
+      "kind": "deployment",
+      "id": "api-prod",
+      "name": "api-prod",
+      "attrs": {
+        "project": "payments",
+        "namespace": "payments-prod",
+        "sync_status": "Synced",
+        "health_status": "Healthy",
+        "config_refs": [
+          "CACHE_HOST=redis-prod.interno",
+          "DB_URL=db-prod.interno",
+          "EVENTS_TOPIC=payments.events"
+        ]
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "deployment",
+      "id": "api-staging",
+      "name": "api-staging",
+      "attrs": {
+        "project": "payments",
+        "namespace": "payments-staging",
+        "sync_status": "OutOfSync",
+        "health_status": "Progressing",
+        "config_refs": [
+          "DB_URL=db-staging.interno",
+          "ORDERS_QUEUE=orders-staging"
+        ]
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "deployment",
+      "id": "web",
+      "name": "web",
+      "attrs": {
+        "project": "frontend",
+        "namespace": "frontend",
+        "sync_status": "Synced",
+        "health_status": "Healthy",
+        "config_refs": [
+          "API_URL=api.acme.example",
+          "SENTRY_DSN=o0.ingest.example.io",
+          "UPLOADS_BUCKET=acme-uploads"
+        ]
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "deployment",
+      "id": "ingress-nginx",
+      "name": "ingress-nginx",
+      "attrs": {
+        "project": "platform",
+        "namespace": "ingress",
+        "sync_status": "Synced",
+        "health_status": "Healthy",
+        "config_refs": []
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "service",
+      "id": "api",
+      "name": "api",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "service",
+      "id": "web",
+      "name": "web",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "service",
+      "id": "ingress-nginx",
+      "name": "ingress-nginx",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "environment",
+      "id": "prod",
+      "name": "prod",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "environment",
+      "id": "staging",
+      "name": "staging",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "environment",
+      "id": "frontend",
+      "name": "frontend",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "cluster",
+      "id": "https://kubernetes.default.svc",
+      "name": "https://kubernetes.default.svc",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "cluster",
+      "id": "https://10.20.0.1:6443",
+      "name": "https://10.20.0.1:6443",
+      "attrs": {},
+      "source": "argocd"
+    },
+    {
+      "kind": "cluster",
+      "id": "eks-prod-1",
+      "name": "eks-prod-1",
+      "attrs": {},
+      "source": "argocd"
+    }
+  ],
+  "relations": [
+    {
+      "from": "deployment:api-prod",
+      "to": "service:api",
+      "type": "deploys",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:api-prod",
+      "to": "environment:prod",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:api-prod",
+      "to": "cluster:https://kubernetes.default.svc",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:api-prod",
+      "to": "repository:acme/api",
+      "type": "sourced_from",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:api-staging",
+      "to": "service:api",
+      "type": "deploys",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:api-staging",
+      "to": "environment:staging",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:api-staging",
+      "to": "cluster:https://10.20.0.1:6443",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:api-staging",
+      "to": "repository:acme/api",
+      "type": "sourced_from",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:web",
+      "to": "service:web",
+      "type": "deploys",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:web",
+      "to": "environment:frontend",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:web",
+      "to": "cluster:eks-prod-1",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:web",
+      "to": "repository:acme/web",
+      "type": "sourced_from",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:ingress-nginx",
+      "to": "service:ingress-nginx",
+      "type": "deploys",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:ingress-nginx",
+      "to": "environment:prod",
+      "type": "runs_in",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:ingress-nginx",
+      "to": "cluster:https://kubernetes.default.svc",
+      "type": "runs_in",
+      "source": "argocd"
+    }
+  ]
+}
