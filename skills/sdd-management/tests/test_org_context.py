@@ -12,6 +12,7 @@ sdd-config; o spec_graph.py não chama o atlas (ADR-0001, ADR-0010). Por isso os
 Os testes de CLI rodam em repositórios temporários com o registro do usuário isolado (SDD_CONFIG_HOME).
 """
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -70,6 +71,21 @@ def discover_section() -> str:
     return "\n".join(lines[start + 1:end])
 
 
+def paragraphs(text: str) -> list:
+    """Itens de lista (linhas "- " com suas continuações) ou parágrafos separados por linha em branco."""
+    blocks, current = [], []
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("- "):
+            if current:
+                blocks.append("\n".join(current))
+            current = [line] if line.strip() else []
+        else:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
 class TemplateKeyTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
@@ -109,6 +125,25 @@ class DiscoverInstructionTest(unittest.TestCase):
         section = discover_section()
         for fragment in ("org_context", "atlas.py context"):
             self.assertIn(fragment, section, f"seção DISCOVER do SKILL.md não cita {fragment!r}")
+
+    def test_atlas_identity_is_checked_against_local_org_atlas_config(self):
+        """SPEC-0041:UT-02 (revisão G4 M1: `atlas.py context` lê o atlas da config local da org-atlas; o DISCOVER
+        confere `atlas.py config --json` contra `org_context` e o modelo diz que a config local decide o atlas lido)"""
+        section = discover_section()
+        self.assertIn("atlas.py config", section, "seção DISCOVER do SKILL.md não cita 'atlas.py config'")
+        near = [para for para in paragraphs(section) if "atlas.py config" in para]
+        self.assertTrue(any("org_context" in para for para in near),
+                        "seção DISCOVER: 'atlas.py config' sem 'org_context' no mesmo item")
+
+        comments = dict(sg.missing_config_keys(TEMPLATE.read_text(encoding="utf-8"), {}))
+        self.assertIn("org_context", comments, "references/sdd-config.template.yml sem a chave org_context")
+        comment = re.sub(r"sdd-config", "", comments["org_context"])
+        self.assertIn("atlas", comment, f"comentário de org_context sem 'atlas': {comment!r}")
+        self.assertRegex(comment, r"\bconfig", "comentário de org_context não diz que a config local da org-atlas "
+                         f"decide o atlas lido: {comment!r}")
+
+        brownfield = (SKILL / "references" / "brownfield.md").read_text(encoding="utf-8")
+        self.assertIn("atlas.py config", brownfield, "references/brownfield.md não cita 'atlas.py config'")
 
 
 if __name__ == "__main__":
