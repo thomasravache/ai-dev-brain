@@ -198,9 +198,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a120ff4 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — a120ff4 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 1, a120ff4): APPROVED — garantia do ADR-0012 resistiu a injeção por argumentos e por sinais; regras por kind conforme a v2; menores: nome de repositório com marcador de região faz o arquivo crescer, rejeição vale só para o mesmo escopo, ids de convenção podem colidir, empate alfabético, --via aceita dígitos não ASCII — a120ff4 | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #20 em 1ab24d1 verde (run 41471531830 Python 3.9/3.15; run 41471536190 sdd/pr-check) — 1ab24d1 | 2026-11-02 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
