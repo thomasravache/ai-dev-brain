@@ -174,7 +174,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=9, errors=16)); nota: red da org-atlas conferido em worktree limpa em dc295e8: FAILED (failures=9, errors=16), só testes da SPEC-0039; se a cadeia parar antes, é o SPEC-0004:IT-10 (tempo, sob carga) — dc295e8 | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 6bb888d | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6bb888d | 2026-11-02 |
-| G4 Review | FAIL | Reviewer (rodada 2, 18db97f): CHANGES_REQUESTED — B1: nomes são verificados por componente mas mascarados no caminho inteiro; um extra_pattern ancorado (^...$) acusa e imprime o valor (pasta, arquivo sem extensão, caminho da convenção), no texto e no --json; achados da rodada 1 todos corrigidos; menor: link para pasta ilegível vira broken-ref | 2026-11-02 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 3, 6bb888d): APPROVED — B1 da rodada 2 corrigido (máscara por componente e por radical em path, detail, suggestion, --json e stderr); rodadas anteriores conferidas de novo; 3 menores de máscara em padrões extras montados para isso, na SPEC-0048 — 6bb888d | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |

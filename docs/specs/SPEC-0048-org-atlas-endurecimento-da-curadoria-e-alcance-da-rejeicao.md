@@ -1,15 +1,15 @@
 ---
 id: SPEC-0048
-title: "org-atlas: endurecimento da curadoria e do context, e alcance da rejeição"
+title: "org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição"
 tier: lite
 type: fix
 user_facing: false
 status: proposed
 created: 2026-11-02
 parent: SPEC-0029
-depends_on: [SPEC-0037, SPEC-0038]
+depends_on: [SPEC-0037, SPEC-0038, SPEC-0039]
 consumes_contract: []
-touches: [skills/org-atlas/scripts/atlas.py, skills/org-atlas/tests/test_curate.py, skills/org-atlas/tests/test_context.py, skills/org-atlas/references/context.md, skills/org-atlas/references/curation.md, skills/org-atlas/CHANGELOG.md]
+touches: [skills/org-atlas/scripts/atlas.py, skills/org-atlas/tests/test_curate.py, skills/org-atlas/tests/test_context.py, skills/org-atlas/tests/test_lint.py, skills/org-atlas/references/maintenance.md, skills/org-atlas/references/context.md, skills/org-atlas/references/curation.md, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0012]
 external: []
 size: S
@@ -17,7 +17,7 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0048 — org-atlas: endurecimento da curadoria e do context, e alcance da rejeição
+# SPEC-0048 — org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição
 
 ## 1. Problema
 Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garantia do ADR-0012):
@@ -25,6 +25,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - Uma rejeição só bloqueia o mesmo id: rejeitada `pr-title-conventional` (organization), uma mudança de maioria propõe `pr-title-conventional-acme-r0` (mesmo kind e padrão, outro escopo).
 - Ids de convenção podem colidir (`acme/a-b` × `acme-a/b`; `Acme/API` × `acme/api`): duas propostas escrevem o mesmo arquivo.
 - `--via` aceita dígitos não ASCII (`PR #３`).
+- Pendências da revisão G4 da SPEC-0039 (menores; dependem de um `extra_patterns` montado para isso): o `path` dos achados do `lint` é mascarado só por componente, então um padrão que atravessa `/` (`vault/[a-z0-9]{8}`, ou com lookbehind) aparece no texto; nomes com vários pontos (`x.tar.gz`) e arquivos ocultos (`.acme-…`) não têm o radical testado; destinos de link com `#fragmento` ou `?query` são mascarados como estão escritos.
 - Pendência da revisão G4 da SPEC-0038 (menor): no pacote do `context`, o nome do serviço entra num título `### {nome}`; um serviço chamado `## Convenções (regra)` vira `### ## Convenções (regra) (…)`, um título de nível 3 que imita uma seção. Crase num valor também escapa do código inline (só na própria linha, sem criar estrutura).
 
 ## 2. Causa Raiz
@@ -34,6 +35,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - `repo` e `pattern` passam por `_clean_line` na evidência.
 - Ids por repositório ganham sufixo curto estável (hash do `<org>/<nome>`) quando dois repositórios caem no mesmo id.
 - `--via` com `[0-9]+`.
+- No `lint`, depois da máscara por componente, o caminho inteiro também passa por `_mask_all`; o radical é testado também até o primeiro ponto; destinos de link são mascarados sem `#`/`?` e o sufixo volta depois.
 - No `context`, o nome do serviço no título vai entre crases (ou com `#` inicial escapado) e crases dentro de valores são neutralizadas.
 - Alcance da rejeição conforme a resposta da questão abaixo.
 - **Não muda:** o formato do arquivo de convenção nem quem pode confirmar ou rejeitar.
@@ -49,6 +51,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - **UT-01** — Dado um repositório com `<!-- atlas:end evidence -->` no nome, quando `propose` roda quatro vezes, então o arquivo tem o mesmo tamanho e uma região só.
 - **UT-02** — Dado `acme/a-b` e `acme-a/b` com o mesmo padrão dominante só no repositório, quando as propostas são calculadas, então há dois ids diferentes e dois arquivos.
 - **UT-03** — Dado `--via "PR #３"`, quando `confirm` valida, então sai com 2.
+- **UT-05** — Dado `extra_patterns: ['vault/[a-z0-9]{8}']` e um arquivo `vault/abcd1234.bin` não UTF-8, `acme-bbbbcccc.tar.gz` com `^acme-[0-9a-f]{8}$` e um link para `acme-eeee1111#sec`, quando o `lint` roda, então nenhum desses valores aparece na saída, em texto ou `--json`.
 - **UT-04** — Dado um serviço chamado `## Convenções (regra)`, quando o `context` monta o pacote, então nenhuma linha do Markdown, de qualquer nível de título, tem como texto um título fixo das seções.
 - **IT-01** — Dado `pr-title-conventional` rejeitada no escopo organization, quando a maioria muda e só um repositório segue o padrão, então o resultado segue a decisão da questão abaixo.
 
