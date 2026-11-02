@@ -8,7 +8,9 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 - processo externo só dentro da função run_processor (ADR-0009), que existe, roda o processo e nunca usa shell
   (SPEC-0022:UT-04);
 - nenhum caminho pessoal absoluto em arquivos de skills/second-brain/ fora de tests/ (placeholders como
-  /Users/<nome> são permitidos).
+  /Users/<nome> são permitidos);
+- remoção de arquivo (os.remove, os.unlink, Path.unlink, os.rmdir, Path.rmdir, shutil.rmtree) só em
+  rotate_backups e na lista fechada de limpezas do que a própria chamada criou (ADR-0015, SPEC-0051:UT-07).
 """
 import ast
 import unittest
@@ -17,11 +19,14 @@ from brain_architecture_rules import (
     cross_skill_path_findings,
     import_findings,
     personal_path_findings,
+    removal_findings,
     subprocess_findings,
 )
 from brain_support import SCRIPT, SKILL
 
 ALLOWED_PROCESS_FUNCTIONS = ("run_processor",)
+# ADR-0015: entrar nesta lista exige emenda do ADR (emenda v1 da SPEC-0051)
+ALLOWED_REMOVAL_FUNCTIONS = ("rotate_backups", "write_export", "copy_to_files", "move_out_of_inbox")
 
 
 def report(findings):
@@ -114,6 +119,60 @@ class ProcessRulesTest(unittest.TestCase):
         shell = [node.lineno for node in ast.walk(tree) if isinstance(node, ast.keyword) and node.arg == "shell"
                  and not (isinstance(node.value, ast.Constant) and node.value.value is False)]
         self.assertEqual(shell, [], f"shell= em brain.py (linhas {shell}): processos rodam sem shell (ADR-0009)")
+
+
+class RemovalRulesTest(unittest.TestCase):
+    def test_removal_outside_the_allowed_functions_is_reported(self):
+        """SPEC-0051:UT-07"""
+        source = (
+            "import os\n"
+            "import shutil\n"
+            "from pathlib import Path\n"
+            "def rotate_backups(folder, keep):\n"
+            "    os.remove(folder / 'a.zip')\n"
+            "    (folder / 'b.zip').unlink()\n"
+            "def write_export(folder, files):\n"
+            "    shutil.rmtree(folder, ignore_errors=True)\n"
+            "def cmd_restore(args):\n"
+            "    Path(args.note).unlink()\n"
+            "    os.unlink(args.note)\n"
+            "def tidy(folder):\n"
+            "    folder.rmdir()\n"
+            "    os.rmdir(folder)\n"
+            "    shutil.rmtree(folder)\n"
+            "    names = ['a']\n"
+            "    names.remove('a')\n"
+            "from os import remove\n"
+        )
+        allowed = ("rotate_backups", "write_export")
+        findings = removal_findings(source, "scripts/brain.py", allowed)
+        self.assertEqual(len(findings), 6, report(findings))
+        self.assertIn("scripts/brain.py:10", findings[0])
+        self.assertIn("cmd_restore", findings[0])
+        self.assertIn("scripts/brain.py:11", findings[1])
+        self.assertIn("os.unlink", findings[1])
+        self.assertIn("scripts/brain.py:13", findings[2])
+        self.assertIn("tidy", findings[2])
+        self.assertIn("scripts/brain.py:14", findings[3])
+        self.assertIn("os.rmdir", findings[3])
+        self.assertIn("scripts/brain.py:15", findings[4])
+        self.assertIn("shutil.rmtree", findings[4])
+        self.assertIn("scripts/brain.py:18", findings[5])
+        self.assertIn("remove", findings[5])
+
+    def test_brain_removes_files_only_in_rotate_backups_and_the_closed_cleanup_list(self):
+        """SPEC-0051:UT-07"""
+        findings = removal_findings(script_source(), "scripts/brain.py", ALLOWED_REMOVAL_FUNCTIONS)
+        self.assertEqual(findings, [], report(findings))
+
+    def test_rotate_backups_exists_and_is_where_backups_are_removed(self):
+        """SPEC-0051:UT-07"""
+        tree = ast.parse(script_source())
+        functions = [node for node in ast.walk(tree)
+                     if isinstance(node, ast.FunctionDef) and node.name == "rotate_backups"]
+        self.assertEqual(len(functions), 1, "brain.py precisa de uma função rotate_backups (ADR-0015, SPEC-0051)")
+        inside = removal_findings(ast.unparse(functions[0]), "scripts/brain.py", allowed=())
+        self.assertTrue(inside, "rotate_backups precisa ser onde os backups antigos são removidos (ADR-0015)")
 
 
 class PersonalPathRulesTest(unittest.TestCase):
