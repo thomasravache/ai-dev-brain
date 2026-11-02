@@ -2329,16 +2329,290 @@ def cmd_context(args):
 
 # ---------------------------------------------------------------- lint (read-only checks of the atlas)
 
+LINT_RULES = ("secret-leak", "config", "failed-collector", "stale", "broken-ref", "pending-convention",
+              "orphan-page")
+LINT_ERRORS = ("secret-leak", "config", "failed-collector")
+VCS_DIRS = (".git", ".hg", ".svn", ".bzr", "_darcs", ".jj")
+LINT_IGNORED_FILES = (".DS_Store", "Thumbs.db", "desktop.ini")
+SECRET_REGEXES = tuple((name, re.compile(regex, re.DOTALL)) for name, regex in SECRET_PATTERNS)
+LINK_RE = re.compile(r"!?\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?(?:\s+[\"'][^)]*[\"'])?\s*\)")
+CODE_SPAN_RE = re.compile(r"`[^`\n]*`")
+EXTERNAL_LINK_RE = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|//|#)")  # http:, https:, mailto:, //host, #anchor
+LINT_SUGGESTIONS = {
+    "secret-leak": "apague o valor do arquivo (o histórico do git também guarda) e troque a credencial; nunca copie "
+                   "o valor para outro lugar",
+    "failed-collector": "rode `atlas.py scan --only <id>` e veja o motivo da FALHA (credencial, timeout, contrato)",
+    "stale": "rode `atlas.py scan` (ou `scan --only <id>`) para atualizar os fatos desse coletor",
+    "pending-convention": "mostre a evidência a uma pessoa e registre a decisão: `atlas.py curate confirm <id> --by "
+                          "NOME --via \"PR #n\"|local` ou `curate reject <id> ...`",
+    "orphan-page": "confirme com o time se a entidade foi desligada; se sim, apague a página (decisão do time) ou "
+                   "mova as notas para outra página",
+}
+
+
 def lint_rules(only=None) -> list:
-    raise NotImplementedError("SPEC-0039: lint_rules")
+    """The rules of --only ("a,b") in report order; None = all of them. Unknown rule = AtlasError (code 2)."""
+    if only in (None, ""):
+        return list(LINT_RULES)
+    wanted = [name.strip() for name in str(only).split(",") if name.strip()]
+    unknown = [name for name in wanted if name not in LINT_RULES]
+    if unknown:
+        raise AtlasError(f"regra desconhecida em --only: {', '.join(unknown)} — use: {', '.join(LINT_RULES)}", 2)
+    return [rule for rule in LINT_RULES if rule in wanted]
+
+
+def _finding(rule, path, detail, suggestion=None) -> dict:
+    return {"rule": rule, "severity": "error" if rule in LINT_ERRORS else "warn", "path": path, "detail": detail,
+            "suggestion": suggestion or LINT_SUGGESTIONS.get(rule, "")}
+
+
+class _AtlasFiles:
+    """Every file of the atlas (VCS folders skipped), read once as UTF-8 text; unreadable ones are recorded."""
+
+    def __init__(self, atlas: Path):
+        self.atlas, self.texts, self.unreadable = atlas, {}, {}
+        for root, dirs, files in os.walk(atlas):
+            dirs[:] = sorted(d for d in dirs if d not in VCS_DIRS)
+            for name in sorted(files):
+                if name in LINT_IGNORED_FILES:
+                    continue
+                path = Path(root) / name
+                rel = path.relative_to(atlas).as_posix()
+                try:
+                    self.texts[rel] = path.read_bytes().decode("utf-8")
+                except UnicodeDecodeError:
+                    self.unreadable[rel] = "não é UTF-8"
+                except OSError as e:
+                    self.unreadable[rel] = e.strerror or str(e)
+        self.bad_json = {}
+
+    def json(self, rel):
+        """Parsed JSON of a file, or None (missing, unreadable or invalid: invalid is recorded in bad_json)."""
+        if rel not in self.texts:
+            return None
+        try:
+            return json.loads(self.texts[rel])
+        except ValueError as e:
+            self.bad_json[rel] = f"JSON inválido: {e.msg} (linha {e.lineno})"
+            return None
+
+
+def _lint_secrets(files: _AtlasFiles, extras) -> list:
+    """secret-leak: each match of a redaction pattern (built-in and extra_patterns) in any file, by file:line and
+    pattern name; never the value."""
+    findings, seen = [], set()
+    patterns = list(SECRET_REGEXES) + [(f"extra_patterns[{i}]", p) for i, p in enumerate(extras)]
+    for rel, text in files.texts.items():
+        for name, regex in patterns:
+            for match in regex.finditer(text):
+                if not match.group(0):
+                    continue
+                line = text.count("\n", 0, match.start()) + 1
+                if (rel, line, name) in seen:
+                    continue
+                seen.add((rel, line, name))
+                findings.append(_finding("secret-leak", f"{rel}:{line}", f"padrão {name} (o valor não é mostrado)"))
+    return findings
+
+
+def _lint_config(files: _AtlasFiles, shared, problems) -> list:
+    findings = [_finding("config", SHARED_FILE, problem, "corrija o atlas-config.yml (references/config.md e "
+                                                         "references/collector-contract.md)") for problem in problems]
+    for rel, reason in sorted({**files.unreadable, **files.bad_json}.items()):
+        findings.append(_finding("config", rel, f"arquivo ilegível: {reason}",
+                                 "regrave o arquivo em UTF-8 válido; se é gerado (snapshots/, graph.json, regiões), "
+                                 "rode `atlas.py scan`"))
+    return findings
+
+
+def _shared_problems(files: _AtlasFiles) -> tuple:
+    """(shared configuration, problems) of atlas-config.yml: unreadable, check_shared, unknown keys, collectors,
+    redaction and curation."""
+    if SHARED_FILE not in files.texts:
+        return {}, [] if SHARED_FILE in files.unreadable else [f"{SHARED_FILE} não existe — rode init"]
+    try:
+        shared = parse_yaml(files.texts[SHARED_FILE])
+    except ValueError as e:
+        return {}, [f"YAML inválido: {e}"]
+    problems = check_shared(shared)
+    problems += [f"chave desconhecida: {key} (válidas: {', '.join(SHARED_KEYS)})" for key in shared
+                 if key not in SHARED_KEYS]
+    if not problems:  # check_shared already names absolute paths and wrong shapes
+        try:
+            validate_collectors(shared.get("collectors"))
+            redaction = shared.get("redaction")
+            extra = redaction.get("extra_patterns") if isinstance(redaction, dict) else None
+            if extra not in (None, "") and not isinstance(extra, list):
+                raise AtlasError("redaction.extra_patterns precisa ser uma lista de regex", 2)
+            compile_extra_patterns(extra or [])
+        except AtlasError as e:
+            problems.append(str(e))
+    return shared, problems
+
+
+def _scan_entries(files: _AtlasFiles, shared) -> tuple:
+    """(declared collector ids, {id: entry} of _scan.json for them)."""
+    try:
+        declared = [c["id"] for c in validate_collectors(shared.get("collectors"))]
+    except AtlasError:
+        declared = []
+    state = files.json(f"{SNAPSHOTS_DIR}/{SCAN_STATE}")
+    state = state if isinstance(state, dict) else {}
+    if declared:
+        state = {cid: entry for cid, entry in state.items() if cid in declared}
+    return declared, {cid: entry if isinstance(entry, dict) else {} for cid, entry in sorted(state.items())}
+
+
+def _lint_collectors(declared, state, stale_days, today, rules) -> list:
+    findings, path = [], f"{SNAPSHOTS_DIR}/{SCAN_STATE}"
+    for cid, entry in state.items():
+        if entry.get("status") == "failed":
+            if "failed-collector" in rules:
+                seen = entry.get("seen_at") or "nunca"
+                findings.append(_finding("failed-collector", path,
+                                         f"coletor {cid}: o último scan falhou (último scan bom: {seen})",
+                                         LINT_SUGGESTIONS["failed-collector"].replace("<id>", cid)))
+            continue
+        if "stale" not in rules:
+            continue
+        days = _days_between(str(entry.get("seen_at") or ""), today)
+        if days is None:
+            detail = f"coletor {cid}: sem data válida do último scan"
+        elif days > stale_days:
+            detail = f"coletor {cid}: {days} dias desde o último scan (stale_days: {stale_days})"
+        else:
+            continue
+        findings.append(_finding("stale", path, detail, LINT_SUGGESTIONS["stale"].replace("<id>", cid)))
+    if "stale" in rules:
+        for cid in sorted(set(declared) - set(state)):
+            findings.append(_finding("stale", path, f"coletor {cid}: nunca escaneado",
+                                     LINT_SUGGESTIONS["stale"].replace("<id>", cid)))
+    return findings
+
+
+def _lint_broken_refs(files: _AtlasFiles) -> list:
+    findings = []
+    graph = files.json(GRAPH_FILE)
+    if isinstance(graph, dict) and isinstance(graph.get("nodes"), list) and isinstance(graph.get("edges"), list):
+        keys = {n.get("key") for n in graph["nodes"] if isinstance(n, dict)}
+        for edge in graph["edges"]:
+            if not isinstance(edge, dict):
+                continue
+            for end in ("from", "to"):
+                if edge.get(end) not in keys:
+                    findings.append(_finding(
+                        "broken-ref", GRAPH_FILE,
+                        f"aresta {edge.get('from')} {edge.get('type')} {edge.get('to')}: {edge.get(end)} não existe",
+                        "rode o coletor que declara a entidade (scan) ou corrija o coletor que aponta para ela"))
+    for rel in sorted(r for r in files.texts if r.endswith(".md")):
+        text = CODE_SPAN_RE.sub("", files.texts[rel])
+        base = (files.atlas / rel).parent
+        for target in sorted({m.group(1) for m in LINK_RE.finditer(text)}):
+            if EXTERNAL_LINK_RE.match(target):
+                continue
+            local = target.split("#", 1)[0].split("?", 1)[0]
+            if local and not (base / local).exists():
+                findings.append(_finding("broken-ref", rel, f"link para {target}: o arquivo não existe",
+                                         "corrija o link ou crie a página; links são relativos à página"))
+    return findings
+
+
+def _lint_conventions(files: _AtlasFiles) -> list:
+    findings = []
+    for rel in sorted(r for r in files.texts if r.startswith(f"{CONVENTIONS_DIR}/") and r.endswith(".md")):
+        head, _ = split_frontmatter(files.texts[rel])
+        try:
+            meta = parse_yaml(head) if head else {}
+        except ValueError:
+            meta = {}
+        if str(meta.get("status") or "") == "inferred":
+            cid = rel[len(CONVENTIONS_DIR) + 1:-3]
+            findings.append(_finding("pending-convention", rel, f"convenção {cid} esperando decisão (inferred)",
+                                     LINT_SUGGESTIONS["pending-convention"].replace("<id>", cid)))
+    return findings
+
+
+def _lint_orphans(files: _AtlasFiles, stale_days, today) -> list:
+    findings = []
+    for rel in sorted(r for r in files.texts if r.startswith(f"{SERVICES_DIR}/") and r.endswith(".md")):
+        found = NOT_SEEN_RE.match(page_regions(files.texts[rel]).get("summary", "").strip())
+        days = _days_between(found.group(1), today) if found else None
+        if days is not None and days > 2 * stale_days:
+            findings.append(_finding("orphan-page", rel, f"não visto há {days} dias (desde {found.group(1)}; "
+                                                         f"limite 2 × stale_days = {2 * stale_days})"))
+    return findings
+
+
+def _finding_order(finding) -> tuple:
+    path, line = finding["path"], 0
+    if finding["rule"] == "secret-leak" and ":" in path:
+        path, number = path.rsplit(":", 1)
+        line = int(number) if number.isdigit() else 0
+    return (LINT_RULES.index(finding["rule"]), path, line, finding["detail"])
 
 
 def run_lint(atlas: Path, rules=None, today=None) -> list:
-    raise NotImplementedError("SPEC-0039: run_lint")
+    """Findings {rule, severity, path, detail, suggestion} of the rules (None = all), only reading the atlas
+    (references/maintenance.md). An unreadable file is a config finding and the lint goes on. Sorted by rule
+    (report order), path, line and detail."""
+    atlas = Path(atlas)
+    rules = list(LINT_RULES) if rules is None else list(rules)
+    today = today or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    files = _AtlasFiles(atlas)
+    shared, problems = _shared_problems(files)
+    try:
+        stale_days = _stale_days(shared)
+    except AtlasError:
+        stale_days = DEFAULT_STALE_DAYS  # check_shared already reported it
+    redaction = shared.get("redaction")
+    try:
+        extras = compile_extra_patterns((redaction.get("extra_patterns") if isinstance(redaction, dict) else None)
+                                        or [])
+    except AtlasError:
+        extras = []
+    declared, state = _scan_entries(files, shared)
+    findings = []
+    if "secret-leak" in rules:
+        findings += _lint_secrets(files, extras)
+    findings += _lint_collectors(declared, state, stale_days, today, rules)
+    if "broken-ref" in rules:
+        findings += _lint_broken_refs(files)
+    if "pending-convention" in rules:
+        findings += _lint_conventions(files)
+    if "orphan-page" in rules:
+        findings += _lint_orphans(files, stale_days, today)
+    if "config" in rules:  # last, after every JSON file was parsed
+        files.json(GRAPH_FILE)
+        for rel in sorted(r for r in files.texts if r.startswith(f"{SNAPSHOTS_DIR}/") and r.endswith(".json")):
+            files.json(rel)
+        findings += _lint_config(files, shared, problems)
+    for finding in findings:  # a path, key or link that looks like a secret is never shown either
+        for key in ("path", "detail"):
+            finding[key] = _redact_text(finding[key], extras)[0]
+    return sorted(findings, key=_finding_order)
+
+
+def lint_line(finding) -> str:
+    label = "ERRO" if finding["severity"] == "error" else "AVISO"
+    return f"{label} {finding['rule']} {finding['path']} — {finding['detail']} (sugestão: {finding['suggestion']})"
 
 
 def cmd_lint(args):
-    raise NotImplementedError("SPEC-0039: lint")
+    """lint [--json] [--only rule,...]: read-only (never writes to the atlas). Exit 0 without ERRO, 1 with ERRO,
+    2 with an unknown rule in --only, 3 not configured."""
+    rules = lint_rules(args.only)
+    atlas, _ = scan_config()
+    findings = run_lint(atlas, rules)
+    errors = sum(1 for x in findings if x["severity"] == "error")
+    warnings = len(findings) - errors
+    if args.json:
+        print(json.dumps({"version": ATLAS_VERSION, "ok": errors == 0, "rules": rules, "errors": errors,
+                          "warnings": warnings, "findings": findings}, ensure_ascii=False, indent=2))
+    else:
+        for finding in findings:
+            print(lint_line(finding))
+        print(f"{errors} erros, {warnings} avisos")
+    return 1 if errors else 0
 
 
 # ---------------------------------------------------------------- init
