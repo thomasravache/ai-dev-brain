@@ -189,9 +189,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — d71c978 | 2026-11-02 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=8)) — fa2b22c | 2026-11-02 |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — bd507a0 | 2026-11-02 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — bd507a0 | 2026-11-02 |
+| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED (bd507a0; 1 major: capture --print falha com configuração e vault inacessível, o caso TCC que motivou a spec; 3 minor e 1 nit) | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
