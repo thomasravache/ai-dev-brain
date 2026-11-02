@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 10, in-progress 1, implemented 27
+- Validação (G0): **3 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 10, implemented 28
 - Impedimentos: **0 aberto(s)**, 14 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,16 +23,15 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0044  
+**Em andamento:** —  
 **Paradas por impedimento:** —  
 **Próximo lote:** SPEC-0032
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0044 | second-brain: captura e leitura pelo conector do provedor | full/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0032 | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | approved | ⛔ aguarda implementação de SPEC-0032 |  |
-| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0044 |
 | 3 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033 |
 | 4 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033; saiu da onda 3: arquivos em comum com SPEC-0034 |
 | 5 | SPEC-0036 | org-atlas: cruzamento de fontes, grafo e páginas geradas | full/M | approved | ⛔ aguarda implementação de SPEC-0033 | saiu da onda 3: arquivos em comum com SPEC-0034; saiu da onda 4: arquivos em comum com SPEC-0035 |
@@ -59,9 +58,7 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
-  S0044["SPEC-0044<br/>second-brain: captura e leitura pelo co…"]:::inprogress
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
-    S0021["SPEC-0021<br/>second-brain: inbox e captura pelo celu…"]:::implemented
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
@@ -76,7 +73,6 @@ flowchart LR
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
     S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::approved
   end
-  S0021 --> S0023
   S0023 --> S0028
   S0032 --> S0033
   S0032 --> S0034
@@ -91,7 +87,6 @@ flowchart LR
   S0037 -. contrato v1 .-> S0039
   S0039 --> S0040
   S0038 --> S0041
-  S0021 --> S0044
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -146,7 +141,7 @@ flowchart LR
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
-| [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | in-progress | 2026-11-02 | — | SPEC-0021 | — |
+| [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
 
 ## ADRs
 
