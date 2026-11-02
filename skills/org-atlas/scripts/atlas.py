@@ -1994,18 +1994,24 @@ def _days_between(first: str, last: str):
 def staleness_warnings(scan_state, stale_days, today) -> list:
     """Warnings from snapshots/_scan.json: a collector with status ok and seen_at more than stale_days days before
     `today` -> "Atlas com D dias desde o último scan de: A, B (stale_days: N)" (one line per D, oldest first); a
-    collector whose last scan failed -> "Último scan falhou: C, D". Collectors sorted by id; deterministic."""
-    stale, failed = {}, []
+    collector whose last scan failed -> "Último scan falhou: C, D"; an entry without a usable seen_at ->
+    "Atlas sem data válida do último scan de: E (stale_days: N)". Collectors sorted by id; deterministic. (A
+    declared collector missing from the state is warned by build_context: "Nunca escaneado: F".)"""
+    stale, failed, undated = {}, [], []
     for cid in sorted(scan_state if isinstance(scan_state, dict) else {}):
         entry = scan_state[cid] if isinstance(scan_state[cid], dict) else {}
         if entry.get("status") == "failed":
             failed.append(cid)
             continue
         days = _days_between(str(entry.get("seen_at") or ""), today)
-        if days is not None and days > int(stale_days):
+        if days is None:  # no usable seen_at: as old as it gets
+            undated.append(cid)
+        elif days > int(stale_days):
             stale.setdefault(days, []).append(cid)
     warnings = [f"Atlas com {days} dias desde o último scan de: {', '.join(stale[days])} (stale_days: {stale_days})"
                 for days in sorted(stale, reverse=True)]
+    if undated:
+        warnings.append(f"Atlas sem data válida do último scan de: {', '.join(undated)} (stale_days: {stale_days})")
     if failed:
         warnings.append(f"Último scan falhou: {', '.join(failed)}")
     return warnings
@@ -2096,9 +2102,19 @@ def _dependencies(starts, index, hops) -> list:
     return result
 
 
+def _complete_decision(meta) -> bool:
+    """confirmed_by, a confirmed_at date and a confirmed_via in the contract format ("PR #n" | "local")."""
+    by, via = str(meta.get("confirmed_by") or "").strip(), str(meta.get("confirmed_via") or "").strip()
+    try:
+        datetime.date.fromisoformat(str(meta.get("confirmed_at") or ""))
+    except ValueError:
+        return False
+    return bool(by) and bool(VIA_RE.match(via))
+
+
 def _context_conventions(atlas: Path, repositories) -> tuple:
-    """(rules, hints): confirmed and inferred conventions of the organization scope and of `repositories`;
-    rejected never."""
+    """(rules, hints): conventions of the organization scope and of `repositories`. Rules = confirmed with a complete
+    decision; hints = inferred, and confirmed with an incomplete decision (`incomplete: true`); rejected never."""
     scopes = {"organization"} | {f"repository:{r}" for r in repositories}
     rules, hints = [], []
     for cid, (meta, _) in _conventions(atlas).items():
@@ -2107,7 +2123,11 @@ def _context_conventions(atlas: Path, repositories) -> tuple:
         item = {key: meta.get(key, "") for key in CONVENTION_KEYS if key != "reason"}
         item["id"], item["path"] = cid, f"{CONVENTIONS_DIR}/{cid}.md"
         if meta.get("status") == "confirmed":
-            rules.append(item)
+            if _complete_decision(meta):
+                rules.append(item)
+            else:  # confirmed by hand without who, when or where: not a rule (ADR-0012)
+                item["incomplete"] = True
+                hints.append(item)
         elif meta.get("status") == "inferred":
             hints.append(item)
     return rules, hints
@@ -2128,10 +2148,10 @@ def _omitted_label(section, item) -> str:
 
 
 def _fit(package: dict, max_chars: int) -> dict:
-    """The package with the longest prefix of its items (services, dependencies, rules, hints, in this order) whose
+    """The package with the longest prefix of its items (services, rules, dependencies, hints, in this order) whose
     Markdown fits in max_chars; the rest goes to `omitted` (one line per item, the first OMITTED_MAX of them, then
     one "… e mais N" line). Warnings are never omitted."""
-    order = ("services", "dependencies", "rules", "hints")
+    order = ("services", "rules", "dependencies", "hints")
     items = [(section, item) for section in order for item in package[section]]
 
     def keep(count):
@@ -2177,7 +2197,11 @@ def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, tod
         declared = set()
     if declared:
         state = {cid: entry for cid, entry in state.items() if cid in declared}
-    package = _empty_package(query, staleness_warnings(state, _stale_days(shared), today))
+    warnings = staleness_warnings(state, _stale_days(shared), today)
+    never = sorted(declared - set(state))
+    if never:
+        warnings.append(f"Nunca escaneado: {', '.join(never)}")
+    package = _empty_package(query, warnings)
     index = _Index(graph, _existing_service_pages(atlas))
     organization = str(shared.get("organization") or graph.get("organization") or "")
     terms = _query_terms(query)
@@ -2239,14 +2263,28 @@ def _dependency_line(edge) -> str:
 def _convention_line(item, hint) -> str:
     where = item["scope"]
     if hint:
-        return f"- `{item['id']}` — {item['title']} ({where}; {item['path']}) — não confirmada"
+        note = "não confirmada (decisão incompleta)" if item.get("incomplete") else "não confirmada"
+        return f"- `{item['id']}` — {item['title']} ({where}; {item['path']}) — {note}"
     return (f"- `{item['id']}` — {item['title']} ({where}; confirmada por {item['confirmed_by']} em "
             f"{item['confirmed_at']} via {item['confirmed_via']}; {item['path']})")
 
 
+def _flat(value):
+    """Every text of the package on one line (newlines, CR and tabs become spaces): data from the atlas never
+    becomes a heading or an item of the package."""
+    if isinstance(value, str):
+        return " ".join(value.split())
+    if isinstance(value, dict):
+        return {_flat(key): _flat(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_flat(item) for item in value]
+    return value
+
+
 def render_context(package: dict) -> str:
     """The package in Markdown, in the contract order; each section only when it has content (the warning, when
-    there is one, is always first)."""
+    there is one, is always first). Every value is flattened to one line first (_flat)."""
+    package = _flat(package)
     parts = []
 
     def add(section, lines):
