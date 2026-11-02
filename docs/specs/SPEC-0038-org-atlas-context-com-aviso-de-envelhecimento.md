@@ -177,9 +177,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 1a65633 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 1a65633 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 2, 1a65633): APPROVED — M1 corrigido (nenhuma seção forjada, inclusive com separadores Unicode e chaves com quebra de linha); menores 1–3 corrigidos; restam menores na SPEC-0048 (nome do serviço dentro de título ###, crase escapando do código inline) — 1a65633 | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #20 em e07339b verde (run 41478872579 Python 3.9/3.15; run 41478875431 sdd/pr-check) — e07339b | 2026-11-02 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
