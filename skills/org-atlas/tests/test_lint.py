@@ -714,5 +714,78 @@ class LinkEdgeCasesTest(unittest.TestCase):
         findings = of_rule(f("run_lint")(copy.atlas, ["broken-ref"], TODAY), "broken-ref")
         self.assertEqual([x["path"] for x in findings], ["services/backoffice.md"], findings)
 
+# --------------------------------------------------------------------------- revisão G4 2 (regressão)
+
+ANCHORED = "'^acme-[0-9a-f]{8}$'"
+
+
+def acme(hex8):
+    return "acme-" + hex8[:4] + hex8[4:]
+
+
+class AnchoredPatternPathTest(LeakCase):
+    """Um extra_pattern ancorado (^...$) casa com um componente do caminho ou com o nome sem extensão; o caminho
+    é mascarado do mesmo jeito que é detectado, então o valor nunca aparece."""
+
+    def setUp(self):
+        super().setUp()
+        config = self.atlas / "atlas-config.yml"
+        text = config.read_text(encoding="utf-8")
+        self.assertIn("redaction: {extra_patterns: []}", text)
+        config.write_text(text.replace("redaction: {extra_patterns: []}",
+                                       f"redaction: {{extra_patterns: [{ANCHORED}]}}"), encoding="utf-8")
+
+    def assert_hidden(self, value, *rules):
+        text_out, json_out = self.lint_all(code=1)
+        hex8 = value[len("acme-"):]
+        self.assert_no_secret((text_out, json_out), (value, hex8))
+        found = {x["rule"] for x in json.loads(json_out.stdout)["findings"]}
+        for rule in ("secret-leak", *rules):
+            self.assertIn(rule, found, json_out.stdout)
+        self.assertIn("secret-leak", {m.group(2) for m in finding_lines(text_out.stdout)})
+
+    def test_folder_name(self):
+        """SPEC-0039:UT-01 (revisão G4 2: pasta process/acme-<hex>/)"""
+        value = acme("cafebabe")
+        (self.atlas / "process" / value).mkdir()
+        (self.atlas / "process" / value / "notes.md").write_text("conteúdo limpo\n", encoding="utf-8")
+        self.assert_hidden(value)
+
+    def test_file_without_extension(self):
+        """SPEC-0039:UT-01 (revisão G4 2: arquivo sem extensão)"""
+        value = acme("deadbeef")
+        (self.atlas / "process" / value).write_text("conteúdo limpo\n", encoding="utf-8")
+        self.assert_hidden(value)
+
+    def test_file_stem(self):
+        """SPEC-0039:IT-02 (revisão G4 2: nome sem a extensão)"""
+        value = acme("feedface")
+        (self.atlas / "process" / f"{value}.md").write_text("conteúdo limpo\n", encoding="utf-8")
+        self.assert_hidden(value)
+
+    def test_inferred_convention_named_with_the_value(self):
+        """SPEC-0039:IT-02 (revisão G4 2: convenção inferred com o valor no nome)"""
+        value = acme("0badc0de")
+        text = INFERRED.read_text(encoding="utf-8").replace("id: merge-method-squash", f"id: {value}")
+        (self.atlas / "conventions" / f"{value}.md").write_text(text, encoding="utf-8")
+        self.assert_hidden(value, "pending-convention")
+
+
+@unittest.skipIf(IS_ROOT or os.name != "posix", "chmod 000 não impede a leitura (root ou sem POSIX)")
+class LinkIntoUnreadableDirectoryTest(unittest.TestCase):
+    def test_links_into_an_unreadable_folder_are_not_reported_missing(self):
+        """SPEC-0039:UT-04 (revisão G4 2: pasta ilegível já é achado config)"""
+        copy = Copy(self)
+        private = copy.path("process/private")
+        private.mkdir()
+        (private / "notes.md").write_text("notas\n", encoding="utf-8")
+        copy.append("services/backoffice.md", "[privado](../process/private/notes.md)")
+        os.chmod(private, 0)
+        self.addCleanup(os.chmod, private, 0o755)
+        findings = f("run_lint")(copy.atlas, ["broken-ref", "config"], TODAY)
+        self.assertTrue([x for x in of_rule(findings, "config") if x["path"].startswith("process/private")], findings)
+        missing = [x for x in of_rule(findings, "broken-ref") if "private" in x["detail"] and "não existe" in x["detail"]]
+        self.assertEqual(missing, [], "link para pasta ilegível reportado como inexistente")
+
 if __name__ == "__main__":
     unittest.main()
