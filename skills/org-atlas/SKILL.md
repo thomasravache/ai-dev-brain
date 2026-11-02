@@ -1,7 +1,7 @@
 ---
 name: org-atlas
 description: >-
-  Atlas de como uma organização desenvolve e opera software — serviços, plataforma, convenções, processo e glossário em Markdown, mantido junto com os agentes num repositório compartilhado ou numa pasta local, com a configuração em duas camadas (compartilhada no atlas, local por máquina com as credenciais só pelo nome). Use quando o usuário quiser mapear a organização para os agentes, configurar o atlas pela primeira vez (onboarding: organização, modo repo ou local, onde fica o atlas, credenciais por nome), ligar uma máquina nova a um atlas existente (init --join), ver a configuração (config), diagnosticar o que está configurado, o que funciona e o que falta (doctor) atualizar o atlas com os dados dos coletores declarados (scan: roda os coletores, valida o contrato, mascara segredos, grava os snapshots e mostra o que mudou) ou refazer o grafo e as páginas a partir dos snapshots (build: junta as fontes no graph.json, infere quem usa qual banco, fila ou serviço e gera ATLAS.md, services/<id>.md e platform/<categoria>.md sem tocar no texto do time).
+  Atlas de como uma organização desenvolve e opera software — serviços, plataforma, convenções, processo e glossário em Markdown, mantido junto com os agentes num repositório compartilhado ou numa pasta local, com a configuração em duas camadas (compartilhada no atlas, local por máquina com as credenciais só pelo nome). Use quando o usuário quiser mapear a organização para os agentes, configurar o atlas pela primeira vez (onboarding: organização, modo repo ou local, onde fica o atlas, credenciais por nome), ligar uma máquina nova a um atlas existente (init --join), ver a configuração (config), diagnosticar o que está configurado, o que funciona e o que falta (doctor) atualizar o atlas com os dados dos coletores declarados (scan: roda os coletores, valida o contrato, mascara segredos, grava os snapshots e mostra o que mudou) ou refazer o grafo e as páginas a partir dos snapshots (build: junta as fontes no graph.json, infere quem usa qual banco, fila ou serviço e gera ATLAS.md, services/<id>.md e platform/<categoria>.md sem tocar no texto do time) ou fazer a curadoria das convenções do time (curate: propõe convenções inferidas dos títulos de PR, prefixos de branch, método de merge e template de PR, lista, e registra a confirmação ou a rejeição de uma pessoa com curate confirm|reject --by --via).
 ---
 
 # Org Atlas
@@ -22,8 +22,11 @@ Rode `python3 <skill-dir>/scripts/atlas.py <comando>`, onde `<skill-dir>` é a p
 | `doctor [--json]` | Uma linha `OK\|AVISO\|ERRO <item> — <detalhe>` por item: configuração local, pasta do atlas, `atlas-config.yml`, estrutura, git, cada coletor e cada credencial (`definida` ou `não definida`, nunca o valor). Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração |
 | `scan [--only id,...] [--json]` | Roda cada coletor habilitado em `collectors` (ou só os de `--only`), valida a saída contra o contrato `org-atlas/collector@1`, mascara segredos (`[REDACTED]`), grava `snapshots/<id>.json` e `snapshots/_scan.json` e imprime por coletor `OK <id> — +A entidades, -R, ~C; +a relações, -r`, `OK <id> — sem mudanças`, `N valor(es) mascarado(s)` ou `FALHA <id> — <motivo>`, e no fim roda o `build`. Exit 0 sem falha, 1 com alguma falha (os outros coletores seguem), 2 com configuração inválida ou `--only` com id não declarado. Sem coletor habilitado nada roda nem é gravado. `--json` imprime um objeto só, com o relatório do `build` na chave `build` |
 | `build [--json]` | Junta os snapshots de `snapshots/` no `graph.json` (um nó por `kind:id`, conflito de atributo registrado e resolvido pela ordem de `collectors`), infere `sourced_from` (serviço → repositório) e `depends_on` (serviço → banco, fila, tópico, bucket ou outro serviço, pelo host de `config_refs`) e atualiza só as regiões geradas de `ATLAS.md`, `services/<id>.md` e `platform/<categoria>.md`. Imprime `Grafo: N nós, M arestas (I inferidas), C conflitos; P páginas atualizadas`; snapshot ilegível = `aviso: ...` e o build segue. Roda sozinho no fim de todo `scan` |
+| `curate propose [--json]` | Propõe convenções (`status: inferred`) a partir dos sinais dos coletores (títulos de PR, prefixos de branch, método de merge, template de PR) e grava `conventions/<id>.md` com a evidência; uma convenção que já existe só tem a região `evidence` atualizada. Imprime `Convenções: N nova(s), M atualizada(s), K esperando decisão`. Roda sozinho no fim de todo `scan` e nunca confirma nem rejeita nada |
+| `curate list [--status inferred\|confirmed\|rejected] [--json]` | As convenções e o status de cada uma |
+| `curate confirm ID --by NOME --via "PR #n"\|local` / `curate reject ID --by NOME --via ... [--reason TEXTO]` | A decisão **humana** sobre uma convenção `inferred`: grava `status`, `confirmed_by`, `confirmed_at` e `confirmed_via`. Sem `--by`/`--via`, `--via` fora do formato, id inexistente ou convenção já decidida saem com 2 |
 
-Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do atlas e regiões geradas: `references/atlas-layout.md`. Contrato dos coletores e o `scan`: `references/collector-contract.md`. Padrões de mascaramento: `references/redaction.md`. Formato do `graph.json`, regras de junção e de inferência e as páginas geradas: `references/graph.md`. Coletores da skill: `references/collectors/generic.md` (fatos escritos à mão), `references/collectors/github.md` (repositórios, pipelines, times e sinais) e `references/collectors/argocd.md` (deployments, serviços, ambientes e clusters).
+Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do atlas e regiões geradas: `references/atlas-layout.md`. Contrato dos coletores e o `scan`: `references/collector-contract.md`. Padrões de mascaramento: `references/redaction.md`. Formato do `graph.json`, regras de junção e de inferência e as páginas geradas: `references/graph.md`. Curadoria de convenções (formato de `conventions/<id>.md`, kinds, status, a regra de padrão dominante por kind, `curation` com `min_share`, `min_total` e `min_repos`, `--via "PR #n"|local`): `references/curation.md`. Coletores da skill: `references/collectors/generic.md` (fatos escritos à mão), `references/collectors/github.md` (repositórios, pipelines, times e sinais) e `references/collectors/argocd.md` (deployments, serviços, ambientes e clusters).
 
 ## Antes de qualquer fluxo
 
@@ -81,7 +84,8 @@ Depois declare as credenciais desta máquina pelo nome (passo 5) e rode `doctor`
    - `FALHA <id> — <motivo>` → o snapshot anterior e o `seen_at` desse coletor ficam como estavam; os outros seguem. Mostre o motivo e as linhas de violação ou do stderr, e ajude a corrigir (credencial não definida, timeout curto, coletor fora do contrato).
    - Exit 2 → configuração inválida (por exemplo caminho absoluto em `command`) ou `--only` com id não declarado: nada rodou; mostre a mensagem e corrija o `atlas-config.yml`.
 4. Mostre a linha `Grafo: ...` do `build` que o `scan` rodou no fim: quantas entidades e relações, quantas inferidas, quantos conflitos e quantas páginas mudaram. Com conflitos, aponte o atributo e os coletores (região `summary` da página ou `conflicts` no `graph.json`) e sugira corrigir a fonte errada ou a ordem de `collectors` (vale o primeiro).
-5. No modo `repo`, os snapshots, o `graph.json` e as páginas são arquivos do atlas: lembre a pessoa de fazer commit (o diff do PR é o que o scan mostrou).
+5. Mostre a linha `Convenções: ...` da curadoria: com convenções esperando decisão, siga **Curadoria** abaixo.
+6. No modo `repo`, os snapshots, o `graph.json`, as páginas e as convenções são arquivos do atlas: lembre a pessoa de fazer commit (o diff do PR é o que o scan mostrou).
 
 ## Build (grafo e páginas)
 
@@ -96,10 +100,23 @@ python3 <skill-dir>/scripts/atlas.py build
 - Um serviço que sumiu dos snapshots mantém a página, com "_Não visto desde AAAA-MM-DD._"; pergunte à pessoa se o serviço foi desligado antes de sugerir apagar a página (apagar é decisão do time, nunca do `atlas.py`).
 - `aviso: snapshots/<id>.json ilegível ...` → rode `scan --only <id>` para regravar o snapshot desse coletor.
 
+## Curadoria (convenções)
+
+Inferir não é normatizar (ADR-0012): o `atlas.py` só propõe; quem decide é uma pessoa.
+
+1. Rode `atlas.py curate list --status inferred` e mostre, para cada convenção, o título, o escopo e a evidência (região `evidence` de `conventions/<id>.md`: total, quantos seguem, porcentagem, repositórios, amostra).
+2. Pergunte à pessoa se cada uma vale como regra. **Nunca** confirme ou rejeite por conta própria, nem porque a porcentagem é alta.
+3. Com a resposta, registre quem decidiu e por onde:
+   - modo `repo`: quem aprova o PR do atlas que traz a convenção — `curate confirm <id> --by <nome> --via "PR #<n>"`;
+   - modo `local`: quem está rodando o `curate` — `curate confirm <id> --by <nome> --via local`;
+   - para descartar: `curate reject <id> --by <nome> --via ... --reason "<motivo>"`. Uma rejeitada não volta a ser proposta; se o padrão mudar, vem como outra convenção (outro id).
+4. Para outras skills, só convenção `confirmed` vale como regra; `inferred` é só uma sugestão.
+
 ## Regras
 
 - **Nunca** grave nem mostre o valor de uma credencial: a configuração local guarda só nomes de variável (`^[A-Z_][A-Z0-9_]*$`) e de profile, e o `doctor` só diz `definida` ou `não definida`.
 - O `atlas-config.yml` vai junto com o atlas: nunca coloque nele um caminho absoluto nem um segredo.
+- Nunca grave `status: confirmed` ou `rejected` editando um arquivo de `conventions/`: use `curate confirm`/`reject`, com a decisão da pessoa.
 - Não edite `snapshots/` nem `graph.json` à mão: são do `atlas.py scan` e do `atlas.py build`. Nunca copie para o atlas, para a conversa ou para outro lugar um valor que o scan mascarou.
 - Não edite à mão as regiões `<!-- atlas:begin <nome> -->` … `<!-- atlas:end <nome> -->`: são do `atlas.py`. O texto fora delas é de quem mantém o atlas.
 - Não sobrescreva um `atlas-config.yml` diferente sem a pessoa pedir; o `--force` guarda o anterior em `atlas-config.yml.bak` (ou `.bak.1`, `.bak.2`…, nunca sobrescrevendo um backup).
