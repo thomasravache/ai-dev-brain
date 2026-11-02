@@ -9,6 +9,43 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-02
+
+### Fixed
+- `SKILL.md` e `references/connectors.md`: numa sessão sem configuração local (exit 3, nuvem ou celular) com conector do provedor, o agente localiza o vault buscando pelo conector o arquivo de nome exatamente `brain-config.yml` e entra direto no modo só conector, sem perguntar nem comentar configuração; onboarding (agora "exit 3 sem conector, ou a pedido") só se o conector não achar o arquivo ou se a pessoa pedir. Com mais de um `brain-config.yml`, vale o que tem `index.md` e `log.md` na mesma pasta; só então uma pergunta curta. `BRAIN_VERSION` 2026.11.5, sem mudança de lógica (SPEC-0052).
+
+## [2026.11.4] - 2026-11-02
+
+### Added
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.11.4): backup do vault em vários destinos (SPEC-0051, ADR-0015). `backup target add PASTA` acrescenta um destino a `backup_targets` da configuração local (repetido = "destino já existe"; dentro do vault ou da pasta `files` sai com 2) (SPEC-0051).
+- `backup [--dest PASTA ...] [--with-files] [--json]`: um zip `second-brain-AAAA-MM-DD-HHMMSS[-files].zip` por destino, com `vault/…`, `files/…` (opcional) e o manifesto `brain-backup.json` (sha256 de cada entrada), gravado como `.partial`, verificado e renomeado sem sobrescrever; um destino que falha não impede os outros (exit 1); linha `backup` no `log.md` (SPEC-0051).
+- Rotação (`rotate_backups`): mantém os `backup.keep` mais recentes por destino e por tipo, só nomes do padrão, só depois de verificar o novo e nunca o novo; é a única remoção do `brain.py` fora da lista fechada de limpezas, e também remove o `.partial` de uma escrita que falhou (ADR-0015, SPEC-0051).
+- `backup list [--json]`, `backup verify [ZIP] [--json]` (sem ZIP: o mais novo de cada destino; destino inacessível = `AVISO`, sem mudar o exit sozinho), `restore NOTA --from ZIP` (arquivo novo `<nome> (restaurado AAAA-MM-DD).md`, `-1`, `-2`...) e `restore --from ZIP --to PASTA` (pasta nova ou vazia; recusa entradas com `..` ou caminho absoluto; funciona sem configuração local) (SPEC-0051).
+- `brain-config.yml`: chave `backup` (`keep` 10, `warn_days` 7, `with_files` false; inválido usa o padrão com aviso). `doctor`: uma linha `OK|AVISO backup <destino>` por destino e `AVISO backup — nenhum destino configurado` (SPEC-0051).
+- `SKILL.md` (seção "Backup e restauração" e comandos) e `references/backup.md` (destinos, quando rodar, restauração, agendamento com cron, launchd e Agendador de Tarefas, zip não cifrado); `references/config.md` e `assets/brain-config.yml` atualizados (SPEC-0051).
+
+### Changed
+- `init` mantém os `backup_targets` da configuração local quando a regrava (SPEC-0051).
+
+### Fixed
+- Revisão (Emenda v2): arquivo ilegível do vault fica fora do zip e do manifesto, aparece em `skipped` (e na saída) e o `backup` sai com 1, gravando e verificando o resto; link simbólico que aponta para fora do vault (ou da pasta files) fica fora do zip; o mesmo destino por dois caminhos (link simbólico, outra grafia) conta uma vez no `target add` e no `backup` (SPEC-0051).
+- `.partial` de um backup interrompido vira AVISO no `backup list` e no `doctor` (`AVISO backup <destino> .partial — …`), sem remoção automática; `restore NOTA` sai com 2 quando o destino fica fora do vault (pasta com link simbólico); `restore --json` traz `from` absoluto; `backup verify --json` traz `verified`; `safe_entry` recusa entrada terminada em `/` (SPEC-0051).
+
+## [2026.11.3] - 2026-11-02
+
+### Added
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.11.3): itens confidenciais (SPEC-0050, ADR-0014). Tipo de nota `secret-ref` (modelo `assets/templates/secret-ref.md`) e `new-note --type secret-ref --title X --vault-ref REF`: nota com `confidential: true` e `vault_ref` no formato `<esquema>://<caminho>`, que a skill só valida e nunca abre; sem `--vault-ref`, REF fora do formato ou `--vault-ref` com outro tipo saem com 2 sem criar nada (SPEC-0050).
+- `new-note --confidential`: o modelo do tipo com `confidential: true` no frontmatter. Só o booleano `true` marca a nota (`"true"`, `yes` ou outro valor não marcam) (SPEC-0050).
+- `ingest ARQUIVO --confidential [--move]`: o arquivo vai para `files` como hoje, nunca roda processador e a nota de fonte só tem `confidential: true`, `size`, `sha256` e `_(confidential: not extracted)_`; `--json` traz `"confidential": true`; o `log.md` cita só os caminhos; URL, `--text-file`, `--kind` ou `--timestamps` junto saem com 2 (SPEC-0050).
+- `search`, `related`, `context` e `links` ganham `--include-confidential`; as saídas `--json` (e o `export-notebooklm --json`) ganham `confidential_omitted`, o número de notas confidenciais distintas deixadas fora da saída (SPEC-0050).
+- `lint`: regras `secret-in-note` (chave privada, token de prefixo conhecido, senha rotulada) e `personal-data` (CPF, CNPJ e cartão válidos, documento rotulado, padrões extras), as duas AVISO, só em notas sem `confidential: true`, com `<caminho>:<linha>` e o tipo e nunca o valor encontrado. Detectores configuráveis em `lint.personal_data` e `lint.personal_data_patterns` do `brain-config.yml` (nova chave `lint`); padrão inválido ou com quantificador aninhado vira achado `config` (SPEC-0050).
+- `doctor`: linha `OK confidential — N notas confidenciais`, só com o número (SPEC-0050).
+- `SKILL.md` (seção "Itens confidenciais e segredos") e `references/confidential.md`: segredo nunca no vault nem na inbox pelo conector, `secret-ref` e o gerenciador de senhas (KeePass/KeePassXC como exemplo, `<esquema>://<caminho>` para os outros), `--include-confidential` só a pedido da pessoa, arquivo confidencial não citado nem resumido no modo só conector, nunca abrir o arquivo do gerenciador, anexo no gerenciador para documento muito sensível, as regras do `lint`, falsos positivos e padrões extras; `references/maintenance.md`, `references/note-types.md`, `references/config.md` e `assets/brain-config.yml` atualizados (SPEC-0050).
+
+### Changed
+- Notas com `confidential: true` ficam fora de `search`, `related`, `context` e `links` (resultados, vizinhas, links de saída e backlinks; um link para elas não é "quebrado"), dos MOCs (região `notes`) e do `recent`/contagem do `index.md`, a menos que `--include-confidential`; `related --note` e `links` numa nota confidencial sem a opção saem com 2. O `export-notebooklm` nunca inclui nota confidencial e recusa um MOC confidencial (exit 2). O `lint` não acusa `orphan` numa nota confidencial. Notas sem a marca não mudam (SPEC-0050).
+- Revisão (Emenda v2): a marca `confidential: true` vale com fim de linha CRLF e com BOM do UTF-8 (busca, `context`, `links`, `index`, exportação e `doctor`; o frontmatter de notas com BOM passa a ser lido); na exportação, um wikilink para nota confidencial (com `#seção` ou `|apelido`) vira `[confidencial]`, sem o título; cartão com dígitos todos iguais não conta; `vault_ref` com caractere de controle é recusado; achados do `lint` de um mesmo arquivo saem pela linha em ordem numérica (SPEC-0050).
+
 ## [2026.11.2] - 2026-11-02
 
 ### Added

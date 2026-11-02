@@ -17,6 +17,14 @@ lint only reads: each rule is a check_<rule> function over a single scan of the 
 (SPEC-0023, ADR-0007).
 export-notebooklm only reads the vault: it writes the package of a MOC to an empty folder outside it, creating each
 file exclusively, and does not touch log.md (SPEC-0024).
+Confidential items (SPEC-0050, ADR-0014): a secret never enters the vault; a secret-ref note only says where it is
+(vault_ref, never opened). Notes with `confidential: true` stay out of search, related, context, links, index and
+the export unless asked (--include-confidential; never in the export); ingest --confidential never runs a processor.
+lint warns (secret-in-note, personal-data) without ever printing the value found.
+backup writes a verified zip of the vault (vault/..., files/..., brain-backup.json with the sha256 of each entry) to
+each folder of backup_targets, outside the vault and files; rotate_backups is the only function that removes a
+backup, only names of its pattern and never the new one (SPEC-0051, ADR-0015). restore never overwrites: a note comes
+back as a new file next to the current one, the whole backup goes to a new folder.
 """
 from __future__ import annotations
 
@@ -24,6 +32,7 @@ import argparse
 import contextlib
 import datetime as dt
 import errno
+import hashlib
 import html
 import json
 import math
@@ -39,24 +48,26 @@ import sys
 import tempfile
 import time
 import unicodedata
+import zipfile
+import zlib
 from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.2"
+BRAIN_VERSION = "2026.11.5"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
 TEMPLATES_DIR = ASSETS_DIR / "templates"
 
 PROVIDERS = ("google-drive", "onedrive", "icloud", "local")
-LOCAL_KEYS = ("vault", "files", "provider")
+LOCAL_KEYS = ("vault", "files", "provider", "backup_targets")  # backup_targets: list of folders of this machine
 LAYOUT_DIRS = ("inbox", "raw", "mocs", "templates")
 LAYOUT_FILES = ("index", "log")
 LAYOUT_KEYS = LAYOUT_DIRS + LAYOUT_FILES
 PARA_KEYS = ("projects", "areas", "resources", "archive")
 SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors", "inbox_stale_days",
-               "conflict_patterns")
+               "conflict_patterns", "lint", "backup")
 SHARED_VERSION = "1"
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
@@ -112,7 +123,7 @@ whom when where why how all any each both few more most other some such only own
 STOPWORDS = frozenset(STOPWORDS_TEXT.split())
 
 # store flow: ingest, new-note, relate and index (SPEC-0019; note types in references/note-types.md)
-NOTE_TYPES = ("note", "lecture", "source", "video", "document", "link", "moc", "answer")
+NOTE_TYPES = ("note", "lecture", "source", "video", "document", "link", "moc", "answer", "secret-ref")
 TITLE_FORBIDDEN = frozenset('/\\:*?"<>|#^[]')  # characters a note title cannot keep in its file name
 RELATIONS_HEADING = "## Relations"
 RELATION_LINE_RE = re.compile(r"^[-*][ \t]+\[\[([^\[\]\n]+?)\]\][ \t]*—[ \t]*(.*?)[ \t]*$")
@@ -159,12 +170,44 @@ SUBTITLE_TAG_RE = re.compile(r"<[^>\n]*>")
 # lint (SPEC-0023): rule -> severity, in the order of the report; conflict patterns per provider documented in
 # references/providers.md (generic patterns: the real names of each provider were not checked on this machine)
 LINT_SEVERITY = {"broken-link": "error", "conflict-copy": "error", "missing-file": "error", "orphan": "warn",
-                 "stale-inbox": "warn", "frontmatter": "warn", "config": "error"}
+                 "stale-inbox": "warn", "frontmatter": "warn", "secret-in-note": "warn", "personal-data": "warn",
+                 "config": "error"}
 LINT_LABELS = {"error": "ERRO", "warn": "AVISO"}
 GENERIC_CONFLICT_PATTERNS = (r"(?P<base>.+) \(\d+\)\.md$", r"(?i)(?P<base>.+)[ _-]conflict.*\.md$")
 MAX_CONFLICT_PATTERN = 500  # characters of a conflict pattern; longer ones are refused (never matched)
 CONFLICT_PATTERNS = {provider: GENERIC_CONFLICT_PATTERNS for provider in PROVIDERS}
 REQUIRED_FIELDS = ("title", "created")  # frontmatter of a note of the skill's types (references/note-types.md)
+# confidential items (SPEC-0050, ADR-0014; references/confidential.md)
+SECRET_REF_TYPE = "secret-ref"
+VAULT_REF_RE = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\x00-\x1f\x7f][^\x00-\x1f\x7f]*")  # fullmatch; never opened
+CONFIDENTIAL_LINE_RE = re.compile(r"^confidential[ \t]*:[ \t]*(?:true|True|TRUE)[ \t]*(?:#.*)?$", re.MULTILINE)
+NOT_EXTRACTED = "_(confidential: not extracted)_"
+CONFIDENTIAL_LINK = "[confidencial]"  # what the export writes in place of a link to a confidential note
+INCLUDE_CONFIDENTIAL = "--include-confidential"
+CONFIDENTIAL_REFUSED = f"nota confidencial — use {INCLUDE_CONFIDENTIAL} só se a pessoa pedir para incluí-la"
+PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
+TOKEN_RE_SECRET = re.compile(r"(?<![\w-])(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|AKIA[0-9A-Z]{16}"
+                             r"|xox[abpr]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})(?![\w-])")
+SECRET_LABEL_RE = re.compile(r"(?i)(?<![\w-])(?:senha|password|passwd|pwd|pin|token|api[ _-]?key|secret|segredo)"
+                             r"(?![\w-])[*_]*[ \t]*[:=][*_]*[ \t]*(\S*)")
+# values that are a marker, not a secret: ***, <...>, ${...}, {{...}}, xxx, ... and YAML booleans/null
+SECRET_PLACEHOLDER_RE = re.compile(r"(?i)^(?:\*+|<.*|\$\{.*|\{\{.*|x{3,}\W*|\.{3,}|…|true|false|null|none|yes|no)$")
+SECRET_MIN = 4  # characters of a labeled value
+CPF_RE = re.compile(r"(?<![\w.-])(\d{3}\.\d{3}\.\d{3}-\d{2})(?![\w-])|(?i:\bCPF\b)\W{0,3}(\d{11})(?!\d)")
+CNPJ_RE = re.compile(r"(?<![\w.-])(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})(?![\w-])|(?i:\bCNPJ\b)\W{0,3}(\d{14})(?!\d)")
+CARD_RE = re.compile(r"(?<![\w.-])(\d{3,6}(?:[ -]\d{3,6}){2,4})(?![\w-])"
+                     r"|(?i:\b(?:cart[aã]o|card)\b)\W{0,3}(\d{13,19})(?!\d)")
+LABELED_DOCUMENT_RE = re.compile(r"(?i)(?<![\w-])(?:RG|CNH|passaporte|passport|SSN|DNI|NIF)(?![\w-])[ \t]*:[ \t]*\S*\d")
+PERSONAL_DETECTORS = ("cpf", "cnpj", "card", "labeled-document")
+PERSONAL_KINDS = {"cpf": "cpf", "cnpj": "cnpj", "card": "cartão", "labeled-document": "documento rotulado"}
+BACKUP_DEFAULTS = {"keep": 10, "warn_days": 7, "with_files": False}  # backup: of brain-config.yml (SPEC-0051)
+BACKUP_MINIMUM = {"keep": 1, "warn_days": 0}  # keep >= 1 (ADR-0015), warn_days >= 0
+BACKUP_NAME_RE = re.compile(r"^second-brain-(\d{4}-\d{2}-\d{2}-\d{6})(-files)?\.zip$")  # the only names rotated
+BACKUP_STAMP = "%Y-%m-%d-%H%M%S"
+BACKUP_MANIFEST = "brain-backup.json"
+BACKUP_PARTIAL = ".partial"
+BACKUP_ROOTS = ("vault", "files")  # top folders of a backup zip: never an absolute path of this machine
+NO_BACKUP_TARGET = "nenhum destino de backup — references/backup.md"
 
 
 class BrainError(Exception):
@@ -456,6 +499,11 @@ def read_config(config_home=None) -> dict:
     local = read_yaml(local_path)
     values, origins, problems, warnings = {}, {}, [], []
     for key in LOCAL_KEYS:
+        if key == "backup_targets":  # a list of folders of this machine (SPEC-0051); anything else = none
+            given = local.get(key) if isinstance(local.get(key), list) else []
+            values[key] = [item for item in given if isinstance(item, str) and item]
+            origins[key] = ORIGIN_LOCAL if values[key] else ORIGIN_DEFAULT
+            continue
         present = isinstance(local.get(key), str) and local.get(key) != ""
         values[key] = local[key] if present else ""
         origins[key] = ORIGIN_LOCAL if present else ORIGIN_DEFAULT
@@ -481,6 +529,11 @@ def read_config(config_home=None) -> dict:
             if given is None and key in shared:
                 warnings.append({"key": key, "message": (f"brain-config.yml: {key} inválido: {shared[key]} — use um "
                                                          f"número inteiro de dias >= 0; usando {values[key]}")})
+        elif key == "backup":  # keep, warn_days and with_files; missing or invalid = the default (SPEC-0051)
+            values[key], found, invalid = backup_settings(shared.get(key) if key in shared else None)
+            origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
+            warnings += [{"key": name, "message": (f"brain-config.yml: {name} inválido: {given} — {rule}; usando "
+                                                   f"{fmt_scalar(default)}")} for name, given, rule, default in invalid]
         elif key == "conflict_patterns":  # missing = the patterns of the local provider (references/providers.md)
             found = key in shared
             values[key] = shared[key] if found else list(CONFLICT_PATTERNS.get(values["provider"],
@@ -503,6 +556,32 @@ def stale_days(value):
     except ValueError:
         return None
     return days if days >= 0 else None
+
+
+def backup_settings(given) -> tuple:
+    """(settings, found, invalid) of the backup: key of brain-config.yml: settings = keep, warn_days and with_files
+    (BACKUP_DEFAULTS for each missing or invalid value); invalid = (key, value, rule, default) of each value that
+    fell back to the default, like inbox_stale_days."""
+    settings, invalid = dict(BACKUP_DEFAULTS), []
+    if given is None:
+        return settings, False, invalid
+    if not isinstance(given, dict):
+        return settings, False, [("backup", fmt_flow(given), "use um mapa {keep, warn_days, with_files}", "padrão")]
+    for name, minimum in BACKUP_MINIMUM.items():
+        if name in given:
+            number = stale_days(given[name])
+            if number is not None and number >= minimum:
+                settings[name] = number
+            else:
+                invalid.append((f"backup.{name}", given[name], f"use um número inteiro >= {minimum}",
+                                BACKUP_DEFAULTS[name]))
+    if "with_files" in given:
+        flag = str(given["with_files"]).strip().lower()
+        if flag in ("true", "false"):
+            settings["with_files"] = flag == "true"
+        else:
+            invalid.append(("backup.with_files", given["with_files"], "use true ou false", "false"))
+    return settings, True, invalid
 
 
 def load_config(config_home=None) -> dict:
@@ -546,8 +625,21 @@ def render_brain_config(vault: str, layout=None, contexts=None) -> str:
     return text
 
 
-def render_local_config(vault: str, files: str, provider: str) -> str:
-    return LOCAL_HEADER + dump_yaml({"vault": vault, "files": files, "provider": provider})
+def render_local_config(vault: str, files: str, provider: str, backup_targets=()) -> str:
+    data = {"vault": vault, "files": files, "provider": provider}
+    if backup_targets:
+        data["backup_targets"] = list(backup_targets)
+    return LOCAL_HEADER + dump_yaml(data)
+
+
+def local_backup_targets(path: Path) -> list:
+    """backup_targets of the local configuration already on disk (none when absent or unreadable): init keeps them
+    when it rewrites this machine's configuration."""
+    with contextlib.suppress(BrainError):
+        if path.is_file():
+            given = read_yaml(path).get("backup_targets")
+            return [item for item in given if isinstance(item, str) and item] if isinstance(given, list) else []
+    return []
 
 
 def write_local_config(path: Path, text: str):
@@ -783,9 +875,9 @@ class Note:
 
 
 def read_frontmatter(text: str):
-    """(frontmatter, body, problem): YAML between a first line "---" and the next "---" (or "..."). Invalid or
-    unclosed YAML gives {} and the problem, never an exception."""
-    first, sep, rest = text.partition("\n")
+    """(frontmatter, body, problem): YAML between a first line "---" and the next "---" (or "..."); a leading BOM
+    is ignored. Invalid or unclosed YAML gives {} and the problem, never an exception."""
+    first, sep, rest = text.lstrip("\ufeff").partition("\n")
     if first.rstrip() != "---" or not sep:
         return {}, text, None
     end = FRONTMATTER_END_RE.search(rest)
@@ -882,6 +974,205 @@ def parse_note(path: str, text: str, contexts=None) -> Note:
                 body=body, text=text, title_terms=Counter(title_terms), tag_terms=Counter(tag_terms),
                 body_terms=Counter(body_terms), warnings=[f"{path}: {problem} — lida sem frontmatter"] if problem else [])
 
+
+# ---------------------------------------------------------------- confidential items (pure; SPEC-0050, ADR-0014)
+
+def is_vault_ref(value) -> bool:
+    """True only for "<esquema>://<caminho>": scheme [a-z][a-z0-9+.-]*, non-empty path. Only the format is checked:
+    brain.py never resolves nor opens the reference (ADR-0014)."""
+    return isinstance(value, str) and bool(VAULT_REF_RE.fullmatch(value))
+
+
+def frontmatter_block(text: str) -> str:
+    """The raw YAML between the first "---" and the next "---" (or "..."), with "\n" line endings (a leading BOM
+    and CRLF endings do not hide it); "" without a closed frontmatter."""
+    first, sep, rest = (text or "").lstrip("\ufeff").replace("\r\n", "\n").partition("\n")
+    end = FRONTMATTER_END_RE.search(rest) if first.rstrip() == "---" and sep else None
+    return rest[:end.start()] if end else ""
+
+
+def marked_confidential(frontmatter: dict, text: str) -> bool:
+    """True only when the frontmatter has `confidential: true` as the YAML boolean: parse_scalar does not convert
+    types, so the line is read as written ("true" in quotes, yes, false or anything else = not confidential)."""
+    value = frontmatter.get("confidential") if isinstance(frontmatter, dict) else None
+    return (isinstance(value, str) and value.lower() == "true"
+            and bool(CONFIDENTIAL_LINE_RE.search(frontmatter_block(text))))
+
+
+def is_confidential(note: Note) -> bool:
+    """True when the note has `confidential: true` (marked_confidential)."""
+    return marked_confidential(note.frontmatter, note.text or "")
+
+
+def confidential_paths(notes) -> set:
+    return {note.path for note in notes if is_confidential(note)}
+
+
+def visible_notes(notes: list, include_confidential: bool = False) -> list:
+    """The notes a command shows: all with include_confidential, else the ones without confidential: true."""
+    return list(notes) if include_confidential else [note for note in notes if not is_confidential(note)]
+
+
+def with_frontmatter_keys(text: str, keys: dict) -> str:
+    """Text with each "key: value" of keys in the frontmatter: a key already there is replaced (its line), a
+    missing one goes before the closing "---"; without a frontmatter one is created. Used by new-note for
+    confidential: true and vault_ref, whatever the template of the vault has."""
+    nl = newline_of(text)
+    first, sep, rest = text.partition("\n")
+    end = FRONTMATTER_END_RE.search(rest) if first.rstrip() == "---" and sep else None
+    if end is None:
+        head = "".join(f"{key}: {value}{nl}" for key, value in keys.items())
+        return f"---{nl}{head}---{nl}{text}"
+    lines, done = rest[:end.start()].splitlines(), set()
+    for i, line in enumerate(lines):
+        m = KEY_RE.match(line)
+        if m and m.group(1) in keys and m.group(1) not in done:
+            lines[i] = f"{m.group(1)}: {keys[m.group(1)]}"
+            done.add(m.group(1))
+    lines += [f"{key}: {value}" for key, value in keys.items() if key not in done]
+    return first + "\n" + "".join(f"{line}{nl}" for line in lines) + rest[end.start():]
+
+
+def _secret_kind(line: str):
+    """The kind of secret written in a line, or None: "chave privada", "token" or "senha rotulada"."""
+    if PRIVATE_KEY_RE.search(line):
+        return "chave privada"
+    if TOKEN_RE_SECRET.search(line):
+        return "token"
+    for m in SECRET_LABEL_RE.finditer(line):
+        value = m.group(1).strip("\"'`")
+        if len(value) >= SECRET_MIN and not SECRET_PLACEHOLDER_RE.match(value):
+            return "senha rotulada"
+    return None
+
+
+def find_secrets(text: str) -> list:
+    """[(line, kind)] of each line of text (1 = the first) with a private key block, a token with a known prefix
+    or a labeled password; placeholders (***, <...>, ${...}, {{...}}, xxx) do not count. Never the value."""
+    found = []
+    for number, line in enumerate((text or "").splitlines(), 1):
+        kind = _secret_kind(line)
+        if kind:
+            found.append((number, kind))
+    return found
+
+
+def _digits(text: str) -> list:
+    return [int(char) for char in text if char.isdigit()]
+
+
+def valid_cpf(text: str) -> bool:
+    """The two check digits of a CPF (11 digits, not all the same)."""
+    d = _digits(text)
+    if len(d) != 11 or len(set(d)) == 1:
+        return False
+    for size in (9, 10):
+        total = sum(digit * weight for digit, weight in zip(d[:size], range(size + 1, 1, -1)))
+        if (total * 10 % 11) % 10 != d[size]:
+            return False
+    return True
+
+
+def valid_cnpj(text: str) -> bool:
+    """The two check digits of a CNPJ (14 digits, not all the same)."""
+    d = _digits(text)
+    if len(d) != 14 or len(set(d)) == 1:
+        return False
+    for size in (12, 13):
+        weights = list(range(size - 7, 1, -1)) + list(range(9, 1, -1))
+        rest = sum(digit * weight for digit, weight in zip(d[:size], weights)) % 11
+        if (0 if rest < 2 else 11 - rest) != d[size]:
+            return False
+    return True
+
+
+def valid_card(text: str) -> bool:
+    """13 to 19 digits, not all the same, that pass the Luhn check."""
+    d = _digits(text)
+    if not 13 <= len(d) <= 19 or len(set(d)) == 1:
+        return False
+    total = sum(digit if i % 2 == 0 else (digit * 2 - 9 if digit > 4 else digit * 2)
+                for i, digit in enumerate(reversed(d)))
+    return total % 10 == 0
+
+
+PERSONAL_CHECKS = {  # detector -> (regex with one value per alternative group, validator of the value)
+    "cpf": (CPF_RE, valid_cpf),
+    "cnpj": (CNPJ_RE, valid_cnpj),
+    "card": (CARD_RE, valid_card),
+    "labeled-document": (LABELED_DOCUMENT_RE, None),
+}
+
+
+def _personal_hit(line: str, detector: str) -> bool:
+    pattern, valid = PERSONAL_CHECKS[detector]
+    for m in pattern.finditer(line):
+        value = next((group for group in m.groups() if group), m.group(0))
+        if valid is None or valid(value):
+            return True
+    return False
+
+
+def find_personal_data(text: str, detectors=None, patterns=None) -> list:
+    """[(line, kind)] of the personal data written in text (1 = the first line), one per line and kind: valid CPF,
+    CNPJ and card (check digits, Luhn), labeled document (RG, CNH, passaporte...: with a digit) and each extra
+    pattern ({name: compiled regex}) under its name. detectors = the ones turned on (None = all). E-mail and phone
+    do not count. Never the value."""
+    detectors = PERSONAL_DETECTORS if detectors is None else [d for d in detectors if d in PERSONAL_CHECKS]
+    extra = dict(patterns or {})
+    found = []
+    for number, line in enumerate((text or "").splitlines(), 1):
+        if not any(char.isdigit() for char in line) and not extra:
+            continue
+        found += [(number, PERSONAL_KINDS[d]) for d in detectors if _personal_hit(line, d)]
+        found += [(number, name) for name, pattern in extra.items() if pattern.search(line)]
+    return found
+
+
+def compile_personal_data(lint) -> tuple:
+    """(detectors, patterns, problems) of the `lint` key of brain-config.yml: lint.personal_data = the detectors
+    turned on (absent = all of PERSONAL_DETECTORS); lint.personal_data_patterns = {name: regex} extra. A regex that
+    is invalid, longer than MAX_CONFLICT_PATTERN or with a nested quantifier is a problem naming the pattern (the
+    protection of compile_conflict_patterns), never compiled; the others still count."""
+    if not lint:
+        lint = {}
+    if not isinstance(lint, dict):
+        return list(PERSONAL_DETECTORS), {}, [f"lint precisa ser um mapa: {one_line(lint)}"]
+    problems, given = [], lint.get("personal_data")
+    if given is None:
+        detectors = list(PERSONAL_DETECTORS)
+    else:
+        items = [given] if isinstance(given, str) else given if isinstance(given, list) else None
+        if items is None:
+            items = list(PERSONAL_DETECTORS)
+            problems.append(f"lint.personal_data precisa ser uma lista: {one_line(given)} — usando todos")
+        names = [str(item).strip() for item in items if str(item).strip()]
+        unknown = [name for name in names if name not in PERSONAL_DETECTORS]
+        if unknown:
+            problems.append(f"lint.personal_data: detector desconhecido {one_line(', '.join(unknown))} — detectores: "
+                            f"{', '.join(PERSONAL_DETECTORS)}")
+        detectors = [name for name in PERSONAL_DETECTORS if name in names]
+    extra = lint.get("personal_data_patterns") or {}
+    if not isinstance(extra, dict):
+        problems.append(f"lint.personal_data_patterns precisa ser um mapa nome: regex: {one_line(extra)}")
+        return detectors, {}, problems
+    patterns = {}
+    for name, item in extra.items():
+        text, label = str(item), f"lint.personal_data_patterns.{one_line(name)}"
+        if len(text) > MAX_CONFLICT_PATTERN:
+            problems.append(f"{label}: regex com {len(text)} caracteres (limite {MAX_CONFLICT_PATTERN}) — não usado")
+        elif nested_quantifier(text):
+            problems.append(f"{label}: regex com quantificador aninhado {one_line(text)!r} — como (a+)+, trava a "
+                            "busca; não usado")
+        else:
+            try:
+                patterns[str(name)] = re.compile(text)
+            except re.error as e:
+                problems.append(f"{label}: regex inválido {one_line(text)!r} ({e}) — não usado")
+    return detectors, patterns, problems
+
+
+# ---------------------------------------------------------------- links and search (read only)
 
 def _link_key(target: str) -> str:
     """Comparison key of a link target or a note path: NFC (a name typed in NFC finds a file stored in NFD), "/",
@@ -1024,9 +1315,12 @@ def make_snippet(note: Note, terms) -> str:
     return piece
 
 
-def search(notes: list, query: str, context=None, note_type=None, tag=None, limit=10) -> list:
+def search(notes: list, query: str, context=None, note_type=None, tag=None, limit=10,
+           include_confidential=False) -> list:
     """Notes of the query by score: sum per query term of tf * idf, weighting title 3, tags 2 and body 1.
-    Only score > 0, descending; filters by context, frontmatter.type and tag."""
+    Only score > 0, descending; filters by context, frontmatter.type and tag. Confidential notes are left out
+    (never counted in the idf either) unless include_confidential."""
+    notes = visible_notes(notes, include_confidential)
     terms = unique(tokenize(query))
     if not terms:
         return []
@@ -1049,12 +1343,13 @@ def search(notes: list, query: str, context=None, note_type=None, tag=None, limi
 
 
 def link_graph(notes: list, index: LinkIndex) -> dict:
-    """Undirected neighborhood of each note: the notes it links to and the ones that link to it."""
+    """Undirected neighborhood of each note: the notes it links to and the ones that link to it. The index may know
+    more notes than `notes` (the confidential ones left out): a link to one of them is not an edge."""
     graph = {note.path: set() for note in notes}
     for note in notes:
         for target in note.links:
             dest = index.resolve(target)
-            if dest and dest != note.path:
+            if dest and dest != note.path and dest in graph:
                 graph[note.path].add(dest)
                 graph[dest].add(note.path)
     return graph
@@ -1079,22 +1374,27 @@ def moc_notes(paths, values=None) -> set:
     return {path for path in paths if _link_key(path).startswith(folder + "/")}
 
 
-def related(notes: list, note=None, text=None, limit=10, values=None) -> list:
+def related(notes: list, note=None, text=None, limit=10, values=None, include_confidential=False) -> list:
     """Notes like `note` (a Note.path) or like a free `text`, by 0.5 * TF-IDF cosine + 0.2 * tag Jaccard
     + 0.1 * same context + 0.2 * neighborhood (1 direct link, 0.5 two hops). Excludes the note itself and the
     generated index.md and log.md (never results nor a path between neighbors); descending; each result says why
-    (reasons)."""
-    generated = generated_notes((n.path for n in notes), values)
+    (reasons). Confidential notes are neither results nor neighbors unless include_confidential; a confidential
+    `note` without it = BrainError (exit 2)."""
     index = LinkIndex(n.path for n in notes)
-    graph = link_graph(notes, index)
     if note is not None:
         ref = next((n for n in notes if n.path == note), None)
         if ref is None:
             raise BrainError(f"nota não encontrada: {note}")
+        if not include_confidential and is_confidential(ref):
+            raise BrainError(CONFIDENTIAL_REFUSED)
+    notes = visible_notes(notes, include_confidential)
+    generated = generated_notes((n.path for n in notes), values)
+    graph = link_graph(notes, index)
+    if note is not None:
         direct = graph[ref.path] - generated
     else:
         ref = parse_note("", text or "")
-        direct = {index.resolve(target) for target in ref.links} - {None} - generated
+        direct = {index.resolve(target) for target in ref.links} & graph.keys() - generated
     two_hops = set().union(*(graph[p] for p in direct)) - direct - {ref.path} - generated if direct else set()
 
     df = Counter()
@@ -1143,14 +1443,22 @@ def related_reasons(common_tags, same_context, neighborhood, contributions) -> l
     return reasons
 
 
-def note_links(notes: list, path: str, index: LinkIndex) -> dict:
-    """Outgoing links of the note at `path` (resolved or None), its backlinks and its broken targets."""
+def note_links(notes: list, path: str, index: LinkIndex, include_confidential=False) -> dict:
+    """Outgoing links of the note at `path` (resolved or None), its backlinks and its broken targets. Without
+    include_confidential a confidential note is neither an outgoing link nor a backlink (nor broken: it exists),
+    "confidential_omitted" counts them (distinct notes), and a confidential `path` = BrainError (exit 2)."""
     note = next(n for n in notes if n.path == path)
-    outgoing = [{"target": target, "path": index.resolve(target)} for target in note.links]
-    backlinks = sorted(n.path for n in notes
-                       if n.path != path and any(index.resolve(target) == path for target in n.links))
+    hidden = set() if include_confidential else confidential_paths(notes)
+    if path in hidden:
+        raise BrainError(CONFIDENTIAL_REFUSED)
+    resolved = [{"target": target, "path": index.resolve(target)} for target in note.links]
+    outgoing = [item for item in resolved if item["path"] not in hidden]
+    linking = [n.path for n in notes if n.path != path and any(index.resolve(target) == path for target in n.links)]
+    backlinks = sorted(p for p in linking if p not in hidden)
+    omitted = {item["path"] for item in resolved if item["path"] in hidden} | (set(linking) & hidden)
     return {"outgoing": outgoing, "backlinks": backlinks,
-            "broken": [item["target"] for item in outgoing if item["path"] is None]}
+            "broken": [item["target"] for item in outgoing if item["path"] is None],
+            "confidential_omitted": len(omitted)}
 
 
 # ---------------------------------------------------------------- query: context package (pure)
@@ -1177,18 +1485,11 @@ def neighbors(seeds: list, graph: dict, hops: int, blocked=()) -> dict:
     return found
 
 
-def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_chars=40000, values=None) -> dict:
-    """Package of notes that answer the query: the MOC of `context` (when given), the search results by score and
-    their link neighbors (outgoing links and backlinks) up to `hops` steps, by distance and title; no note repeats.
-    The MOC is never walked through (it would bring the whole context): notes reached only through it stay out;
-    without `context` the MOC is an ordinary note. The generated index.md and log.md may be search results but are
-    never walked through either. In that priority order each note goes in whole when it still
-    fits max_chars (sum of len(content)); one that does not fit goes to "omitted" (path, title, reason) and the
-    next ones are still tried. "broken" lists the broken links of the notes in the package. Nothing found by
-    the search = empty package (no MOC alone)."""
+def context_picks(notes: list, index: LinkIndex, query: str, context, hops: int, limit: int, values) -> list:
+    """[(path, reason)] of build_context in the contract order (MOC, search results, link neighbors); `notes` are
+    the ones that may be picked and `index` resolves links over the whole vault."""
     by_path = {note.path: note for note in notes}
-    index = LinkIndex(by_path)
-    results = search(notes, query, context=context, limit=limit)
+    results = search(notes, query, context=context, limit=limit, include_confidential=True)
     moc = moc_path(context, values) if context and results else None
     picked = [(moc, "moc")] if moc in by_path else []  # (path, reason) in the contract order
     generated = generated_notes(by_path, values)
@@ -1199,6 +1500,27 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     picked += [(path, f"link:{distance}")
                for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
                                                                               item[0]))]
+    return picked
+
+
+def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_chars=40000, values=None,
+                  include_confidential=False) -> dict:
+    """Package of notes that answer the query: the MOC of `context` (when given), the search results by score and
+    their link neighbors (outgoing links and backlinks) up to `hops` steps, by distance and title; no note repeats.
+    The MOC is never walked through (it would bring the whole context): notes reached only through it stay out;
+    without `context` the MOC is an ordinary note. The generated index.md and log.md may be search results but are
+    never walked through either. In that priority order each note goes in whole when it still
+    fits max_chars (sum of len(content)); one that does not fit goes to "omitted" (path, title, reason) and the
+    next ones are still tried. "broken" lists the broken links of the notes in the package. Nothing found by
+    the search = empty package (no MOC alone). Without include_confidential the confidential notes are neither
+    picked nor walked through (a link to one is not broken) and "confidential_omitted" counts the distinct ones that
+    the package would have picked with them."""
+    by_path = {note.path: note for note in notes}
+    index = LinkIndex(by_path)
+    shown = visible_notes(notes, include_confidential)
+    picked = context_picks(shown, index, query, context, hops, limit, values)
+    hidden = by_path.keys() - {note.path for note in shown}
+    every = context_picks(notes, index, query, context, hops, limit, values) if hidden else []
     package, omitted, broken, size = [], [], [], 0
     for path, reason in picked:
         note = by_path[path]
@@ -1209,20 +1531,24 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
         else:
             omitted.append({"path": path, "title": note.title, "reason": reason})
         broken += [{"note": path, "target": target} for target in note.links if index.resolve(target) is None]
-    return {"query": query, "notes": package, "omitted": omitted, "broken": broken}
+    return {"query": query, "notes": package, "omitted": omitted, "broken": broken,
+            "confidential_omitted": len({path for path, _ in every if path in hidden})}
 
 
 # ---------------------------------------------------------------- export: NotebookLM package (pure; SPEC-0024)
 
-def flatten_links(text: str) -> str:
+def flatten_links(text: str, hidden=None) -> str:
     """Wikilinks as plain text ([[Nota]] -> "Nota", [[Nota|apelido]] -> "apelido", [[Nota#seção]] -> "Nota >
     seção") and attachment embeds as "(anexo: nome)" (![[grafico.png]]); code (fenced blocks of fenced_lines and
-    inline `code` or ``code``) and the rest of the text do not change."""
+    inline `code` or ``code``) and the rest of the text do not change. hidden(page) True = the link (alias and
+    section included) becomes CONFIDENTIAL_LINK: the export never writes the title of a confidential note."""
     def plain(match) -> str:
         target, _, alias = match.group(1).partition("|")
         target = target.rstrip("\\").strip()
         page, _, section = target.partition("#")
         page, section = page.strip(), section.strip()
+        if hidden is not None and page and hidden(page):
+            return CONFIDENTIAL_LINK
         name = posixpath.basename(page)
         if match.group(0).startswith("!") and posixpath.splitext(name)[1].lower() not in ("", ".md"):
             return f"(anexo: {name})"
@@ -1239,17 +1565,20 @@ def flatten_links(text: str) -> str:
     return "".join(line if code else outside_code(line) for line, code in fenced_lines(text.splitlines(True)))
 
 
-def export_notes(notes: list, moc: str, hops: int, values=None) -> list:
+def export_notes(notes: list, moc: str, hops: int, values=None, include_confidential=False) -> list:
     """[(path, origin)] of the NotebookLM package of the MOC at `moc`: the MOC, the notes it cites (in its order)
     and their link neighbors up to `hops` steps, by distance and title (neighbors of build_context). The MOC is
     never walked through, nor any other MOC of layout.mocs, nor the generated index.md and log.md: notes reached
-    only through them stay out."""
+    only through them stay out. Confidential notes are never cited nor walked through (include_confidential only
+    serves to count what was left out)."""
     by_path = {note.path: note for note in notes}
     index = LinkIndex(by_path)
+    shown = visible_notes(notes, include_confidential)
+    hidden = by_path.keys() - {note.path for note in shown}
     blocked = [moc] + sorted((generated_notes(by_path, values) | moc_notes(by_path, values)) - {moc})
     cited = unique(path for path in (index.resolve(target) for target in by_path[moc].links)
-                   if path and path not in blocked)
-    found = neighbors(cited, link_graph(notes, index), hops, blocked) if cited and hops > 0 else {}
+                   if path and path not in blocked and path not in hidden)
+    found = neighbors(cited, link_graph(shown, index), hops, blocked) if cited and hops > 0 else {}
     picked = [(moc, "MOC")] + [(path, "citada pelo MOC") for path in cited]
     picked += [(path, f"link:{distance}")
                for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
@@ -1257,11 +1586,11 @@ def export_notes(notes: list, moc: str, hops: int, values=None) -> list:
     return picked
 
 
-def export_text(note: Note) -> str:
+def export_text(note: Note, hidden=None) -> str:
     """The note for the NotebookLM: the title as the first line (no frontmatter), the body without the
-    brain:begin/end markers and with flatten_links."""
+    brain:begin/end markers and with flatten_links (a link to a confidential note = CONFIDENTIAL_LINK)."""
     lines = [line for line in (note.body or "").splitlines() if not re.match(r"^\s*<!-- brain:(?:begin|end) ", line)]
-    body = flatten_links("\n".join(lines)).strip()
+    body = flatten_links("\n".join(lines), hidden).strip()
     title = flatten_links(note.title)
     first = body.splitlines()[0] if body else ""
     heading = HEADING_RE.match(first)
@@ -1291,15 +1620,23 @@ def export_name(title: str, path: str, taken: set) -> str:
 
 
 def export_package(notes: list, moc: str, hops: int, values=None) -> dict:
-    """{"notes": [{"path", "title", "origin", "file"}], "files": {name: text}}: one .md per note of export_notes,
-    sources.md (where each one came from) and combined.md (every note in one file; dropped without --combined)."""
+    """{"notes": [{"path", "title", "origin", "file"}], "files": {name: text}, "confidential_omitted": N}: one .md
+    per note of export_notes, sources.md (where each one came from) and combined.md (every note in one file;
+    dropped without --combined). A confidential note never goes in (N = the distinct ones left out); a
+    confidential MOC = BrainError (exit 2)."""
     by_path = {note.path: note for note in notes}
+    if is_confidential(by_path[moc]):
+        raise BrainError("MOC confidencial — o export-notebooklm nunca exporta item confidencial")
+    hidden = confidential_paths(notes)
+    every = export_notes(notes, moc, hops, values, include_confidential=True) if hidden else []
+    index = LinkIndex(by_path)
+    secret = (lambda page: index.resolve(page) in hidden) if hidden else None
     taken = {export_key(name) for name in EXPORT_EXTRA}
     items, files = [], {}
     for path, origin in export_notes(notes, moc, hops, values):
         note = by_path[path]
         name = export_name(note.title, path, taken)
-        files[name] = export_text(note)
+        files[name] = export_text(note, secret)
         items.append({"path": path, "title": note.title, "origin": origin, "file": name})
     moc_title = flatten_links(by_path[moc].title)
     lines = [f"# Fontes — {moc_title}", "", f"Pacote para o NotebookLM exportado do MOC {moc} (hops: {hops}).", ""]
@@ -1308,7 +1645,7 @@ def export_package(notes: list, moc: str, hops: int, values=None) -> dict:
     files["sources.md"] = "\n".join(lines) + "\n"
     files["combined.md"] = (f"# {moc_title} — todas as notas\n\n"
                             + "\n---\n\n".join(files[item["file"]] for item in items))
-    return {"notes": items, "files": files}
+    return {"notes": items, "files": files, "confidential_omitted": len({path for path, _ in every if path in hidden})}
 
 
 # ---------------------------------------------------------------- store: note paths, relations, regions (pure)
@@ -1501,9 +1838,10 @@ def render_note(template: str, tags=(), **fields) -> str:
     return head + fill_template(rest[end.start():], **fields)
 
 
-def render_source_note(title: str, date: str, context, file_rel, url, extracted: str) -> str:
+def render_source_note(title: str, date: str, context, file_rel, url, extracted: str, opaque=None) -> str:
     """Source note of ingest: frontmatter type: source, title, context, created, tags, source_url or files, and
-    the extracted text (or _(pending)_) under "## Extracted text"."""
+    the extracted text (or _(pending)_) under "## Extracted text". opaque = (size, sha256) of a confidential file
+    (ingest --confidential): confidential: true, size and sha256, and NOT_EXTRACTED in place of any text."""
     frontmatter = {"type": "source", "title": title}
     if context:
         frontmatter["context"] = context
@@ -1512,6 +1850,9 @@ def render_source_note(title: str, date: str, context, file_rel, url, extracted:
         frontmatter["source_url"] = url
     else:
         frontmatter["files"] = [file_rel]
+    if opaque is not None:
+        frontmatter.update(confidential="true", size=str(opaque[0]), sha256=opaque[1])
+        extracted = NOT_EXTRACTED
     text = extracted.strip("\n").rstrip() or PENDING_TEXT
     return (f"---\n{dump_yaml(frontmatter)}---\n\n# {title}\n\n## Summary\n\n## Extracted text\n\n{text}\n\n"
             f"{RELATIONS_HEADING}\n")
@@ -1532,11 +1873,13 @@ def wikilink(path: str, title: str, index: LinkIndex) -> str:
 
 
 class IndexEntry:
-    """What index needs of a note: path, title, type, context and created (AAAA-MM-DD or "")."""
-    __slots__ = ("context", "created", "note_type", "path", "title")
+    """What index needs of a note: path, title, type, context, created (AAAA-MM-DD or "") and whether it is
+    confidential (then it is listed neither in a MOC nor in index.md)."""
+    __slots__ = ("confidential", "context", "created", "note_type", "path", "title")
 
-    def __init__(self, path, title, note_type, context, created):
+    def __init__(self, path, title, note_type, context, created, confidential=False):
         self.path, self.title, self.note_type, self.context, self.created = path, title, note_type, context, created
+        self.confidential = confidential
 
 
 def index_entry(rel: str, text: str, contexts) -> IndexEntry:
@@ -1545,7 +1888,8 @@ def index_entry(rel: str, text: str, contexts) -> IndexEntry:
     title = note_title(rel, frontmatter, "" if isinstance(frontmatter.get("title"), str) else prose(body))
     note_type = frontmatter.get("type")
     return IndexEntry(rel, title, note_type.strip() if isinstance(note_type, str) else "",
-                      note_context(rel, frontmatter, contexts), created_date(frontmatter.get("created")))
+                      note_context(rel, frontmatter, contexts), created_date(frontmatter.get("created")),
+                      marked_confidential(frontmatter, text))
 
 
 def created_date(value) -> str:
@@ -1645,7 +1989,7 @@ def cmd_init(args, config_home=None) -> int:
         raise BrainError(error)
     vault, local_path = Path(vault_s), local_config_path(config_home)
     shared_path = shared_config_path(vault_s)
-    local_text = render_local_config(vault_s, files_s, args.provider)
+    local_text = render_local_config(vault_s, files_s, args.provider, local_backup_targets(local_path))
 
     if args.join:
         if args.adopt or args.map or args.context or args.force:
@@ -1827,6 +2171,8 @@ def doctor_items(config: dict, local_path: Path) -> list:
         rows += kebab_context_items(str(name), folder, f"contexts.{name}.folder" in problems)
     rows += processor_items(values["processors"])
     rows.append(lint_item(values, problems))
+    rows.append(confidential_item(values, problems))
+    rows += backup_items(values)
     return rows + provider_items(values)
 
 
@@ -1887,6 +2233,22 @@ def provider_items(values: dict) -> list:
     return [(status, f"provider {provider}", note)]
 
 
+def confidential_item(values: dict, problems: dict) -> tuple:
+    """The doctor line of confidential items: "OK confidential — N notas confidenciais" (only the number: never a
+    title nor a path)."""
+    if problems:
+        return ("AVISO", "confidential", "não conferido (brain-config.yml com valores fora do vault)")
+    count = 0
+    try:
+        for path, _ in walk_notes(values):
+            text = path.read_bytes().decode("utf-8-sig", errors="replace")
+            if CONFIDENTIAL_LINE_RE.search(frontmatter_block(text)):  # only then the YAML is parsed
+                count += marked_confidential(read_frontmatter(text)[0], text)
+    except (BrainError, OSError) as e:
+        return ("AVISO", "confidential", f"não conferido: {e.strerror if isinstance(e, OSError) else e}")
+    return ("OK", "confidential", f"{count} notas confidenciais")
+
+
 def cmd_doctor(as_json: bool, config_home=None) -> int:
     rows = doctor_items(read_config(config_home), local_config_path(config_home))
     code = 1 if any(status == "ERRO" for status, _, _ in rows) else 0
@@ -1935,13 +2297,33 @@ def find_note(ref: str, index: LinkIndex) -> str:
     return path
 
 
+def has_confidential(notes: list) -> bool:
+    return any(is_confidential(note) for note in notes)
+
+
+def confidential_omitted(every: list, notes: list) -> int:
+    """How many distinct confidential notes are in `every`, the output the command would give with
+    --include-confidential (the ones left out of the output without it)."""
+    return len({item["path"] for item in every} & confidential_paths(notes))
+
+
+def print_confidential_omitted(omitted: int):
+    if omitted:
+        print(f"({omitted} nota(s) confidencial(is) fora da lista — {INCLUDE_CONFIDENTIAL} só a pedido da pessoa)")
+
+
 def cmd_search(args, config_home=None) -> int:
     check_limit(args.limit)
     query = " ".join(args.query)
     notes, warnings = load_notes(config_home)
-    results = search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit)
+    include = args.include_confidential
+    results = search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
+                     include_confidential=include)
+    omitted = 0 if include or not has_confidential(notes) else confidential_omitted(
+        search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
+               include_confidential=True), notes)
     if args.json:
-        print_json({"query": query, "results": results, "warnings": warnings})
+        print_json({"query": query, "results": results, "warnings": warnings, "confidential_omitted": omitted})
         return 0
     print_warnings(warnings)
     if not results:
@@ -1950,19 +2332,21 @@ def cmd_search(args, config_home=None) -> int:
         print(f"{result['score']:.2f}  {result['path']}  — {result['title']}")
         if result["snippet"]:
             print(f"    {result['snippet']}")
+    print_confidential_omitted(omitted)
     return 0
 
 
 def cmd_related(args, config_home=None) -> int:
     check_limit(args.limit)
     values, notes, warnings = load_vault(config_home)
-    if args.note is not None:
-        path = find_note(args.note, LinkIndex(n.path for n in notes))
-        results = related(notes, note=path, limit=args.limit, values=values)
-    else:
-        results = related(notes, text=args.text, limit=args.limit, values=values)
+    include = args.include_confidential
+    path = find_note(args.note, LinkIndex(n.path for n in notes)) if args.note is not None else None
+    results = related(notes, note=path, text=args.text, limit=args.limit, values=values,
+                      include_confidential=include)
+    omitted = 0 if include or not has_confidential(notes) else confidential_omitted(
+        related(notes, note=path, text=args.text, limit=args.limit, values=values, include_confidential=True), notes)
     if args.json:
-        print_json({"results": results, "warnings": warnings})
+        print_json({"results": results, "warnings": warnings, "confidential_omitted": omitted})
         return 0
     print_warnings(warnings)
     if not results:
@@ -1970,6 +2354,7 @@ def cmd_related(args, config_home=None) -> int:
     for result in results:
         print(f"{result['score']:.2f}  {result['path']}  — {result['title']}")
         print(f"    {'; '.join(result['reasons'])}")
+    print_confidential_omitted(omitted)
     return 0
 
 
@@ -1977,7 +2362,7 @@ def cmd_links(args, config_home=None) -> int:
     notes, warnings = load_notes(config_home)
     index = LinkIndex(n.path for n in notes)
     path = find_note(args.note, index)
-    data = note_links(notes, path, index)
+    data = note_links(notes, path, index, include_confidential=args.include_confidential)
     if args.json:
         print_json(dict(data, warnings=warnings))
         return 0
@@ -1991,6 +2376,7 @@ def cmd_links(args, config_home=None) -> int:
     print(f"Quebrados ({len(data['broken'])}):")
     for target in data["broken"]:
         print(f"  {target}")
+    print_confidential_omitted(data["confidential_omitted"])
     return 0
 
 
@@ -2003,13 +2389,14 @@ def cmd_context(args, config_home=None) -> int:
     query = " ".join(args.query)
     values, notes, warnings = load_vault(config_home)
     data = build_context(notes, query, context=args.context, hops=args.hops, limit=args.limit,
-                         max_chars=args.max_chars, values=values)
+                         max_chars=args.max_chars, values=values, include_confidential=args.include_confidential)
     if args.json:
         print_json(dict(data, warnings=warnings))
         return 0
     print_warnings(warnings)
     if not data["notes"] and not data["omitted"]:
         print(f"Nenhuma nota encontrada para: {query}")
+        print_confidential_omitted(data["confidential_omitted"])
         return 0
     for item in data["notes"]:
         print(f"=== {item['path']} ({item['reason']}) ===")
@@ -2023,6 +2410,7 @@ def cmd_context(args, config_home=None) -> int:
         print("Links quebrados:")
         for item in data["broken"]:
             print(f"  {item['note']} → {item['target']}")
+    print_confidential_omitted(data["confidential_omitted"])
     return 0
 
 
@@ -2107,15 +2495,581 @@ def cmd_export_notebooklm(args, config_home=None) -> int:
     write_export(folder, files)
     if args.json:
         print_json({"moc": moc, "out": str(folder), "notes": data["notes"], "files": list(files),
-                    "warnings": warnings})
+                    "warnings": warnings, "confidential_omitted": data["confidential_omitted"]})
         return 0
     print_warnings(warnings)
     print(f"Pacote do NotebookLM: {len(data['notes'])} notas de {moc} em {one_line(str(folder))}")
     for item in data["notes"]:
         print(f"  {item['file']} — {item['path']} ({item['origin']})")
     print(f"  {', '.join(name for name in files if name in EXPORT_EXTRA)}")
+    if data["confidential_omitted"]:
+        print(f"  ({data['confidential_omitted']} nota(s) confidencial(is) fora do pacote: nunca são exportadas)")
     print("Suba os arquivos como fontes no NotebookLM (references/notebooklm.md).")
     return 0
+
+
+# ---------------------------------------------------------------- backup and restore (SPEC-0051, ADR-0015)
+
+def backup_name(with_files: bool = False, clock=None) -> str:
+    """"second-brain-AAAA-MM-DD-HHMMSS[-files].zip" with the time of clock() (None = datetime.now). Pure."""
+    stamp = (clock or dt.datetime.now)().strftime(BACKUP_STAMP)
+    return f"second-brain-{stamp}{'-files' if with_files else ''}.zip"
+
+
+def backup_moment(name: str):
+    """datetime of the stamp of a backup name, or None when the name is not of the pattern."""
+    match = BACKUP_NAME_RE.match(name)
+    if not match:
+        return None
+    try:
+        return dt.datetime.strptime(match.group(1), BACKUP_STAMP)
+    except ValueError:
+        return None
+
+
+def backup_names(folder: Path) -> list:
+    """Names of the pattern in folder (files only), from the newest to the oldest stamp; OSError propagates."""
+    names = [entry.name for entry in os.scandir(folder)
+             if backup_moment(entry.name) and entry.is_file(follow_symlinks=False)]
+    return sorted(names, key=lambda name: (backup_moment(name), name), reverse=True)
+
+
+def rotate_backups(folder, keep: int = BACKUP_DEFAULTS["keep"], new=None, discard=None) -> list:
+    """The only removal of brain.py outside the closed cleanup list (ADR-0015). Returns the names removed.
+
+    Rotation: in folder (a backup target, never inside the vault nor files), only the names of BACKUP_NAME_RE count,
+    each kind (with and without -files) apart; the oldest beyond `keep` (at least 1) are removed, and `new` (the zip
+    this backup just wrote and verified) never is. Every other file of the folder stays.
+    discard: the "<name>.partial" this backup created and could not finish: that file alone is removed, and nothing
+    is rotated (the call that failed never costs an older backup)."""
+    folder = Path(folder)
+    if discard is not None:
+        discard = Path(discard)
+        name = discard.name
+        if (discard.parent == folder and name.endswith(BACKUP_PARTIAL)
+                and backup_moment(name[:-len(BACKUP_PARTIAL)]) and discard.is_file()):
+            discard.unlink()
+            return [name]
+        return []
+    keep = max(1, int(keep))
+    removed = []
+    for with_files in (False, True):
+        names = [name for name in backup_names(folder) if bool(BACKUP_NAME_RE.match(name).group(2)) == with_files]
+        for name in names[keep:]:
+            if name != new:
+                (folder / name).unlink()
+                removed.append(name)
+    return sorted(removed)
+
+
+def tree_files(root: Path):
+    """(absolute path, posix path relative to root) of every file below root, in path order (hidden folders
+    included: a backup keeps .obsidian/ and .trash/). Left out: what is not a regular file (a broken link, a socket,
+    a pipe) and a symbolic link that points outside root (its content is not the vault's); folder links are not
+    followed (os.walk)."""
+    real_root = Path(root).resolve()
+    for base, dirs, files in os.walk(root):
+        dirs.sort()
+        rel = Path(base).relative_to(root).as_posix()
+        for name in sorted(files):
+            path = Path(base) / name
+            if not path.is_file():
+                continue
+            if path.is_symlink() and not is_inside(str(path.resolve()), str(real_root)):
+                continue
+            yield path, name if rel == "." else f"{rel}/{name}"
+
+
+def build_manifest(vault, files=None, clock=None, skipped=None) -> dict:
+    """brain-backup.json of a backup: brain_version, created, with_files (files given) and entries, the sha256 of
+    each "vault/<rel>" and "files/<rel>". Paths are relative: no folder of this machine goes into the zip.
+    A file that cannot be read stays out of the entries; its "vault/<rel>" goes into `skipped` (a list) when given,
+    else the OSError propagates."""
+    entries = {}
+    for root, folder in (("vault", vault), ("files", files)):
+        if folder is not None:
+            for path, rel in tree_files(Path(folder)):
+                try:
+                    entries[f"{root}/{rel}"] = file_digest(path)[1]
+                except OSError:
+                    if skipped is None:
+                        raise
+                    skipped.append(f"{root}/{rel}")
+    return {"brain_version": BRAIN_VERSION, "created": (clock or dt.datetime.now)().isoformat(timespec="seconds"),
+            "with_files": files is not None, "entries": entries}
+
+
+def backup_source(entry: str, vault: Path, files) -> Path:
+    root, _, rel = entry.partition("/")
+    return (vault if root == "vault" else Path(files)) / rel
+
+
+def zip_file_entry(zf, entry: str, source: Path):
+    """source copied in blocks into the entry of an open zip; returns its sha256, or None when source is gone."""
+    try:
+        info = zipfile.ZipInfo.from_file(source, entry)
+        handle = open(source, "rb")  # noqa: SIM115 — closed by the with below; opened here to catch a removed file
+    except FileNotFoundError:
+        return None
+    info.compress_type = zipfile.ZIP_DEFLATED
+    digest = hashlib.sha256()
+    with handle, zf.open(info, "w", force_zip64=True) as dest:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+            dest.write(block)
+    return digest.hexdigest()
+
+
+def write_backup_zip(partial: Path, manifest: dict, vault: Path, files=None):
+    """Write the zip into `partial`, created exclusively (FileExistsError when it exists): each entry of the
+    manifest read in blocks, then brain-backup.json. A file changed since the manifest gets the sha256 of what was
+    written; a file gone since then leaves the manifest. Failures (OSError) propagate to the caller."""
+    with open(partial, "xb") as handle, zipfile.ZipFile(handle, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+        for entry in list(manifest["entries"]):
+            digest = zip_file_entry(zf, entry, backup_source(entry, vault, files))
+            if digest is None:
+                del manifest["entries"][entry]
+            else:
+                manifest["entries"][entry] = digest
+        zf.writestr(BACKUP_MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=2))
+
+
+def safe_entry(name: str) -> bool:
+    """False for a zip entry that could land outside the destination: empty, absolute ("/x", "\\x", "C:..."), a
+    folder (ending in "/"), or with a ".." part."""
+    text = str(name).replace("\\", "/")
+    if not text or text.startswith("/") or text.endswith("/") or re.match(r"^[A-Za-z]:", text) or "\x00" in text:
+        return False
+    return ".." not in text.split("/")
+
+
+def read_manifest(zf) -> dict:
+    """The manifest of an open backup zip; missing or invalid = ValueError with the reason."""
+    try:
+        manifest = json.loads(zf.read(BACKUP_MANIFEST).decode("utf-8"))
+    except KeyError:
+        raise ValueError(f"sem {BACKUP_MANIFEST}") from None
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ValueError(f"{BACKUP_MANIFEST} inválido: {e}") from None
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("entries"), dict):
+        raise ValueError(f"{BACKUP_MANIFEST} inválido: sem entries")  # noqa: TRY004 — a reason, like the others
+    return manifest
+
+
+def verify_backup(zip_path) -> tuple:
+    """(ok, detail) of a backup zip: it opens, every name is safe (safe_entry), and each entry of the manifest
+    exists and matches its sha256. detail = "N entradas", or the reason (zip inválido, entrada faltando, sha256
+    diferente, entrada perigosa)."""
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            manifest = read_manifest(zf)
+            names = set(zf.namelist())
+            unsafe = sorted(name for name in names | set(manifest["entries"]) if not safe_entry(name))
+            if unsafe:
+                return False, f"entrada perigosa: {one_line(unsafe[0])}"
+            for entry, expected in manifest["entries"].items():
+                if entry not in names:
+                    return False, f"entrada faltando: {one_line(entry)}"
+                digest = hashlib.sha256()
+                with zf.open(entry) as handle:
+                    for block in iter(lambda: handle.read(1 << 20), b""):
+                        digest.update(block)
+                if digest.hexdigest() != expected:
+                    return False, f"sha256 diferente: {one_line(entry)}"
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, zlib.error, NotImplementedError) as e:
+        return False, f"zip inválido: {e}"
+    except ValueError as e:  # the manifest (read_manifest)
+        return False, str(e)
+    except OSError as e:
+        return False, f"não consegui ler o zip: {e.strerror or e}"
+    return True, f"{len(manifest['entries'])} entradas"
+
+
+def zip_summary(path: Path) -> dict:
+    """name, created, size, entries and with_files of a backup zip of a target, read from the manifest (entries None
+    and "detail" when it cannot be read)."""
+    moment, item = backup_moment(path.name), {"name": path.name}
+    item["created"] = moment.isoformat() if moment else None
+    item["with_files"] = bool(BACKUP_NAME_RE.match(path.name).group(2))
+    try:
+        item["size"] = path.stat().st_size
+        with zipfile.ZipFile(path) as zf:
+            manifest = read_manifest(zf)
+        item["entries"], item["with_files"] = len(manifest["entries"]), bool(manifest.get("with_files"))
+    except (OSError, ValueError, EOFError, zipfile.BadZipFile, zlib.error) as e:
+        item.setdefault("size", None)
+        item["entries"], item["detail"] = None, f"não consegui ler: {getattr(e, 'strerror', None) or e}"
+    return item
+
+
+def target_problem(folder: Path):
+    """Why a backup target cannot be used (missing, not a folder, not readable), or None."""
+    if not folder.exists():
+        return "pasta não encontrada"
+    if not folder.is_dir():
+        return "não é uma pasta"
+    try:
+        os.scandir(folder).close()
+    except OSError as e:
+        return e.strerror or str(e)
+    return None
+
+
+def check_backup_target(target: str, values: dict, what: str) -> str:
+    """target as an absolute path; inside the vault or the files folder = BrainError (exit 2), before any write."""
+    folder = absolute(target)
+    for key in ("vault", "files"):
+        if values.get(key) and inside_on_disk(folder, values[key]):
+            raise BrainError(f"{what} dentro {'do vault' if key == 'vault' else 'da pasta files'}: {target} — "
+                             "o backup fica sempre fora deles (references/backup.md)")
+    return folder
+
+
+def same_folder(a: str, b: str) -> bool:
+    """True when a and b are the same folder: the same resolved path, or the same folder on disk (samefile)."""
+    if os.path.realpath(a) == os.path.realpath(b):
+        return True
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def distinct_folders(folders) -> list:
+    """folders without repeats, the first spelling of each folder kept (same_folder)."""
+    kept = []
+    for folder in folders:
+        if not any(same_folder(folder, other) for other in kept):
+            kept.append(folder)
+    return kept
+
+
+def stale_partials(folder: Path) -> list:
+    """Names "<backup name>.partial" in a target: left by an interrupted backup (or one running right now). Only
+    reported: brain.py never removes them (ADR-0015); the person can delete them by hand."""
+    names = [entry.name for entry in os.scandir(folder) if entry.name.endswith(BACKUP_PARTIAL)
+             and backup_moment(entry.name[:-len(BACKUP_PARTIAL)]) and entry.is_file(follow_symlinks=False)]
+    return sorted(names)
+
+
+PARTIAL_HINT = "backup interrompido; pode ser apagado à mão (references/backup.md)"
+
+
+def cmd_backup_target_add(args, config_home=None) -> int:
+    config = read_config(config_home)
+    values, local_path = config["values"], local_config_path(config_home)
+    folder = check_backup_target(args.folder, values, "destino")
+    known = next((target for target in values["backup_targets"] if same_folder(folder, target)), None)
+    if known is not None:
+        print(f"destino já existe: {known}" + (f" (mesma pasta de {folder})" if known != folder else ""))
+        return 0
+    local = read_yaml(local_path)
+    local["backup_targets"] = values["backup_targets"] + [folder]
+    write_local_config(local_path, LOCAL_HEADER + dump_yaml(local))
+    print(f"Destino de backup acrescentado: {folder} (configuração local: {local_path})")
+    problem = target_problem(Path(folder))
+    if problem:
+        print(f"aviso: {folder} — {problem}; o backup nesse destino falha até a pasta existir", file=sys.stderr)
+    return 0
+
+
+def backup_to(folder: Path, name: str, manifest: dict, vault: Path, files, keep: int) -> dict:
+    """One target of the backup: <name>.partial written and verified, renamed to <name>, then rotation (ADR-0015).
+    A failure leaves the older backups as they were and removes only the .partial this call created."""
+    result = {"path": str(folder), "status": "failed", "detail": "", "removed": []}
+    problem = target_problem(folder)
+    if problem:
+        result["detail"] = problem
+        return result
+    final, partial = folder / name, folder / (name + BACKUP_PARTIAL)
+    if final.exists() or partial.exists():
+        result["detail"] = f"já existe: {(final if final.exists() else partial).name}"
+        return result
+    try:
+        write_backup_zip(partial, manifest, vault, files)
+    except FileExistsError:
+        result["detail"] = f"já existe: {partial.name}"
+        return result
+    except OSError as e:
+        result["detail"] = f"não consegui gravar o zip: {e.strerror or e}"
+        with contextlib.suppress(OSError):
+            rotate_backups(folder, keep, discard=partial)
+        return result
+    ok, detail = verify_backup(partial)
+    if not ok:
+        result["detail"] = f"zip gravado não confere: {detail}"
+        with contextlib.suppress(OSError):
+            rotate_backups(folder, keep, discard=partial)
+        return result
+    try:
+        if final.exists():  # never overwrite: another backup took the name meanwhile
+            raise FileExistsError(errno.EEXIST, "já existe", str(final))
+        os.rename(partial, final)
+    except OSError as e:
+        result["detail"] = f"já existe: {final.name}" if isinstance(e, FileExistsError) else \
+            f"não consegui renomear o zip: {e.strerror or e}"
+        with contextlib.suppress(OSError):
+            rotate_backups(folder, keep, discard=partial)
+        return result
+    result["status"], result["detail"] = "ok", detail
+    try:
+        result["removed"] = rotate_backups(folder, keep, new=name)
+    except OSError as e:
+        result["detail"] = f"{detail}; rotação falhou: {e.strerror or e}"
+    return result
+
+
+def cmd_backup(args, config_home=None) -> int:
+    values = load_config(config_home)["values"]
+    vault, settings = vault_dir(values), values["backup"]
+    targets = args.dest or values["backup_targets"]
+    if not targets:
+        raise BrainError(NO_BACKUP_TARGET)
+    folders = distinct_folders(check_backup_target(target, values, "--dest" if args.dest else "destino")
+                               for target in targets)
+    with_files = args.with_files or settings["with_files"]
+    files = values["files"] if with_files else None
+    if with_files and not (files and Path(files).is_dir()):
+        raise BrainError(f"pasta files não encontrada: {files or '(sem files na configuração local)'}", 1)
+    clock = dt.datetime.now().replace(microsecond=0)
+    name = backup_name(with_files, clock=lambda: clock)
+    skipped = []  # files that could not be read: out of the zip, and the exit is 1
+    manifest = build_manifest(vault, Path(files) if files else None, clock=lambda: clock, skipped=skipped)
+    results = [backup_to(Path(folder), name, manifest, vault, files, settings["keep"]) for folder in folders]
+    ok = sum(1 for item in results if item["status"] == "ok")
+    if ok:
+        failed = len(results) - ok
+        append_log(vault, values["layout"], "backup",
+                   f"— {name} → {ok} destino(s)" + (f", {failed} falhou(aram)" if failed else "")
+                   + (f", {len(skipped)} arquivo(s) sem leitura fora do zip" if skipped else ""))
+    code = 0 if ok == len(results) and not skipped else 1
+    if args.json:
+        print_json({"name": name, "entries": len(manifest["entries"]), "targets": results, "skipped": skipped})
+        return code
+    print(f"Backup {name} — {len(manifest['entries'])} entradas")
+    for item in skipped:
+        print(f"AVISO {one_line(item)} — sem leitura: ficou fora do zip")
+    for item in results:
+        print(f"{'OK' if item['status'] == 'ok' else 'ERRO'} {one_line(item['path'])} — {one_line(item['detail'])}")
+        for removed in item["removed"]:
+            print(f"  removido (rotação, backup.keep {settings['keep']}): {removed}")
+    return code
+
+
+def cmd_backup_list(args, config_home=None) -> int:
+    values = read_config(config_home)["values"]
+    targets = []
+    for target in values["backup_targets"]:
+        folder = Path(target)
+        item = {"path": target, "status": "ok", "detail": "", "backups": [], "partials": []}
+        problem = target_problem(folder)
+        if problem is None:
+            try:
+                item["backups"] = [zip_summary(folder / name) for name in backup_names(folder)]
+                item["partials"] = stale_partials(folder)
+            except OSError as e:
+                problem = e.strerror or str(e)
+        if problem:
+            item["status"], item["detail"] = "failed", f"inacessível ({problem})"
+        else:
+            item["detail"] = f"{len(item['backups'])} backup(s)"
+        targets.append(item)
+    if args.json:
+        print_json({"targets": targets})
+        return 0
+    if not targets:
+        print("nenhum destino configurado (references/backup.md)")
+    for item in targets:
+        print(f"{one_line(item['path'])} — {item['detail']}")
+        for backup in item["backups"]:
+            entries = backup["entries"] if backup["entries"] is not None else backup.get("detail", "?")
+            print(f"  {backup['name']}  {backup['created']}  {backup['size']} bytes  {entries} entradas"
+                  + ("  (com files)" if backup["with_files"] else ""))
+        for partial in item["partials"]:
+            print(f"  AVISO {partial} — {PARTIAL_HINT}")
+    return 0
+
+
+def cmd_backup_verify(args, config_home=None) -> int:
+    results, warnings = [], []
+    if args.zip:
+        path = Path(args.zip).expanduser()
+        if not path.is_file():
+            raise BrainError(f"zip não encontrado: {args.zip}")
+        results.append((path, *verify_backup(path)))
+    else:
+        targets = read_config(config_home)["values"]["backup_targets"]
+        if not targets:
+            raise BrainError(NO_BACKUP_TARGET)
+        for target in targets:
+            problem = target_problem(Path(target))
+            names = []
+            if problem is None:
+                try:
+                    names = backup_names(Path(target))
+                except OSError as e:
+                    problem = e.strerror or str(e)
+            if problem or not names:
+                warnings.append((target, f"inacessível ({problem})" if problem else "nenhum backup"))
+            else:
+                path = Path(target) / names[0]
+                results.append((path, *verify_backup(path)))
+    code = 0 if all(ok for _, ok, _ in results) else 1
+    if args.json:
+        print_json({"ok": code == 0, "verified": len(results),
+                    "backups": [{"zip": str(path), "ok": ok, "detail": detail}
+                                                  for path, ok, detail in results],
+                    "warnings": [{"path": target, "detail": detail} for target, detail in warnings]})
+        return code
+    for target, detail in warnings:
+        print(f"AVISO {one_line(target)} — {detail}")
+    for path, ok, detail in results:
+        print(f"{'OK' if ok else 'ERRO'} {one_line(str(path))} — {detail}")
+    return code
+
+
+def restore_zip(source: str) -> Path:
+    """--from of restore, as an absolute path: an existing zip (missing = exit 2) that passes verify_backup (else
+    exit 1)."""
+    path = Path(absolute(source))
+    if not path.is_file():
+        raise BrainError(f"zip não encontrado: {source}")
+    ok, detail = verify_backup(path)
+    if not ok:
+        raise BrainError(f"backup não confere: {one_line(str(path))} — {detail}; nada foi gravado", 1)
+    return path
+
+
+def restored_name(rel: str, date: str, n: int = 0) -> str:
+    """"<pasta>/<nome> (restaurado AAAA-MM-DD).md", then "...)-1.md", "...)-2.md"."""
+    folder, base = posixpath.split(rel)
+    stem, suffix = posixpath.splitext(base)
+    name = f"{stem} (restaurado {date}){f'-{n}' if n else ''}{suffix}"
+    return posixpath.join(folder, name) if folder else name
+
+
+def create_bytes(path: Path, data: bytes) -> bool:
+    """create_file for bytes: path created exclusively (and the missing folders); an existing file = False."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(path, "xb") as handle:
+            handle.write(data)
+    except FileExistsError:
+        return False
+    return True
+
+
+def cmd_restore_note(args, config_home=None) -> int:
+    _, vault, layout = store_config(config_home)
+    rel = inside_vault(args.note, "nota")
+    path = restore_zip(args.source)
+    with zipfile.ZipFile(path) as zf:
+        entries = read_manifest(zf)["entries"]
+        if f"vault/{rel}" not in entries:
+            raise BrainError(f"nota não está no backup: {rel} ({path.name})")
+        data = zf.read(f"vault/{rel}")
+    date, n = today(), 0
+    if not inside_on_disk(vault / restored_name(rel, date), vault):  # a folder linked outside the vault
+        raise BrainError(f"restore fora do vault: {rel} — a pasta aponta para fora do vault; nada foi gravado")
+    while not create_bytes(vault / restored_name(rel, date, n), data):
+        n += 1
+    new = restored_name(rel, date, n)
+    append_log(vault, layout, "restore", f"{new} ← {rel} de {path.name}")
+    if args.json:
+        print_json({"note": rel, "restored": new, "from": str(path)})
+        return 0
+    print(f"Restaurado: {new} (de {path.name}) — a nota atual não mudou; compare e escolha")
+    return 0
+
+
+def restore_folder(out: str, values: dict) -> Path:
+    """--to of restore: a new or empty folder outside the vault and the files folder, else BrainError (exit 2)."""
+    folder = Path(check_backup_target(out, values, "--to"))
+    if folder.exists() and not folder.is_dir():
+        raise BrainError(f"--to não é uma pasta: {out}")
+    if folder.is_dir() and any(entry.name not in OS_METADATA for entry in folder.iterdir()):
+        raise BrainError(f"--to já tem arquivos: {out} — o restore nunca sobrescreve; use uma pasta nova ou vazia")
+    return folder
+
+
+def cmd_restore_all(args, config_home=None) -> int:
+    """The whole backup into a new folder. Works on a machine without configuration (the computer that was lost):
+    then only the folder itself is checked."""
+    try:
+        values = read_config(config_home)["values"]
+    except BrainError as e:
+        if e.code != 3:
+            raise
+        values = {}
+    folder = restore_folder(args.to, values)
+    path = restore_zip(args.source)
+    with zipfile.ZipFile(path) as zf:
+        entries = read_manifest(zf)["entries"]
+        bad = sorted(entry for entry in entries if entry.split("/", 1)[0] not in BACKUP_ROOTS or "/" not in entry)
+        if bad:
+            raise BrainError(f"backup não confere: entrada fora de vault/ e files/: {one_line(bad[0])}; nada foi "
+                             "gravado", 1)
+        written = 0
+        try:
+            for entry in sorted(entries):
+                target = folder.joinpath(*entry.split("/"))
+                if not inside_on_disk(target, folder):
+                    raise BrainError(f"entrada perigosa: {one_line(entry)}", 1)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(entry) as src, open(target, "xb") as dest:
+                    shutil.copyfileobj(src, dest, 1 << 20)
+                moment = time.mktime(zf.getinfo(entry).date_time + (0, 0, -1))
+                os.utime(target, (moment, moment))
+                written += 1
+        except OSError as e:
+            raise BrainError(f"restauração incompleta em {one_line(str(folder))} ({written} de {len(entries)} "
+                             f"arquivos): {e.strerror or e}", 1) from e
+    roots = sorted({entry.split("/", 1)[0] for entry in entries})
+    if args.json:
+        print_json({"from": str(path), "to": str(folder), "entries": written, "roots": roots})
+        return 0
+    print(f"Backup {path.name} restaurado em {one_line(str(folder))}: {written} arquivos em "
+          f"{', '.join(f'{root}/' for root in roots)}")
+    print("Nada no vault mudou; compare e copie o que quiser.")
+    return 0
+
+
+def cmd_restore(args, config_home=None) -> int:
+    if bool(args.note) == bool(args.to):
+        raise BrainError("informe NOTA (uma nota do vault) ou --to PASTA (o backup inteiro), um dos dois")
+    return cmd_restore_note(args, config_home) if args.note else cmd_restore_all(args, config_home)
+
+
+def backup_items(values: dict) -> list:
+    """Doctor lines of the backup: one per target (age of the newest backup, from the name's stamp)."""
+    targets = values.get("backup_targets") or []
+    if not targets:
+        return [("AVISO", "backup", "nenhum destino configurado (references/backup.md)")]
+    warn_days, rows = values["backup"]["warn_days"], []
+    for target in targets:
+        problem = target_problem(Path(target))
+        names = []
+        if problem is None:
+            try:
+                names = backup_names(Path(target))
+            except OSError as e:
+                problem = e.strerror or str(e)
+        item = f"backup {target}"
+        if problem:
+            rows.append(("AVISO", item, f"inacessível ({problem})"))
+        elif not names:
+            rows.append(("AVISO", item, "nenhum backup"))
+        else:
+            days = max(0, (dt.datetime.now() - backup_moment(names[0])).days)
+            if days > warn_days:
+                rows.append(("AVISO", item, f"último há {days} dia(s), mais que warn_days ({warn_days}) ({names[0]})"))
+            else:
+                rows.append(("OK", item, f"último há {days} dia(s) ({names[0]})"))
+        if problem is None:
+            with contextlib.suppress(OSError):
+                rows += [("AVISO", f"backup {target} .partial", f"{name} — {PARTIAL_HINT}")
+                         for name in stale_partials(Path(target))]
+    return rows
 
 
 # ---------------------------------------------------------------- store commands (create, append, regions)
@@ -2207,10 +3161,34 @@ def free_raw_path(vault: Path, layout: dict, title: str) -> str:
     return candidate
 
 
+def file_digest(path: Path) -> tuple:
+    """(size in bytes, sha256 hex) of a stored file, read in blocks; only the numbers go into the vault."""
+    digest, size = hashlib.sha256(), 0
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+            size += len(block)
+    return size, digest.hexdigest()
+
+
+def check_confidential_ingest(args, url):
+    """ingest --confidential takes only a file and never extracts: a URL, --text-file, --kind or --timestamps =
+    BrainError (exit 2), before anything is written."""
+    if url is not None:
+        raise BrainError("--confidential só vale para arquivo: um link não é guardado como item confidencial")
+    given = [flag for flag, value in (("--text-file", args.text_file), ("--kind", args.kind),
+                                      ("--timestamps", args.timestamps)) if value]
+    if given:
+        raise BrainError(f"--confidential não extrai texto: não use {', '.join(given)} "
+                         "(o documento fica opaco, references/confidential.md)")
+
+
 def cmd_ingest(args, config_home=None) -> int:
     values, vault, layout = store_config(config_home)
     source = args.source.strip()
     url = source if URL_RE.match(source) else None
+    if args.confidential:
+        check_confidential_ingest(args, url)
     if args.context:
         check_context(args.context, values)
     if args.move:  # only an item of the inbox, checked before anything is written
@@ -2222,7 +3200,7 @@ def cmd_ingest(args, config_home=None) -> int:
     if url is None and not Path(source).is_file():
         raise BrainError(f"fonte não encontrada: {args.source}")
     kind = args.kind or detect_kind(source)
-    process = bool(kind) and not args.text_file and not args.no_process
+    process = bool(kind) and not args.text_file and not args.no_process and not args.confidential
     if process and not processor_of(kind, values["processors"]):
         process = False
         print_warnings([f"sem processador para {kind} — veja references/processors.md"])
@@ -2245,7 +3223,10 @@ def cmd_ingest(args, config_home=None) -> int:
         file_rel = f"{folder}/{moved.name}"
     else:
         file_rel = copy_to_files(Path(source), values, args.context)  # the copy comes first
-    extraction = ""
+    extraction, opaque = "", None
+    if args.confidential:  # opaque: never a processor, only the size and the hash of the stored file
+        opaque = file_digest(Path(values["files"]) / file_rel)
+        extraction = "; confidencial"
     if process:  # on the stored copy (or the URL); a failure keeps the raw and is written in the note
         try:
             extracted = run_processor(kind, url or str(Path(values["files"]) / file_rel), values["processors"],
@@ -2257,16 +3238,17 @@ def cmd_ingest(args, config_home=None) -> int:
             extraction = f"; extração falhou ({kind}): {e.reason}"
     raw_rel = free_raw_path(vault, layout, title)
     try:
-        write_new_file(vault / raw_rel, render_source_note(title, today(), args.context, file_rel, url, extracted))
+        write_new_file(vault / raw_rel, render_source_note(title, today(), args.context, file_rel, url, extracted,
+                                                           opaque))
     except OSError as e:
         where = "o arquivo foi movido para" if args.move else "a cópia ficou em"
         kept = f"; {where} {file_rel} (na pasta files)" if file_rel else ""
         raise BrainError(f"não consegui criar a nota de fonte {raw_rel}: {e.strerror or e}{kept}", 1) from e
     append_log(vault, layout, "ingest", f"{raw_rel} — {url or file_rel}{extraction}")
     if args.json:
-        print_json({"raw": raw_rel, "file": file_rel, "url": url})
+        print_json(dict({"raw": raw_rel, "file": file_rel, "url": url}, **({"confidential": True} if opaque else {})))
         return 0
-    print(f"Nota de fonte: {one_line(raw_rel)}")
+    print(f"Nota de fonte: {one_line(raw_rel)}" + (" (confidencial: texto não extraído)" if opaque else ""))
     if url:
         print(f"Link: {url}")
     else:
@@ -2287,10 +3269,27 @@ def source_value(source, vault: Path) -> str:
     return f"[[{rel[:-3] if rel.lower().endswith('.md') else rel}]]"
 
 
+def check_secret_ref(note_type: str, vault_ref):
+    """--vault-ref only with type secret-ref, which requires it in the <esquema>://<caminho> format = BrainError
+    (exit 2) otherwise. The reference is only validated, never opened (ADR-0014)."""
+    if note_type != SECRET_REF_TYPE:
+        if vault_ref is not None:
+            raise BrainError(f"--vault-ref só vale com --type {SECRET_REF_TYPE}")
+        return
+    if vault_ref is None:
+        raise BrainError(f"--type {SECRET_REF_TYPE} precisa de --vault-ref <esquema>://<caminho> "
+                         "(ex.: keepass://Pessoal/Banco) — o segredo fica no gerenciador de senhas")
+    if not is_vault_ref(vault_ref.strip()):
+        raise BrainError(f"--vault-ref fora do formato <esquema>://<caminho> (ex.: keepass://Pessoal/Banco): "
+                         f"{one_line(vault_ref)}")
+
+
 def cmd_new_note(args, config_home=None) -> int:
     values, vault, layout = store_config(config_home)
     if args.type not in NOTE_TYPES:
         raise BrainError(f"tipo desconhecido: {args.type} — use um de: {', '.join(NOTE_TYPES)}")
+    check_secret_ref(args.type, args.vault_ref)
+    vault_ref = (args.vault_ref or "").strip()
     title = " ".join(args.title.split())
     rel = note_path(title, args.context, values)
     tags = unique(frontmatter_tags(args.tags or ""))
@@ -2298,9 +3297,15 @@ def cmd_new_note(args, config_home=None) -> int:
     if not template.is_file():
         template = TEMPLATES_DIR / f"{args.type}.md"
     text = render_note(template.read_text(encoding="utf-8"), tags=tags, title=title, date=today(),
-                       context=args.context or "", source=source_value(args.source, vault))
+                       context=args.context or "", source=source_value(args.source, vault), vault_ref=vault_ref)
+    confidential = args.confidential or args.type == SECRET_REF_TYPE
+    if confidential:  # whatever the vault's template has: confidential: true (and vault_ref in a secret-ref)
+        keys = {"confidential": "true"}
+        if vault_ref:
+            keys["vault_ref"] = json.dumps(vault_ref, ensure_ascii=False)
+        text = with_frontmatter_keys(text, keys)
     write_new_file(vault / rel, text)
-    append_log(vault, layout, "new-note", f"{rel} — {args.type}")
+    append_log(vault, layout, "new-note", f"{rel} — {args.type}" + ("; confidencial" if confidential else ""))
     if args.json:
         print_json({"path": rel})
     else:
@@ -2369,8 +3374,10 @@ def cmd_index(args, config_home=None) -> int:
         paths.append(rel)
         if rel in own or (mocs and rel.startswith(mocs + "/")):
             continue
-        text = path.read_bytes().decode("utf-8", errors="replace")
-        entries.append(index_entry(rel, text, contexts))
+        text = path.read_bytes().decode("utf-8-sig", errors="replace")
+        entry = index_entry(rel, text, contexts)
+        if not entry.confidential:  # a confidential note is never listed (SPEC-0050)
+            entries.append(entry)
     links = LinkIndex(paths)
     by_context = {name: [e for e in entries if e.context == name] for name in contexts}
 
@@ -3038,8 +4045,8 @@ def layout_paths(layout: dict, keys) -> list:
 
 def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
     """One warning per note with no outgoing link that resolves, no incoming link and outside any MOC (a MOC's
-    links are incoming links). Notes of raw/, inbox/, mocs/ and templates/ and index.md and log.md are not judged;
-    the lists of index.md and log.md do not count as incoming links."""
+    links are incoming links). Notes of raw/, inbox/, mocs/ and templates/, index.md and log.md and confidential
+    notes (never listed in a MOC) are not judged; the lists of index.md and log.md do not count as incoming links."""
     folders = [_link_key(folder) + "/" for folder in layout_paths(layout, LAYOUT_DIRS)]
     generated = generated_notes((note.path for note in notes), {"layout": layout})
     linked = set()
@@ -3052,7 +4059,7 @@ def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
     return [Finding("orphan", note.path, "sem links de entrada nem de saída e fora de qualquer MOC",
                     "relacione com relate ou ligue a uma nota nova; se a nota tem contexto, index a põe no MOC dele")
             for note in notes if note.path not in linked and note.path not in generated
-            and not _link_key(note.path).startswith(tuple(folders))]
+            and not _link_key(note.path).startswith(tuple(folders)) and not is_confidential(note)]
 
 
 def check_stale_inbox(entries: list, stale_after: int) -> list:
@@ -3083,6 +4090,25 @@ def check_frontmatter(notes: list) -> list:
             found.append(Finding("frontmatter", note.path, f"type {note.note_type} sem {' e '.join(missing)}",
                                  f"acrescente {', '.join(missing)} ao frontmatter (references/note-types.md)"))
     return found
+
+
+def check_secret_in_note(notes: list) -> list:
+    """One warning per line of a note without confidential: true with a secret (find_secrets): "<path>:<line>"
+    and the kind, never the value."""
+    return [Finding("secret-in-note", f"{note.path}:{line}", kind,
+                    "tire o valor da nota e guarde no gerenciador de senhas; no vault, só uma nota secret-ref "
+                    "(references/confidential.md)")
+            for note in notes if not is_confidential(note) for line, kind in find_secrets(note.text)]
+
+
+def check_personal_data(notes: list, detectors=None, patterns=None) -> list:
+    """One warning per line and kind of personal data (find_personal_data) in a note without confidential: true:
+    "<path>:<line>" and the kind, never the value."""
+    return [Finding("personal-data", f"{note.path}:{line}", kind,
+                    "tire o dado da nota ou marque a nota com confidential: true; documento pessoal entra com "
+                    "ingest --confidential (references/confidential.md)")
+            for note in notes if not is_confidential(note)
+            for line, kind in find_personal_data(note.text, detectors, patterns)]
 
 
 def _repeats_group(pattern: str, i: int) -> bool:
@@ -3163,7 +4189,8 @@ class LintVault:
     """What the rules read, from a single scan of the vault (walk_vault): notes, the link index of the notes and
     of the attachments, every file path, the inbox items, the files folder (None = inaccessible), the valid
     conflict patterns and the config findings, each with the rule it affects."""
-    __slots__ = ("attachments", "config", "files", "inbox", "index", "notes", "paths", "patterns", "values")
+    __slots__ = ("attachments", "config", "detectors", "files", "inbox", "index", "notes", "paths", "patterns",
+                 "personal_patterns", "values")
 
     def __init__(self, values: dict):
         vault, layout = vault_dir(values), values["layout"]
@@ -3187,6 +4214,11 @@ class LintVault:
         self.config += [("conflict-copy", Finding("config", "brain-config.yml", problem,
                                                   "corrija conflict_patterns (references/maintenance.md)"))
                         for problem in problems]
+        self.detectors, self.personal_patterns, problems = compile_personal_data(values.get("lint"))
+        self.config += [("personal-data", Finding("config", "brain-config.yml", problem,
+                                                  "corrija lint.personal_data ou lint.personal_data_patterns "
+                                                  "(references/confidential.md)"))
+                        for problem in problems]
         self.files = Path(values["files"]) if values["files"] else None
         try:
             if self.files is None:
@@ -3207,6 +4239,8 @@ LINT_CHECKS = {  # rule -> check over the LintVault; "config" findings come from
     "orphan": lambda v: check_orphan(v.notes, v.index, v.values["layout"]),
     "stale-inbox": lambda v: check_stale_inbox(v.inbox, v.values["inbox_stale_days"]),
     "frontmatter": lambda v: check_frontmatter(v.notes),
+    "secret-in-note": lambda v: check_secret_in_note(v.notes),
+    "personal-data": lambda v: check_personal_data(v.notes, v.detectors, v.personal_patterns),
     "config": lambda v: [],
 }
 
@@ -3224,6 +4258,18 @@ def lint_rules(only=None) -> list:
     return [rule for rule in LINT_SEVERITY if rule in given]
 
 
+LINE_RULES = ("secret-in-note", "personal-data")  # rules whose path is "<caminho>:<linha>"
+
+
+def finding_place(finding: Finding) -> tuple:
+    """(path, line) to order findings: the line of LINE_RULES as a number (line 5 before line 17), else 0."""
+    if finding.rule in LINE_RULES:
+        path, _, line = finding.path.rpartition(":")
+        if path and line.isdigit():
+            return path, int(line)
+    return finding.path, 0
+
+
 def run_lint(values: dict, rules=None) -> list:
     """Findings of the rules (None = all) over a single scan of the vault, errors first; only reads."""
     rules = list(LINT_SEVERITY) if rules is None else rules
@@ -3232,7 +4278,7 @@ def run_lint(values: dict, rules=None) -> list:
     for rule in rules:
         found += LINT_CHECKS[rule](vault)
     order = {rule: i for i, rule in enumerate(LINT_SEVERITY)}
-    return sorted(found, key=lambda f: (f.severity != "error", order[f.rule], f.path, f.detail))
+    return sorted(found, key=lambda f: (f.severity != "error", order[f.rule]) + finding_place(f) + (f.detail,))
 
 
 def lint_summary(findings: list) -> dict:
@@ -3270,6 +4316,11 @@ def cmd_lint(args, config_home=None) -> int:
 
 # ---------------------------------------------------------------- cli
 
+def add_include_confidential(p: argparse.ArgumentParser):
+    p.add_argument(INCLUDE_CONFIDENTIAL, action="store_true",
+                   help="inclui notas com confidential: true (só quando a pessoa pede; references/confidential.md)")
+
+
 def context_add_parser() -> argparse.ArgumentParser:
     """`context add` (exactly "add" right after "context"); any other text after "context" is a query."""
     p = argparse.ArgumentParser(prog="brain.py context add", description="registra um contexto, cria a pasta e o MOC")
@@ -3306,6 +4357,7 @@ def main(argv=None) -> int:
     p.add_argument("--hops", type=int, default=1, help=f"passos de link a partir da busca (0..{MAX_HOPS}, padrão 1)")
     p.add_argument("--limit", type=int, default=8, help="resultados da busca (padrão 8)")
     p.add_argument("--max-chars", type=int, default=40000, help="soma máxima do conteúdo das notas (padrão 40000)")
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
@@ -3322,15 +4374,18 @@ def main(argv=None) -> int:
     p.add_argument("--type", help="só notas com este frontmatter.type")
     p.add_argument("--tag", help="só notas com esta tag")
     p.add_argument("--limit", type=int, default=10)
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("related", help="notas parecidas com uma nota ou com um texto, com os motivos; só leitura")
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--note", metavar="CAMINHO", help="caminho (ou nome) da nota de referência")
     group.add_argument("--text", metavar="TEXTO", help="texto livre de referência")
     p.add_argument("--limit", type=int, default=10)
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("links", help="links de saída, backlinks e links quebrados de uma nota; só leitura")
     p.add_argument("note", metavar="NOTA", help="caminho ou nome da nota")
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("ingest", help="guarda uma fonte (arquivo ou URL): cópia em files e nota de fonte em raw/")
     p.add_argument("source", metavar="FONTE", help="arquivo local ou URL http(s)")
@@ -3341,6 +4396,8 @@ def main(argv=None) -> int:
     p.add_argument("--kind", help="tipo da fonte para o processador (padrão: detectado; youtube, video, audio, pdf)")
     p.add_argument("--no-process", action="store_true", help="não roda o processador do tipo")
     p.add_argument("--timestamps", action="store_true", help="legendas com '[mm:ss]' (no YouTube, link para o trecho)")
+    p.add_argument("--confidential", action="store_true",
+                   help="documento confidencial: guarda o arquivo opaco (tamanho e sha256), nunca roda processador")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("process", help="roda o processador do tipo da fonte e devolve o texto (references/processors.md)")
     p.add_argument("source", metavar="ENTRADA", help="arquivo local ou URL http(s)")
@@ -3353,6 +4410,9 @@ def main(argv=None) -> int:
     p.add_argument("--context", help="contexto (sem ele, a nota vai para para.resources)")
     p.add_argument("--source", metavar="CAMINHO_OU_URL", help="nota de fonte (raw/...) ou URL")
     p.add_argument("--tags", metavar="A,B", help="tags separadas por vírgula")
+    p.add_argument("--vault-ref", metavar="REF",
+                   help="só com --type secret-ref: onde o segredo está no gerenciador (<esquema>://<caminho>)")
+    p.add_argument("--confidential", action="store_true", help="marca a nota com confidential: true")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("relate", help="acrescenta '- [[PARA]] — motivo' na seção Relations de DE")
     p.add_argument("source", metavar="DE", help="caminho ou nome da nota")
@@ -3378,6 +4438,28 @@ def main(argv=None) -> int:
     p = sub.add_parser("lint", help="achados de manutenção do vault (links, conflitos, órfãs, inbox); só leitura")
     p.add_argument("--json", action="store_true")
     p.add_argument("--only", metavar="REGRA,...", help=f"só estas regras: {', '.join(LINT_SEVERITY)}")
+    p = sub.add_parser("backup", help="zip datado e verificado do vault em cada destino, com rotação (references/backup.md)",
+                       description=("backup: um zip por destino (backup_targets ou --dest), gravado como .partial, "
+                                    "verificado e renomeado; depois a rotação mantém backup.keep por destino. "
+                                    "Também: backup list, backup verify [ZIP] e backup target add PASTA."))
+    p.add_argument("--dest", action="append", metavar="PASTA", help="destino desta execução (repetível; substitui backup_targets)")
+    p.add_argument("--with-files", action="store_true", help="inclui a pasta files (nome -files.zip)")
+    p.add_argument("--json", action="store_true")
+    backup = p.add_subparsers(dest="backup_command")
+    q = backup.add_parser("list", help="backups de cada destino, do mais novo para o mais velho; só leitura")
+    q.add_argument("--json", action="store_true")
+    q = backup.add_parser("verify", help="confere um zip (ou o mais novo de cada destino) com o manifesto")
+    q.add_argument("zip", nargs="?", metavar="ZIP")
+    q.add_argument("--json", action="store_true")
+    q = backup.add_parser("target", help="destinos de backup desta máquina (configuração local)")
+    target = q.add_subparsers(dest="target_command", required=True)
+    t = target.add_parser("add", help="acrescenta PASTA (fora do vault e da pasta files) a backup_targets")
+    t.add_argument("folder", metavar="PASTA")
+    p = sub.add_parser("restore", help="recupera uma nota como arquivo novo, ou o backup inteiro numa pasta nova")
+    p.add_argument("note", nargs="?", metavar="NOTA", help="caminho da nota relativo ao vault")
+    p.add_argument("--from", dest="source", required=True, metavar="ZIP", help="zip do backup")
+    p.add_argument("--to", metavar="PASTA", help="pasta nova ou vazia, fora do vault, para o backup inteiro")
+    p.add_argument("--json", action="store_true")
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:2] == ["context", "add"]:
         args = context_add_parser().parse_args(argv[2:])
@@ -3420,6 +4502,17 @@ def main(argv=None) -> int:
             return cmd_inbox_list(args) if args.inbox_command == "list" else cmd_inbox_done(args)
         if args.command == "lint":
             return cmd_lint(args)
+        if args.command == "backup":
+            command = getattr(args, "backup_command", None)
+            if command == "list":
+                return cmd_backup_list(args)
+            if command == "verify":
+                return cmd_backup_verify(args)
+            if command == "target":
+                return cmd_backup_target_add(args)
+            return cmd_backup(args)
+        if args.command == "restore":
+            return cmd_restore(args)
     except BrainError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code

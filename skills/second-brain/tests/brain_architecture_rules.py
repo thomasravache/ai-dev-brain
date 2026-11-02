@@ -1,4 +1,5 @@
-"""Checadores das regras do ADR-0007 (e da regra de rede do ADR-0008), usados por test_architecture.py.
+"""Checadores das regras do ADR-0007 (e das regras de rede do ADR-0008 e de remoção do ADR-0015), usados por
+test_architecture.py.
 
 Escritos aqui, sem importar da sdd-management (ADR-0007 proíbe import entre skills).
 Cada checador recebe o código-fonte (ou o texto do arquivo) e devolve uma linha por violação:
@@ -17,6 +18,7 @@ RULE_CROSS_SKILL = "nenhum import entre skills nem de tools/"
 RULE_NETWORK = "sem chamada de rede"
 RULE_PROCESS = "processos externos só em run_processor"
 RULE_PERSONAL_PATH = "nenhum caminho pessoal absoluto"
+RULE_REMOVAL = "remoção de arquivo só em rotate_backups e nas limpezas da lista fechada (ADR-0015)"
 
 FORBIDDEN_MODULES = ("spec_graph", "sdd_management", "tools", "architecture_rules")
 NETWORK_MODULES = ("socket", "ssl", "http", "urllib.request", "ftplib", "smtplib", "poplib", "imaplib",
@@ -27,6 +29,11 @@ PROCESS_CALLS = {
            "spawnv", "spawnve", "spawnvp", "spawnvpe", "spawnl", "spawnle", "posix_spawn", "posix_spawnp"},
     "asyncio": {"create_subprocess_exec", "create_subprocess_shell"},
 }
+# Remoção de arquivo (ADR-0015): os.remove/os.unlink/os.rmdir/os.removedirs, shutil.rmtree e qualquer .unlink()
+# ou .rmdir() (Path). `x.remove(...)` de lista não conta: só os.remove.
+REMOVAL_CALLS = {"os": {"remove", "unlink", "rmdir", "removedirs"}, "shutil": {"rmtree"}}
+REMOVAL_METHODS = {"unlink", "rmdir"}
+REMOVAL_IMPORTS = {"os": {"remove", "unlink", "rmdir", "removedirs"}, "shutil": {"rmtree"}}
 # Placeholders como /Users/<nome> são permitidos; nomes reais não.
 PERSONAL_PATH = re.compile(r"/Users/(?!<)[A-Za-z0-9._-]+|[A-Za-z]:\\\\?Users\\\\?(?!<)[A-Za-z0-9._-]+"
                            r"|/home/(?!<)[A-Za-z0-9._-]+")
@@ -117,6 +124,64 @@ def subprocess_findings(source, filename, allowed=("run_processor",)):
             visit(child, function)
 
     visit(ast.parse(source), None)
+    return [message for _, message in sorted(findings)]
+
+
+def _module_aliases(tree):
+    """Nome local -> módulo de remoção (os, shutil) para `import os`, `import os as o`, `import shutil as s`."""
+    aliases = {name: name for name in REMOVAL_CALLS}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in REMOVAL_CALLS:
+                    aliases[alias.asname or alias.name] = alias.name
+    return aliases
+
+
+def _removal_reference(node, aliases):
+    """'os.remove', '.unlink' etc. quando o nó chama ou só referencia (rm = os.remove, Path.unlink,
+    getattr(os, "remove")) uma função de remoção; None para o resto."""
+    if isinstance(node, ast.Attribute):
+        if isinstance(node.value, ast.Name) and node.attr in REMOVAL_CALLS.get(aliases.get(node.value.id), ()):
+            return f"{aliases[node.value.id]}.{node.attr}"
+        if node.attr in REMOVAL_METHODS:
+            return f".{node.attr}"
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr"
+            and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)):
+        target, name = node.args[0], node.args[1].value
+        module = aliases.get(target.id) if isinstance(target, ast.Name) else None
+        if name in REMOVAL_CALLS.get(module, ()) or name in REMOVAL_METHODS:
+            return f'getattr(..., "{name}")'
+    return None
+
+
+def removal_findings(source, filename, allowed=("rotate_backups",)):
+    """Chamadas ou referências a funções que apagam arquivo ou pasta fora das funções permitidas (ADR-0015):
+    os.remove, os.unlink, os.rmdir, os.removedirs, shutil.rmtree (também por apelido do módulo, `import os as o`),
+    qualquer .unlink/.rmdir (Path.unlink, p.unlink()), getattr(os, "remove") e imports diretos dessas funções
+    (`from os import remove`). `lista.remove(x)` não conta."""
+    allowed = set(allowed)
+    tree = ast.parse(source)
+    aliases = _module_aliases(tree)
+    findings = []
+
+    def visit(node, function):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function = node.name
+        if isinstance(node, ast.ImportFrom) and node.module in REMOVAL_IMPORTS:
+            for alias in node.names:
+                if alias.name in REMOVAL_IMPORTS[node.module]:
+                    what = f"from {node.module} import {alias.name}"
+                    findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_REMOVAL} — {what}"))
+        found = _removal_reference(node, aliases)
+        if found and function not in allowed:
+            where = f"{function}()" if function else "nível de módulo"
+            findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_REMOVAL} — {found} em {where}"))
+        for child in ast.iter_child_nodes(node):
+            visit(child, function)
+
+    visit(tree, None)
     return [message for _, message in sorted(findings)]
 
 
