@@ -456,41 +456,67 @@ class ConfigRefsTest(unittest.TestCase):
                 self.assertEqual(host_of(value), want)
 
 
-    def test_host_is_taken_after_the_last_at_sign(self):
-        """SPEC-0035:UT-03 — revisão G4: com "@" no valor (com ou sem esquema), o host vem depois do ÚLTIMO "@",
-        cortado no primeiro "/", "?" ou "#" e sem porta; nenhum pedaço do usuário ou da senha sai."""
+    AMBIGUOUS = (
+        # "@" depois do fim da autoridade (no caminho, na query ou no fragmento): pode ser senha, nunca sai
+        "postgres://app:Secr3t@Pass/word@db:5432/app",
+        "redis://:p@ss/w0rd@cache:6379",
+        "postgres://user:ab@cd#ef@db/x",
+        "postgres://user:ab@cd?ef@db/x",
+        "amqp://u:Tr0ub4dor@3/x@rabbit",
+        "app:Secr3t@Pass/word@db:5432",
+        "user:ab@cd/ef@db",
+        "u:ab@cd#x@db",
+        "postgres://u:p#ss@db/x",
+        "postgres://u:p?ss@db/x",
+        "postgres://u:p#s/s@db/x",
+        "postgres://db/app?sslpassword=Hunter2@x/y",
+        "postgres://u:pw@db/app?password=s3cr3t@x",
+        "https://h/x?token=abc@def",
+        "https://h/path@pwd123",
+        "https://u:p@h/?redirect=http://evil@leak",
+        "https://api.example.com/?email=ana@acme.com",
+        "s3://bucket/key@v2",
+        "http://h/a?x=1#y@z",
+    )
+    UNAMBIGUOUS = types.MappingProxyType({
+        "postgres://user:senha@db.interno:5432/app?ssl=true": "db.interno",
+        "redis://:p@ss@cache:6379": "cache",  # "@" só dentro da autoridade: o host vem depois do último
+    })
+
+    def test_at_sign_after_the_authority_gives_no_host(self):
+        """SPEC-0035:UT-03 — revisão G4 (rodada 2): sem o esquema, a autoridade vai até o primeiro "/", "?" ou "#";
+        com "@" depois desse ponto (caminho, query ou fragmento) o valor é ambíguo e host_of devolve None (perder
+        a referência é aceitável; vazar, nunca)."""
         host_of = function("host_of")
-        cases = {
-            "postgres://app:Secr3t@Pass/word@db:5432/app": "db",
-            "redis://:p@ss/w0rd@cache:6379": "cache",
-            "postgres://user:ab@cd#ef@db/x": "db",
-            "postgres://user:ab@cd?ef@db/x": "db",
-            "amqp://u:Tr0ub4dor@3/x@rabbit": "rabbit",
-            "app:Secr3t@Pass/word@db:5432": "db",
-            "user:ab@cd/ef@db": "db",
-            "u:ab@cd#x@db": "db",
-            "postgres://u:p#ss@db/x": "db",
-            "postgres://u:p?ss@db/x": "db",
-            "postgres://u:p#s/s@db/x": "db",
-        }
-        for value, want in cases.items():
+        for value in self.AMBIGUOUS:
+            with self.subTest(value=value):
+                self.assertIsNone(host_of(value))
+
+    def test_at_sign_only_inside_the_authority_gives_the_host_after_the_last_one(self):
+        """SPEC-0035:UT-03 — revisão G4 (rodada 2): com "@" só dentro da autoridade, o host é o texto depois do
+        último "@" da autoridade, sem porta."""
+        host_of = function("host_of")
+        for value, want in self.UNAMBIGUOUS.items():
             with self.subTest(value=value):
                 self.assertEqual(host_of(value), want)
 
-    def test_host_of_never_returns_a_piece_of_the_userinfo(self):
-        """SPEC-0035:UT-03 — revisão G4: o resultado é um hostname/IP estrito ou None; nunca contém um pedaço do
-        que vem antes do último "@"."""
+    def test_host_of_never_returns_a_piece_of_userinfo_path_query_or_fragment(self):
+        """SPEC-0035:UT-03 — revisão G4: o resultado é None ou um hostname/IP estrito, e nunca contém um pedaço do
+        usuário, da senha, do caminho, da query ou do fragmento."""
         host_of = function("host_of")
-        for value in ("postgres://app:Secr3t@Pass/word@db:5432/app", "redis://:p@ss/w0rd@cache:6379",
-                      "amqp://u:Tr0ub4dor@3/x@rabbit", "u:ab@cd#x@db", "postgres://u:p#s/s@db/x",
-                      "postgres://user:ab@cd?ef@db/x"):
+        for value in (*self.AMBIGUOUS, *self.UNAMBIGUOUS):
             with self.subTest(value=value):
                 host = host_of(value)
-                userinfo = value.split("://", 1)[-1].rsplit("@", 1)[0]
-                self.assertIsNotNone(host)
+                if host is None:
+                    continue
                 self.assertRegex(host, r"^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$")
-                for piece in filter(None, re.split(r"[:@/#?]", userinfo)):
-                    self.assertNotIn(piece, host)
+                rest = value.split("://", 1)[-1]
+                authority = re.split(r"[/?#]", rest, maxsplit=1)[0]
+                outside = rest[len(authority):]
+                userinfo = authority.rsplit("@", 1)[0] if "@" in authority else ""
+                for piece in re.split(r"[:@/#?=&]", userinfo + "/" + outside):
+                    if len(piece) >= 2:
+                        self.assertNotIn(piece, host)
 
 
 class RepositoryRefTest(unittest.TestCase):
@@ -584,16 +610,21 @@ class InputFileTest(ArgocdCase):
                 self.assertEqual((data["entities"], data["relations"]), ([], []))
 
     def test_passwords_with_at_slash_hash_and_query_never_leave_the_collector(self):
-        """SPEC-0035:IT-01 — revisão G4: Application com senhas que têm "@", "/", "#" e "?" em helm.parameters e
-        helm.values: exit 0, sem traceback, refs só com o host e nenhum pedaço das senhas no stdout."""
+        """SPEC-0035:IT-01 — revisão G4 (rodada 2): Application com senhas que têm "@", "/", "#" e "?" em
+        helm.parameters e helm.values: exit 0, sem traceback; valor ambíguo ("@" depois da autoridade) não gera
+        referência para a chave, e nenhum pedaço das senhas sai no stdout."""
         app = application("ingress-nginx")
         app["metadata"]["name"] = "leaky"
         app["spec"]["source"]["helm"] = {
-            "parameters": [{"name": "env.DB_URL", "value": "postgres://app:Secr3t@Pass/word@db:5432/app"}],
+            "parameters": [{"name": "env.DB_URL", "value": "postgres://app:Secr3t@Pass/word@db:5432/app"},
+                           {"name": "env.REPLICA_URL", "value": "postgres://db/app?sslpassword=Hunter2@x/y"}],
             "values": ("env:\n"
                        "  CACHE_URL: \"redis://:s3c#ret@cache:6379/0\"\n"
                        "  BROKER_URL: 'amqp://u:Tr0ub4dor@3/x@rabbit'\n"
-                       "  QUEUE_ADDR: u:ab@cd#x@mq\n"),
+                       "  QUEUE_ADDR: u:ab@cd#x@mq\n"
+                       "  AUDIT_URL: postgres://u:pw@db/app?password=s3cr3t@x\n"
+                       "  DATABASE_URL: postgres://db.interno/app?user=app&password=Pa55@word\n"
+                       "  REDIS_URL: redis://:p@ss@cache:6379\n"),
         }
         app["status"]["sync"]["comparedTo"]["source"] = copy.deepcopy(app["spec"]["source"])
         app["status"]["history"][0]["source"] = copy.deepcopy(app["spec"]["source"])
@@ -601,9 +632,10 @@ class InputFileTest(ArgocdCase):
         path.write_text(json.dumps([app]), encoding="utf-8")
         data, result = self.collect("--from", "argocd", "--input", path)
         refs = next(e["attrs"]["config_refs"] for e in data["entities"] if e["kind"] == "deployment")
-        self.assertEqual(refs, ["BROKER_URL=rabbit", "CACHE_URL=cache", "DB_URL=db", "QUEUE_ADDR=mq"])
-        for fragment in ("Secr3t", "Pass", "word", "s3c#ret", "s3c", "ret@", "Tr0ub4dor", "3/x", "ab@cd", "cd#x",
-                         "5432", "6379"):
+        self.assertEqual(refs, ["REDIS_URL=cache"])
+        for fragment in ("Secr3t", "Pass", "word", "Pa55", "Hunter2", "s3cr3t", "s3c#ret", "s3c", "Tr0ub4dor",
+                         "3/x", "ab@cd", "cd#x", "p@ss", "password", "5432", "6379", "DB_URL", "DATABASE_URL",
+                         "CACHE_URL", "BROKER_URL", "QUEUE_ADDR", "AUDIT_URL", "REPLICA_URL"):
             with self.subTest(never_out=fragment):
                 self.assertNotIn(fragment, result.stdout)
 
