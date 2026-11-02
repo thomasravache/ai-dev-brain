@@ -77,7 +77,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 7a75b81 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 14d0c16 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na revisão de fb6476b; achado minor (description vazia passava) corrigido em 7a75b81; 4 nits sem ação — cf208f5 | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | FAIL | test exit 1 (FAILED (failures=1, skipped=1)); arch_test exit 0 (OK) — 39988cb | 2026-11-02 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
