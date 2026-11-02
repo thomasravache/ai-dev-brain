@@ -197,7 +197,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=27, errors=15)); nota: red da org-atlas conferido em worktree limpa em 8eb233b: FAILED (failures=27, errors=15), só testes da SPEC-0037; se a cadeia parar antes, é o SPEC-0004:IT-10 (tempo, sob carga) — 8eb233b | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a120ff4 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — a120ff4 | 2026-11-02 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 1, a120ff4): APPROVED — garantia do ADR-0012 resistiu a injeção por argumentos e por sinais; regras por kind conforme a v2; menores: nome de repositório com marcador de região faz o arquivo crescer, rejeição vale só para o mesmo escopo, ids de convenção podem colidir, empate alfabético, --via aceita dígitos não ASCII — a120ff4 | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
