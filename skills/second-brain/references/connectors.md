@@ -6,8 +6,10 @@ O conector é do agente, nunca do `brain.py`: o `brain.py` continua só com a bi
 
 ## Quando entra o modo só conector
 
-- o `brain.py config` sai com 3 (não configurado nesta máquina), ou sai com 0 mas a pasta do vault não está acessível, ou não há shell para rodar o `brain.py`; **e**
+- o `brain.py config` sai com 3 (não configurado nesta máquina), ou sai com 1 porque o agente não consegue ler o vault (pasta ou `brain-config.yml` inacessível), ou sai com 0 mas a pasta do vault não está acessível, ou não há shell para rodar o `brain.py`; **e**
 - a ferramenta tem um conector do provedor do vault com permissão de criar e ler arquivos.
+
+Isso vem antes do onboarding (exit 3) e do `doctor` (exit 1), a menos que a pessoa queira configurar esta máquina (onboarding ou `init --join`) ou consertá-la.
 
 Sem conector, nada muda: valem os canais de `references/mobile-capture.md` e o fluxo normal no computador.
 
@@ -31,9 +33,9 @@ brain.py capture "<texto>" --print --json [--context C] [--inbox PASTA]
 ```
 
 - não escreve nada: nem no vault, nem na configuração local, nem no `log.md`;
-- com configuração, o caminho usa `layout.inbox` e o contexto é validado (inválido sai com 2);
-- sem configuração, o caminho usa `inbox`, ou a pasta do `--inbox` (o nome da pasta da inbox do vault, relativo a ele);
-- `--inbox` com configuração sai com 2: a pasta já é a do `layout.inbox` (`brain.py config` mostra qual é);
+- com o `brain-config.yml` do vault legível, o caminho usa `layout.inbox` e o contexto é validado (inválido sai com 2);
+- sem configuração, ou com o vault, o `brain-config.yml` ou a inbox ausente ou ilegível (o caso da pasta bloqueada pelo macOS), não falha: o caminho usa o `layout.inbox` se ele pôde ser lido, senão `inbox`, ou a pasta do `--inbox` (o nome da pasta da inbox do vault, relativo a ele), e sai com 0;
+- `--inbox` com o `brain-config.yml` legível sai com 2: a pasta já é a do `layout.inbox` (`brain.py config` mostra qual é); `--inbox` na raiz do vault (`""`, `.`, `a/..`) ou fora dele (`..`, `a/../../x`, caminho absoluto) sai com 2, conferido sem ler o disco; `--inbox` só vale com `--print`;
 - texto vazio sai com 2; sem `--json`, a saída é `<caminho>`, uma linha em branco e o conteúdo.
 
 Crie pelo conector o arquivo `<vault>/<path>` com exatamente o `content`.
