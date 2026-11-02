@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: [SPEC-0017]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/backup.md, skills/second-brain/references/config.md, skills/second-brain/assets/brain-config.yml, skills/second-brain/CHANGELOG.md]
 adrs: [ADR-0007, ADR-0008, ADR-0015]
 external: []
@@ -166,6 +166,9 @@ doctor, por destino:
 | Restaurar tudo | `--to` pasta nova | vault (e files) extraídos; pasta com arquivos ou dentro do vault, exit 2 | IT-06 |
 | Doctor | destino com backup recente, velho, sem backup, inacessível, nenhum destino | uma linha OK ou AVISO por caso | IT-08 |
 | Instruções | `SKILL.md` e `references/backup.md` | destinos, quando rodar, restaurar, agendar, aviso de cifra | UT-06 |
+| Arquivo ilegível no vault | um arquivo sem permissão de leitura | os outros vão para o zip, `skipped` lista o ilegível, exit 1 | IT-02 |
+| `.partial` antigo | sobra de uma execução interrompida | AVISO no `backup list` e no `doctor`, nada removido | IT-04, IT-08 |
+| Restaurar para fora | pasta do vault com link simbólico para fora | exit 2, nada gravado | IT-05 |
 | Remoção só na rotação | código do `brain.py` | apagar arquivo só em `rotate_backups` e na lista fechada de limpezas do que a própria chamada criou | UT-07 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
@@ -307,4 +310,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0051`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-02 | Arquivo ilegível do vault não derruba o backup: fica fora do zip, aparece em `skipped` (e na saída) e o exit é 1; `.partial` antigo de uma execução interrompida aparece no `backup list` e no `doctor` (AVISO, sem remoção automática); o mesmo destino por dois caminhos conta uma vez; `restore NOTA` nunca grava fora do vault (pasta com link simbólico para fora → exit 2); links simbólicos que apontam para fora do vault ficam fora do zip; entrada terminada em `/` é recusada; `restore --json` traz `from` absoluto; `backup verify --json` traz `verified`; regra de arquitetura também pega apelidos e referências a funções de remoção | revisão G4 (APPROVED com 5 minors e 4 nits): endurecimento antes da integração | Nenhuma | thomas, 2026-11-02 ("segue com o piloto automático com o recomendado") |
 | 1 (emenda v1, contrato inalterado) | 2026-11-02 | UT-07 e o Mapa aceitam, além de `rotate_backups`, a lista fechada de limpezas existentes (`write_export`, `copy_to_files`, `move_out_of_inbox`), que só removem o que a própria chamada criou; ADR-0015 ajustado | IMP-01: o `brain.py` 2026.11.2 já tem essas três limpezas, e o teste reprovaria código correto | Nenhuma | thomas, 2026-11-02 ("pode fazer no piloto automático com o recomendado") |
