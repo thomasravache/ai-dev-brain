@@ -1,7 +1,7 @@
 ---
 id: ADR-0013
 title: Conector do provedor como canal de captura e leitura
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-02
 pillars: [arquitetura]

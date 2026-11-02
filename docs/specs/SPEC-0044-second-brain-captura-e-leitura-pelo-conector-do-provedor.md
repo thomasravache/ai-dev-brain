@@ -4,7 +4,7 @@ title: "second-brain: captura e leitura pelo conector do provedor"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0021]
@@ -14,8 +14,8 @@ touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, sk
 adrs: [ADR-0013, ADR-0008, ADR-0007, ADR-0002]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-02
 ---
 
 # SPEC-0044 — second-brain: captura e leitura pelo conector do provedor
@@ -165,6 +165,23 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: capture --print**
+- [ ] Red: UT-01, UT-02 e IT-01 com a tag `SPEC-0044:<ID>`, falhando pelo motivo certo
+- [ ] Green: opção `--print` (com `--json` e `--inbox`), sem escrever nada e sem exigir configuração
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Ida e volta e instruções**
+- [ ] Red: IT-02 e UT-03 falhando pelo motivo certo
+- [ ] Green: modo "só conector" no `SKILL.md`, `references/connectors.md` e o canal em `mobile-capture.md`
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
