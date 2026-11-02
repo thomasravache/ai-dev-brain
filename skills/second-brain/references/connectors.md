@@ -11,6 +11,8 @@ O conector é do agente, nunca do `brain.py`: o `brain.py` continua só com a bi
 
 Isso vem antes do onboarding (exit 3) e do `doctor` (exit 1), a menos que a pessoa queira configurar esta máquina (onboarding ou `init --join`) ou consertá-la.
 
+- **Localizar o vault:** busque o `brain-config.yml` pelo conector; a pasta dele é a raiz do vault. Com mais de um `brain-config.yml`, use o que tem `index.md` e `log.md` na mesma pasta; só se ainda sobrar mais de um, faça uma pergunta curta sobre qual vault usar.
+
 Sem conector, nada muda: valem os canais de `references/mobile-capture.md` e o fluxo normal no computador.
 
 ## Regras
