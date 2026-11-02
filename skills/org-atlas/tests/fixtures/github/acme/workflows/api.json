@@ -1,0 +1,29 @@
+{
+  "total_count": 2,
+  "workflows": [
+    {
+      "id": 5001,
+      "node_id": "W_kwDOacme5001",
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "state": "active",
+      "created_at": "2025-01-10T09:00:00Z",
+      "updated_at": "2026-09-01T09:00:00Z",
+      "url": "https://api.github.com/repos/acme/api/actions/workflows/5001",
+      "html_url": "https://github.com/acme/api/blob/main/.github/workflows/ci.yml",
+      "badge_url": "https://github.com/acme/api/workflows/CI/badge.svg"
+    },
+    {
+      "id": 5002,
+      "node_id": "W_kwDOacme5002",
+      "name": "Release",
+      "path": ".github/workflows/release.yml",
+      "state": "active",
+      "created_at": "2025-01-10T09:00:00Z",
+      "updated_at": "2026-09-01T09:00:00Z",
+      "url": "https://api.github.com/repos/acme/api/actions/workflows/5002",
+      "html_url": "https://github.com/acme/api/blob/main/.github/workflows/release.yml",
+      "badge_url": "https://github.com/acme/api/workflows/Release/badge.svg"
+    }
+  ]
+}

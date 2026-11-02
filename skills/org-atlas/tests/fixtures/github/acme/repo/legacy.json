@@ -1,0 +1,43 @@
+{
+  "id": 1005,
+  "node_id": "R_kgDOacme1005",
+  "name": "legacy",
+  "full_name": "acme/legacy",
+  "private": true,
+  "owner": {
+    "login": "acme",
+    "id": 900001,
+    "type": "Organization",
+    "site_admin": false
+  },
+  "html_url": "https://github.com/acme/legacy",
+  "description": "acme legacy",
+  "fork": false,
+  "url": "https://api.github.com/repos/acme/legacy",
+  "created_at": "2024-03-01T10:00:00Z",
+  "updated_at": "2026-10-29T18:00:00Z",
+  "pushed_at": "2026-10-29T18:00:00Z",
+  "size": 2048,
+  "stargazers_count": 3,
+  "watchers_count": 3,
+  "language": null,
+  "forks_count": 0,
+  "open_issues_count": 2,
+  "license": null,
+  "topics": [],
+  "archived": true,
+  "disabled": false,
+  "visibility": "private",
+  "default_branch": "master",
+  "permissions": {
+    "admin": false,
+    "maintain": false,
+    "push": false,
+    "triage": true,
+    "pull": true
+  },
+  "has_issues": true,
+  "has_wiki": false,
+  "network_count": 0,
+  "subscribers_count": 2
+}
