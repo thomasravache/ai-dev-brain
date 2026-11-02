@@ -603,6 +603,129 @@ class RemovedEntityTest(BuildCase):
             self.assertEqual(outside(text), outside(edited))
 
 
+# --------------------------------------------------------------------------- nomes das páginas (revisão G4 1)
+
+WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
+                    *(f"lpt{i}" for i in range(1, 10))}
+KEY_LINE_RE = re.compile(r"^- Chave: `([^`]+)`", re.MULTILINE)
+
+
+def services_config():
+    command = ["python3", "{skill}/assets/collectors/generic.py", "--facts", "{atlas}/facts/services.json",
+               "--category", "runtime", "--source", "facts"]
+    return ("version: 1\norganization: Acme\nmode: local\nlanguage: auto\nstale_days: 14\n"
+            "categories: [code, delivery]\ncollectors:\n  - id: facts\n    category: runtime\n"
+            "    command: [" + ", ".join(json.dumps(a) for a in command) + "]\n    timeout: 60\n"
+            "redaction: {extra_patterns: []}\n")
+
+
+class PageNamesTest(BuildCase):
+    """Um coletor generic com os serviços num arquivo de fatos que o teste reescreve entre os scans."""
+
+    def configure(self, argocd_without=()):
+        (self.atlas / "atlas-config.yml").write_text(services_config(), encoding="utf-8")
+
+    def services(self, *ids):
+        folder = self.atlas / "facts"
+        folder.mkdir(exist_ok=True)
+        facts = {"entities": [{"kind": "service", "id": sid} for sid in ids], "relations": []}
+        (folder / "services.json").write_text(json.dumps(facts), encoding="utf-8")
+
+    def pages(self):
+        return sorted((self.atlas / "services").glob("*.md"))
+
+    def page_of(self, key):
+        """O arquivo cuja região summary diz "- Chave: `<key>`" (exatamente um)."""
+        found = [p for p in self.pages()
+                 if key in KEY_LINE_RE.findall(regions(p.read_text(encoding="utf-8")).get("summary", ""))]
+        self.assertEqual(len(found), 1, f"{key}: {[p.name for p in self.pages()]}")
+        return found[0]
+
+    def add_note(self, path, note):
+        path.write_text(add_team_notes(path.read_text(encoding="utf-8"), "Contexto do time.", note), encoding="utf-8")
+
+    def test_existing_page_keeps_its_service_when_a_case_only_twin_appears(self):
+        """SPEC-0036:IT-02 (revisão G4: o nome da página não muda e não colide sem diferenciar maiúsculas)"""
+        self.services("Payments")
+        self.scan()
+        upper = self.page_of("service:Payments")
+        self.add_note(upper, "Nota do time sobre o Payments.")
+        self.services("Payments", "payments")
+        self.scan()
+        names = [p.name for p in self.pages()]
+        self.assertEqual(len({n.casefold() for n in names}), 2, f"nomes que colidem sem diferenciar maiúsculas: {names}")
+        self.assertEqual(self.page_of("service:Payments"), upper)
+        self.assertIn("Nota do time sobre o Payments.", upper.read_text(encoding="utf-8"))
+        lower = self.page_of("service:payments")
+        self.assertNotEqual(lower.name.casefold(), upper.name.casefold())
+        self.assertNotIn("Nota do time sobre o Payments.", lower.read_text(encoding="utf-8"))
+
+    def test_page_of_a_gone_service_is_not_taken_by_another_with_the_same_slug(self):
+        """SPEC-0036:IT-03 (revisão G4: a-b some e a/b continua no próprio arquivo)"""
+        self.services("a-b", "a/b")
+        self.scan()
+        dash, slash = self.page_of("service:a-b"), self.page_of("service:a/b")
+        self.assertNotEqual(dash, slash)
+        self.add_note(dash, "Nota do time sobre o a-b.")
+        self.services("a/b")
+        self.scan()
+        self.assertEqual(self.page_of("service:a/b"), slash, "a/b mudou de arquivo")
+        slash_text = slash.read_text(encoding="utf-8")
+        self.assertNotIn("Nota do time sobre o a-b.", slash_text)
+        self.assertIsNone(NOT_SEEN_RE.match(regions(slash_text)["summary"].strip()), "a/b marcado como sumido")
+        self.assertTrue(dash.is_file(), "a página do a-b foi apagada")
+        dash_text = dash.read_text(encoding="utf-8")
+        self.assertIn("Nota do time sobre o a-b.", dash_text)
+        self.assertIsNotNone(NOT_SEEN_RE.match(regions(dash_text)["summary"].strip()), regions(dash_text)["summary"])
+
+    def test_very_long_ids_get_short_distinct_and_stable_file_names(self):
+        """SPEC-0036:IT-01 (revisão G4: id de 300 caracteres)"""
+        prefix = "svc-" + "abcdefghij" * 29
+        long_a, long_b = (prefix + "-alpha")[:300], (prefix + "-omega")[:296] + "beta"
+        self.assertEqual((len(long_a), len(long_b)), (300, 300))
+        self.services(long_a, long_b)
+        self.scan()
+        first = {key: self.page_of(key).name for key in (f"service:{long_a}", f"service:{long_b}")}
+        self.assertEqual(len(set(first.values())), 2, first)
+        for name in first.values():
+            self.assertLessEqual(len(name), 100, name)
+        self.run_cli("build")
+        self.scan()
+        again = {key: self.page_of(key).name for key in first}
+        self.assertEqual(again, first)
+        self.assertEqual(len(self.pages()), 2, [p.name for p in self.pages()])
+
+    def test_windows_reserved_names_get_a_suffix(self):
+        """SPEC-0036:IT-01 (revisão G4: con, prn, aux, nul, com1-9 e lpt1-9, com ou sem extensão)"""
+        ids = ("con", "PRN", "Aux", "nul", "com1", "COM9", "lpt1", "lpt9", "con.txt", "nul.tar.gz")
+        self.services(*ids)
+        self.scan()
+        for sid in ids:
+            name = self.page_of(f"service:{sid}").name
+            self.assertNotIn(name.split(".")[0].casefold(), WINDOWS_RESERVED, f"{sid}: {name}")
+        self.assertEqual(len({p.name.casefold() for p in self.pages()}), len(ids))
+
+    def test_scan_json_reports_a_build_failure_inside_the_single_json_object(self):
+        """SPEC-0036:IT-01 (revisão G4: build que falha no scan --json)"""
+        self.services("api")
+        self.scan()
+        self.page_of("service:api").write_bytes(b"# api\n\xff\xfe n\xe3o \xe9 UTF-8\n")
+        result = self.sandbox.run("scan", "--json")
+        self.assertNotIn("Traceback", output(result), output(result))
+        self.assertNotEqual(result.returncode, 0, output(result))
+        try:
+            data = json.loads(result.stdout)
+        except ValueError:
+            self.fail(f"stdout não é um único objeto JSON:\n{result.stdout}\n{result.stderr}")
+        self.assertIsInstance(data, dict)
+        self.assertIn("collectors", data)
+        self.assertEqual([c["id"] for c in data["collectors"]], ["facts"])
+        self.assertIsInstance(data.get("build"), dict, data)
+        self.assertIs(data["build"].get("ok"), False, data["build"])
+        self.assertIsInstance(data["build"].get("error"), str)
+        self.assertTrue(data["build"]["error"].strip())
+
+
 # --------------------------------------------------------------------------- contrato
 
 
