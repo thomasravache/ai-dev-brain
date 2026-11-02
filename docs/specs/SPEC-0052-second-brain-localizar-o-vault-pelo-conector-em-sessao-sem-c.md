@@ -42,7 +42,7 @@ Só texto de instrução, com o mínimo de mudança:
 
 **Não muda:** o limite do modo só conector (só consulta e captura na inbox; qualquer outra escrita exige o computador com a pasta do vault, ADR-0013); o comportamento do `brain.py` (o exit 3 continua igual); o onboarding e o `init --join`.
 
-**Padrão seguido:** `skills/second-brain/SKILL.md` seção "Modo só conector" e `references/connectors.md` (SPEC-0044); teste de instruções `tests/test_connector_instructions.py` (SPEC-0044:UT-03), que checa as regras linha a linha.
+**Padrão seguido:** `skills/second-brain/SKILL.md` seção "Modo só conector" e `references/connectors.md` (SPEC-0044); teste de instruções `tests/test_connector_instructions.py` (o teste de instruções da SPEC-0044), que checa as regras linha a linha.
 
 **Rollback:** `git revert` do commit; só texto e a versão.
 
@@ -50,7 +50,7 @@ Só texto de instrução, com o mínimo de mudança:
 
 ## 4. Plano de Testes (TDD)
 <!-- Mínimo: um teste de regressão que reproduz o problema e FALHA antes da correção, no nível em que o defeito aparece (IT para fronteiras de I/O, E2E para jornadas de usuário). Código sem cobertura: primeiro CH-xx fixando o comportamento atual. Tag no código: `SPEC-0052:<ID>`. Modo privado: sem tag no código; aponte o teste no fim da linha com `→ caminho::nome` (ex.: `→ tests/test_soma.py::test_soma`). Categoria sem teste: "N/A — motivo" SEM ID. -->
-- Caracterização: N/A — as regras atuais do modo só conector já são checadas pelo SPEC-0044:UT-03 e continuam valendo.
+- Caracterização: N/A — as regras atuais do modo só conector já são checadas pelo teste de instruções da SPEC-0044 e continuam valendo.
 - **UT-01** — Dado o `SKILL.md`, quando lido, então "Antes de qualquer fluxo" diz que exit 3 numa sessão nova é normal e manda buscar o `brain-config.yml` pelo conector antes do onboarding, sem perguntar nem comentar configuração, com onboarding só se não achar ou se a pessoa pedir; "Modo só conector" começa com **Localizar o vault** (a pasta do `brain-config.yml` é a raiz; `layout` dá a inbox; não pedir o caminho; com mais de um `brain-config.yml`, o que tem `index.md` e `log.md` ao lado, e só então uma pergunta curta); e a primeira regra cobre "Exit 3 com conector". Falha hoje porque nenhum desses trechos existe.
 - **UT-02** — Dado `references/connectors.md`, quando lido, então "Quando usar" traz o passo de localizar o vault pelo `brain-config.yml`; e o `SKILL.md` continua dizendo que qualquer outra escrita no modo só conector é recusada (o limite não mudou).
 - Integração/E2E: N/A — só instruções do agente; o `brain.py` não muda (ADR-0002: a jornada da CLI fica coberta pelos testes existentes).
@@ -81,7 +81,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 1b3f11b (árvore suja) | 2026-11-02 |
-| G1 Red | PENDING | | |
+| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0052:UT-03 — 17d7c2f | 2026-11-02 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
@@ -126,3 +126,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (emenda v1, contrato inalterado) | 2026-11-02 | Texto deixa de citar o ID de teste da SPEC-0044 | o `verify` lia o ID citado como teste desta spec e reprovava o G1 | Nenhuma | thomas, 2026-11-02 ("segue com o piloto automático com o recomendado") |
