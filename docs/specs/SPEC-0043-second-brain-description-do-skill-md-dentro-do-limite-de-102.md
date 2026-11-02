@@ -59,11 +59,11 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01 com a tag `SPEC-0043:UT-01`, falhando pela description com 1149 caracteres
-- [ ] Green: description reescrita, `BRAIN_VERSION` 2026.11.1 e CHANGELOG da skill
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] Review independente (G4)
+- [x] Red: UT-01 com a tag `SPEC-0043:UT-01`, falhando pela description com 1149 caracteres
+- [x] Green: description reescrita, `BRAIN_VERSION` 2026.11.1 e CHANGELOG da skill
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Review independente (G4)
 - [ ] Integração + CI verde (G5) e H2
 - [ ] Deploy (G6) — N/A: pilar entrega dispensado
 - [ ] Relatório de Entrega, CHANGELOG e upload manual no claude.ai (G7)
@@ -76,7 +76,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=1)) — 09281d9 | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 7a75b81 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 14d0c16 | 2026-11-02 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na revisão de fb6476b; achado minor (description vazia passava) corrigido em 7a75b81; 4 nits sem ação — cf208f5 | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
