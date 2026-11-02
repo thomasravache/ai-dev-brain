@@ -72,6 +72,18 @@ class InstructionsTest(unittest.TestCase):
         self.assertRegex(text, r"(?is)configurad[oa].{0,120}(direto|diretamente|sem perguntar)"
                                r"|configured.{0,120}(directly|without asking)")
 
+    def test_skill_md_frontmatter_fits_the_skill_upload_limits(self):
+        """SPEC-0043:UT-01"""
+        front = read(SKILL_MD).split("---", 2)[1]
+        name = re.search(r"(?m)^name:\s*(.*?)\s*$", front).group(1)
+        self.assertLessEqual(len(name), 64, "name com mais de 64 caracteres")
+        self.assertRegex(name, r"^[a-z0-9-]+$")
+        match = re.search(r"(?ms)^description:[ \t]*(?:>-?|\|-?)?[ \t]*\n?(.*?)(?=^\S|\Z)", front)
+        description = " ".join(line.strip() for line in match.group(1).splitlines() if line.strip())
+        self.assertTrue(description, "description vazia")
+        self.assertLessEqual(len(description), 1024,
+                             f"description com {len(description)} caracteres; o upload aceita no máximo 1024")
+
     def test_config_reference_describes_both_layers(self):
         """SPEC-0017:UT-05"""
         text = read(CONFIG_MD)
