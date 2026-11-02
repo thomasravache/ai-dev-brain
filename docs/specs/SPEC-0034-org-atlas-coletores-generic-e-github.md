@@ -190,7 +190,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=18, errors=12)) — bbc684f | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 30f0b76 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 30f0b76 | 2026-11-02 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | Reviewer (rodada 1, 30f0b76): CHANGES_REQUESTED — M1: branch-prefixes vaza logins de autores (branches <login>/...), contra a seção 5 da spec; menores: caixa de times/--repos/--org, has_template_entry com item não-dict, 403 de rate limit classificado como sem acesso, sem teste de paginação | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
