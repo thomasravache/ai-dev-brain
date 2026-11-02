@@ -64,9 +64,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [x] Refactor mantendo tudo verde
 - [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 - [x] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega, CHANGELOG e upload manual no claude.ai (G7)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega, CHANGELOG e upload manual no claude.ai (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -77,9 +77,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 7a75b81 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 14d0c16 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na revisão de fb6476b; achado minor (description vazia passava) corrigido em 7a75b81; 4 nits sem ação — cf208f5 | 2026-11-02 |
-| G5 Integração & CI | PASS | MANUAL: CI do PR #21 verde em cf208f5: ci (3.9) e ci (3.15) com a suíte completa (run 41424652684), pr-check sdd (run 41424652699); a suíte local falhou só em testes de desempenho de 2 s fora do escopo (máquina com carga 5–7; test_fifty_commits levou 4,06 s isolado); thomas aceitou a evidência do CI | 2026-11-02 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | MANUAL: CI do PR #21 verde em 39988cb: ci (3.9) e ci (3.15) com a suíte completa (run 41424652684), pr-check sdd (run 41424652699); a suíte local falhou só em testes de desempenho de 2 s fora do escopo (máquina com carga 5–7; test_fifty_commits levou 4,06 s isolado); thomas aceitou a evidência do CI | 2026-11-02 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -91,28 +91,35 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+A `description` do `skills/second-brain/SKILL.md` caiu de 1149 para 841 caracteres, mantendo todos os gatilhos e comandos, e o upload da skill no claude.ai passou: a skill já aparece no projeto Idiomas do usuário com a description nova. Um teste novo reprova `description` vazia ou com mais de 1024 caracteres e `name` fora de `[a-z0-9-]` ou com mais de 64, para o defeito não voltar. Versão da skill: 2026.11.1.
 
 ### Como foi feito
+Teste primeiro (806e16d, falhando com "description com 1149 caracteres"), depois a description nova, `BRAIN_VERSION` 2026.11.1 e a seção no CHANGELOG da skill (fb6476b). A revisão G4 aprovou e apontou um achado minor (description vazia passava), corrigido com um teste a mais (7a75b81). Antes do G1, a spec passou a citar o teste da SPEC-0017 pelo nome do método, porque a ferramenta lia "SPEC-0017:UT-05" como teste desta spec; o plano de testes não mudou. O G5 usa a evidência do CI, por decisão do thomas: a suíte local falhou só em testes de desempenho de 2 s, fora do escopo, com a máquina carregada.
 
 ### Prova de Correção
 <!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes:** em 806e16d, `test_skill_md_frontmatter_fits_the_skill_upload_limits` falhou com `AssertionError: 1149 not less than or equal to 1024 : description com 1149 caracteres; o upload aceita no máximo 1024` (G1 em 09281d9).
+- **Depois:** em fb6476b o teste passa (G2 em 7a75b81, suíte completa OK) e no CI do PR #21 (run 41424652684, Python 3.9 e 3.15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | description ≤ 1024 e não vazia; name ≤ 64 em `[a-z0-9-]` | PASS | `test_instructions.py::InstructionsTest.test_skill_md_frontmatter_fits_the_skill_upload_limits` — CI do PR #21 em 39988cb (run 41424652684, Python 3.9 e 3.15; pr-check no run 41424652699) e suíte local (G2) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6)
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy próprio (pilar entrega dispensado). Passa a valer na `main` com o merge do PR #21; o zip já foi subido no claude.ai e funciona. Para as máquinas locais, copiar a skill de novo para `~/.claude/skills/`. Rollback: revert do merge.
 
 ### Pendências
+Nenhuma. Observação: os testes de desempenho com limite de 2 s (`test_fifty_commits_in_under_two_seconds`, `test_context_with_two_hops_takes_under_2_seconds_on_5000_notes`) falham numa máquina carregada; vale avaliar uma margem ou um jeito de pular esses testes localmente.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
