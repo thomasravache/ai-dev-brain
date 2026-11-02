@@ -191,7 +191,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 0ef159b | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 0ef159b | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 2, 0ef159b): APPROVED — M1 e menores 1–4 corrigidos; 3 notas cosméticas — 0ef159b | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | FAIL | test exit 1 (FAILED (failures=1, skipped=1)); arch_test exit 0 (OK); nota: CI do PR #20 em b5c8120 verde (runs 41415077562 Python 3.9/3.15 e 41415077615 sdd/pr-check) — b5c8120 | 2026-11-02 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
