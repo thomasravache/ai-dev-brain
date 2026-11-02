@@ -145,22 +145,22 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Mapeamento das Applications**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0035:<ID>`, falhando pelo motivo certo
-- [ ] Green: mapeamento de deployment, serviço, ambiente, cluster e origem; extração e higiene de `config_refs`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0035:<ID>`, falhando pelo motivo certo
+- [x] Green: mapeamento de deployment, serviço, ambiente, cluster e origem; extração e higiene de `config_refs`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: CLI e contrato**
-- [ ] Red: IT-01, IT-02, IT-03, CT-01 com a tag `SPEC-0035:<ID>`, falhando pelo motivo certo
-- [ ] Green: `assets/collectors/argocd.py` com `--from argocd|kubectl` e `--input`, CLIs falsas, fixtures e `references/collectors/argocd.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: IT-01, IT-02, IT-03, CT-01 com a tag `SPEC-0035:<ID>`, falhando pelo motivo certo
+- [x] Green: `assets/collectors/argocd.py` com `--from argocd|kubectl` e `--input`, CLIs falsas, fixtures e `references/collectors/argocd.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`; o `ATLAS_VERSION` sobe na SPEC-0036, no mesmo PR #20 (`atlas.py` fora do `touches`)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -186,36 +186,56 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Coletor `argocd` da `org-atlas`, chamado pelo `scan`: lê a lista de Applications pelo `argocd app list -o json` ou pelo `kubectl get applications.argoproj.io -A -o json` (ou de um arquivo com `--input`) e gera `deployment`, `service`, `environment` e `cluster` com `deploys`, `runs_in` e `sourced_from` para o repositório do GitHub. Das configurações sai só `CHAVE=host` das chaves com sufixo da lista; credenciais, portas, caminhos e queries nunca saem, e valor ambíguo não gera referência. Nunca lê Secrets nem manifestos.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `assets/collectors/argocd.py` no padrão do `github.py` (funções puras de mapeamento, `CollectorError`, `main` com exit code, `erro:` no stderr); uma única chamada à CLI escolhida, lista de argumentos, sem shell, timeout de 120 s, sem fallback para a outra CLI.
+- `config_refs` de `helm.parameters`, `helm.values` (texto), `helm.valuesObject` e `plugin.env`, inclusive `spec.sources`; ordenadas e sem repetição.
+- **Revisão G4 (3 rodadas):** a 1ª achou trecho de senha saindo como host quando a senha tinha `@` seguido de `/ ? #`, e um IndexError que derrubava o coletor; a regra do Architect para a 2ª rodada (host depois do último `@` do valor inteiro) abriu vazamento por `@` na query (`?password=Pa55@word` → `word`); a 3ª fixou a regra: `@` depois da autoridade torna o valor ambíguo e não gera referência; senão o host vem depois do último `@` da autoridade. Cada rodada com testes de regressão antes da correção (57f6287/e7539bf, f204993/f4d1115). Na mesma revisão: mensagem guiada para "server address unspecified" e aviso para Application repetida.
+- Guia em `references/collectors/argocd.md`; entrada em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`.
+- **Menores aceitos (sem credencial):** valores `jdbc:` não geram referência; barra invertida antes de `@` é lida como parte da autoridade; `user:dígitos` sem host é lido como host:porta; tokens opacos sem formato conhecido podem passar como nome de recurso; o mesmo cluster pode aparecer por `name` e por `server`.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Application vira deployment, serviço, ambiente e cluster com `deploys`/`runs_in`; 1.000 Applications < 10 s; nome repetido fica com a primeira | PASS | `test_collector_argocd.py::MapApplicationTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
+| UT-02 | Serviço e ambiente pelo label, ou pelo nome e namespace | PASS | `ServiceAndEnvironmentTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
+| UT-03 | Só `CHAVE=host` das chaves da lista, sem credencial, porta, caminho ou query; valor ambíguo não gera referência | PASS | `ConfigRefsTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
+| UT-04 | `repoURL` do GitHub (https, ssh) vira `sourced_from` → `repository:acme/api` | PASS | `RepositoryRefTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
+| IT-01 | `--input` nos dois formatos gera a saída esperada; senhas com `@ / ? #` nunca saem | PASS | `InputFileTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
+| IT-02 | `argocd` e `kubectl` falsos dão a mesma saída que `--input`, só com a chamada de lista | PASS | `FakeCliTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
+| IT-03 | Sem acesso, servidor não configurado, CLI ausente e resposta inválida saem com 1 e a mensagem | PASS | `CliFailureTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
+| CT-01 | Saída passa no `validate_collector_output` e o `scan` termina OK sem nada mascarado | PASS | `ArgocdContractTest` — CI do PR #20 em b629bea (run 41425187358, Python 3.9 e 3.15) e suíte local em f4d1115 (G2) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em b629bea
+- [x] Review independente sem achados blocker/major (G4) — 3ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — 1.000 Applications abaixo de 10 s (UT-01); segurança e privacidade por UT-03/IT-01 e ~120 valores adversariais na revisão; resiliência por IT-03
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — relatório do `scan`; rollback removendo o coletor do `atlas-config.yml`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `skills/org-atlas/CHANGELOG.md` e guia do coletor
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0044, SPEC-0045 (novas), SPEC-0036 e SPEC-0043
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; na branch `sdd/SPEC-0029`, PR #20, em `[Unreleased]` do CHANGELOG da skill.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0044 — ids de repositório sem diferença de caixa entre os coletores GitHub e Argo CD (`sourced_from` pode apontar para id inexistente quando a caixa do `repoURL` difere do `full_name`).
+- SPEC-0045 — teste de tempo `SPEC-0004:IT-10` tolerante à carga (derrubou o `gate --run` do G5).
+- SPEC-0036 — `ATLAS_VERSION` e links dos guias no `SKILL.md`, no mesmo PR #20.
+- SPEC-0043 — regra de arquitetura de `subprocess` nos coletores.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0035`. -->

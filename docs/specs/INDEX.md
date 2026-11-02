@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 6, in-progress 1, implemented 29
+- Validação (G0): **5 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 4, approved 6, in-progress 1, implemented 29
 - Impedimentos: **0 aberto(s)**, 16 resolvido(s)
 
 ## Cobertura de Pilares
@@ -31,6 +31,7 @@ Perfil: **minimo**
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0036 | org-atlas: cruzamento de fontes, grafo e páginas geradas | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0035 |
 | 3 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | approved | ⛔ aguarda implementação de SPEC-0036 |  |
 | 4 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 3: arquivos em comum com SPEC-0037 |
@@ -38,6 +39,7 @@ Perfil: **minimo**
 | 5 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ⛔ aguarda implementação de SPEC-0038 |  |
 | 6 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
 | 7 | SPEC-0043 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0035; saiu da onda 2: arquivos em comum com SPEC-0036; saiu da onda 3: arquivos em comum com SPEC-0037; saiu da onda 4: arquivos em comum com SPEC-0038; saiu da onda 5: arquivos em comum com SPEC-0039; saiu da onda 6: arquivos em comum com SPEC-0040 |
+| 8 | SPEC-0044 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 2: arquivos em comum com SPEC-0036; saiu da onda 3: arquivos em comum com SPEC-0037; saiu da onda 4: arquivos em comum com SPEC-0038; saiu da onda 5: arquivos em comum com SPEC-0039; saiu da onda 6: arquivos em comum com SPEC-0040; saiu da onda 7: arquivos em comum com SPEC-0043 |
 
 ## Épicos
 
@@ -45,7 +47,7 @@ Perfil: **minimo**
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
-| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 3/11 implementadas |
+| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 3/12 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/0 implementadas |
 
@@ -56,12 +58,14 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
+  S0045["SPEC-0045<br/>sdd-management: teste de tempo do leak-…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
     S0032["SPEC-0032<br/>org-atlas: esqueleto, configuração em d…"]:::implemented
     S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::implemented
+    S0034["SPEC-0034<br/>org-atlas: coletores generic e GitHub"]:::implemented
     S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::inprogress
     S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::approved
     S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::approved
@@ -70,9 +74,12 @@ flowchart LR
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
     S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::approved
     S0043["SPEC-0043<br/>org-atlas: testes do endurecimento do i…"]:::proposed
+    S0044["SPEC-0044<br/>org-atlas: ids de repositório sem difer…"]:::proposed
   end
   S0023 --> S0028
   S0032 --> S0033
+  S0032 --> S0034
+  S0033 -. contrato v1 .-> S0034
   S0032 --> S0035
   S0033 -. contrato v1 .-> S0035
   S0033 --> S0036
@@ -84,6 +91,8 @@ flowchart LR
   S0039 --> S0040
   S0038 --> S0041
   S0033 --> S0043
+  S0034 --> S0044
+  S0035 --> S0044
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -138,6 +147,8 @@ flowchart LR
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 | [SPEC-0043](SPEC-0043-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
+| [SPEC-0044](SPEC-0044-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0034, SPEC-0035 | — |
+| [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | proposed | 2026-11-02 | — | — | — |
 
 ## ADRs
 
