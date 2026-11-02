@@ -8,7 +8,7 @@ status: approved
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0036]
-consumes_contract: [SPEC-0037@1]
+consumes_contract: [SPEC-0037@2]
 contract_version: 1
 touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/org-atlas/references/maintenance.md, skills/org-atlas/tests/test_lint.py, skills/org-atlas/tests/fixtures/lint/**, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0010, ADR-0011, ADR-0012]

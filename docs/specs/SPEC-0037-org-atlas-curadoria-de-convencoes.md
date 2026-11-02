@@ -9,7 +9,7 @@ created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0036]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/org-atlas/references/curation.md, skills/org-atlas/assets/pages/convention.md, skills/org-atlas/assets/atlas-config.yml, skills/org-atlas/tests/test_curate.py, skills/org-atlas/tests/fixtures/curate/**, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0010, ADR-0012]
 external: []
@@ -67,7 +67,7 @@ Implementa a curadoria do ADR-0012. A partir dos sinais dos coletores (padrão d
 
 ```text
 atlas-config.yml:
-  curation: {min_share: 0.6, min_total: 20}
+  curation: {min_share: 0.6, min_total: 20, min_repos: 3}   (min_repos: v2)
 
 conventions/<id>.md (contrato v1, references/curation.md):
   ---
@@ -84,6 +84,17 @@ conventions/<id>.md (contrato v1, references/curation.md):
   ---
   <!-- atlas:begin evidence --> total, quantos seguem, porcentagem, repositórios, amostra <!-- atlas:end evidence -->
   ## Notas  (texto do time, nunca reescrito)
+
+padrão dominante por kind (v2):
+  pr-title       itens = PRs da amostra; padrão = conventional | ticket_key | other (pattern_counts)
+  branch-prefix  itens = branches da amostra; padrão = cada chave de counts ("feat/"…); id branch-prefix-<prefixo sem />
+  → domina quando padrão/total ≥ min_share e total ≥ min_total; escopo organization quando mais da metade
+    dos repositórios com o sinal tem o mesmo padrão dominante, senão uma convenção por repositório
+  merge-method   itens = repositórios com o sinal; padrão = o único método permitido (merge | squash | rebase);
+                 repositório com mais de um método não conta para nenhum padrão; id merge-method-<método>
+  pr-template    itens = repositórios com o sinal; padrão = pr_template true; id pr-template-present
+  → domina quando repositórios com o padrão / repositórios com o sinal ≥ min_share e repositórios com o
+    sinal ≥ min_repos; escopo sempre organization (sinal sim/não de um repositório só não vira convenção)
 
 atlas.py curate propose [--json]      (também roda no fim do scan)
   imprime "N nova(s), M atualizada(s), K esperando decisão"
@@ -104,6 +115,7 @@ atlas.py curate reject  ID --by NOME --via "PR #n"|local [--reason TEXTO]
 | Cenário | Condição / Entrada | Resultado esperado | Testes |
 |---|---|---|---|
 | Padrão dominante | ≥ 60% de ≥ 20 itens | convenção `inferred` com evidência | UT-01, IT-01 |
+| Padrão por kind | branch-prefix por branches; merge-method e pr-template por repositório, com `min_repos` | convenção do kind certo, escopo organization para sim/não | UT-05, UT-06 |
 | Sem padrão | abaixo do limiar ou poucos itens | nenhuma proposta | UT-01 |
 | Escopo | maioria dos repositórios com o mesmo padrão | `scope: organization`; senão por repositório | UT-02 |
 | Confirmar | `confirm` com `--by` e `--via` | `status: confirmed` com quem, quando e por onde | IT-02, CT-01 |
@@ -120,6 +132,8 @@ atlas.py curate reject  ID --by NOME --via "PR #n"|local [--reason TEXTO]
 - **UT-01** — Dado sinais com 70% de títulos em Conventional Commits em 50 PRs, e outros com 40% ou com 10 PRs, quando as propostas são calculadas, então só o primeiro vira convenção.
 - **UT-02** — Dado sinais de 5 repositórios, 4 com o mesmo padrão, quando o escopo é decidido, então a convenção é `organization`; com 2 de 5, uma por repositório.
 - **UT-03** — Dado `confirm` sem `--by`, sem `--via` ou com `--via` inválido, quando os argumentos são validados, então sai com 2 e a mensagem do contrato.
+- **UT-05** — Dado `branch-prefixes` com 70% de `feat/` em 50 branches num repositório e 40% em outro, quando as propostas são calculadas, então só o primeiro vira `branch-prefix-feat` (v2).
+- **UT-06** — Dado `merge-methods` de 5 repositórios, 4 só com squash e 1 com merge e squash, e `pr-template` presente em 2 de 5, quando as propostas são calculadas, então há `merge-method-squash` (organization) e nenhuma de template; com 2 repositórios só (abaixo de `min_repos`), nenhuma (v2).
 - **UT-04** — Dado o código do `atlas.py`, quando se procura quem grava `status: confirmed` ou `rejected`, então só as funções de `confirm` e `reject` gravam.
 
 ### 7.3 Testes de Integração
@@ -158,7 +172,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Propostas**
-- [ ] Red: UT-01, UT-02, CT-01, IT-01 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
+- [ ] Red: UT-01, UT-02, UT-05, UT-06, CT-01, IT-01 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
 - [ ] Green: cálculo das propostas com `curation.min_share`/`min_total`, escopo e `conventions/<id>.md` com a região `evidence`; `curate propose` no fim do `scan`
 - [ ] Refactor mantendo tudo verde
 
@@ -193,6 +207,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-02 | G1 | spec | A spec lista 4 kinds (pr-title, branch-prefix, merge-method, pr-template), mas só define 'padrão dominante' (≥60% de ≥20 itens) para títulos de PR; para branch-prefix não diz qual é o item, e merge-method/pr-template são sim/não por repositório, onde '60% de 20 itens' não se aplica | Test-writer cobriu só pr-title (a4be65e, 1932c68); Architect leu a spec e o exemplo merge-method-merge da seção 4 | thomas | Emenda v2 (aprovada por thomas em 2026-11-02): padrão dominante definido para cada kind, com min_repos para merge-method e pr-template | 2026-11-02 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -234,3 +249,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0037`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-02 | Regra de padrão dominante para cada `kind`: branch-prefix por branches (como pr-title); merge-method e pr-template por repositório, com `curation.min_repos` (padrão 3) e escopo sempre `organization`; UT-05 e UT-06 novos | IMP-01: a v1 só definia o domínio para títulos de PR, e sinais sim/não por repositório não cabem em "60% de 20 itens" | SPEC-0038 e SPEC-0039 (formato do arquivo de convenção inalterado; só a chave nova `min_repos`) | thomas, 2026-11-02 |
