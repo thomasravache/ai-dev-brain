@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 16 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 10, implemented 27
+- Validação (G0): **3 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 10, implemented 28
 - Impedimentos: **0 aberto(s)**, 14 resolvido(s)
 
 ## Cobertura de Pilares
@@ -14,7 +14,7 @@ Perfil: **minimo**
 
 | Pilar | Situação | Detalhe |
 |---|---|---|
-| Arquitetura e fronteiras | coberto | ADR-0001, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012 |
+| Arquitetura e fronteiras | coberto | ADR-0001, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013 |
 | Estratégia de testes | coberto | ADR-0002 |
 | Qualidade de código | coberto | ADR-0003 |
 | Entrega contínua e ambientes | dispensado | sem deploy nem ambientes: a skill é usada direto do checkout da main (link simbólico) ou copiada; release, versão e rollback estão no ADR-0005 |
@@ -141,6 +141,7 @@ flowchart LR
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
+| [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
 
 ## ADRs
 
@@ -157,3 +158,4 @@ flowchart LR
 | [ADR-0010](../adr/ADR-0010-fronteiras-da-skill-org-atlas.md) | Fronteiras da skill org-atlas | accepted | SPEC-0029 |
 | [ADR-0011](../adr/ADR-0011-modelo-neutro-do-atlas-e-contrato-dos-coletores.md) | Modelo neutro do atlas e contrato dos coletores | accepted | SPEC-0033 |
 | [ADR-0012](../adr/ADR-0012-curadoria-de-convencoes-do-atlas.md) | Curadoria de convenções do atlas | accepted | SPEC-0037 |
+| [ADR-0013](../adr/ADR-0013-conector-do-provedor-como-canal-de-captura-e-leitura.md) | Conector do provedor como canal de captura e leitura | accepted | SPEC-0044 |

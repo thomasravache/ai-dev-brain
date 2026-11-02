@@ -2,6 +2,8 @@
 
 No celular não roda a skill: capturar é só **jogar na pasta `inbox/` do vault**. Texto, link, foto, PDF ou vídeo vão pelo menu de compartilhar do sistema para o app do provedor, ou por uma nota rápida no Obsidian mobile. Depois, numa máquina com a skill, "processa minha inbox" faz o resto (`references/inbox.md`).
 
+Outro canal, para texto: o **conector do provedor** na ferramenta do agente (por exemplo, o conector do Google Drive no app do Claude). Pelo celular ou pelo navegador, "anota isso: …" vira um arquivo novo na `inbox/`, criado pelo agente pelo conector, sem depender do menu de compartilhar do app do provedor. O conector só cria arquivo novo na inbox e lê notas; o modo, as regras e o formato estão em `references/connectors.md`.
+
 Tudo o que chega à inbox pelo celular aparece no `inbox list` assim que o app do provedor sincroniza a pasta no computador. Enquanto o arquivo ainda está sendo baixado, ele aparece como `syncing` e não é processado.
 
 **Fonte verificada:** https://obsidian.md/help/sync-notes (verificado em 2026-10-30, ADR-0008). Ela diz:
