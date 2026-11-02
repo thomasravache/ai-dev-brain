@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -1060,13 +1061,20 @@ def cmd_scan(only=None, as_json=False):
         reports.append(report)
     write_atomic(state_path, json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
     failed = any(r["status"] != "ok" for r in reports)
-    build = build_atlas(atlas, shared)  # SPEC-0036: graph.json and the pages, also with a failed collector
+    try:  # SPEC-0036: graph.json and the pages, also with a failed collector
+        build = build_atlas(atlas, shared)
+    except (AtlasError, OSError) as e:  # scan --json stays one object: the error goes into "build"
+        build = {"ok": False, "error": str(e)}
+    failed = failed or not build["ok"]
     if as_json:
         print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports, "build": build},
                          ensure_ascii=False, indent=2))
     else:
         print_scan(reports)
-        print_build(build)
+        if build["ok"]:
+            print_build(build)
+        else:
+            print(f"erro no build: {build['error']}", file=sys.stderr)
     return 1 if failed else 0
 
 
@@ -1085,6 +1093,11 @@ DEPENDENCY_TYPES = ("depends_on", "reads", "writes", "publishes", "consumes")
 REGION_SUB_RE = re.compile(r"(<!-- atlas:begin ([\w-]+) -->)(.*?)(<!-- atlas:end \2 -->)", re.DOTALL)
 NOT_SEEN_RE = re.compile(r"^_Não visto desde (\d{4}-\d{2}-\d{2})\._$")
 SLUG_RE = re.compile(r"[^A-Za-z0-9._-]+")
+SLUG_MAX = 80  # longer slugs are cut and get "-<hash of the id>" (file names stay well under 100 characters)
+WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+# the service a page belongs to: "- Chave: `<key>`" in its summary region, or the template line "Serviço `<key>`"
+OWNER_SUMMARY_RE = re.compile(r"^- Chave: `([^`]+)`", re.MULTILINE)
+OWNER_INTRO_RE = re.compile(r"^Serviço `(service:[^`]+)`", re.MULTILINE)
 NONE_TEXT = "_(nenhum)_"
 
 
@@ -1243,21 +1256,47 @@ def render_graph(graph: dict, organization: str, built_at: str) -> str:
 # ---- pages
 
 def slug(entity_id) -> str:
-    """File name (without .md) of an entity's page: only letters, digits, '.', '_' and '-'."""
-    text = SLUG_RE.sub("-", str(entity_id)).strip("-.")
-    return text or "-"
+    """File name (without .md) of an entity's page: only letters, digits, '.', '_' and '-'; more than SLUG_MAX
+    characters = cut and suffixed with a short hash of the id; a Windows reserved name (con, prn, aux, nul, com1-9,
+    lpt1-9, with or without extension) gets '_' after its first part."""
+    text = SLUG_RE.sub("-", str(entity_id)).strip("-.") or "-"
+    if len(text) > SLUG_MAX:
+        digest = hashlib.sha1(str(entity_id).encode("utf-8")).hexdigest()[:10]
+        text = f"{text[:SLUG_MAX].rstrip('-.')}-{digest}"
+    first, dot, rest = text.partition(".")
+    if first.casefold() in WINDOWS_RESERVED:
+        text = f"{first}_{dot}{rest}"
+    return text
 
 
-def _service_slugs(keys) -> dict:
-    """{service key: slug}, with -2, -3... when two ids give the same file name (deterministic: sorted keys)."""
-    result, taken = {}, set()
-    for key in sorted(keys):
+def page_owner(text: str):
+    """Key of the service a page belongs to (its summary "- Chave:" line, else the template intro line) or None."""
+    found = OWNER_SUMMARY_RE.search(page_regions(text).get("summary", "")) or OWNER_INTRO_RE.search(text)
+    return found.group(1) if found else None
+
+
+def service_page_names(keys, existing: dict) -> dict:
+    """{service key: file name without .md}. An existing page keeps belonging to its service (page_owner); a new
+    service gets a slug that collides (ignoring case) neither with another name nor with any existing file, with
+    -2, -3... when needed. A file of a service that is gone is never given to another one. Deterministic."""
+    files = sorted(p[len(SERVICES_DIR) + 1:-3] for p in existing
+                   if p.startswith(SERVICES_DIR + "/") and p.endswith(".md"))
+    keys = sorted(keys)
+    wanted, result = set(keys), {}
+    taken = {name.casefold() for name in files}
+    for name in files:
+        owner = page_owner(existing[f"{SERVICES_DIR}/{name}.md"])
+        if owner in wanted and owner not in result:
+            result[owner] = name
+    for key in keys:
+        if key in result:
+            continue
         base = slug(key.split(":", 1)[1])
         candidate, n = base, 1
-        while candidate in taken:
+        while candidate.casefold() in taken:
             n += 1
             candidate = f"{base}-{n}"
-        taken.add(candidate)
+        taken.add(candidate.casefold())
         result[key] = candidate
     return result
 
@@ -1287,14 +1326,14 @@ def page_regions(text: str) -> dict:
 class _Index:
     """Lookups over a graph for the pages: nodes by key, edges by (from, type) and by (to, type)."""
 
-    def __init__(self, graph):
+    def __init__(self, graph, existing=None):
         self.nodes = {node["key"]: node for node in graph["nodes"]}
         self.out, self.into = {}, {}
         for edge in sorted(graph["edges"], key=lambda e: (e["from"], e["type"], e["to"])):
             self.out.setdefault((edge["from"], edge["type"]), []).append(edge)
             self.into.setdefault((edge["to"], edge["type"]), []).append(edge)
         services = [key for key, node in self.nodes.items() if node["kind"] == "service"]
-        self.slugs = _service_slugs(services)
+        self.slugs = service_page_names(services, existing or {})
 
     def targets(self, key, rtype, kind=None) -> list:
         return [e["to"] for e in self.out.get((key, rtype), []) if kind is None or e["to"].startswith(kind + ":")]
@@ -1448,7 +1487,7 @@ def render_pages(graph: dict, existing: dict, organization: str, previous=None, 
     that is gone stays: its summary becomes "_Não visto desde AAAA-MM-DD._" and its other regions are emptied."""
     existing = existing or {}
     scans = scans if isinstance(scans, dict) else _scans_from_nodes(graph)
-    index = _Index(graph)
+    index = _Index(graph, existing)
     pages = {}
     for key, name in index.slugs.items():
         path = f"{SERVICES_DIR}/{name}.md"
@@ -1459,14 +1498,13 @@ def render_pages(graph: dict, existing: dict, organization: str, previous=None, 
         pages[path] = fill_regions(text, _service_regions(key, index, scans))
     previous_seen = {}
     if isinstance(previous, dict) and isinstance(previous.get("nodes"), list):
-        old = [n for n in previous["nodes"] if isinstance(n, dict) and n.get("kind") == "service" and "key" in n]
-        old_slugs = _service_slugs(n["key"] for n in old)
-        previous_seen = {old_slugs[n["key"]]: str(n.get("seen_at") or "") for n in old}
+        previous_seen = {n["key"]: str(n.get("seen_at") or "") for n in previous["nodes"]
+                         if isinstance(n, dict) and n.get("kind") == "service" and isinstance(n.get("key"), str)}
     today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     for path in sorted(p for p in existing if p.startswith(SERVICES_DIR + "/") and p not in pages):
         text = existing[path]
         current = NOT_SEEN_RE.match(page_regions(text).get("summary", "").strip())
-        day = current.group(1) if current else previous_seen.get(path[len(SERVICES_DIR) + 1:-3]) or today
+        day = current.group(1) if current else previous_seen.get(page_owner(text)) or today
         bodies = {name: "\n" for name in page_regions(text)}
         bodies["summary"] = f"\n_Não visto desde {day}._\n"
         pages[path] = fill_regions(text, bodies)
@@ -1554,7 +1592,7 @@ def build_atlas(atlas: Path, shared: dict) -> dict:
             target.parent.mkdir(parents=True, exist_ok=True)
             write_atomic(target, pages[path])
             updated.append(path)
-    return {"nodes": len(graph["nodes"]), "edges": len(graph["edges"]),
+    return {"ok": True, "nodes": len(graph["nodes"]), "edges": len(graph["edges"]),
             "inferred": sum(1 for e in graph["edges"] if e.get("inferred")),
             "conflicts": sum(len(n["conflicts"]) for n in graph["nodes"]), "pages": updated, "warnings": warnings}
 
@@ -1576,7 +1614,7 @@ def cmd_build(as_json=False):
     atlas, shared = scan_config()
     report = build_atlas(atlas, shared)
     if as_json:
-        print(json.dumps({"version": ATLAS_VERSION, "ok": True, **report}, ensure_ascii=False, indent=2))
+        print(json.dumps({"version": ATLAS_VERSION, **report}, ensure_ascii=False, indent=2))
     else:
         print_build(report)
     return 0

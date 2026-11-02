@@ -84,7 +84,10 @@ Uma aresta inferida igual a uma declarada (mesma trinca) não é adicionada: a d
 - Os donos e os pipelines de um serviço chegam pelo repositório dele: `team` → `owns` → repositório (ou o próprio serviço) e `pipeline` → `builds` → repositório (ou o serviço).
 - `depends-on` e `used-by` mostram `depends_on`, `reads`, `writes`, `publishes` e `consumes`, com a evidência das inferidas.
 - Cada kind (menos `service`) tem a sua categoria em `platform/`: `repository` e `team` → `code`; `pipeline` → `ci`; `deployment` e `environment` → `delivery`; `cluster` → `runtime`; `datastore` e `bucket` → `data`; `queue` e `topic` → `messaging`; `secret-ref` → `secrets`.
-- O nome do arquivo de um serviço é o id com tudo o que não é letra, dígito, `.`, `_` ou `-` trocado por `-` (e `-2`, `-3`… se dois ids derem o mesmo nome).
+- **Nome do arquivo de um serviço** (estável e sem colisão):
+  - Uma página que já existe continua do serviço dela: o da linha `- Chave: \`service:<id>\`` da região `summary` ou, na falta dela (página de serviço que sumiu), o da linha `Serviço \`service:<id>\`` do esqueleto. O nome do arquivo nunca muda depois de criado.
+  - Serviço novo: o id com tudo o que não é letra, dígito, `.`, `_` ou `-` trocado por `-`. Mais de 80 caracteres = cortado em 80 e com `-<10 primeiros caracteres do SHA-1 do id>` no fim. Nome reservado do Windows (`con`, `prn`, `aux`, `nul`, `com1`–`com9`, `lpt1`–`lpt9`, sem diferença de caixa, com ou sem extensão) ganha `_` depois da primeira parte (`con_.md`, `con_.txt.md`).
+  - Se o nome colide, sem diferenciar maiúsculas, com outro serviço ou com qualquer arquivo de `services/` (inclusive o de um serviço que sumiu), ganha `-2`, `-3`…, nessa ordem pelos ids em ordem alfabética. O arquivo de um serviço que sumiu nunca é dado a outro.
 - Página nova vem de `assets/pages/` (`service.md`, `platform.md`, `ATLAS.md`), com título, regiões e `## Notas` para o time. Página existente: só o conteúdo entre `<!-- atlas:begin <nome> -->` e `<!-- atlas:end <nome> -->` muda; regiões que o `build` não conhece (como `about`) e todo o texto fora delas ficam como estão.
 - **Serviço que sumiu** do grafo: a página fica, a região `summary` vira `_Não visto desde AAAA-MM-DD._` (o `seen_at` do serviço no `graph.json` anterior; a data se mantém nos builds seguintes) e as outras regiões ficam vazias. Uma página `platform/` sem entidades fica, com `_(nenhum)_`.
 
@@ -94,4 +97,4 @@ Uma aresta inferida igual a uma declarada (mesma trinca) não é adicionada: a d
 Grafo: N nós, M arestas (I inferidas), C conflitos; P páginas atualizadas
 ```
 
-`P` conta as páginas gravadas (novas ou com alguma região diferente). `build --json` imprime um objeto `{"version", "ok", "nodes", "edges", "inferred", "conflicts", "pages", "warnings"}`; no `scan --json` o mesmo relatório vem na chave `build`.
+`P` conta as páginas gravadas (novas ou com alguma região diferente). `build --json` imprime um objeto `{"version", "ok", "nodes", "edges", "inferred", "conflicts", "pages", "warnings"}`; no `scan --json` o mesmo relatório vem na chave `build`. Se o `build` falhar dentro do `scan` (página ilegível, disco sem permissão), o `scan --json` continua imprimindo um objeto só, com `build: {"ok": false, "error": "..."}`, e sai com 1; no modo texto a mensagem vai para o stderr como `erro no build: ...`.
