@@ -29,7 +29,7 @@ Ao subir a skill no claude.ai (Settings → Skills → Upload a skill, com `seco
 - **Impacto:** a skill não pode ser usada no claude.ai; só funciona copiada para `~/.claude/skills/`, onde o limite não é verificado.
 
 ## 2. Causa Raiz
-A `description` foi crescendo a cada spec (SPEC-0018 search/related/links, SPEC-0019 ingest, processadores, inbox, lint…) sem nenhum limite. O formato de skills limita `description` a 1024 caracteres e `name` a 64 (minúsculas, dígitos e hífen), mas o teste `test_instructions.py` (SPEC-0017:UT-05) só confere que o campo existe. Nada impede a regressão.
+A `description` foi crescendo a cada spec (SPEC-0018 search/related/links, SPEC-0019 ingest, processadores, inbox, lint…) sem nenhum limite. O formato de skills limita `description` a 1024 caracteres e `name` a 64 (minúsculas, dígitos e hífen), mas o teste `test_instructions.py` (`test_skill_md_describes_onboarding_join_and_direct_use`, SPEC-0017) só confere que o campo existe. Nada impede a regressão.
 
 ## 3. Mudança Proposta
 - `test_instructions.py` ganha um teste que lê a `description` do frontmatter (escalar dobrado `>-`, juntando as linhas) e exige no máximo 1024 caracteres, e exige `name` com no máximo 64 caracteres em `[a-z0-9-]`.
@@ -46,7 +46,7 @@ NÃO muda: o corpo do `SKILL.md`, o `brain.py` (além da versão) e o `name`.
 
 ## 4. Plano de Testes (TDD)
 <!-- Mínimo: um teste de regressão que reproduz o problema e FALHA antes da correção, no nível em que o defeito aparece (IT para fronteiras de I/O, E2E para jornadas de usuário). Código sem cobertura: primeiro CH-xx fixando o comportamento atual. Tag no código: `SPEC-0043:<ID>`. Modo privado: sem tag no código; aponte o teste no fim da linha com `→ caminho::nome` (ex.: `→ tests/test_soma.py::test_soma`). Categoria sem teste: "N/A — motivo" SEM ID. -->
-- Caracterização: N/A — o teste SPEC-0017:UT-05 já cobre o restante do `SKILL.md` e continua valendo.
+- Caracterização: N/A — o teste `test_skill_md_describes_onboarding_join_and_direct_use` (SPEC-0017) já cobre o restante do `SKILL.md` e continua valendo.
 - **UT-01** — Dado o `skills/second-brain/SKILL.md`, quando o teste lê o frontmatter, então a `description` (linhas do escalar dobrado juntadas com espaço) tem no máximo 1024 caracteres e o `name` tem no máximo 64 caracteres, só com `[a-z0-9-]`. Falha hoje (1149).
 - Integração/E2E: N/A — o defeito está num arquivo estático; o upload no claude.ai é manual e fica como verificação no Relatório de Entrega.
 
@@ -73,7 +73,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 3607a19 | 2026-11-02 |
-| G1 Red | PENDING | | |
+| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0043:UT-05 — 806e16d | 2026-11-02 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
