@@ -4,7 +4,7 @@ title: "second-brain: description do SKILL.md dentro do limite de 1024 caractere
 tier: lite
 type: fix
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-02
 parent:
 depends_on: []
@@ -80,7 +80,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | MANUAL: CI do PR #21 verde em 39988cb: ci (3.9) e ci (3.15) com a suíte completa (run 41424652684), pr-check sdd (run 41424652699); a suíte local falhou só em testes de desempenho de 2 s fora do escopo (máquina com carga 5–7; test_fifty_commits levou 4,06 s isolado); thomas aceitou a evidência do CI | 2026-11-02 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
 | G6 Deploy | N/A | pilar entrega dispensado (pillars.waived): skill distribuída por cópia da pasta, sem deploy | 2026-11-02 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 250c7b4 | 2026-11-02 |
 
 ## 9. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
