@@ -2490,13 +2490,21 @@ def _matching_patterns(text, patterns) -> list:
     return [name for name, regex in patterns if any(m.group(0) for m in regex.finditer(text))]
 
 
+def _name_patterns(name, patterns) -> list:
+    """Patterns that match a file or folder name, or its stem without the extension (^acme-[0-9a-f]{8}$ matches
+    acme-feedface.md): the same pieces _mask_path masks."""
+    stem = os.path.splitext(name)[0]
+    found = set(_matching_patterns(name, patterns)) | (set(_matching_patterns(stem, patterns)) if stem else set())
+    return [label for label, _ in patterns if label in found]
+
+
 def _lint_secrets(files: _AtlasFiles, extras) -> list:
     """secret-leak: each match of a redaction pattern (built-in and extra_patterns) in any file, by file:line and
     pattern name, and each file or folder whose name matches one; never the value."""
     findings, seen = [], set()
     patterns = _lint_patterns(extras)
     for rel, name in files.names:
-        found = _matching_patterns(name, patterns)
+        found = _name_patterns(name, patterns)
         if found:
             where = "da pasta" if rel.endswith("/") else "do arquivo"
             findings.append(_finding("secret-leak", rel, f"padrão {', '.join(found)} no nome {where} (o valor não é "
@@ -2661,14 +2669,18 @@ def _without_code(text: str) -> str:
     return CODE_SPAN_RE.sub("", "\n".join(lines))
 
 
-def _link_problem(atlas_root: str, base: str, target: str):
-    """None when a relative link reaches an existing path inside the atlas; else why it is broken."""
+def _link_problem(atlas_root: str, base: str, target: str, problems=()):
+    """None when a relative link reaches an existing path inside the atlas, or a path under a folder that could not
+    be read (already a config finding: it cannot be checked); else why it is broken."""
     local = urllib.parse.unquote(target.split("#", 1)[0].split("?", 1)[0])
     if not local:
         return None
     resolved = os.path.normpath(os.path.join(base, local))
     if resolved != atlas_root and not resolved.startswith(atlas_root.rstrip(os.sep) + os.sep):
         return "aponta para fora do atlas"
+    parts = os.path.relpath(resolved, atlas_root).replace(os.sep, "/").split("/")
+    if any("/".join(parts[:i]) in problems for i in range(1, len(parts))):
+        return None
     try:
         found = os.path.lexists(resolved)
     except (OSError, ValueError):
@@ -2676,7 +2688,7 @@ def _link_problem(atlas_root: str, base: str, target: str):
     return None if found else "o arquivo não existe"
 
 
-def _lint_broken_refs(files: _AtlasFiles) -> list:
+def _lint_broken_refs(files: _AtlasFiles, extras) -> list:
     findings = []
     graph = _graph_shape(files)
     if graph:
@@ -2694,9 +2706,9 @@ def _lint_broken_refs(files: _AtlasFiles) -> list:
         for target in sorted({m.group(1) for m in LINK_RE.finditer(_without_code(files.texts[rel]))}):
             if EXTERNAL_LINK_RE.match(target):
                 continue
-            problem = _link_problem(atlas_root, base, target)
+            problem = _link_problem(atlas_root, base, target, files.problems)
             if problem:
-                findings.append(_finding("broken-ref", rel, f"link para {target}: {problem}",
+                findings.append(_finding("broken-ref", rel, f"link para {_mask_path(target, extras)}: {problem}",
                                          "corrija o link ou crie a página; links são relativos à página e ficam "
                                          "dentro do atlas"))
     return findings
@@ -2733,6 +2745,25 @@ def _mask_all(text, extras) -> str:
     return _redact_text(str(text), [regex for _, regex in extras])[0]
 
 
+def _mask_path(path, extras) -> str:
+    """path with each "/" component, and that component's stem without the extension, masked on its own: an
+    anchored pattern (^...$) that matches a name is masked exactly as it is detected (_name_patterns)."""
+    masked = []
+    for part in str(path).split("/"):
+        stem, ext = os.path.splitext(part)
+        masked.append(_mask_all(_mask_all(stem, extras) + ext if stem else part, extras))
+    return "/".join(masked)
+
+
+def _mask_finding_path(finding, extras) -> str:
+    """The path of a finding masked by _mask_path; the ":<line>" of secret-leak stays out of the last component."""
+    path, line = finding["path"], ""
+    if finding["rule"] == "secret-leak" and ":" in path and path.rsplit(":", 1)[1].isdigit():
+        path, line = path.rsplit(":", 1)
+        line = f":{line}"
+    return _mask_path(path, extras) + line
+
+
 def _finding_order(finding) -> tuple:
     path, line = finding["path"], 0
     if finding["rule"] == "secret-leak" and ":" in path:
@@ -2761,7 +2792,7 @@ def run_lint(atlas: Path, rules=None, today=None) -> list:
         findings += _lint_secrets(files, extras)
     findings += _lint_collectors(declared, state, stale_days, today, rules, extras)
     if "broken-ref" in rules:
-        findings += _lint_broken_refs(files)
+        findings += _lint_broken_refs(files, extras)
     if "pending-convention" in rules:
         findings += _lint_conventions(files, extras)
     if "orphan-page" in rules:
@@ -2772,7 +2803,8 @@ def run_lint(atlas: Path, rules=None, today=None) -> list:
             files.json(rel)
         findings += _lint_config(files, problems)
     for finding in findings:  # a path, id, key or link that looks like a secret is never shown either
-        for key in ("path", "detail", "suggestion"):
+        finding["path"] = _mask_finding_path(finding, extras)
+        for key in ("detail", "suggestion"):
             finding[key] = _mask_all(finding[key], extras)
     return sorted(findings, key=_finding_order)
 
