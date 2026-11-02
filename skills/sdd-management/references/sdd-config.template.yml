@@ -148,6 +148,8 @@ living_docs:
 dod_extra: []
 
 # --- Contexto da organização (SPEC-0041) ---
-# Caminho do atlas da org-atlas; com ele, o DISCOVER roda "atlas.py context" com os termos da demanda (SPEC-0029).
+# Atlas da org-atlas que o projeto espera (SPEC-0029): caminho relativo ou com "~", nunca absoluto de uma máquina.
+# Com ele, o DISCOVER roda "atlas.py context" com os termos da demanda. Quem decide qual atlas o context lê é a
+# config local da org-atlas nesta máquina ("atlas.py config --json"); o DISCOVER confere que ela aponta para este.
 # "" ou sem a chave: o DISCOVER só olha o repositório, como antes.
 org_context: ""
