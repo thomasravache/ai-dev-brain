@@ -22,7 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-ATLAS_VERSION = "2026.10.2"
+ATLAS_VERSION = "2026.11.1"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -1060,34 +1060,526 @@ def cmd_scan(only=None, as_json=False):
         reports.append(report)
     write_atomic(state_path, json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
     failed = any(r["status"] != "ok" for r in reports)
+    build = build_atlas(atlas, shared)  # SPEC-0036: graph.json and the pages, also with a failed collector
     if as_json:
-        print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports},
+        print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports, "build": build},
                          ensure_ascii=False, indent=2))
     else:
         print_scan(reports)
+        print_build(build)
     return 1 if failed else 0
 
 
 # ---------------------------------------------------------------- build (graph and pages)
 
+GRAPH_FILE = "graph.json"
+GRAPH_VERSION = 1
+SERVICE_PAGE, PLATFORM_PAGE, ATLAS_PAGE = "service.md", "platform.md", "ATLAS.md"
+SERVICES_DIR, PLATFORM_DIR = "services", "platform"
+# category of the platform/<category>.md page of each kind (services have their own pages)
+KIND_CATEGORY = {"repository": "code", "team": "code", "pipeline": "ci", "deployment": "delivery",
+                 "environment": "delivery", "cluster": "runtime", "datastore": "data", "bucket": "data",
+                 "queue": "messaging", "topic": "messaging", "secret-ref": "secrets"}
+RESOURCE_KINDS = ("datastore", "queue", "topic", "bucket")  # config_refs host -> depends_on (rule 2)
+DEPENDENCY_TYPES = ("depends_on", "reads", "writes", "publishes", "consumes")
+REGION_SUB_RE = re.compile(r"(<!-- atlas:begin ([\w-]+) -->)(.*?)(<!-- atlas:end \2 -->)", re.DOTALL)
+NOT_SEEN_RE = re.compile(r"^_Não visto desde (\d{4}-\d{2}-\d{2})\._$")
+SLUG_RE = re.compile(r"[^A-Za-z0-9._-]+")
+NONE_TEXT = "_(nenhum)_"
+
+
+def _source_order(order, extra) -> list:
+    """Collector ids in the order of atlas-config.yml, then any other id (sorted): the merge order."""
+    known = list(dict.fromkeys(order))
+    return known + sorted(set(extra) - set(known))
+
+
+def _day_of(collected_at) -> str:
+    text = str(collected_at or "")
+    return text[:10] if re.match(r"^\d{4}-\d{2}-\d{2}", text) else ""
+
+
 def merge_snapshots(snapshots: dict, order: list, scan_state: dict) -> dict:
-    raise NotImplementedError("SPEC-0036: merge_snapshots")
+    """One graph {"nodes", "edges"} from the snapshots of every collector ({id: snapshot}). Same kind:id = one node
+    with the attrs combined and every source; the same attr with different values = the first collector of `order`
+    wins and the conflict is recorded with the value of each collector. Same (from, type, to) = one edge with every
+    source. seen_at of a node = the most recent seen_at (snapshots/_scan.json) of its collectors."""
+    scan_state = scan_state if isinstance(scan_state, dict) else {}
+    ids = _source_order(order, snapshots)
+    rank = {cid: index for index, cid in enumerate(ids)}
+    nodes, edges = {}, {}
+    for cid in ids:
+        snapshot = snapshots.get(cid)
+        if not isinstance(snapshot, dict):
+            continue
+        entry = scan_state.get(cid) if isinstance(scan_state.get(cid), dict) else {}
+        seen = str(entry.get("seen_at") or "") or _day_of(snapshot.get("collected_at"))
+        for entity in snapshot.get("entities", []):
+            key = entity_key(entity)
+            attrs = entity.get("attrs") if isinstance(entity.get("attrs"), dict) else {}
+            node = nodes.get(key)
+            if node is None:
+                node = nodes[key] = {"key": key, "kind": entity.get("kind"), "name": str(entity.get("name") or
+                                                                                      entity.get("id")),
+                                     "attrs": {}, "sources": [], "seen_at": "", "values": {}}
+            if cid not in node["sources"]:
+                node["sources"].append(cid)
+            node["seen_at"] = max(node["seen_at"], seen)
+            for name, value in attrs.items():
+                node["values"].setdefault(name, {})[cid] = value
+        for relation in snapshot.get("relations", []):
+            key = (relation.get("from"), relation.get("type"), relation.get("to"))
+            edge = edges.get(key)
+            if edge is None:
+                edge = edges[key] = {"from": key[0], "to": key[2], "type": key[1], "sources": [],
+                                     "inferred": relation.get("inferred") is True}
+            if cid not in edge["sources"]:
+                edge["sources"].append(cid)
+    result = []
+    for key in sorted(nodes):
+        node = nodes[key]
+        values = node.pop("values")
+        conflicts = []
+        for name in sorted(values):
+            by_source = dict(sorted(values[name].items(), key=lambda item: rank[item[0]]))
+            first = next(iter(by_source.values()))
+            node["attrs"][name] = first
+            if any(_canonical(value) != _canonical(first) for value in by_source.values()):
+                conflicts.append({"attr": name, "values": by_source})
+        node["attrs"] = dict(sorted(node["attrs"].items()))
+        node["conflicts"] = conflicts
+        result.append(node)
+    return {"nodes": result, "edges": [edges[key] for key in sorted(edges, key=lambda k: tuple(map(str, k)))]}
+
+
+def _union(*lists) -> list:
+    return list(dict.fromkeys(item for items in lists for item in items))
+
+
+def _host_of(ref) -> str:
+    """Host of a config_refs item (KEY=host): the text after the first '='; '' without it."""
+    return ref.split("=", 1)[1] if isinstance(ref, str) and "=" in ref else ""
 
 
 def infer_relations(graph: dict) -> dict:
-    raise NotImplementedError("SPEC-0036: infer_relations")
+    """New graph with the declared edges and the inferred ones (`inferred: true`); the input does not change.
+    (1) deployment `sourced_from` repository + deployment `deploys` service -> service `sourced_from` repository;
+    (2) a config_refs item (KEY=host) of a deployment whose host equals the `host` attr or the name of a datastore,
+        queue, topic or bucket -> service `depends_on` that entity, with `evidence` = the item;
+    (3) a host equal to the name of another service -> `depends_on` between the services.
+    Only equality: an unknown or similar host creates no edge and no node. An inferred edge equal to a declared
+    one (same from, type, to) is not added; the same inferred edge from several items keeps the smallest evidence."""
+    nodes = {node["key"]: node for node in graph["nodes"]}
+    edges = [dict(edge, sources=list(edge["sources"])) for edge in graph["edges"]]
+    declared = {(e["from"], e["type"], e["to"]) for e in edges}
+    out = {}
+    for edge in edges:
+        out.setdefault((edge["from"], edge["type"]), []).append(edge)
+    targets = {}  # host or name -> keys of the entities it names (rules 2 and 3)
+    for node in graph["nodes"]:
+        if node["kind"] in RESOURCE_KINDS:
+            names = {node["name"], node["attrs"].get("host")}
+        elif node["kind"] == "service":
+            names = {node["name"]}
+        else:
+            continue
+        for name in names:
+            if isinstance(name, str) and name:
+                targets.setdefault(name, []).append(node["key"])
+    inferred = {}
+
+    def add(src, rtype, dst, sources, evidence):
+        key = (src, rtype, dst)
+        if key in declared or src == dst:
+            return
+        edge = inferred.get(key)
+        if edge is None:
+            inferred[key] = {"from": src, "to": dst, "type": rtype, "sources": list(sources), "inferred": True,
+                             "evidence": evidence}
+            return
+        edge["sources"] = _union(edge["sources"], sources)
+        edge["evidence"] = min(edge["evidence"], evidence)
+
+    for key in sorted(k for k, n in nodes.items() if n["kind"] == "deployment"):
+        deployment = nodes[key]
+        deploys = [e for e in out.get((key, "deploys"), []) if e["to"].startswith("service:")]
+        if not deploys:
+            continue
+        for deploy in deploys:
+            for source in out.get((key, "sourced_from"), []):
+                add(deploy["to"], "sourced_from", source["to"], _union(deploy["sources"], source["sources"]), key)
+        refs = deployment["attrs"].get("config_refs")
+        for ref in sorted(r for r in (refs if isinstance(refs, list) else []) if isinstance(r, str)):
+            for target in targets.get(_host_of(ref), []):
+                for deploy in deploys:
+                    add(deploy["to"], "depends_on", target,
+                        _union(deployment["sources"], nodes[target]["sources"]), ref)
+    return {**graph, "nodes": [dict(node) for node in graph["nodes"]],
+            "edges": edges + [inferred[key] for key in sorted(inferred)]}
+
+
+def _graph_node(node) -> dict:
+    return {"key": node["key"], "kind": node["kind"], "name": node["name"], "attrs": node["attrs"],
+            "sources": node["sources"], "seen_at": node["seen_at"], "conflicts": node["conflicts"]}
+
+
+def _graph_edge(edge) -> dict:
+    result = {"from": edge["from"], "to": edge["to"], "type": edge["type"], "sources": edge["sources"],
+              "inferred": bool(edge.get("inferred"))}
+    if "evidence" in edge:
+        result["evidence"] = edge["evidence"]
+    return result
 
 
 def render_graph(graph: dict, organization: str, built_at: str) -> str:
-    raise NotImplementedError("SPEC-0036: render_graph")
+    """Text of graph.json (contract v1, references/graph.md): nodes sorted by key, edges by (from, type, to),
+    sorted keys, 2-space indentation, final newline. Same graph = same text."""
+    data = {"version": GRAPH_VERSION, "organization": organization, "built_at": built_at,
+            "nodes": [_graph_node(n) for n in sorted(graph["nodes"], key=lambda n: n["key"])],
+            "edges": [_graph_edge(e) for e in sorted(graph["edges"], key=lambda e: (e["from"], e["type"], e["to"]))]}
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
 
 
-def render_pages(graph: dict, existing: dict, organization: str, previous=None) -> dict:
-    raise NotImplementedError("SPEC-0036: render_pages")
+# ---- pages
+
+def slug(entity_id) -> str:
+    """File name (without .md) of an entity's page: only letters, digits, '.', '_' and '-'."""
+    text = SLUG_RE.sub("-", str(entity_id)).strip("-.")
+    return text or "-"
+
+
+def _service_slugs(keys) -> dict:
+    """{service key: slug}, with -2, -3... when two ids give the same file name (deterministic: sorted keys)."""
+    result, taken = {}, set()
+    for key in sorted(keys):
+        base = slug(key.split(":", 1)[1])
+        candidate, n = base, 1
+        while candidate in taken:
+            n += 1
+            candidate = f"{base}-{n}"
+        taken.add(candidate)
+        result[key] = candidate
+    return result
+
+
+def _fmt_value(value) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return ", ".join(_fmt_value(v) for v in value) or "—"
+    return "—" if value is None else json.dumps(value, ensure_ascii=False)
+
+
+def _region(lines) -> str:
+    return "\n" + "\n".join(lines or [NONE_TEXT]) + "\n"
+
+
+def fill_regions(text: str, bodies: dict) -> str:
+    """text with the content of each region named in `bodies` replaced; everything else stays as it is."""
+    return REGION_SUB_RE.sub(lambda m: m.group(1) + bodies[m.group(2)] + m.group(4) if m.group(2) in bodies
+                             else m.group(0), text)
+
+
+def page_regions(text: str) -> dict:
+    return {m.group(2): m.group(3) for m in REGION_SUB_RE.finditer(text)}
+
+
+class _Index:
+    """Lookups over a graph for the pages: nodes by key, edges by (from, type) and by (to, type)."""
+
+    def __init__(self, graph):
+        self.nodes = {node["key"]: node for node in graph["nodes"]}
+        self.out, self.into = {}, {}
+        for edge in sorted(graph["edges"], key=lambda e: (e["from"], e["type"], e["to"])):
+            self.out.setdefault((edge["from"], edge["type"]), []).append(edge)
+            self.into.setdefault((edge["to"], edge["type"]), []).append(edge)
+        services = [key for key, node in self.nodes.items() if node["kind"] == "service"]
+        self.slugs = _service_slugs(services)
+
+    def targets(self, key, rtype, kind=None) -> list:
+        return [e["to"] for e in self.out.get((key, rtype), []) if kind is None or e["to"].startswith(kind + ":")]
+
+    def sources(self, key, rtype, kind=None) -> list:
+        return [e["from"] for e in self.into.get((key, rtype), [])
+                if kind is None or e["from"].startswith(kind + ":")]
+
+    def name(self, key) -> str:
+        node = self.nodes.get(key)
+        return node["name"] if node else key.split(":", 1)[-1]
+
+    def label(self, key, here="services") -> str:
+        """Markdown for an entity: a link to its page (service or platform/<category>.md) and its key."""
+        kind = key.split(":", 1)[0]
+        prefix = "" if here == "services" else "../services/"
+        if key in self.slugs:
+            return f"[{self.name(key)}]({prefix}{self.slugs[key]}.md)"
+        category = KIND_CATEGORY.get(kind)
+        if key in self.nodes and category:
+            target = f"{category}.md" if here == "platform" else f"../{PLATFORM_DIR}/{category}.md"
+            return f"[{self.name(key)}]({target}) (`{key}`)"
+        return f"`{key}`"
+
+
+def _edge_note(edge) -> str:
+    notes = [] if edge["type"] == "depends_on" else [edge["type"]]
+    if edge.get("inferred"):
+        notes.append(f"inferida de `{edge['evidence']}`" if edge.get("evidence") else "inferida")
+    return f" — {', '.join(notes)}" if notes else ""
+
+
+def _summary_lines(node) -> list:
+    lines = [f"- Chave: `{node['key']}`", f"- Visto em: {node['seen_at'] or '—'}",
+             f"- Fontes: {', '.join(node['sources'])}"]
+    lines += [f"- {name}: {_fmt_value(value)}" for name, value in node["attrs"].items()]
+    for conflict in node["conflicts"]:
+        values = "; ".join(f"{cid} = {_fmt_value(v)}" for cid, v in conflict["values"].items())
+        lines.append(f"- Conflito em `{conflict['attr']}`: {values}")
+    return lines
+
+
+def _service_regions(key, index, scans) -> dict:
+    node = index.nodes[key]
+    repositories = _union(index.targets(key, "sourced_from", "repository"))
+    deployments = index.sources(key, "deploys", "deployment")
+    by_env = {}
+    for deployment in deployments:
+        envs = index.targets(deployment, "runs_in", "environment") or [""]
+        for env in envs:
+            by_env.setdefault(env, []).append(deployment)
+    deployment_lines = []
+    for env in sorted(by_env, key=lambda e: (e == "", index.name(e) if e else "")):
+        title = index.name(env) if env else "sem ambiente"
+        for deployment in by_env[env]:
+            attrs = index.nodes[deployment]["attrs"] if deployment in index.nodes else {}
+            status = ", ".join(str(attrs[k]) for k in ("sync_status", "health_status") if attrs.get(k))
+            clusters = ", ".join(f"`{index.name(c)}`" for c in index.targets(deployment, "runs_in", "cluster"))
+            details = "; ".join(part for part in (status, f"cluster {clusters}" if clusters else "") if part)
+            deployment_lines.append(f"- **{title}**: `{index.name(deployment)}`" + (f" ({details})" if details else ""))
+    depends = [e for rtype in DEPENDENCY_TYPES for e in index.out.get((key, rtype), [])]
+    used = [e for rtype in DEPENDENCY_TYPES for e in index.into.get((key, rtype), [])]
+    owners = _union(*(index.sources(target, "owns", "team") for target in [key] + repositories))
+    pipelines = _union(*(index.sources(target, "builds", "pipeline") for target in [key] + repositories))
+    sources = []
+    for cid in node["sources"]:
+        seen = (scans.get(cid) or {}).get("seen_at") if isinstance(scans.get(cid), dict) else None
+        sources.append(f"- {cid}" + (f" (visto em {seen})" if seen else ""))
+    return {
+        "summary": _region(_summary_lines(node)),
+        "repository": _region([f"- {index.label(r)}" for r in repositories]),
+        "deployments": _region(deployment_lines),
+        "depends-on": _region([f"- {index.label(e['to'])}{_edge_note(e)}"
+                               for e in sorted(depends, key=lambda e: (e["to"], e["type"]))]),
+        "used-by": _region([f"- {index.label(e['from'])}{_edge_note(e)}"
+                            for e in sorted(used, key=lambda e: (e["from"], e["type"]))]),
+        "owners": _region([f"- {index.name(t)} (`{t.split(':', 1)[1]}`)" for t in owners]),
+        "pipelines": _region([f"- {index.name(p)} (`{p.split(':', 1)[1]}`)" for p in pipelines]),
+        "sources": _region(sources),
+    }
+
+
+def _platform_regions(category, index) -> dict:
+    lines = []
+    for kind in [k for k in KINDS if KIND_CATEGORY.get(k) == category]:
+        keys = sorted(k for k, n in index.nodes.items() if n["kind"] == kind)
+        if not keys:
+            continue
+        lines += ([""] if lines else []) + [f"### {kind}", ""]
+        for key in keys:
+            node = index.nodes[key]
+            attrs = "; ".join(f"{name}: {_fmt_value(value)}" for name, value in node["attrs"].items())
+            used = _union(*(index.sources(key, rtype, "service") for rtype in DEPENDENCY_TYPES))
+            parts = [part for part in (attrs, f"usado por {', '.join(index.label(s, 'platform') for s in used)}"
+                                       if used else "", f"visto em {node['seen_at']}" if node["seen_at"] else "")
+                     if part]
+            lines.append(f"- **{node['name']}** (`{key}`)" + (f" — {' — '.join(parts)}" if parts else ""))
+    return {"entities": _region(lines)}
+
+
+def _atlas_regions(graph, index, scans, categories) -> dict:
+    counts = {}
+    for node in graph["nodes"]:
+        counts[node["kind"]] = counts.get(node["kind"], 0) + 1
+    inferred = sum(1 for e in graph["edges"] if e.get("inferred"))
+    conflicts = sum(len(n["conflicts"]) for n in graph["nodes"])
+    summary = [(f"- {len(graph['nodes'])} entidades, {len(graph['edges'])} relações ({inferred} inferidas), "
+                f"{conflicts} conflitos")]
+    summary += [f"- {kind}: {counts[kind]}" for kind in KINDS if kind in counts]
+    if categories:
+        summary.append("- Plataforma: " + ", ".join(f"[{c}]({PLATFORM_DIR}/{c}.md)" for c in categories))
+    services = []
+    for key in sorted(index.slugs, key=lambda k: (index.name(k), k)):
+        repositories = ", ".join("`" + r.split(":", 1)[1] + "`" for r in index.targets(key, "sourced_from",
+                                                                                     "repository"))
+        extra = f" — repositório {repositories}" if repositories else ""
+        services.append(f"- [{index.name(key)}]({SERVICES_DIR}/{index.slugs[key]}.md){extra}")
+    scan_lines = []
+    for cid in sorted(scans):
+        entry = scans[cid] if isinstance(scans[cid], dict) else {}
+        status = entry.get("status") or "?"
+        counts_text = (f", {entry['entities']} entidades, {entry['relations']} relações"
+                       if "entities" in entry and "relations" in entry else "")
+        scan_lines.append(f"- {cid}: {entry.get('seen_at') or 'nunca'} ({status}{counts_text})")
+    scans_body = _region(scan_lines)
+    # "snapshots" = name of the scans region in ATLAS.md of atlases created before 2026.11.1
+    return {"summary": _region(summary), "services": _region(services), "scans": scans_body, "snapshots": scans_body}
+
+
+def _template(name: str, organization: str, **values) -> str:
+    text = (PAGES_DIR / name).read_text(encoding="utf-8")
+    for key, value in values.items():
+        text = text.replace("{" + key + "}", value)
+    return text.replace("{organization}", organization)
+
+
+def _scans_from_nodes(graph) -> dict:
+    scans = {}
+    for node in graph["nodes"]:
+        for cid in node["sources"]:
+            entry = scans.setdefault(cid, {"seen_at": ""})
+            entry["seen_at"] = max(entry["seen_at"], node["seen_at"])
+    return scans
+
+
+def render_pages(graph: dict, existing: dict, organization: str, previous=None, scans=None) -> dict:
+    """{path relative to the atlas: text} of ATLAS.md, services/<id>.md and platform/<category>.md. `existing` =
+    {path: current text} of the pages that already exist (only their regions change; a new page comes from
+    assets/pages/); `previous` = the previous graph (graph.json on disk), for the date of a service that is gone;
+    `scans` = snapshots/_scan.json (seen_at per collector; without it, derived from the nodes). A page of a service
+    that is gone stays: its summary becomes "_Não visto desde AAAA-MM-DD._" and its other regions are emptied."""
+    existing = existing or {}
+    scans = scans if isinstance(scans, dict) else _scans_from_nodes(graph)
+    index = _Index(graph)
+    pages = {}
+    for key, name in index.slugs.items():
+        path = f"{SERVICES_DIR}/{name}.md"
+        node = index.nodes[key]
+        eid = key.split(":", 1)[1]
+        title = eid if node["name"] == eid else f"{node['name']} ({eid})"
+        text = existing.get(path) or _template(SERVICE_PAGE, organization, title=title, key=key)
+        pages[path] = fill_regions(text, _service_regions(key, index, scans))
+    previous_seen = {}
+    if isinstance(previous, dict) and isinstance(previous.get("nodes"), list):
+        old = [n for n in previous["nodes"] if isinstance(n, dict) and n.get("kind") == "service" and "key" in n]
+        old_slugs = _service_slugs(n["key"] for n in old)
+        previous_seen = {old_slugs[n["key"]]: str(n.get("seen_at") or "") for n in old}
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    for path in sorted(p for p in existing if p.startswith(SERVICES_DIR + "/") and p not in pages):
+        text = existing[path]
+        current = NOT_SEEN_RE.match(page_regions(text).get("summary", "").strip())
+        day = current.group(1) if current else previous_seen.get(path[len(SERVICES_DIR) + 1:-3]) or today
+        bodies = {name: "\n" for name in page_regions(text)}
+        bodies["summary"] = f"\n_Não visto desde {day}._\n"
+        pages[path] = fill_regions(text, bodies)
+    categories = sorted({KIND_CATEGORY[n["kind"]] for n in graph["nodes"] if n["kind"] in KIND_CATEGORY})
+    for path in sorted({f"{PLATFORM_DIR}/{c}.md" for c in categories}
+                       | {p for p in existing if p.startswith(PLATFORM_DIR + "/")}):
+        category = path[len(PLATFORM_DIR) + 1:-3]
+        text = existing.get(path) or _template(PLATFORM_PAGE, organization, category=category)
+        pages[path] = fill_regions(text, _platform_regions(category, index))
+    text = existing.get(ATLAS_PAGE) or _template(ATLAS_PAGE, organization)
+    pages[ATLAS_PAGE] = fill_regions(text, _atlas_regions(graph, index, scans, categories))
+    return pages
+
+
+# ---- build command
+
+def read_snapshots(atlas: Path, ids) -> tuple:
+    """({id: snapshot}, warnings) of snapshots/<id>.json for the declared collectors; a missing file is skipped (the
+    collector never ran) and an unreadable one is a warning (the build goes on with the others)."""
+    snapshots, warnings = {}, []
+    for cid in ids:
+        path = atlas / SNAPSHOTS_DIR / f"{cid}.json"
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError):
+            data = None
+        problems = validate_collector_output(data)[1] if isinstance(data, dict) else ["não é um objeto JSON"]
+        if problems:
+            warnings.append(f"aviso: {SNAPSHOTS_DIR}/{cid}.json ilegível ou fora do contrato — ignorado no build")
+            continue
+        snapshots[cid] = data
+    return snapshots, warnings
+
+
+def _existing_pages(atlas: Path) -> dict:
+    pages = {}
+    if (atlas / ATLAS_PAGE).is_file():
+        pages[ATLAS_PAGE] = read_text(atlas / ATLAS_PAGE)
+    for folder in (SERVICES_DIR, PLATFORM_DIR):
+        if (atlas / folder).is_dir():
+            for path in sorted((atlas / folder).glob("*.md")):
+                pages[f"{folder}/{path.name}"] = read_text(path)
+    return pages
+
+
+def _without_built_at(text) -> str:
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return ""
+    return _canonical({k: v for k, v in data.items() if k != "built_at"}) if isinstance(data, dict) else ""
+
+
+def build_atlas(atlas: Path, shared: dict) -> dict:
+    """Merges the snapshots, infers the relations and writes graph.json and the pages (only what changed; the
+    graph keeps its built_at when nothing else changed). Returns the report of the build."""
+    collectors = validate_collectors(shared.get("collectors"))
+    ids = [c["id"] for c in collectors]
+    snapshots, warnings = read_snapshots(atlas, ids)
+    state = read_json_file(atlas / SNAPSHOTS_DIR / SCAN_STATE)
+    state = state if isinstance(state, dict) else {}
+    organization = str(shared.get("organization") or "")
+    graph = infer_relations(merge_snapshots(snapshots, ids, state))
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    text = render_graph(graph, organization, today)
+    graph_path = atlas / GRAPH_FILE
+    old_text = read_text(graph_path) if graph_path.is_file() else None
+    previous = None
+    if old_text is not None:
+        try:
+            previous = json.loads(old_text)
+        except ValueError:
+            previous = None
+    if old_text is None or _without_built_at(old_text) != _without_built_at(text):
+        write_atomic(graph_path, text)
+    scans = {cid: state[cid] for cid in ids if isinstance(state.get(cid), dict)}
+    existing = _existing_pages(atlas)
+    pages = render_pages(graph, existing, organization, previous, scans)
+    updated = []
+    for path in sorted(pages):
+        if existing.get(path) != pages[path]:
+            target = atlas / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            write_atomic(target, pages[path])
+            updated.append(path)
+    return {"nodes": len(graph["nodes"]), "edges": len(graph["edges"]),
+            "inferred": sum(1 for e in graph["edges"] if e.get("inferred")),
+            "conflicts": sum(len(n["conflicts"]) for n in graph["nodes"]), "pages": updated, "warnings": warnings}
+
+
+def build_line(report: dict) -> str:
+    return (f"Grafo: {report['nodes']} nós, {report['edges']} arestas ({report['inferred']} inferidas), "
+            f"{report['conflicts']} conflitos; {len(report['pages'])} páginas atualizadas")
+
+
+def print_build(report: dict) -> None:
+    for warning in report["warnings"]:
+        print(warning, file=sys.stderr)
+    print(build_line(report))
 
 
 def cmd_build(as_json=False):
-    raise NotImplementedError("SPEC-0036: build")
+    """build [--json]: graph.json and the pages from the snapshots already on disk (also runs at the end of every
+    scan). Exit 0; an unreadable snapshot is a warning."""
+    atlas, shared = scan_config()
+    report = build_atlas(atlas, shared)
+    if as_json:
+        print(json.dumps({"version": ATLAS_VERSION, "ok": True, **report}, ensure_ascii=False, indent=2))
+    else:
+        print_build(report)
+    return 0
 
 
 # ---------------------------------------------------------------- init
