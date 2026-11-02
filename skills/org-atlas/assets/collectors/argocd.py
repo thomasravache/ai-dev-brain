@@ -109,9 +109,10 @@ def host_of(value):
     nothing safe is left. A URL gives its host (s3://bucket/x gives the bucket); host:port and user:pass@host give
     the host; a bare name stays as it is.
 
-    Rule (G4 review): drop the scheme; when the value has an "@", keep only what follows its LAST "@" (a password
-    may hold "@", "/", "#" or "?", so nothing before that "@" can leave); cut at the first "/", "?" or "#"; strip
-    the port; the result must be a strict host name, IP or resource name, else None."""
+    Rule (G4 review): drop the scheme; the authority is the text up to the first "/", "?" or "#". An "@" after
+    that point (path, query or fragment: it may be a password) makes the value ambiguous and gives None — losing a
+    reference is acceptable, leaking never is. Otherwise the host is what follows the last "@" of the authority,
+    without the port, and must be a strict host name, IP or resource name, else None."""
     if not isinstance(value, str):
         return None
     value = value.strip().strip("\"'").strip()
@@ -119,10 +120,10 @@ def host_of(value):
         return None
     match = SCHEME_RE.match(value)
     rest = value[match.end():] if match else value
-    if "@" in rest:
-        rest = rest.rsplit("@", 1)[1]
     authority = re.split(r"[/?#]", rest, maxsplit=1)[0]
-    host = _strip_port(authority)
+    if "@" in rest[len(authority):]:
+        return None
+    host = _strip_port(authority.rsplit("@", 1)[-1])
     if not host or not HOST_RE.match(host):
         return None
     return host

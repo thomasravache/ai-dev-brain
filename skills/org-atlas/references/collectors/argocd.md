@@ -109,7 +109,7 @@ With `--input` the collector never calls a CLI.
 
 ## Privacy
 
-- Host rule: the scheme is dropped; when the value has an `@`, only what follows its **last** `@` is kept (a password may contain `@`, `/`, `#` or `?`, so no piece of the user or password can leave); that is cut at the first `/`, `?` or `#` and the port is stripped; the result must be a strict host name, IP or resource name, otherwise there is no reference. A value like `https://host/x?to=a@b` therefore gives `b`: when in doubt, the collector errs towards dropping the userinfo.
+- Host rule: the scheme is dropped and the authority is the text up to the first `/`, `?` or `#`. When an `@` appears after that point (in the path, query or fragment — a password may contain `@`, `/`, `#` or `?`), the value is ambiguous and gives **no reference** (`postgres://db/app?password=Pa55@word`, `postgres://u:p#ss@db/x`): losing a reference is acceptable, leaking never is. Otherwise the host is what follows the last `@` of the authority (`redis://:p@ss@cache:6379` → `cache`), without the port, and it must be a strict host name, IP or resource name, otherwise there is no reference.
 - Only key names from the suffix list and bare hosts or resource names leave; never a whole configuration value, a key outside the list (`LOG_LEVEL`, `DB_PASSWORD`, `API_TOKEN`), a credential, a port, a path or a query string.
 - Secrets are never read: not through the CLI, and Secrets listed in `status.resources` are ignored.
 - Annotations are never read, so `last-applied-configuration` (which repeats the whole spec) never leaves.
