@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: [SPEC-0023, SPEC-0024, SPEC-0044]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/SKILL.md, skills/second-brain/references/confidential.md, skills/second-brain/references/maintenance.md, skills/second-brain/references/note-types.md, skills/second-brain/references/config.md, skills/second-brain/assets/templates/secret-ref.md, skills/second-brain/assets/brain-config.yml, skills/second-brain/CHANGELOG.md]
 adrs: [ADR-0007, ADR-0013, ADR-0014]
 external: []
@@ -103,6 +103,9 @@ search | related | context | links  [--include-confidential]
   related --note <nota confidencial> | links <nota confidencial> sem a opção → exit 2 ("nota confidencial — use --include-confidential")
 index: MOCs (região notes) e index.md (região recent) não listam notas confidenciais
 export-notebooklm: nunca inclui nota confidencial (nem com opção); --json ganha "confidential_omitted": N
+  wikilink de outra nota exportada que aponta para nota confidencial → texto "[confidencial]" (o título não sai)
+  MOC confidencial → exit 2 ("MOC confidencial — …")
+marca confidencial reconhecida com fim de linha CRLF e com BOM UTF-8
 
 lint (regras novas, severidade AVISO, só em notas sem confidential: true, fora de templates):
   secret-in-note  <caminho>:<linha> — <tipo>   tipos: chave privada | token | senha rotulada
@@ -146,6 +149,8 @@ doctor: "OK confidential — N notas confidenciais" (só o número)
 | Nota confidencial pedida pelo caminho | `related --note` ou `links` numa nota confidencial sem a opção | exit 2 | IT-04 |
 | MOC e índice | `index` com nota confidencial no contexto | não listada no MOC nem no `recent` | IT-05 |
 | Exportação | MOC que cita nota confidencial | nota fora do pacote, `confidential_omitted` conta | IT-05 |
+| Título no pacote | nota exportada com `[[nota confidencial]]` | o link vira `[confidencial]`; MOC confidencial sai com 2 | IT-05 |
+| Fim de linha e BOM | nota confidencial salva com CRLF ou BOM | continua confidencial em busca, índice, exportação e doctor | UT-02, IT-04, IT-05 |
 | Segredo numa nota comum | chave privada, token, senha rotulada | AVISO `secret-in-note` com caminho, linha e tipo, sem o valor | UT-03, UT-05, IT-06 |
 | Marcadores | `senha: ***`, `token: <seu token>` | nenhum achado | UT-03 |
 | Dado pessoal numa nota comum | CPF, CNPJ e cartão válidos, documento rotulado | AVISO `personal-data`, sem o valor | UT-04, UT-05, IT-06 |
@@ -240,10 +245,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 29b2dc6 | 2026-11-02 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=31)) — c6aa6a9 | 2026-11-02 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — b96973b | 2026-11-02 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — b96973b | 2026-11-02 |
+| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED (b96973b; blocker: nota CRLF não é reconhecida como confidencial e vaza em search/context/links/index/export; major: BOM faz o index listar a confidencial no MOC; minors: título de confidencial via wikilink no export, MOC confidencial no export sem doc, cartão com dígitos iguais) | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -294,3 +299,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0050`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-02 | Exportação troca wikilink para nota confidencial por `[confidencial]` e recusa MOC confidencial (exit 2); a marca vale com CRLF e BOM; cartão com dígitos todos iguais não conta | revisão G4: título da confidencial saía no pacote por links de outras notas, e notas CRLF/BOM vazavam | Nenhuma | thomas, 2026-11-02 ("pode fazer no piloto automático com o recomendado") |
