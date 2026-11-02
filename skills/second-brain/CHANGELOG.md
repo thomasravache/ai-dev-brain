@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-02
+
+### Fixed
+- `SKILL.md` e `references/connectors.md`: numa sessão sem configuração local (exit 3, nuvem ou celular) com conector do provedor, o agente localiza o vault buscando pelo conector o arquivo de nome exatamente `brain-config.yml` e entra direto no modo só conector, sem perguntar nem comentar configuração; onboarding (agora "exit 3 sem conector, ou a pedido") só se o conector não achar o arquivo ou se a pessoa pedir. Com mais de um `brain-config.yml`, vale o que tem `index.md` e `log.md` na mesma pasta; só então uma pergunta curta. `BRAIN_VERSION` 2026.11.5, sem mudança de lógica (SPEC-0052).
+
 ## [2026.11.4] - 2026-11-02
 
 ### Added

@@ -53,11 +53,13 @@ Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de 
 Rode sempre `brain.py config` antes de qualquer fluxo, em toda conversa — não confie na memória:
 
 - **Configurado (exit 0)** → siga direto o fluxo pedido, sem perguntar nada de configuração.
-- **Exit 3** ("second-brain não configurado nesta máquina") → faça o **onboarding** abaixo, ou o `init --join` se o vault já existir configurado.
+- **Exit 3** sem conector do provedor (ou quando a pessoa pedir para configurar esta máquina) → faça o **onboarding** abaixo, ou o `init --join` se o vault já existir configurado.
 - **Exit 1** ou valores estranhos → rode `brain.py doctor` e mostre o resultado antes de seguir.
 - **Sem enxergar o vault** — exit 3, ou exit 1 de um vault que o agente não consegue ler (pasta do vault ou `brain-config.yml` inacessível, como quando o macOS bloqueia a pasta do provedor), ou exit 0 com a pasta do vault inacessível, ou sem shell — e com um conector do provedor na ferramenta → **modo só conector** (seção abaixo), só para capturar e consultar. Essa regra vem antes das de exit 3 e exit 1 acima, a menos que a pessoa queira configurar esta máquina (onboarding ou `init --join`) ou consertá-la (`doctor`): aí siga o fluxo de configuração.
 
-## Onboarding (exit 3)
+**Exit 3 numa sessão nova é normal**, não um problema para resolver: a configuração local fica na máquina e não acompanha sessões na nuvem ou no celular. Com um conector do provedor na ferramenta, antes de pensar em onboarding, busque o arquivo `brain-config.yml` pelo conector. Achou → o vault é a pasta dele: entre direto no modo só conector, sem perguntar nem comentar sobre configuração. Vá para o onboarding só se o conector não achar o `brain-config.yml`, ou se a pessoa pedir para configurar esta máquina. Se o pedido não couber no modo só conector, explique o limite em uma frase.
+
+## Onboarding (exit 3 sem conector, ou a pedido)
 
 Converse com a pessoa; o `brain.py init` não é interativo e recebe tudo por flags.
 
@@ -145,6 +147,7 @@ Para processar a inbox ("processa minha inbox"), siga sempre estes quatro passos
 
 Use o modo só conector quando o `brain.py config` sai com 3, ou sai com 0 mas a pasta do vault não está acessível (no celular, no navegador, ou uma pasta bloqueada pelo sistema), ou não há shell, **e** a ferramenta tem um conector do provedor (por exemplo, o do Google Drive) com permissão de criar e ler arquivos. Detalhes, formato da captura e conectores conferidos: `references/connectors.md`.
 
+- **Localizar o vault:** busque pelo conector o arquivo de nome exatamente `brain-config.yml` (pelo nome, não pelo conteúdo); a pasta dele é a raiz do vault, e o arquivo traz o `layout` (como a inbox). Não peça o caminho à pessoa nem comente que a sessão está sem configuração. Com mais de um `brain-config.yml`, use o que tem `index.md` e `log.md` na mesma pasta; só se ainda sobrar mais de um, faça uma pergunta curta sobre qual vault usar.
 - **Capturar ("anota isso"):** monte o arquivo com `capture --print`: `brain.py capture "<texto>" --print --json [--context C]` (devolve `path` e `content`; não escreve nada). Sem shell, monte o nome `AAAA-MM-DD-HHMMSS-<slug>.md` e o frontmatter `type: capture` / `created` conforme `references/connectors.md`. Depois, pelo conector, crie um arquivo novo com esse nome e conteúdo em `<vault>/inbox/` (a pasta de `layout.inbox`). Só crie arquivo novo na inbox: nunca sobrescreva — se o nome já existir, gere outro com o `--print` ou acrescente `-1` — e nunca edite, mova ou apague um arquivo do vault pelo conector.
 - **Consultar ("o que eu sei sobre X"):** só leitura. Busque e leia as notas pelo conector, responda com base nelas citando `[[nota]]`, e avise que a resposta é parcial (sem o índice e sem os vizinhos por link do `brain.py`); sugira refazer a consulta completa no computador com a pasta. Um arquivo com `confidential: true` no frontmatter não é citado nem resumido.
 - **Qualquer outra escrita** (nota organizada, `new-note`, relação, índice, processar a inbox, mover, apagar, `lint`): recuse e explique que isso é feito no computador com a pasta do vault, pelo `brain.py`.
@@ -189,7 +192,7 @@ O provedor sincroniza também um apagamento ou uma corrupção para todas as má
 
 ## Regras
 
-- **`brain.py config` antes de qualquer fluxo.** Configurado → direto ao pedido, sem perguntar configuração.
+- **`brain.py config` antes de qualquer fluxo.** Configurado → direto ao pedido, sem perguntar configuração. Exit 3 com conector → localize o vault pelo conector e siga no modo só conector, sem perguntar configuração.
 - **O vault é do usuário.** O `brain.py` só cria e acrescenta; nada do vault é apagado (a única remoção é a rotação de zips antigos do próprio `backup`, nos destinos de backup, ADR-0015). A única movimentação é tirar da inbox um item já processado (`inbox done`, `ingest --move`). Toda escrita dele no vault aparece no `log.md`.
 - **Segredo fora do vault.** Senha, token e chave ficam no gerenciador de senhas; o vault guarda só a `secret-ref` (seção **Itens confidenciais e segredos**).
 - **Sem caminho absoluto no vault.** Caminhos de máquina ficam só na configuração local (`references/config.md`).
