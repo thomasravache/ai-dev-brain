@@ -9,6 +9,10 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+### Added
+- Coletor `generic` (`assets/collectors/generic.py --facts ARQUIVO --category C [--source NOME]`): converte um arquivo de fatos escrito à mão (JSON) na saída `org-atlas/collector@1`, com `source` em cada entidade e relação (`name` padrão = id, `attrs` padrão = `{}`); arquivo inexistente, JSON inválido ou fato sem campo obrigatório saem com 1 e o motivo (`entities[<i>]: falta o campo id`), sem traceback; guia em `references/collectors/generic.md` (SPEC-0034).
+- Coletor `github` (`assets/collectors/github.py --org ORG [--repos a,b] [--pr-sample N] [--input PASTA]`, categoria `code`): pelo `gh api` (listas com `--paginate`, JSON lido com a biblioteca padrão, sem shell e com timeout) gera `repository` (`language`, `default_branch`, `topics`, `archived`, `visibility`), `pipeline` + `builds` dos workflows, `team` + `owns` dos times do CODEOWNERS (pessoas e e-mails ignorados) e os sinais `pr-titles` (Conventional Commits, chave de ticket e outros, amostra de até 10 títulos), `branch-prefixes`, `merge-methods` (de `allow_*` do repositório; sem esses campos o sinal é omitido com aviso no stderr) e `pr-template`; nunca coleta logins de autores, corpo de PR nem código. `--input` lê respostas gravadas sem chamar o `gh`; `gh` ausente, sem acesso ou organização inexistente saem com 1 e a mensagem do contrato; guia em `references/collectors/github.md` (SPEC-0034).
+
 ## [2026.10.2] - 2026-10-30
 
 ### Added
