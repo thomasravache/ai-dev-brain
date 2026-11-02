@@ -1068,6 +1068,28 @@ def cmd_scan(only=None, as_json=False):
     return 1 if failed else 0
 
 
+# ---------------------------------------------------------------- build (graph and pages)
+
+def merge_snapshots(snapshots: dict, order: list, scan_state: dict) -> dict:
+    raise NotImplementedError("SPEC-0036: merge_snapshots")
+
+
+def infer_relations(graph: dict) -> dict:
+    raise NotImplementedError("SPEC-0036: infer_relations")
+
+
+def render_graph(graph: dict, organization: str, built_at: str) -> str:
+    raise NotImplementedError("SPEC-0036: render_graph")
+
+
+def render_pages(graph: dict, existing: dict, organization: str, previous=None) -> dict:
+    raise NotImplementedError("SPEC-0036: render_pages")
+
+
+def cmd_build(as_json=False):
+    raise NotImplementedError("SPEC-0036: build")
+
+
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
@@ -1347,6 +1369,8 @@ def main(argv=None):
     p = sub.add_parser("scan", help="roda os coletores, valida, mascara, grava snapshots/ e mostra o diff")
     p.add_argument("--only", help="ids dos coletores separados por vírgula")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("build", help="junta os snapshots no graph.json, infere relações e gera as páginas")
+    p.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -1358,6 +1382,8 @@ def main(argv=None):
             return cmd_doctor(args.json)
         if args.command == "scan":
             return cmd_scan(args.only, args.json)
+        if args.command == "build":
+            return cmd_build(args.json)
     except AtlasError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
