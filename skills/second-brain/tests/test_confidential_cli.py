@@ -26,6 +26,7 @@ import json
 import re
 import shlex
 import sys
+from pathlib import Path
 
 from brain_support import doctor_lines, fn, output, snapshot
 from test_store_cli import StoreCliTestCase, region
@@ -350,3 +351,125 @@ class ConfidentialDoctorCliTest(ConfidentialCliTestCase):
         self.assertIn(("OK", "confidential", "2 notas confidenciais"), rows, out.stdout)
         for leaked in ("Cofre Alfa", "Cofre Beta", "Cofre"):
             self.assertNotIn(leaked, output(out))
+
+
+class ReviewRegressionCliTest(ConfidentialCliTestCase):
+    """Regressões da revisão (G4) da SPEC-0050."""
+
+    CRLF = "projects/college/Conta crlf.md"
+    BOM = "projects/college/Conta bom.md"
+    SECRET_BODY = "MARCA-SIGILOSA-REVISAO-0050"
+
+    def put_bytes(self, rel, data):
+        path = self.box.vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def write_crlf_and_bom(self):
+        self.write("projects/college/Conta comum.md", note_text("Conta comum", "Banco do bairro. Ver [[Conta crlf]]."))
+        crlf = note_text("Conta crlf", f"Banco {self.SECRET_BODY}. Ver [[Conta comum]].", True)
+        bom = note_text("Conta bom", f"Banco {self.SECRET_BODY}. Ver [[Conta comum]].", True)
+        self.put_bytes(self.CRLF, crlf.replace("\n", "\r\n").encode("utf-8"))
+        self.put_bytes(self.BOM, b"\xef\xbb\xbf" + bom.encode("utf-8"))
+        with open(self.box.vault / "mocs" / "college.md", "a", encoding="utf-8") as handle:
+            handle.write("\n- [[Conta comum]]\n- [[Conta crlf]]\n- [[Conta bom]]\n")
+
+    def test_crlf_and_bom_confidential_notes_stay_out_of_queries(self):
+        """SPEC-0050:IT-04 — CRLF e BOM não tiram a marca de confidencial."""
+        self.write_crlf_and_bom()
+        hidden = {self.CRLF, self.BOM}
+        for args in (("search", "banco"), ("context", "banco"), ("links", "Conta comum")):
+            with self.subTest(args=args):
+                data = self.json_of(*args)
+                listed = [r["path"] for r in data.get("results", [])]
+                listed += [n["path"] for n in data.get("notes", []) + data.get("omitted", [])]
+                listed += [o["path"] for o in data.get("outgoing", [])] + list(data.get("backlinks", []))
+                self.assertFalse(hidden & set(listed), data)
+                self.assertNotIn(self.SECRET_BODY, json.dumps(data, ensure_ascii=False))
+        for note in ("Conta crlf", "Conta bom"):
+            with self.subTest(note=note):
+                self.assertExit(self.box.run("links", note), 2)
+
+    def test_crlf_and_bom_confidential_notes_stay_out_of_index_export_and_are_counted(self):
+        """SPEC-0050:IT-05 SPEC-0050:IT-07"""
+        self.write_crlf_and_bom()
+        self.assertExit(self.box.run("index"), 0)
+        notes_region = region(self.read("mocs/college.md"), "notes")
+        self.assertIn("Conta comum", notes_region)
+        index = self.read("index.md")
+        recent, contexts = region(index, "recent"), region(index, "contexts")
+        self.assertIn("Conta comum", recent)
+        for title in ("Conta crlf", "Conta bom"):
+            with self.subTest(title=title):
+                self.assertNotIn(title, notes_region)
+                self.assertNotIn(title, recent)
+        college = [line for line in contexts.splitlines() if "college" in line.lower()]
+        self.assertEqual(len(college), 1, contexts)
+        self.assertRegex(college[0], r"(?<!\d)1(?!\d)", "só a nota comum conta no contexto")
+
+        folder = self.box.root / "export"
+        out = self.box.run("export-notebooklm", "college", "--out", folder, "--json", "--combined")
+        self.assertExit(out, 0)
+        data = json.loads(out.stdout)
+        self.assertFalse({self.CRLF, self.BOM} & {item["path"] for item in data["notes"]}, data)
+        self.assertEqual(data.get("confidential_omitted"), 2, data)
+        names = [p.name for p in folder.rglob("*") if p.is_file()]
+        self.assertFalse([n for n in names if "crlf" in n.lower() or "bom" in n.lower()], names)
+        for path in folder.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(self.SECRET_BODY, path.read_text(encoding="utf-8"), path.name)
+
+        rows = doctor_lines(self.box.run("doctor").stdout)
+        self.assertIn(("OK", "confidential", "2 notas confidenciais"), rows)
+
+    def test_export_never_reveals_the_title_of_a_linked_confidential_note(self):
+        """SPEC-0050:IT-05 — decisão do Architect: o título também fica invisível no pacote."""
+        title = "Aula sigilosa"
+        self.write("projects/college/Aula comum.md",
+                   note_text("Aula comum", f"Limites. Ver [[{title}]] e [[{title}#parte]]."))
+        self.write("projects/college/Aula sigilosa.md", note_text(title, "Conteúdo da aula.", True))
+        with open(self.box.vault / "mocs" / "college.md", "a", encoding="utf-8") as handle:
+            handle.write(f"\n- [[Aula comum]]\n- [[{title}]]\n")
+        folder = self.box.root / "export"
+        out = self.box.run("export-notebooklm", "college", "--out", folder, "--json", "--combined")
+        self.assertExit(out, 0)
+        self.assertNotIn(title, output(out))
+        texts = {p.name: p.read_text(encoding="utf-8") for p in folder.rglob("*") if p.is_file()}
+        for name, text in texts.items():
+            with self.subTest(file=name):
+                self.assertNotIn(title, text)
+                self.assertNotIn(title.lower(), text.lower())
+        data = json.loads(out.stdout)
+        by_path = {item["path"]: item["file"] for item in data["notes"]}
+        for rel in ("mocs/college.md", "projects/college/Aula comum.md"):
+            with self.subTest(note=rel):
+                self.assertIn("[confidencial]", texts[Path(by_path[rel]).name])
+
+    def test_export_of_a_confidential_moc_is_refused(self):
+        """SPEC-0050:IT-05"""
+        moc = self.box.vault / "mocs" / "college.md"
+        text = moc.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\n"), text)
+        moc.write_text("---\nconfidential: true\n" + text[4:], encoding="utf-8")
+        folder = self.box.root / "export"
+        out = self.box.run("export-notebooklm", "college", "--out", folder)
+        self.assertExit(out, 2)
+        self.assertIn("confidencial", output(out))
+        self.assertFalse(folder.exists() and any(folder.iterdir()), "nada exportado")
+
+    def test_lint_text_orders_findings_of_a_file_by_numeric_line(self):
+        """SPEC-0050:UT-05 SPEC-0050:IT-06 — a linha 5 vem antes da 17."""
+        lines = ["---", "type: note", "title: Ordem", "created: 2026-10-01", LABELED, "---", "", "# Ordem", ""]
+        lines += [f"linha {n}" for n in range(10, 17)] + [LABELED, "", "Ver [[Doc]]."]
+        rel = "projects/college/Ordem.md"
+        self.write(rel, "\n".join(lines) + "\n")
+        self.write("projects/college/Doc.md", note_text("Doc", "Ver [[Ordem]]."))
+        self.assertEqual((lines.index(LABELED) + 1, len(lines) - 2), (5, 17))
+        out = self.box.run("lint")
+        self.assertExit(out, 0)
+        hits = [line for line in out.stdout.splitlines() if " secret-in-note " in line]
+        positions = [int(re.search(rf"{re.escape(rel)}:(\d+)", hit).group(1)) for hit in hits]
+        self.assertEqual(positions, [5, 17], out.stdout)
+        data = json.loads(self.box.run("lint", "--json").stdout)
+        found = [f"{f['path']} {f['detail']}" for f in data["findings"] if f["rule"] == "secret-in-note"]
+        self.assertEqual([int(re.search(r":(\d+)", f).group(1)) for f in found], [5, 17], found)

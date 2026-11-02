@@ -28,7 +28,10 @@ Contrato esperado das funções de scripts/brain.py (o Implementer segue estes t
         quebrado. build_context e note_links ganham "confidential_omitted": N (notas distintas omitidas).
 """
 import json
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
 
 from brain_support import brain, fn
 
@@ -262,6 +265,47 @@ class ConfidentialFilterTest(unittest.TestCase):
         self.assertIn(SIGILOSA, data["backlinks"])
         self.assertEqual(data["broken"], [])
 
+
+
+class ReviewRegressionTest(unittest.TestCase):
+    """Regressões da revisão (G4) da SPEC-0050."""
+
+    def test_crlf_and_bom_notes_are_still_confidential(self):
+        """SPEC-0050:UT-02 — CRLF e BOM antes de "---" não escondem a marca."""
+        is_conf = fn("is_confidential", SPEC)
+        base = note_text("Nota", "corpo", "true")
+        crlf = base.replace("\n", "\r\n")
+        self.assertIn("confidential: true\r\n", crlf)
+        for name, text in (("crlf", crlf), ("bom", "\ufeff" + base), ("bom+crlf", "\ufeff" + crlf)):
+            with self.subTest(case=name):
+                self.assertTrue(is_conf(parse("resources/Nota.md", text)))
+
+    def test_crlf_and_bom_notes_read_from_disk_are_confidential(self):
+        """SPEC-0050:UT-02"""
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        read_note, is_conf = fn("read_note", "SPEC-0018"), fn("is_confidential", SPEC)
+        base = note_text("Nota", "corpo", "true")
+        for name, data in (("crlf", base.replace("\n", "\r\n").encode()),
+                           ("bom", b"\xef\xbb\xbf" + base.encode())):
+            with self.subTest(case=name):
+                path = root / f"{name}.md"
+                path.write_bytes(data)
+                self.assertTrue(is_conf(read_note(path, f"{name}.md", None)))
+
+    def test_card_with_all_equal_digits_is_not_personal_data(self):
+        """SPEC-0050:UT-04 — passa no Luhn, mas não é um cartão."""
+        find = fn("find_personal_data", SPEC)
+        for text in ("0000 0000 0000 0000", "0000-0000-0000-0000", "cartão: 0000000000000000"):
+            with self.subTest(text=text):
+                self.assertEqual(kinds(find(text)), [])
+
+    def test_vault_ref_with_control_characters_is_refused(self):
+        """SPEC-0050:UT-01"""
+        is_ref = fn("is_vault_ref", SPEC)
+        for value in ("keepass://a\n", "keepass://a\nb", "keepass://a\r", "keepass://a\t", "keepass://\x00a"):
+            with self.subTest(value=value):
+                self.assertFalse(is_ref(value))
 
 if __name__ == "__main__":
     unittest.main()
