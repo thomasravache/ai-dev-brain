@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 5, approved 3, in-progress 1, implemented 34
+- Validação (G0): **6 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 5, approved 3, implemented 35
 - Impedimentos: **0 aberto(s)**, 17 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,21 +23,20 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0038  
+**Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** —
+**Próximo lote:** SPEC-0039, SPEC-0041
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ✅ pronta |  |
+| 1 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ✅ pronta |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0038 |
-| 2 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ⛔ aguarda implementação de SPEC-0038 |  |
-| 3 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
-| 4 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0038; saiu da onda 2: arquivos em comum com SPEC-0039; saiu da onda 3: arquivos em comum com SPEC-0040 |
-| 5 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0038; saiu da onda 2: arquivos em comum com SPEC-0039; saiu da onda 3: arquivos em comum com SPEC-0040; saiu da onda 4: arquivos em comum com SPEC-0046 |
-| 6 | SPEC-0048 | org-atlas: endurecimento da curadoria e do context, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 2: arquivos em comum com SPEC-0039; saiu da onda 3: arquivos em comum com SPEC-0040; saiu da onda 4: arquivos em comum com SPEC-0046; saiu da onda 5: arquivos em comum com SPEC-0047 |
+| 2 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
+| 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: max_parallel=3 |
+| 3 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0039; saiu da onda 2: arquivos em comum com SPEC-0040 |
+| 4 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0039; saiu da onda 2: arquivos em comum com SPEC-0040; saiu da onda 3: arquivos em comum com SPEC-0046 |
+| 5 | SPEC-0048 | org-atlas: endurecimento da curadoria e do context, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0039; saiu da onda 2: arquivos em comum com SPEC-0040; saiu da onda 3: arquivos em comum com SPEC-0046; saiu da onda 4: arquivos em comum com SPEC-0047 |
 
 ## Épicos
 
@@ -45,7 +44,7 @@ Perfil: **minimo**
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
-| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 6/13 implementadas |
+| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 7/13 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/0 implementadas |
 
@@ -66,7 +65,7 @@ flowchart LR
     S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::implemented
     S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::implemented
     S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::implemented
-    S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::inprogress
+    S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::implemented
     S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::approved
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
     S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::approved
@@ -138,7 +137,7 @@ flowchart LR
 | [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
 | [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
-| [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | in-progress | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
+| [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
 | [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
