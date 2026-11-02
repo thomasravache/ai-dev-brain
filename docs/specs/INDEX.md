@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **6 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 5, approved 3, in-progress 1, implemented 34
 - Impedimentos: **0 aberto(s)**, 17 resolvido(s)
 
@@ -37,7 +37,7 @@ Perfil: **minimo**
 | 3 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
 | 4 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0038; saiu da onda 2: arquivos em comum com SPEC-0039; saiu da onda 3: arquivos em comum com SPEC-0040 |
 | 5 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0038; saiu da onda 2: arquivos em comum com SPEC-0039; saiu da onda 3: arquivos em comum com SPEC-0040; saiu da onda 4: arquivos em comum com SPEC-0046 |
-| 6 | SPEC-0048 | org-atlas: endurecimento da curadoria e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0038; saiu da onda 2: arquivos em comum com SPEC-0039; saiu da onda 3: arquivos em comum com SPEC-0040; saiu da onda 4: arquivos em comum com SPEC-0046; saiu da onda 5: arquivos em comum com SPEC-0047 |
+| 6 | SPEC-0048 | org-atlas: endurecimento da curadoria e do context, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 2: arquivos em comum com SPEC-0039; saiu da onda 3: arquivos em comum com SPEC-0040; saiu da onda 4: arquivos em comum com SPEC-0046; saiu da onda 5: arquivos em comum com SPEC-0047 |
 
 ## Épicos
 
@@ -89,6 +89,7 @@ flowchart LR
   S0034 --> S0047
   S0035 --> S0047
   S0037 --> S0048
+  S0038 --> S0048
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -147,7 +148,7 @@ flowchart LR
 | [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | proposed | 2026-11-02 | — | — | — |
 | [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
 | [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0034, SPEC-0035 | — |
-| [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria e alcance da rejeição | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0037 | — |
+| [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria e do context, e alcance da rejeição | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0037, SPEC-0038 | — |
 
 ## ADRs
 
