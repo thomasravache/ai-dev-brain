@@ -256,9 +256,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 29b2dc6 (árvore suja) | 2026-11-02 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=30)) — 43c8bcc | 2026-11-02 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ea710e3 | 2026-11-02 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — ea710e3 | 2026-11-02 |
-| G4 Review | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — b5a482e | 2026-11-02 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — b5a482e | 2026-11-02 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (b5a482e; 2ª rodada após emenda v2: ilegível vai para skipped, symlink para fora fora do zip, dedupe de destinos, .partial antigo avisado, restore não grava fora do vault, verified e from absoluto, entrada com / recusada, regra de remoção com apelidos; rotação e descarte inalterados; 2 nits não bloqueantes) — b5a482e | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
