@@ -1969,6 +1969,24 @@ def cmd_curate(args):
     return reject_convention(atlas, args)
 
 
+# ---------------------------------------------------------------- context (read-only package for a task)
+
+def staleness_warnings(scan_state, stale_days, today) -> list:
+    raise NotImplementedError("SPEC-0038: staleness_warnings")
+
+
+def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, today=None) -> dict:
+    raise NotImplementedError("SPEC-0038: build_context")
+
+
+def render_context(package: dict) -> str:
+    raise NotImplementedError("SPEC-0038: render_context")
+
+
+def cmd_context(args):
+    raise NotImplementedError("SPEC-0038: context")
+
+
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
@@ -2258,6 +2276,12 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("build", help="junta os snapshots no graph.json, infere relações e gera as páginas")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("context", help="pacote só de leitura do atlas para uma tarefa (serviços, dependências, convenções)")
+    p.add_argument("query", nargs="+", help="termos da tarefa")
+    p.add_argument("--hops", type=int, default=1, help="passos no grafo a partir dos serviços encontrados (0..2)")
+    p.add_argument("--limit", type=int, default=8, help="quantos serviços no máximo")
+    p.add_argument("--max-chars", type=int, default=30000, help="tamanho máximo do pacote")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("curate", help="propõe convenções (inferred) e registra a decisão humana (confirm | reject)")
     curate = p.add_subparsers(dest="action", required=True)
     q = curate.add_parser("propose", help="cria ou atualiza conventions/<id>.md a partir dos sinais")
@@ -2285,6 +2309,8 @@ def main(argv=None):
             return cmd_scan(args.only, args.json)
         if args.command == "build":
             return cmd_build(args.json)
+        if args.command == "context":
+            return cmd_context(args)
         if args.command == "curate":
             return cmd_curate(args)
     except AtlasError as e:
