@@ -176,7 +176,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=14, errors=13)); nota: red da org-atlas conferido em worktree limpa em 6bd88ec: FAILED (failures=14, errors=13), só testes da SPEC-0038; se a cadeia parar antes, é o SPEC-0004:IT-10 (tempo, sob carga) — 6bd88ec | 2026-11-02 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 935494b | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 935494b | 2026-11-02 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | Reviewer (rodada 1, 935494b): CHANGES_REQUESTED — M1: texto de coletor ou convenção com quebra de linha forja seções do pacote (regra falsa, aviso falso); menores: status confirmed editado à mão sem decisão vira regra, seen_at inválido ou coletor nunca escaneado sem aviso, regras confirmadas cortadas antes das dependências no --max-chars | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
