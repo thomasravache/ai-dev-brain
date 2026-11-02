@@ -9,6 +9,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.1] - 2026-11-02
+
+### Added
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.11.1): `capture TEXTO --print [--context C] [--inbox PASTA] [--json]` — mostra o caminho (relativo ao vault) e o conteúdo da nota de captura, os mesmos que o `capture` gravaria, sem escrever nada (nem no vault, nem na configuração local, nem no `log.md`) e sem exigir configuração: com configuração usa `layout.inbox` e valida o contexto (inválido sai com 2); sem ela usa `inbox` ou o `--inbox`; `--inbox` com configuração sai com 2; saída `"<caminho>\n\n<conteúdo>"` ou `{"path", "content"}` com `--json`; texto vazio sai com 2 (SPEC-0044).
+- `capture_note(text, context=None, clock=None)`: o conteúdo da nota de captura, usado pelo `capture` e pelo `capture --print` (SPEC-0044).
+- `SKILL.md`: modo só conector — capturar pelo conector do provedor só criando arquivo novo na inbox (nunca editar, mover, apagar nem sobrescrever), consultar só leitura citando `[[nota]]` e avisando que é parcial, e recusar as demais escritas, que ficam para o computador com a pasta (SPEC-0044, ADR-0013).
+- `references/connectors.md`: o modo, as regras, o formato da captura, os limites e o conector do Google Drive conferido no diretório de conectores do Claude em 2026-11-02 (OneDrive, iCloud e outros não conferidos); `references/mobile-capture.md` cita o conector como canal de captura (SPEC-0044).
+
 ## [2026.10.12] - 2026-10-30
 
 ### Added

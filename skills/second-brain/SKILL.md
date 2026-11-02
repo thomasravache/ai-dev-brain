@@ -31,13 +31,14 @@ Rode `python3 <skill-dir>/scripts/brain.py <comando>`, onde `<skill-dir>` é a p
 | `relate DE PARA --why "motivo" [--both]` | Acrescenta `- [[PARA]] — motivo` na seção `## Relations` de DE (e de PARA com `--both`); repetida = "relação já existe" |
 | `index [--context C]` | Regenera as regiões geradas dos MOCs (`notes`) e do `index.md` (`contexts`, `recent`), sem tocar no texto da pessoa |
 | `capture TEXTO [--context C] [--json]` | Nota rápida `inbox/AAAA-MM-DD-HHMMSS-<slug>.md` (`type: capture`); imprime o caminho. Texto vazio sai com 2 |
+| `capture TEXTO --print [--context C] [--inbox PASTA] [--json]` | Não escreve nada e não exige configuração: mostra o caminho (relativo ao vault) e o conteúdo que o `capture` gravaria, `"<caminho>\n\n<conteúdo>"` ou, com `--json`, `{"path", "content"}`, para enviar pelo conector (modo só conector). Com configuração usa `layout.inbox` e valida o contexto (inválido sai com 2); sem configuração usa `inbox`, ou o `--inbox` informado. `--inbox` com configuração sai com 2 (a pasta é a do `layout.inbox`). Texto vazio sai com 2 |
 | `inbox list [--json]` | Itens da inbox, do mais antigo para o mais novo: `path`, `kind` (`text`, `link`, `file` ou `syncing`), `size`, `age_days`, `stale` (mais velho que `inbox_stale_days`, padrão 7) e `preview`. Vazia imprime "Inbox vazia" |
 | `ingest ITEM --move [--context C] [...]` | Como o `ingest`, mas o arquivo **sai** da inbox para `files` em vez de ser copiado. Fonte fora da inbox sai com 2 ("--move só vale para itens da inbox"); item `syncing` sai com 2 |
 | `lint [--json] [--only regra,...]` | Achados de manutenção, só leitura: `broken-link`, `conflict-copy`, `missing-file` e `config` (erro); `orphan`, `stale-inbox` e `frontmatter` (aviso). Uma linha `<ERRO\|AVISO> <regra> <caminho> — <detalhe> (sugestão: …)` por achado e o resumo "N erros, M avisos"; exit 0 sem erro, 1 com erro, 2 com regra desconhecida em `--only` |
 | `export-notebooklm MOC --out PASTA [--hops 0..2] [--combined] [--json]` | Pacote de um MOC para subir no NotebookLM, só lendo o vault: o MOC, as notas que ele cita e as vizinhas delas até `--hops` (padrão 1; o MOC, o `index.md` e o `log.md` nunca são atravessados), um `.md` por nota com o título no topo e os wikilinks como texto, `sources.md` (de onde veio cada nota) e, com `--combined`, `combined.md`. `--out` dentro do vault ou já com arquivos sai com 2 (nunca sobrescreve); `--hops` fora de 0..2 ou MOC inexistente sai com 2 |
 | `inbox done ITEM [--note CAMINHO]` | Item `text` ou `link` já guardado vai para `raw/processed/AAAA-MM/` (nunca sobrescreve: `-1`, `-2`...) e o log cita a nota. `file` sai com 2 ("arquivo: use ingest --move"), `syncing` sai com 2 ("ainda sincronizando") |
 
-Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de consultar e o pacote do `context`: `references/query-flow.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`. Inbox em detalhe: `references/inbox.md`; capturar pelo celular: `references/mobile-capture.md`. Processadores (modelos de yt-dlp, Whisper e pdftotext): `references/processors.md`. Exportar para o NotebookLM (envio, formatos e limites): `references/notebooklm.md`. Manutenção e as regras do `lint`: `references/maintenance.md`; padrões de cópia de conflito por provedor: `references/providers.md`.
+Pontuação e filtros de `search` e `related`: `references/search.md`. Fluxo de consultar e o pacote do `context`: `references/query-flow.md`. Fluxo de guardar em detalhe: `references/store-flow.md`; tipos de nota e frontmatter: `references/note-types.md`. Detalhes das duas camadas de configuração: `references/config.md`. Estrutura do vault: `references/vault-layout.md`. Provedores e celular: `references/providers.md`. Inbox em detalhe: `references/inbox.md`; capturar pelo celular: `references/mobile-capture.md`; capturar e consultar pelo conector do provedor: `references/connectors.md`. Processadores (modelos de yt-dlp, Whisper e pdftotext): `references/processors.md`. Exportar para o NotebookLM (envio, formatos e limites): `references/notebooklm.md`. Manutenção e as regras do `lint`: `references/maintenance.md`; padrões de cópia de conflito por provedor: `references/providers.md`.
 
 ## Antes de qualquer fluxo
 
@@ -46,6 +47,7 @@ Rode sempre `brain.py config` antes de qualquer fluxo, em toda conversa — não
 - **Configurado (exit 0)** → siga direto o fluxo pedido, sem perguntar nada de configuração.
 - **Exit 3** ("second-brain não configurado nesta máquina") → faça o **onboarding** abaixo, ou o `init --join` se o vault já existir configurado.
 - **Exit 1** ou valores estranhos → rode `brain.py doctor` e mostre o resultado antes de seguir.
+- **Sem enxergar o vault** (exit 3, ou exit 0 com a pasta do vault inacessível, ou sem shell) e com um conector do provedor na ferramenta → **modo só conector** (seção abaixo), só para capturar e consultar.
 
 ## Onboarding (exit 3)
 
@@ -131,6 +133,16 @@ Para processar a inbox ("processa minha inbox"), siga sempre estes quatro passos
 3. **Tirar da inbox:** item de texto ou link já guardado → `brain.py inbox done ITEM --note <nota criada>` (vai para `raw/processed/AAAA-MM/`; nada é apagado).
 4. **Pular e reportar:** pule os itens `syncing` (ainda sincronizando; não processe) e avise a pessoa; no fim, reporte o que entrou, onde (as notas criadas) e as relações criadas.
 
+## Modo só conector
+
+Use o modo só conector quando o `brain.py config` sai com 3, ou sai com 0 mas a pasta do vault não está acessível (no celular, no navegador, ou uma pasta bloqueada pelo sistema), ou não há shell, **e** a ferramenta tem um conector do provedor (por exemplo, o do Google Drive) com permissão de criar e ler arquivos. Detalhes, formato da captura e conectores conferidos: `references/connectors.md`.
+
+- **Capturar ("anota isso"):** monte o arquivo com `capture --print`: `brain.py capture "<texto>" --print --json [--context C]` (devolve `path` e `content`; não escreve nada). Sem shell, monte o nome `AAAA-MM-DD-HHMMSS-<slug>.md` e o frontmatter `type: capture` / `created` conforme `references/connectors.md`. Depois, pelo conector, crie um arquivo novo com esse nome e conteúdo em `<vault>/inbox/` (a pasta de `layout.inbox`). Só crie arquivo novo na inbox: nunca sobrescreva — se o nome já existir, gere outro com o `--print` ou acrescente `-1` — e nunca edite, mova ou apague um arquivo do vault pelo conector.
+- **Consultar ("o que eu sei sobre X"):** só leitura. Busque e leia as notas pelo conector, responda com base nelas citando `[[nota]]`, e avise que a resposta é parcial (sem o índice e sem os vizinhos por link do `brain.py`); sugira refazer a consulta completa no computador com a pasta.
+- **Qualquer outra escrita** (nota organizada, `new-note`, relação, índice, processar a inbox, mover, apagar, `lint`): recuse e explique que isso é feito no computador com a pasta do vault, pelo `brain.py`.
+- **Depois, no computador:** "processa minha inbox" segue o fluxo da seção **Capturar e processar a inbox**; as capturas do conector aparecem no `inbox list` como `text`.
+- **Sem conector, ou sem permissão:** avise e sugira os outros canais (`references/mobile-capture.md`). A skill nunca pede nem guarda credencial do conector; autorizar o conector é com a pessoa, na ferramenta dela.
+
 ## Manter o vault (lint)
 
 Rode a manutenção quando a pessoa pedir ("arruma meu segundo cérebro", "tem link quebrado?"), quando o `brain.py doctor` mostrar a linha `lint` com achados (AVISO ou ERRO), e depois de processar a inbox. O `lint` só lê; a correção é sempre proposta e só acontece com o sim da pessoa. Detalhes de cada regra: `references/maintenance.md`.
@@ -147,4 +159,4 @@ Nunca apague arquivo: nem a cópia de conflito, nem a nota órfã, nem um item d
 - **`brain.py config` antes de qualquer fluxo.** Configurado → direto ao pedido, sem perguntar configuração.
 - **O vault é do usuário.** O `brain.py` só cria e acrescenta; nada é apagado. A única movimentação é tirar da inbox um item já processado (`inbox done`, `ingest --move`). Toda escrita dele no vault aparece no `log.md`.
 - **Sem caminho absoluto no vault.** Caminhos de máquina ficam só na configuração local (`references/config.md`).
-- **Sem credenciais e sem rede.** A skill só lê e escreve pastas; quem sincroniza é o app do provedor. Os únicos programas que ela executa são os processadores do `brain-config.yml` (sem shell); o yt-dlp, se configurado, acessa a rede para baixar legendas.
+- **Sem credenciais e sem rede.** A skill só lê e escreve pastas; quem sincroniza é o app do provedor. O conector do provedor, quando usado, é do agente, nunca do `brain.py`, e só cria arquivo novo na inbox e lê notas (modo só conector). Os únicos programas que ela executa são os processadores do `brain-config.yml` (sem shell); o yt-dlp, se configurado, acessa a rede para baixar legendas.
