@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: [SPEC-0044]
 consumes_contract: []
-touches: [skills/second-brain/SKILL.md, skills/second-brain/references/connectors.md, skills/second-brain/tests/test_connector_instructions.py, skills/second-brain/scripts/brain.py, skills/second-brain/CHANGELOG.md]
+touches: [skills/second-brain/SKILL.md, skills/second-brain/references/connectors.md, skills/second-brain/tests/test_connector_instructions.py, skills/second-brain/tests/test_connector_session_instructions.py, skills/second-brain/scripts/brain.py, skills/second-brain/CHANGELOG.md]
 adrs: [ADR-0007, ADR-0013]
 external: []
 size: S
@@ -81,7 +81,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 1b3f11b (árvore suja) | 2026-11-02 |
-| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0052:UT-03 — 17d7c2f | 2026-11-02 |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests` exit 1 (red: FAILED (failures=6)) — 17d7c2f | 2026-11-02 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
@@ -126,4 +126,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (emenda v2, contrato inalterado) | 2026-11-02 | `touches` inclui `tests/test_connector_session_instructions.py`; ajustes de texto da revisão G4: o caso "Exit 3" da lista passa a dizer "sem conector do provedor (ou a pedido)", o título do onboarding cita o conector, "siga no modo só conector" na regra e busca pelo nome exato `brain-config.yml` | revisão G4: o arquivo de teste novo ficou fora de `touches` (verify reprova), e três trechos podiam ser lidos fora de ordem | Nenhuma | thomas, 2026-11-02 ("segue com o piloto automático com o recomendado") |
 | 1 (emenda v1, contrato inalterado) | 2026-11-02 | Texto deixa de citar o ID de teste da SPEC-0044 | o `verify` lia o ID citado como teste desta spec e reprovava o G1 | Nenhuma | thomas, 2026-11-02 ("segue com o piloto automático com o recomendado") |
