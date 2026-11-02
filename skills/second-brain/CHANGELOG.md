@@ -9,6 +9,23 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.4] - 2026-11-02
+
+### Added
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.11.4): backup do vault em vários destinos (SPEC-0051, ADR-0015). `backup target add PASTA` acrescenta um destino a `backup_targets` da configuração local (repetido = "destino já existe"; dentro do vault ou da pasta `files` sai com 2) (SPEC-0051).
+- `backup [--dest PASTA ...] [--with-files] [--json]`: um zip `second-brain-AAAA-MM-DD-HHMMSS[-files].zip` por destino, com `vault/…`, `files/…` (opcional) e o manifesto `brain-backup.json` (sha256 de cada entrada), gravado como `.partial`, verificado e renomeado sem sobrescrever; um destino que falha não impede os outros (exit 1); linha `backup` no `log.md` (SPEC-0051).
+- Rotação (`rotate_backups`): mantém os `backup.keep` mais recentes por destino e por tipo, só nomes do padrão, só depois de verificar o novo e nunca o novo; é a única remoção do `brain.py` fora da lista fechada de limpezas, e também remove o `.partial` de uma escrita que falhou (ADR-0015, SPEC-0051).
+- `backup list [--json]`, `backup verify [ZIP] [--json]` (sem ZIP: o mais novo de cada destino; destino inacessível = `AVISO`, sem mudar o exit sozinho), `restore NOTA --from ZIP` (arquivo novo `<nome> (restaurado AAAA-MM-DD).md`, `-1`, `-2`...) e `restore --from ZIP --to PASTA` (pasta nova ou vazia; recusa entradas com `..` ou caminho absoluto; funciona sem configuração local) (SPEC-0051).
+- `brain-config.yml`: chave `backup` (`keep` 10, `warn_days` 7, `with_files` false; inválido usa o padrão com aviso). `doctor`: uma linha `OK|AVISO backup <destino>` por destino e `AVISO backup — nenhum destino configurado` (SPEC-0051).
+- `SKILL.md` (seção "Backup e restauração" e comandos) e `references/backup.md` (destinos, quando rodar, restauração, agendamento com cron, launchd e Agendador de Tarefas, zip não cifrado); `references/config.md` e `assets/brain-config.yml` atualizados (SPEC-0051).
+
+### Changed
+- `init` mantém os `backup_targets` da configuração local quando a regrava (SPEC-0051).
+
+### Fixed
+- Revisão (Emenda v2): arquivo ilegível do vault fica fora do zip e do manifesto, aparece em `skipped` (e na saída) e o `backup` sai com 1, gravando e verificando o resto; link simbólico que aponta para fora do vault (ou da pasta files) fica fora do zip; o mesmo destino por dois caminhos (link simbólico, outra grafia) conta uma vez no `target add` e no `backup` (SPEC-0051).
+- `.partial` de um backup interrompido vira AVISO no `backup list` e no `doctor` (`AVISO backup <destino> .partial — …`), sem remoção automática; `restore NOTA` sai com 2 quando o destino fica fora do vault (pasta com link simbólico); `restore --json` traz `from` absoluto; `backup verify --json` traz `verified`; `safe_entry` recusa entrada terminada em `/` (SPEC-0051).
+
 ## [2026.11.3] - 2026-11-02
 
 ### Added
