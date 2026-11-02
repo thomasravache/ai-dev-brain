@@ -68,9 +68,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=2, skipped=1)) — a69cc9f | 2026-11-02 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — b71984e | 2026-11-02 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — b71984e | 2026-11-02 |
-| G4 Review | FAIL | Reviewer (rodada 1, b71984e): CHANGES_REQUESTED — M1: org_context nunca é conferido contra o atlas que atlas.py context lê (config local da org-atlas); com vários atlas o agente usa as regras de outra organização, e um caminho absoluto iria para o sdd-config.yml compartilhado; menores: placeholder <org-atlas> sem explicação, dica descrita mais estrita que o contrato, exit 2 não citado | 2026-11-02 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — c22deb1 | 2026-11-02 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — c22deb1 | 2026-11-02 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 2, c22deb1): APPROVED — M1 fechado (atlas.py config --json conferido contra org_context; values.atlas confirmado num atlas descartável); menores aceitos: exit 2 do config --json (credencial colada) e comparação sem resolver symlinks — c22deb1 | 2026-11-02 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
