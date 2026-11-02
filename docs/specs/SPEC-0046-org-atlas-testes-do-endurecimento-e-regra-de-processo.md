@@ -1,5 +1,5 @@
 ---
-id: SPEC-0043
+id: SPEC-0046
 title: "org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias"
 tier: lite
 type: fix
@@ -17,7 +17,7 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0043 — org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias
+# SPEC-0046 — org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias
 
 ## 1. Problema
 Duas pendências da revisão (G4) da SPEC-0032:

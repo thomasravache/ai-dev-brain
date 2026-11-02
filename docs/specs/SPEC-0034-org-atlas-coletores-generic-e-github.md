@@ -171,7 +171,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 **Fase 3: Contrato**
 - [x] Red: CT-01 com a tag `SPEC-0034:<ID>`, falhando pelo motivo certo
-- [x] Green: ajustes para a saída passar no validador da SPEC-0033@1; teste de arquitetura cobrindo `assets/collectors/` (biblioteca padrão pela SPEC-0032:UT-05; regra de `subprocess` na SPEC-0043)
+- [x] Green: ajustes para a saída passar no validador da SPEC-0033@1; teste de arquitetura cobrindo `assets/collectors/` (biblioteca padrão pela SPEC-0032:UT-05; regra de `subprocess` na SPEC-0046)
 - [x] Refactor mantendo tudo verde
 - [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 - [x] Seção em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`; o `ATLAS_VERSION` sobe na SPEC-0036, no mesmo PR #20 (`atlas.py` fora do `touches`)
@@ -248,7 +248,7 @@ N/A — `type: feature`.
 - [x] Observabilidade e rollback prontos conforme o Plano de Rollout — relatório do `scan`; rollback removendo o coletor do `atlas-config.yml`
 - [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `skills/org-atlas/CHANGELOG.md` e guias dos coletores
 - [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
-- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0043 e SPEC-0036
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0046 e SPEC-0036
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
@@ -256,7 +256,7 @@ N/A — skill distribuída por cópia; na branch `sdd/SPEC-0029`, PR #20, em `[U
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
-- SPEC-0043 — regra de arquitetura dos coletores (`subprocess` só para o executável do provedor, sem shell; UT-04 dela), que pedia `test_architecture.py`, fora do `touches` desta spec.
+- SPEC-0046 — regra de arquitetura dos coletores (`subprocess` só para o executável do provedor, sem shell; UT-04 dela), que pedia `test_architecture.py`, fora do `touches` desta spec.
 - SPEC-0036 — sobe o `ATLAS_VERSION` e liga os guias novos no `SKILL.md` no mesmo PR #20 (ADR-0010: versão e CHANGELOG no mesmo PR); `atlas.py` e `SKILL.md` estão fora do `touches` desta spec.
 
 ## 15. Emendas

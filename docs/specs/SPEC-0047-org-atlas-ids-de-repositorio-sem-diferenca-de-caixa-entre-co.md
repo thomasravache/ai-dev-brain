@@ -1,5 +1,5 @@
 ---
-id: SPEC-0044
+id: SPEC-0047
 title: "org-atlas: ids de repositório sem diferença de caixa entre coletores"
 tier: lite
 type: fix
@@ -17,7 +17,7 @@ approved_by:
 approved_at:
 ---
 
-# SPEC-0044 — org-atlas: ids de repositório sem diferença de caixa entre coletores
+# SPEC-0047 — org-atlas: ids de repositório sem diferença de caixa entre coletores
 
 ## 1. Problema
 O coletor GitHub (SPEC-0034) gera `repository:<org>/<nome>` com a caixa do `full_name` da API; o coletor Argo CD (SPEC-0035) gera `sourced_from` → `repository:<owner>/<repo>` com a caixa escrita no `repoURL`. Quando as duas diferem (`Acme/API` × `acme/api`), a relação `sourced_from` aponta para um id que não existe: o cruzamento entre deployment e repositório se perde e o `lint` (SPEC-0039) só avisa `broken-ref`. Achado nas revisões G4 das SPEC-0034 e SPEC-0035.

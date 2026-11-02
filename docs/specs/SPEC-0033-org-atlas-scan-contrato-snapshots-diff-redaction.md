@@ -199,7 +199,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=10, errors=50)) — 1edf72c | 2026-10-30 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — dbc517c | 2026-10-30 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — dbc517c | 2026-10-30 |
-| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (4ª rodada, liberada pelo thomas após IMP-01; M1–M4, R1, R2, R4 e F1 corrigidos; F2, F3 e n1 aceitos; m3 e m4 viram pendência na SPEC-0043) — dbc517c | 2026-10-30 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (4ª rodada, liberada pelo thomas após IMP-01; M1–M4, R1, R2, R4 e F1 corrigidos; F2, F3 e n1 aceitos; m3 e m4 viram pendência na SPEC-0046) — dbc517c | 2026-10-30 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — af60635 | 2026-10-30 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-10-30 |
 | G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-10-30 |
@@ -265,7 +265,7 @@ N/A
 - [x] Observabilidade e rollback prontos conforme o Plano de Rollout — relatório do `scan` e `_scan.json`; rollback por revert
 - [x] Documentação raiz e CHANGELOG atualizados (G7) — `skills/org-atlas/CHANGELOG.md` 2026.10.2, `SKILL.md` e referências; não há CHANGELOG na raiz
 - [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
-- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0043
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0046
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
@@ -273,7 +273,7 @@ N/A — skill distribuída por cópia; versão 2026.10.2 na branch `sdd/SPEC-002
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
-- SPEC-0043 — ruído da regra de chave proibida e conferência de `collector`/`category` com a configuração (além das pendências da SPEC-0032).
+- SPEC-0046 — ruído da regra de chave proibida e conferência de `collector`/`category` com a configuração (além das pendências da SPEC-0032).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0033`. -->

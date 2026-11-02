@@ -248,7 +248,7 @@ O `SKILL.md` manda o agente rodar `atlas.py config` antes de qualquer fluxo e co
 - Também foram criados `assets/atlas-config.yml`, `assets/pages/` (`ATLAS.md`, `glossary.md` com regiões `atlas:`), `SKILL.md`, `references/config.md`, `references/atlas-layout.md`, `CHANGELOG.md` da skill, o passo na CI e a linha no README. O Architect incluiu a suíte da skill em `test` e `arch_test` do `docs/specs/sdd-config.yml`.
 - **Revisão G4:** a primeira rodada achou 1 major (erros de sistema de arquivos com traceback) e 6 minor. A correção (6faff6c) trata `OSError`/`UnicodeDecodeError` na fronteira (exit 1, sem traceback), usa backups `.bak`, `.bak.1`…, recusa `--join` com `--org`/`--mode`/`--force`, dá ERRO para `atlas` relativo, mensagem própria para profile com espaço e documenta o `doctor --json`. A segunda rodada aprovou.
 - **Decisões aceitas na revisão:** escalares do YAML ficam texto; "mesma configuração" é igualdade de texto; pasta com só `.git`/`.DS_Store` conta como vazia; `.gitkeep` nas pastas da estrutura; credenciais locais existentes mantidas no `init`; flag `--version`.
-- **Dívida assumida:** os comportamentos do endurecimento foram verificados à mão e a regra de processo não pega `subprocess` importado com alias — SPEC-0043.
+- **Dívida assumida:** os comportamentos do endurecimento foram verificados à mão e a regra de processo não pega `subprocess` importado com alias — SPEC-0046.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
@@ -280,7 +280,7 @@ N/A
 - [x] Observabilidade e rollback prontos conforme o Plano de Rollout — saída do `doctor`; rollback por revert
 - [x] Documentação raiz e CHANGELOG atualizados (G7) — README e `skills/org-atlas/CHANGELOG.md`; não há CHANGELOG na raiz do repositório
 - [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
-- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0043
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0046
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
@@ -288,7 +288,7 @@ N/A — skill distribuída por cópia (`cp -R skills/org-atlas ~/.claude/skills/
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
-- SPEC-0043 — testes do endurecimento do `init`/`doctor` e regra de processo com alias.
+- SPEC-0046 — testes do endurecimento do `init`/`doctor` e regra de processo com alias.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0032`. -->

@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **5 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 4, approved 5, in-progress 1, implemented 30
 - Impedimentos: **0 aberto(s)**, 16 resolvido(s)
 
@@ -37,8 +37,8 @@ Perfil: **minimo**
 | 4 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 2: arquivos em comum com SPEC-0037; saiu da onda 3: arquivos em comum com SPEC-0038 |
 | 4 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ⛔ aguarda implementação de SPEC-0038 |  |
 | 5 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
-| 6 | SPEC-0043 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0036; saiu da onda 2: arquivos em comum com SPEC-0037; saiu da onda 3: arquivos em comum com SPEC-0038; saiu da onda 4: arquivos em comum com SPEC-0039; saiu da onda 5: arquivos em comum com SPEC-0040 |
-| 7 | SPEC-0044 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0036; saiu da onda 2: arquivos em comum com SPEC-0037; saiu da onda 3: arquivos em comum com SPEC-0038; saiu da onda 4: arquivos em comum com SPEC-0039; saiu da onda 5: arquivos em comum com SPEC-0040; saiu da onda 6: arquivos em comum com SPEC-0043 |
+| 6 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0036; saiu da onda 2: arquivos em comum com SPEC-0037; saiu da onda 3: arquivos em comum com SPEC-0038; saiu da onda 4: arquivos em comum com SPEC-0039; saiu da onda 5: arquivos em comum com SPEC-0040 |
+| 7 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0036; saiu da onda 2: arquivos em comum com SPEC-0037; saiu da onda 3: arquivos em comum com SPEC-0038; saiu da onda 4: arquivos em comum com SPEC-0039; saiu da onda 5: arquivos em comum com SPEC-0040; saiu da onda 6: arquivos em comum com SPEC-0046 |
 
 ## Épicos
 
@@ -71,8 +71,8 @@ flowchart LR
     S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::approved
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
     S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::approved
-    S0043["SPEC-0043<br/>org-atlas: testes do endurecimento do i…"]:::proposed
-    S0044["SPEC-0044<br/>org-atlas: ids de repositório sem difer…"]:::proposed
+    S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::proposed
+    S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::proposed
   end
   S0023 --> S0028
   S0033 -. contrato v1 .-> S0034
@@ -85,9 +85,9 @@ flowchart LR
   S0037 -. contrato v1 .-> S0039
   S0039 --> S0040
   S0038 --> S0041
-  S0033 --> S0043
-  S0034 --> S0044
-  S0035 --> S0044
+  S0033 --> S0046
+  S0034 --> S0047
+  S0035 --> S0047
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -141,9 +141,9 @@ flowchart LR
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
-| [SPEC-0043](SPEC-0043-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
-| [SPEC-0044](SPEC-0044-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0034, SPEC-0035 | — |
 | [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | proposed | 2026-11-02 | — | — | — |
+| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
+| [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0034, SPEC-0035 | — |
 
 ## ADRs
 

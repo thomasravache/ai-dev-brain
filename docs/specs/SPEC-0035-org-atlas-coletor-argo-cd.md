@@ -224,7 +224,7 @@ N/A — `type: feature`.
 - [x] Observabilidade e rollback prontos conforme o Plano de Rollout — relatório do `scan`; rollback removendo o coletor do `atlas-config.yml`
 - [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `skills/org-atlas/CHANGELOG.md` e guia do coletor
 - [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
-- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0044, SPEC-0045 (novas), SPEC-0036 e SPEC-0043
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0047, SPEC-0045 (novas), SPEC-0036 e SPEC-0046
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
@@ -232,10 +232,10 @@ N/A — skill distribuída por cópia; na branch `sdd/SPEC-0029`, PR #20, em `[U
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
-- SPEC-0044 — ids de repositório sem diferença de caixa entre os coletores GitHub e Argo CD (`sourced_from` pode apontar para id inexistente quando a caixa do `repoURL` difere do `full_name`).
+- SPEC-0047 — ids de repositório sem diferença de caixa entre os coletores GitHub e Argo CD (`sourced_from` pode apontar para id inexistente quando a caixa do `repoURL` difere do `full_name`).
 - SPEC-0045 — teste de tempo `SPEC-0004:IT-10` tolerante à carga (derrubou o `gate --run` do G5).
 - SPEC-0036 — `ATLAS_VERSION` e links dos guias no `SKILL.md`, no mesmo PR #20.
-- SPEC-0043 — regra de arquitetura de `subprocess` nos coletores.
+- SPEC-0046 — regra de arquitetura de `subprocess` nos coletores.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0035`. -->
