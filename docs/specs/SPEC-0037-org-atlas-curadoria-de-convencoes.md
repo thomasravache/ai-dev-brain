@@ -172,22 +172,22 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Propostas**
-- [ ] Red: UT-01, UT-02, UT-05, UT-06, CT-01, IT-01 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
-- [ ] Green: cálculo das propostas com `curation.min_share`/`min_total`, escopo e `conventions/<id>.md` com a região `evidence`; `curate propose` no fim do `scan`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-05, UT-06, CT-01, IT-01 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
+- [x] Green: cálculo das propostas com `curation.min_share`/`min_total`, escopo e `conventions/<id>.md` com a região `evidence`; `curate propose` no fim do `scan`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Decisão humana**
-- [ ] Red: UT-03, UT-04, IT-02, IT-03, IT-04 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
-- [ ] Green: `curate list`, `confirm` e `reject`; `references/curation.md` e `SKILL.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: UT-03, UT-04, IT-02, IT-03, IT-04 com a tag `SPEC-0037:<ID>`, falhando pelo motivo certo
+- [x] Green: `curate list`, `confirm` e `reject`; `references/curation.md` e `SKILL.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`; o `ATLAS_VERSION` sobe no fim do épico, no mesmo PR #20
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -214,36 +214,55 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Curadoria de convenções da `org-atlas` (ADR-0012): no fim de cada `scan` (ou com `curate propose`), os sinais dos coletores viram propostas `conventions/<id>.md` com `status: inferred` e uma região de evidência quando um padrão domina — títulos de PR, prefixos de branch, método de merge permitido e template de PR, com escopo da organização ou do repositório. Só uma pessoa decide, com `curate confirm` ou `curate reject` (`--by` e `--via "PR #n"|local`); uma convenção rejeitada nunca volta com o mesmo id e o texto do time nunca é reescrito. `curate list` mostra o estado.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `propose_conventions`, `cmd_curate` e `_write_decision` no `atlas.py`; o `propose` roda depois do `build` no `scan` e entra no `scan --json` como `curation`; template `assets/pages/convention.md`; `curation` com padrões em `assets/atlas-config.yml` e validado no `config`/`doctor`.
+- **Emenda v2** (IMP-01, aprovada por thomas): a v1 só definia o padrão dominante para títulos de PR; a v2 define a regra de cada kind e a chave `min_repos` (padrão 3) para os sinais sim/não por repositório. UT-05 e UT-06 novos; SPEC-0038 e SPEC-0039 passaram a consumir `SPEC-0037@2`.
+- **Garantia do ADR-0012:** só `_write_decision`, chamada por `confirm` e `reject`, grava a decisão (UT-04, verificação estática); valores de `--by`, `--via` e `--reason` sempre entre aspas no YAML; ids validados contra caminho. A revisão tentou injeção pelos argumentos e pelos sinais dos coletores sem sucesso.
+- Guia `references/curation.md`; `SKILL.md` com os comandos `curate` e o fluxo "o agente propõe, a pessoa decide"; CHANGELOG em `[Unreleased]` (com a correção das entradas das SPEC-0034/0035 que tinham ido para "Changed" na 2026.11.1).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Padrão dominante de títulos de PR: ≥ 60% de ≥ 20 itens, limites inclusivos, limites da configuração | PASS | `test_curate.py::ProposeTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| UT-02 | Escopo organization com maioria dos repositórios; senão uma convenção por repositório | PASS | `ScopeTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| UT-03 | `confirm`/`reject` sem `--by`/`--via`, `--via` inválido ou id inexistente saem com 2 sem tocar o arquivo | PASS | `DecisionArgumentsTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| UT-04 | Só as funções de confirm/reject gravam `confirmed`/`rejected` (verificação estática do `atlas.py`) | PASS | `OnlyHumansDecideTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| UT-05 | Prefixos de branch dominantes viram `branch-prefix-<prefixo>` (v2) | PASS | `BranchPrefixTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| UT-06 | `merge-method` e `pr-template` por repositório, com `min_repos` e escopo organization (v2) | PASS | `RepositoryKindsTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| IT-01 | `scan` cria `conventions/<id>.md` inferida com evidência; mesmos sinais não mudam o arquivo; `curate propose` sozinho; kinds da v2 pelo `scan` | PASS | `ProposeCliTest`, `KindsCliTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| IT-02 | `curate confirm` grava a decisão, que sobrevive a novos `scan`; decidir de novo sai com 2; `list --status` | PASS | `ConfirmTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| IT-03 | Depois de `reject`, o mesmo id nunca volta; só a evidência é atualizada | PASS | `RejectTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| IT-04 | Nota do time na convenção sobrevive a novos `scan` e a `confirm` | PASS | `TeamTextTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
+| CT-01 | Arquivos de convenção seguem `references/curation.md` (chaves, valores, região `evidence`, `## Notas`) | PASS | `ConventionContractTest` — CI do PR #20 em 1ab24d1 (run 41471531830, Python 3.9 e 3.15) e suíte local no G5 (1ab24d1) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em 1ab24d1
+- [x] Review independente sem achados blocker/major (G4) — 1ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — 300 repositórios: 18 ms em processo, 0,57 s pela CLI a frio, 0,17 s a quente (meta 2 s); UT-04 para a segurança; sem sinal, nenhuma proposta (UT-01)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — linha `Convenções: …` e `curation` no `scan --json`; rollback por revert
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `SKILL.md`, `references/curation.md` e `skills/org-atlas/CHANGELOG.md`
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0048
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; em `[Unreleased]` na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0048 — endurecimento da curadoria (marcador de região em nome de repositório, colisão de ids, `--via` com dígitos não ASCII) e alcance da rejeição entre escopos (questão para o thomas).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0037`. -->
