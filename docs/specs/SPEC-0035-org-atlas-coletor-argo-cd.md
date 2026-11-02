@@ -171,7 +171,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — f4d1115 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — f4d1115 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 3, f4d1115): APPROVED — ~120 valores adversariais sem vazamento nem traceback; 3 menores sem credencial (jdbc: sem referência, barra invertida antes de @, user:dígitos lido como host:porta) — f4d1115 | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | FAIL | test exit 1 (FAILED (failures=1, skipped=1)); arch_test exit 0 (OK); nota: CI do PR #20 em b629bea verde (runs 41425187358 Python 3.9/3.15 e 41425187396 sdd/pr-check) — b629bea | 2026-11-02 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
