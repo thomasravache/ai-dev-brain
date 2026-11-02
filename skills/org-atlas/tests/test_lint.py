@@ -25,13 +25,16 @@ Valores de segredo dos testes são montados em tempo de execução (nunca litera
 """
 import datetime
 import json
+import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import SKILL, TESTS, Sandbox, fn, output, snapshot
+from helpers import SCRIPT, SKILL, TESTS, Sandbox, fn, output, snapshot
 
 SPEC = "SPEC-0039"
 FIXTURE = TESTS / "fixtures" / "lint" / "atlas"
@@ -417,6 +420,299 @@ class ConventionFilesContractTest(unittest.TestCase):
         decided = {"conventions/pr-title-conventional.md", "conventions/pr-template-present.md"}
         self.assertEqual(self.pending(), sorted(set(files) - decided))
 
+
+# --------------------------------------------------------------------------- revisão G4 1 (regressão)
+
+TOKEN = "ghp_" + "Zx9" * 12
+TOKEN_PART = "Zx9Zx9"  # nem um pedaço do valor pode aparecer
+SLACK_IDS = {  # ids de coletor válidos (^[a-z0-9-]+$) que são tokens do Slack
+    "failed": "xoxb-" + "1111111111" + "-aaaaaaaaaa",
+    "stale": "xoxp-" + "2222222222" + "-bbbbbbbbbb",
+    "never": "xoxa-" + "3333333333" + "-cccccccccc",
+}
+SLACK_PARTS = ("1111111111", "2222222222", "3333333333")
+CLI_TIMEOUT = 30
+IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
+# Linux respeita RLIMIT_AS: o lint que lesse /dev/zero esgotaria a memória da máquina antes do timeout
+MEMORY_CAP = 1024 * 1024 * 1024 if sys.platform.startswith("linux") else None
+
+
+def _cap_memory():
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, (MEMORY_CAP, MEMORY_CAP))
+
+
+def run_cli(sandbox, *args, timeout=CLI_TIMEOUT):
+    """Como Sandbox.run, mas com tempo máximo: um lint que trava (FIFO, /dev/zero) falha o teste em vez de travar."""
+    environ = dict(os.environ, HOME=str(sandbox.home), ATLAS_CONFIG_HOME=str(sandbox.config_home))
+    try:
+        return subprocess.run([sys.executable, str(SCRIPT), *[str(a) for a in args]], check=False, cwd=sandbox.root,
+                              capture_output=True, text=True, env=environ, timeout=timeout,
+                              preexec_fn=_cap_memory if MEMORY_CAP else None)
+    except subprocess.TimeoutExpired:
+        raise AssertionError(f"lint não terminou em {timeout} s") from None
+
+
+class LeakCase(LintCase):
+    def lint_all(self, code=None):
+        """(texto, json) do lint pela CLI; nenhum dos dois pode ter traceback."""
+        text = run_cli(self.sandbox, "lint")
+        as_json = run_cli(self.sandbox, "lint", "--json")
+        for result in (text, as_json):
+            self.assertNotIn("Traceback", output(result), output(result))
+            if code is not None:
+                self.assertEqual(result.returncode, code, output(result))
+        return text, as_json
+
+    def assert_no_secret(self, results, parts):
+        for result in results:
+            for part in parts:
+                self.assertNotIn(part, output(result), f"um pedaço do segredo apareceu na saída: {part}")
+
+    def config_lines(self, text):
+        return [m for m in finding_lines(text) if m.group(2) == "config"]
+
+
+class NoValueAnywhereTest(LeakCase):
+    def test_convention_named_with_a_token_never_shows_it(self):
+        """SPEC-0039:IT-02 (revisão G4: caminho, detalhe e sugestão nunca têm o valor)"""
+        text = INFERRED.read_text(encoding="utf-8").replace("id: merge-method-squash", f"id: {TOKEN}")
+        (self.atlas / "conventions" / f"{TOKEN}.md").write_text(text, encoding="utf-8")
+        text_out, json_out = self.lint_all(code=1)
+        self.assert_no_secret((text_out, json_out), (TOKEN, TOKEN_PART))
+        rules = {x["rule"] for x in json.loads(json_out.stdout)["findings"]}
+        self.assertIn("pending-convention", rules)
+        self.assertIn("secret-leak", rules)  # o nome do arquivo é um segredo
+
+    def test_collector_ids_that_are_tokens_never_show(self):
+        """SPEC-0039:IT-02 (revisão G4: id de coletor failed, stale e nunca escaneado)"""
+        config = self.atlas / "atlas-config.yml"
+        block = "".join(f"  - id: {cid}\n    category: code\n    command: [\"python3\", \"-c\", \"print(1)\"]\n"
+                        for cid in SLACK_IDS.values())
+        config.write_text(config.read_text(encoding="utf-8").replace("collectors:\n", "collectors:\n" + block, 1),
+                          encoding="utf-8")
+        today = utc_today().isoformat()
+        state = scan_state(facts=(today, "ok"), signals=(today, "ok"))
+        state[SLACK_IDS["failed"]] = {"seen_at": today, "status": "failed", "entities": 0, "relations": 0}
+        state[SLACK_IDS["stale"]] = {"seen_at": days_before(40, today), "status": "ok", "entities": 0, "relations": 0}
+        self.set_scan(state)
+        text_out, json_out = self.lint_all(code=1)
+        self.assert_no_secret((text_out, json_out), (*SLACK_IDS.values(), *SLACK_PARTS))
+        rules = [x["rule"] for x in json.loads(json_out.stdout)["findings"]]
+        self.assertIn("failed-collector", rules)
+        self.assertGreaterEqual(rules.count("stale"), 2, rules)  # o velho e o nunca escaneado
+
+
+class SharedConfigProblemsTest(LeakCase):
+    def setUp(self):
+        super().setUp()
+        path = self.atlas / "services" / "search.md"
+        text = path.read_text(encoding="utf-8")
+        self.secret_line = text.count("\n") + 1
+        path.write_text(text + f"nota: {TOKEN}\n", encoding="utf-8")
+        self.config = self.atlas / "atlas-config.yml"
+
+    def assert_config_error_and_lint_goes_on(self):
+        text_out, json_out = self.lint_all(code=1)
+        self.assert_no_secret((text_out, json_out), (TOKEN, TOKEN_PART))
+        self.assertTrue([m for m in self.config_lines(text_out.stdout) if m.group(3).startswith("atlas-config.yml")],
+                        text_out.stdout)
+        self.assertTrue([m for m in finding_lines(text_out.stdout)
+                         if m.group(2) == "secret-leak" and m.group(3) == f"services/search.md:{self.secret_line}"],
+                        f"o lint parou no atlas-config.yml:\n{text_out.stdout}")
+        data = json.loads(json_out.stdout)
+        self.assertTrue([x for x in data["findings"] if x["rule"] == "config"
+                         and x["path"].startswith("atlas-config.yml")])
+
+    def test_invalid_yaml_with_a_token_is_a_config_error(self):
+        """SPEC-0039:UT-02 (revisão G4: YAML inválido com segredo)"""
+        self.config.write_text(self.config.read_text(encoding="utf-8")
+                               + f'organization: "Acme {TOKEN}\nmode: [local\n', encoding="utf-8")
+        self.assert_config_error_and_lint_goes_on()
+
+    def test_non_utf8_config_is_a_config_error(self):
+        """SPEC-0039:UT-02 (revisão G4: atlas-config.yml não UTF-8)"""
+        self.config.write_bytes(self.config.read_bytes() + b"# \xff\xfe\n")
+        self.assert_config_error_and_lint_goes_on()
+
+    @unittest.skipIf(IS_ROOT or os.name != "posix", "chmod 000 não impede a leitura (root ou sem POSIX)")
+    def test_unreadable_config_is_a_config_error(self):
+        """SPEC-0039:UT-02 (revisão G4: atlas-config.yml sem permissão de leitura)"""
+        os.chmod(self.config, 0)
+        self.addCleanup(os.chmod, self.config, 0o644)
+        self.assert_config_error_and_lint_goes_on()
+
+    def test_missing_config_is_a_config_error(self):
+        """SPEC-0039:IT-01 (revisão G4: atlas-config.yml ausente; a configuração local só dá o caminho)"""
+        self.config.unlink()
+        self.assert_config_error_and_lint_goes_on()
+
+
+class SpecialFilesTest(LeakCase):
+    """Nada que não seja arquivo comum é lido nem seguido: vira achado config com o caminho."""
+
+    def outside(self):
+        folder = self.sandbox.root / "outside"
+        folder.mkdir(exist_ok=True)
+        (folder / "secret.md").write_text(f"token: {TOKEN}\n", encoding="utf-8")
+        return folder
+
+    def symlink(self, target, rel):
+        link = self.atlas / rel
+        try:
+            os.symlink(target, link)
+        except (OSError, NotImplementedError) as e:
+            self.skipTest(f"sem symlink: {e}")
+        return link
+
+    def assert_named_and_not_read(self, rel):
+        text_out, json_out = self.lint_all()
+        self.assertEqual(text_out.returncode, 1, output(text_out))
+        self.assert_no_secret((text_out, json_out), (TOKEN, TOKEN_PART))
+        configs = [x for x in json.loads(json_out.stdout)["findings"] if x["rule"] == "config"]
+        self.assertTrue([x for x in configs if x["path"] == rel or x["path"].startswith(rel + "/")], configs)
+        leaks = [x for x in json.loads(json_out.stdout)["findings"]
+                 if x["rule"] == "secret-leak" and x["path"].startswith(rel)]
+        self.assertEqual(leaks, [], f"{rel} foi lido")
+
+    def test_symlink_to_a_file_outside_the_atlas(self):
+        """SPEC-0039:UT-02 (revisão G4: symlink para fora do atlas)"""
+        self.symlink(self.outside() / "secret.md", "services/outside.md")
+        self.assert_named_and_not_read("services/outside.md")
+
+    def test_symlink_to_dev_zero(self):
+        """SPEC-0039:UT-02 (revisão G4: symlink para /dev/zero termina logo)"""
+        if not Path("/dev/zero").exists():
+            self.skipTest("sem /dev/zero")
+        if MEMORY_CAP is None:
+            self.skipTest("sem limite de memória por processo nesta plataforma: ler /dev/zero esgotaria a máquina")
+        self.symlink("/dev/zero", "process/zero.md")
+        self.assert_named_and_not_read("process/zero.md")
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "sem FIFO nesta plataforma")
+    def test_fifo(self):
+        """SPEC-0039:UT-02 (revisão G4: FIFO não é lido)"""
+        os.mkfifo(self.atlas / "process" / "pipe.md")
+        self.assert_named_and_not_read("process/pipe.md")
+
+    def test_symlinked_directory(self):
+        """SPEC-0039:UT-02 (revisão G4: pasta por symlink não é seguida)"""
+        self.symlink(self.outside(), "platform/linked")
+        self.assert_named_and_not_read("platform/linked")
+
+
+@unittest.skipIf(IS_ROOT or os.name != "posix", "chmod 000 não impede a leitura (root ou sem POSIX)")
+class UnreadableDirectoryTest(LeakCase):
+    def test_unreadable_directory_is_a_config_finding(self):
+        """SPEC-0039:UT-02 (revisão G4: pasta sem permissão)"""
+        private = self.atlas / "process" / "private"
+        private.mkdir()
+        (private / "notes.md").write_text("notas\n", encoding="utf-8")
+        os.chmod(private, 0)
+        self.addCleanup(os.chmod, private, 0o755)
+        for args in ((), ("--only", "secret-leak,config")):
+            with self.subTest(args=args):
+                result = run_cli(self.sandbox, "lint", "--json", *args)
+                self.assertNotIn("Traceback", output(result), output(result))
+                self.assertEqual(result.returncode, 1, output(result))
+                configs = [x for x in json.loads(result.stdout)["findings"] if x["rule"] == "config"]
+                self.assertTrue([x for x in configs if x["path"].startswith("process/private")], configs)
+
+
+class SecretNamesAndBytesTest(unittest.TestCase):
+    def test_secret_in_a_file_or_directory_name_is_a_masked_secret_leak(self):
+        """SPEC-0039:UT-01 (revisão G4: segredo no nome do arquivo ou da pasta)"""
+        copy = Copy(self)
+        (copy.path("process") / f"{TOKEN}.md").write_text("conteúdo limpo\n", encoding="utf-8")
+        folder = copy.path("process") / SLACK_IDS["failed"]
+        folder.mkdir()
+        (folder / "notes.md").write_text("conteúdo limpo\n", encoding="utf-8")
+        findings = of_rule(f("run_lint")(copy.atlas, ["secret-leak"], TODAY), "secret-leak")
+        dumped = json.dumps(findings, ensure_ascii=False)
+        for part in (TOKEN, TOKEN_PART, SLACK_IDS["failed"], "1111111111"):
+            self.assertNotIn(part, dumped)
+        paths = [x["path"] for x in findings]
+        self.assertTrue([p for p in paths if p.startswith("process/") and "[REDACTED]" in p and "/" not in p[8:]],
+                        paths)  # o arquivo
+        self.assertTrue([p for p in paths if p.startswith("process/[REDACTED]/")], paths)  # a pasta
+        self.assertEqual(len(findings), 2, findings)
+
+    def test_non_utf8_file_is_also_scanned_for_secrets(self):
+        """SPEC-0039:UT-01 (revisão G4: arquivo não UTF-8 também é varrido)"""
+        copy = Copy(self)
+        copy.path("process/binary.md").write_bytes(b"\xff\xfe lixo\nsegunda " + TOKEN.encode() + b"\n")
+        findings = f("run_lint")(copy.atlas, ["secret-leak", "config"], TODAY)
+        self.assertIn("process/binary.md", [x["path"] for x in of_rule(findings, "config")])
+        self.assertEqual([x["path"] for x in of_rule(findings, "secret-leak")], ["process/binary.md:2"])
+        self.assertNotIn(TOKEN_PART, json.dumps(findings))
+
+    def test_one_invalid_extra_pattern_does_not_disable_the_valid_ones(self):
+        """SPEC-0039:UT-01 (revisão G4: extra_patterns)"""
+        copy = Copy(self)
+        config = copy.path("atlas-config.yml")
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "redaction: {extra_patterns: []}", "redaction: {extra_patterns: ['acme-internal-[0-9]{4}', '(unclosed']}"),
+            encoding="utf-8")
+        internal = "acme-internal-" + "4321"
+        line = copy.append("services/search.md", f"chave interna: {internal}")
+        findings = f("run_lint")(copy.atlas, ["secret-leak", "config"], TODAY)
+        self.assertEqual([x["path"] for x in of_rule(findings, "secret-leak")], [f"services/search.md:{line}"])
+        self.assertTrue([x for x in of_rule(findings, "config") if x["path"] == "atlas-config.yml"])
+        self.assertNotIn(internal, json.dumps(findings))
+
+
+class MalformedShapesTest(unittest.TestCase):
+    def lint(self, copy):
+        return f("run_lint")(copy.atlas, None, TODAY)
+
+    def test_malformed_graph_and_scan_state_are_config_findings(self):
+        """SPEC-0039:UT-02 (revisão G4: formatos inesperados, sem traceback)"""
+        cases = {
+            "graph.json": (json.dumps({"nodes": [{"key": ["a"]}], "edges": [{"from": ["a"], "to": "x:y"}]}),),
+            "graph.json ": (json.dumps("x"),),
+            "snapshots/_scan.json": (json.dumps([{"facts": "ok"}]),),
+        }
+        for rel, (content,) in cases.items():
+            with self.subTest(file=rel):
+                copy = Copy(self)
+                copy.path(rel.strip()).write_text(content, encoding="utf-8")
+                findings = self.lint(copy)
+                self.assertIn(rel.strip(), [x["path"] for x in of_rule(findings, "config")], findings)
+
+    def test_graph_node_with_a_list_key_does_not_crash_broken_ref(self):
+        """SPEC-0039:UT-04 (revisão G4)"""
+        copy = Copy(self)
+        graph = json.loads(copy.path("graph.json").read_text(encoding="utf-8"))
+        graph["nodes"].append({"key": ["service", "x"], "kind": "service"})
+        copy.path("graph.json").write_text(json.dumps(graph), encoding="utf-8")
+        findings = f("run_lint")(copy.atlas, ["broken-ref", "config"], TODAY)
+        self.assertIn("graph.json", [x["path"] for x in findings])
+
+
+class LinkEdgeCasesTest(unittest.TestCase):
+    def test_links_in_code_blocks_are_ignored(self):
+        """SPEC-0039:UT-04 (revisão G4: blocos de código)"""
+        copy = Copy(self)
+        copy.append("services/backoffice.md", "\n```markdown\n[cercado](missing-fenced.md)\n```\n\n"
+                                              "    [indentado](missing-indented.md)\n\n~~~\n[til](missing-tilde.md)\n~~~")
+        self.assertEqual(of_rule(f("run_lint")(copy.atlas, ["broken-ref"], TODAY), "broken-ref"), [])
+
+    def test_percent_encoded_targets_are_unquoted(self):
+        """SPEC-0039:UT-04 (revisão G4: %20)"""
+        copy = Copy(self)
+        copy.path("process/meu arquivo.md").write_text("# nota\n", encoding="utf-8")
+        copy.append("services/backoffice.md", "[existe](../process/meu%20arquivo.md) e [falta](../process/nao%20existe.md)")
+        findings = of_rule(f("run_lint")(copy.atlas, ["broken-ref"], TODAY), "broken-ref")
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("nao", findings[0]["detail"])
+
+    def test_targets_outside_the_atlas_root_are_broken(self):
+        """SPEC-0039:UT-04 (revisão G4: link que sai da raiz do atlas)"""
+        copy = Copy(self)
+        (copy.root / "outside.md").write_text("fora do atlas\n", encoding="utf-8")
+        copy.append("services/backoffice.md", "[fora](../../outside.md)")
+        findings = of_rule(f("run_lint")(copy.atlas, ["broken-ref"], TODAY), "broken-ref")
+        self.assertEqual([x["path"] for x in findings], ["services/backoffice.md"], findings)
 
 if __name__ == "__main__":
     unittest.main()
