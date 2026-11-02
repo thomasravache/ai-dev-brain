@@ -280,6 +280,25 @@ class MapApplicationTest(unittest.TestCase):
         self.assertEqual(len(keys), len(set(keys)), keys)
         self.assertEqual(comparable({"entities": entities, "relations": relations}), comparable(expected()))
 
+    def test_duplicate_application_name_keeps_the_first(self):
+        """SPEC-0035:UT-01 — revisão G4: duas Applications com o mesmo metadata.name em namespaces diferentes: fica
+        a primeira (a segunda não gera deployment nem relações) e a saída continua sem chave repetida."""
+        first = application("api-prod")
+        second = application("api-prod")
+        second["metadata"]["namespace"] = "team-a"
+        second["metadata"]["labels"] = {"app.kubernetes.io/part-of": "other", "env": "qa"}
+        second["spec"]["project"] = "team-a"
+        entities, relations = function("map_applications")([first, second])
+        keys = [f"{e['kind']}:{e['id']}" for e in entities]
+        self.assertEqual(len(keys), len(set(keys)), keys)
+        deployments = [e for e in entities if e["kind"] == "deployment"]
+        self.assertEqual(len(deployments), 1, deployments)
+        self.assertEqual(deployments[0]["attrs"]["project"], "payments")
+        self.assertEqual(targets(relations, "deploys"), {"api-prod": "service:api"})
+        self.assertEqual(targets(relations, "runs_in", "environment"), {"api-prod": "environment:prod"})
+        self.assertNotIn(relation("deployment:api-prod", "environment:qa", "runs_in"), relations)
+        self.assertNotIn(relation("deployment:api-prod", "service:other", "deploys"), relations)
+
     def test_one_thousand_applications_in_less_than_ten_seconds(self):
         """SPEC-0035:UT-01 — requisito de desempenho (seção 5): 1.000 Applications (fixture gerada) mapeadas em
         menos de 10 s depois da resposta da CLI."""
@@ -437,6 +456,43 @@ class ConfigRefsTest(unittest.TestCase):
                 self.assertEqual(host_of(value), want)
 
 
+    def test_host_is_taken_after_the_last_at_sign(self):
+        """SPEC-0035:UT-03 — revisão G4: com "@" no valor (com ou sem esquema), o host vem depois do ÚLTIMO "@",
+        cortado no primeiro "/", "?" ou "#" e sem porta; nenhum pedaço do usuário ou da senha sai."""
+        host_of = function("host_of")
+        cases = {
+            "postgres://app:Secr3t@Pass/word@db:5432/app": "db",
+            "redis://:p@ss/w0rd@cache:6379": "cache",
+            "postgres://user:ab@cd#ef@db/x": "db",
+            "postgres://user:ab@cd?ef@db/x": "db",
+            "amqp://u:Tr0ub4dor@3/x@rabbit": "rabbit",
+            "app:Secr3t@Pass/word@db:5432": "db",
+            "user:ab@cd/ef@db": "db",
+            "u:ab@cd#x@db": "db",
+            "postgres://u:p#ss@db/x": "db",
+            "postgres://u:p?ss@db/x": "db",
+            "postgres://u:p#s/s@db/x": "db",
+        }
+        for value, want in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(host_of(value), want)
+
+    def test_host_of_never_returns_a_piece_of_the_userinfo(self):
+        """SPEC-0035:UT-03 — revisão G4: o resultado é um hostname/IP estrito ou None; nunca contém um pedaço do
+        que vem antes do último "@"."""
+        host_of = function("host_of")
+        for value in ("postgres://app:Secr3t@Pass/word@db:5432/app", "redis://:p@ss/w0rd@cache:6379",
+                      "amqp://u:Tr0ub4dor@3/x@rabbit", "u:ab@cd#x@db", "postgres://u:p#s/s@db/x",
+                      "postgres://user:ab@cd?ef@db/x"):
+            with self.subTest(value=value):
+                host = host_of(value)
+                userinfo = value.split("://", 1)[-1].rsplit("@", 1)[0]
+                self.assertIsNotNone(host)
+                self.assertRegex(host, r"^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$")
+                for piece in filter(None, re.split(r"[:@/#?]", userinfo)):
+                    self.assertNotIn(piece, host)
+
+
 class RepositoryRefTest(unittest.TestCase):
     def test_github_https_and_ssh_become_the_same_repository(self):
         """SPEC-0035:UT-04 — https://github.com/acme/api.git e git@github.com:acme/api.git viram
@@ -527,6 +583,47 @@ class InputFileTest(ArgocdCase):
                 self.assert_header(data)
                 self.assertEqual((data["entities"], data["relations"]), ([], []))
 
+    def test_passwords_with_at_slash_hash_and_query_never_leave_the_collector(self):
+        """SPEC-0035:IT-01 — revisão G4: Application com senhas que têm "@", "/", "#" e "?" em helm.parameters e
+        helm.values: exit 0, sem traceback, refs só com o host e nenhum pedaço das senhas no stdout."""
+        app = application("ingress-nginx")
+        app["metadata"]["name"] = "leaky"
+        app["spec"]["source"]["helm"] = {
+            "parameters": [{"name": "env.DB_URL", "value": "postgres://app:Secr3t@Pass/word@db:5432/app"}],
+            "values": ("env:\n"
+                       "  CACHE_URL: \"redis://:s3c#ret@cache:6379/0\"\n"
+                       "  BROKER_URL: 'amqp://u:Tr0ub4dor@3/x@rabbit'\n"
+                       "  QUEUE_ADDR: u:ab@cd#x@mq\n"),
+        }
+        app["status"]["sync"]["comparedTo"]["source"] = copy.deepcopy(app["spec"]["source"])
+        app["status"]["history"][0]["source"] = copy.deepcopy(app["spec"]["source"])
+        path = self.tmp / "leaky.json"
+        path.write_text(json.dumps([app]), encoding="utf-8")
+        data, result = self.collect("--from", "argocd", "--input", path)
+        refs = next(e["attrs"]["config_refs"] for e in data["entities"] if e["kind"] == "deployment")
+        self.assertEqual(refs, ["BROKER_URL=rabbit", "CACHE_URL=cache", "DB_URL=db", "QUEUE_ADDR=mq"])
+        for fragment in ("Secr3t", "Pass", "word", "s3c#ret", "s3c", "ret@", "Tr0ub4dor", "3/x", "ab@cd", "cd#x",
+                         "5432", "6379"):
+            with self.subTest(never_out=fragment):
+                self.assertNotIn(fragment, result.stdout)
+
+    def test_duplicate_application_name_warns_on_stderr(self):
+        """SPEC-0035:UT-01 — revisão G4: pela CLI, Application repetida (mesmo nome, outro namespace): exit 0, a
+        primeira fica e um aviso com o nome vai para o stderr."""
+        first = application("web")
+        second = application("web")
+        second["metadata"]["namespace"] = "team-b"
+        second["spec"]["project"] = "team-b"
+        path = self.tmp / "duplicate.json"
+        path.write_text(json.dumps([first, second]), encoding="utf-8")
+        data, result = self.collect("--from", "argocd", "--input", path)
+        self.assertIn("web", result.stderr)
+        deployments = [e for e in data["entities"] if e["kind"] == "deployment"]
+        self.assertEqual([d["id"] for d in deployments], ["web"])
+        self.assertEqual(deployments[0]["attrs"]["project"], "frontend")
+        _, violations, dropped = fn("validate_collector_output", "SPEC-0033")(data)
+        self.assertEqual((violations, dropped), ([], []))
+
     def test_missing_input_file_exits_1(self):
         """SPEC-0035:IT-01 — --input com arquivo que não existe: exit 1, sem traceback e sem saída do contrato."""
         result = self.run_argocd("--from", "argocd", "--input", self.tmp / "nope.json")
@@ -600,6 +697,13 @@ class CliFailureTest(ArgocdCase):
                 result = self.run_argocd("--from", cli, path=only_other)
                 self.assert_failure(result, f"{cli} não encontrado — {GUIDE}")
                 self.assertEqual(self.calls(other), [], f"--from {cli} não chama o {other}")
+
+    def test_argocd_without_server_configured_exits_1_with_no_access(self):
+        """SPEC-0035:IT-03 — revisão G4: argocd sem contexto/servidor ("Argo CD server address unspecified"): exit 1
+        com "sem acesso às Applications" (e o guia)."""
+        result = self.run_argocd("--from", "argocd", fakes=self.BOTH, env={"FAKE_CLI_FAIL": "unconfigured"})
+        self.assert_failure(result, NO_ACCESS)
+        self.assertIn("references/collectors/argocd.md", output(result))
 
     def test_invalid_cli_response_exits_1(self):
         """SPEC-0035:IT-03 — CLI que responde algo que não é JSON, ou JSON que não é lista de Applications:

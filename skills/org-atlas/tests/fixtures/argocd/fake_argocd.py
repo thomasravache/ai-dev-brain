@@ -9,7 +9,9 @@ Os testes copiam este arquivo como `argocd` para uma pasta no início do PATH. V
     unauthenticated = sessão inválida ou expirada (rpc error Unauthenticated, exit 20);
     forbidden       = RBAC nega a leitura (rpc error PermissionDenied, exit 20);
     garbage         = exit 0 com uma resposta que não é JSON;
-    shape           = exit 0 com JSON que não é uma lista de Applications.
+    shape           = exit 0 com JSON que não é uma lista de Applications;
+    unconfigured    = nenhum contexto/servidor configurado ("Argo CD server address unspecified", exit 20;
+                      revisão G4).
 
 Comandos: `argocd version [--client]` e `argocd app list [opções]`. Com `-o json` (também `-o=json`, `-ojson`,
 `--output json`, `--output=json`) imprime o arquivo; sem ele, a tabela que a CLI imprime por padrão (não é JSON).
@@ -86,6 +88,8 @@ def main(argv):
                      "token is expired")
     if failure == "forbidden":
         return fatal("rpc error: code = PermissionDenied desc = permission denied: applications, list")
+    if failure == "unconfigured":
+        return fatal("Argo CD server address unspecified")
     if failure == "garbage":
         print("<html><body><h1>502 Bad Gateway</h1></body></html>")
         return 0
