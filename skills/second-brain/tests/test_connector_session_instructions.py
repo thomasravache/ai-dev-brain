@@ -169,6 +169,44 @@ class ConnectorSessionInstructionsTest(unittest.TestCase):
             "feito no computador": r"computador",
         }, "Modo só conector, Qualquer outra escrita")
 
+    def test_exit_3_case_sends_to_onboarding_only_without_connector_or_on_request(self):
+        """SPEC-0052:UT-01"""
+        body = section(read(SKILL_MD), r"^Antes de qualquer fluxo")
+        case = next((norm(b) for b in bullets(body) if norm(b).startswith("- exit 3")), None)
+        self.assertIsNotNone(case, "Antes de qualquer fluxo: falta o caso '- **Exit 3**' da lista")
+        self.assertRules(case, {
+            "sem conector do provedor": r"\bsem (um |o )?conector",
+            "ou a pedido": r"a pedido|(pessoa|ela) pe(dir|ca|de)|pedir para configurar",
+        }, "Antes de qualquer fluxo, caso Exit 3")
+
+    def test_onboarding_heading_points_to_the_connector(self):
+        """SPEC-0052:UT-01"""
+        lines = read(SKILL_MD).splitlines()
+        idx = next((i for i, line in enumerate(lines) if line.startswith("## Onboarding")), None)
+        self.assertIsNotNone(idx, "SKILL.md sem o título '## Onboarding'")
+        first = next((line for line in lines[idx + 1:] if line.strip()), "")
+        self.assertRegex(norm(lines[idx] + " " + first), r"conector",
+                         f"onboarding: o título ou a primeira linha deve citar o conector: {lines[idx]!r} / {first!r}")
+
+    def test_first_rule_says_follow_in_connector_only_mode(self):
+        """SPEC-0052:UT-01"""
+        first = norm(bullets(section(read(SKILL_MD), r"^Regras$"))[0])
+        self.assertIn("siga no modo so conector", first, "Regras, primeiro item: 'siga no modo só conector'")
+
+    def test_locate_the_vault_searches_by_the_exact_file_name(self):
+        """SPEC-0052:UT-01"""
+        where = {
+            "SKILL.md, Modo só conector": section(read(SKILL_MD), r"^Modo s[óo] conector"),
+            "connectors.md, Quando usar": section(read(CONNECTORS_MD), r"^Quando (usar|entra)"),
+        }
+        for name, body in where.items():
+            with self.subTest(where=name):
+                item = item_with(body, [r"^- localizar o vault"])
+                self.assertIsNotNone(item, f"{name}: falta o item 'Localizar o vault'")
+                self.assertRegex(item, r"brain-config\.yml", f"{name}: brain-config.yml")
+                self.assertRegex(item, r"exatamente|pelo nome|nome exato",
+                                 f"{name}: buscar o arquivo pelo nome exato brain-config.yml, não pelo conteúdo")
+
 
 if __name__ == "__main__":
     unittest.main()
