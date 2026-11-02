@@ -17,6 +17,10 @@ lint only reads: each rule is a check_<rule> function over a single scan of the 
 (SPEC-0023, ADR-0007).
 export-notebooklm only reads the vault: it writes the package of a MOC to an empty folder outside it, creating each
 file exclusively, and does not touch log.md (SPEC-0024).
+Confidential items (SPEC-0050, ADR-0014): a secret never enters the vault; a secret-ref note only says where it is
+(vault_ref, never opened). Notes with `confidential: true` stay out of search, related, context, links, index and
+the export unless asked (--include-confidential; never in the export); ingest --confidential never runs a processor.
+lint warns (secret-in-note, personal-data) without ever printing the value found.
 """
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ import argparse
 import contextlib
 import datetime as dt
 import errno
+import hashlib
 import html
 import json
 import math
@@ -43,7 +48,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.2"
+BRAIN_VERSION = "2026.11.3"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -56,7 +61,7 @@ LAYOUT_FILES = ("index", "log")
 LAYOUT_KEYS = LAYOUT_DIRS + LAYOUT_FILES
 PARA_KEYS = ("projects", "areas", "resources", "archive")
 SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors", "inbox_stale_days",
-               "conflict_patterns")
+               "conflict_patterns", "lint")
 SHARED_VERSION = "1"
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
@@ -112,7 +117,7 @@ whom when where why how all any each both few more most other some such only own
 STOPWORDS = frozenset(STOPWORDS_TEXT.split())
 
 # store flow: ingest, new-note, relate and index (SPEC-0019; note types in references/note-types.md)
-NOTE_TYPES = ("note", "lecture", "source", "video", "document", "link", "moc", "answer")
+NOTE_TYPES = ("note", "lecture", "source", "video", "document", "link", "moc", "answer", "secret-ref")
 TITLE_FORBIDDEN = frozenset('/\\:*?"<>|#^[]')  # characters a note title cannot keep in its file name
 RELATIONS_HEADING = "## Relations"
 RELATION_LINE_RE = re.compile(r"^[-*][ \t]+\[\[([^\[\]\n]+?)\]\][ \t]*—[ \t]*(.*?)[ \t]*$")
@@ -159,12 +164,35 @@ SUBTITLE_TAG_RE = re.compile(r"<[^>\n]*>")
 # lint (SPEC-0023): rule -> severity, in the order of the report; conflict patterns per provider documented in
 # references/providers.md (generic patterns: the real names of each provider were not checked on this machine)
 LINT_SEVERITY = {"broken-link": "error", "conflict-copy": "error", "missing-file": "error", "orphan": "warn",
-                 "stale-inbox": "warn", "frontmatter": "warn", "config": "error"}
+                 "stale-inbox": "warn", "frontmatter": "warn", "secret-in-note": "warn", "personal-data": "warn",
+                 "config": "error"}
 LINT_LABELS = {"error": "ERRO", "warn": "AVISO"}
 GENERIC_CONFLICT_PATTERNS = (r"(?P<base>.+) \(\d+\)\.md$", r"(?i)(?P<base>.+)[ _-]conflict.*\.md$")
 MAX_CONFLICT_PATTERN = 500  # characters of a conflict pattern; longer ones are refused (never matched)
 CONFLICT_PATTERNS = {provider: GENERIC_CONFLICT_PATTERNS for provider in PROVIDERS}
 REQUIRED_FIELDS = ("title", "created")  # frontmatter of a note of the skill's types (references/note-types.md)
+# confidential items (SPEC-0050, ADR-0014; references/confidential.md)
+SECRET_REF_TYPE = "secret-ref"
+VAULT_REF_RE = re.compile(r"^[a-z][a-z0-9+.-]*://\S[^\x00-\x1f\x7f]*$")  # <esquema>://<caminho>, never opened
+CONFIDENTIAL_LINE_RE = re.compile(r"^confidential[ \t]*:[ \t]*(?:true|True|TRUE)[ \t]*(?:#.*)?$", re.MULTILINE)
+NOT_EXTRACTED = "_(confidential: not extracted)_"
+INCLUDE_CONFIDENTIAL = "--include-confidential"
+CONFIDENTIAL_REFUSED = f"nota confidencial — use {INCLUDE_CONFIDENTIAL} só se a pessoa pedir para incluí-la"
+PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
+TOKEN_RE_SECRET = re.compile(r"(?<![\w-])(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|AKIA[0-9A-Z]{16}"
+                             r"|xox[abpr]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})(?![\w-])")
+SECRET_LABEL_RE = re.compile(r"(?i)(?<![\w-])(?:senha|password|passwd|pwd|pin|token|api[ _-]?key|secret|segredo)"
+                             r"(?![\w-])[*_]*[ \t]*[:=][*_]*[ \t]*(\S*)")
+# values that are a marker, not a secret: ***, <...>, ${...}, {{...}}, xxx, ... and YAML booleans/null
+SECRET_PLACEHOLDER_RE = re.compile(r"(?i)^(?:\*+|<.*|\$\{.*|\{\{.*|x{3,}\W*|\.{3,}|…|true|false|null|none|yes|no)$")
+SECRET_MIN = 4  # characters of a labeled value
+CPF_RE = re.compile(r"(?<![\w.-])(\d{3}\.\d{3}\.\d{3}-\d{2})(?![\w-])|(?i:\bCPF\b)\W{0,3}(\d{11})(?!\d)")
+CNPJ_RE = re.compile(r"(?<![\w.-])(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})(?![\w-])|(?i:\bCNPJ\b)\W{0,3}(\d{14})(?!\d)")
+CARD_RE = re.compile(r"(?<![\w.-])(\d{3,6}(?:[ -]\d{3,6}){2,4})(?![\w-])"
+                     r"|(?i:\b(?:cart[aã]o|card)\b)\W{0,3}(\d{13,19})(?!\d)")
+LABELED_DOCUMENT_RE = re.compile(r"(?i)(?<![\w-])(?:RG|CNH|passaporte|passport|SSN|DNI|NIF)(?![\w-])[ \t]*:[ \t]*\S*\d")
+PERSONAL_DETECTORS = ("cpf", "cnpj", "card", "labeled-document")
+PERSONAL_KINDS = {"cpf": "cpf", "cnpj": "cnpj", "card": "cartão", "labeled-document": "documento rotulado"}
 
 
 class BrainError(Exception):
@@ -883,6 +911,204 @@ def parse_note(path: str, text: str, contexts=None) -> Note:
                 body_terms=Counter(body_terms), warnings=[f"{path}: {problem} — lida sem frontmatter"] if problem else [])
 
 
+# ---------------------------------------------------------------- confidential items (pure; SPEC-0050, ADR-0014)
+
+def is_vault_ref(value) -> bool:
+    """True only for "<esquema>://<caminho>": scheme [a-z][a-z0-9+.-]*, non-empty path. Only the format is checked:
+    brain.py never resolves nor opens the reference (ADR-0014)."""
+    return isinstance(value, str) and bool(VAULT_REF_RE.match(value))
+
+
+def frontmatter_block(text: str) -> str:
+    """The raw YAML between the first "---" and the next "---" (or "..."); "" without a closed frontmatter."""
+    first, sep, rest = (text or "").partition("\n")
+    end = FRONTMATTER_END_RE.search(rest) if first.rstrip() == "---" and sep else None
+    return rest[:end.start()] if end else ""
+
+
+def marked_confidential(frontmatter: dict, text: str) -> bool:
+    """True only when the frontmatter has `confidential: true` as the YAML boolean: parse_scalar does not convert
+    types, so the line is read as written ("true" in quotes, yes, false or anything else = not confidential)."""
+    value = frontmatter.get("confidential") if isinstance(frontmatter, dict) else None
+    return (isinstance(value, str) and value.lower() == "true"
+            and bool(CONFIDENTIAL_LINE_RE.search(frontmatter_block(text))))
+
+
+def is_confidential(note: Note) -> bool:
+    """True when the note has `confidential: true` (marked_confidential)."""
+    return marked_confidential(note.frontmatter, note.text or "")
+
+
+def confidential_paths(notes) -> set:
+    return {note.path for note in notes if is_confidential(note)}
+
+
+def visible_notes(notes: list, include_confidential: bool = False) -> list:
+    """The notes a command shows: all with include_confidential, else the ones without confidential: true."""
+    return list(notes) if include_confidential else [note for note in notes if not is_confidential(note)]
+
+
+def with_frontmatter_keys(text: str, keys: dict) -> str:
+    """Text with each "key: value" of keys in the frontmatter: a key already there is replaced (its line), a
+    missing one goes before the closing "---"; without a frontmatter one is created. Used by new-note for
+    confidential: true and vault_ref, whatever the template of the vault has."""
+    nl = newline_of(text)
+    first, sep, rest = text.partition("\n")
+    end = FRONTMATTER_END_RE.search(rest) if first.rstrip() == "---" and sep else None
+    if end is None:
+        head = "".join(f"{key}: {value}{nl}" for key, value in keys.items())
+        return f"---{nl}{head}---{nl}{text}"
+    lines, done = rest[:end.start()].splitlines(), set()
+    for i, line in enumerate(lines):
+        m = KEY_RE.match(line)
+        if m and m.group(1) in keys and m.group(1) not in done:
+            lines[i] = f"{m.group(1)}: {keys[m.group(1)]}"
+            done.add(m.group(1))
+    lines += [f"{key}: {value}" for key, value in keys.items() if key not in done]
+    return first + "\n" + "".join(f"{line}{nl}" for line in lines) + rest[end.start():]
+
+
+def _secret_kind(line: str):
+    """The kind of secret written in a line, or None: "chave privada", "token" or "senha rotulada"."""
+    if PRIVATE_KEY_RE.search(line):
+        return "chave privada"
+    if TOKEN_RE_SECRET.search(line):
+        return "token"
+    for m in SECRET_LABEL_RE.finditer(line):
+        value = m.group(1).strip("\"'`")
+        if len(value) >= SECRET_MIN and not SECRET_PLACEHOLDER_RE.match(value):
+            return "senha rotulada"
+    return None
+
+
+def find_secrets(text: str) -> list:
+    """[(line, kind)] of each line of text (1 = the first) with a private key block, a token with a known prefix
+    or a labeled password; placeholders (***, <...>, ${...}, {{...}}, xxx) do not count. Never the value."""
+    found = []
+    for number, line in enumerate((text or "").splitlines(), 1):
+        kind = _secret_kind(line)
+        if kind:
+            found.append((number, kind))
+    return found
+
+
+def _digits(text: str) -> list:
+    return [int(char) for char in text if char.isdigit()]
+
+
+def valid_cpf(text: str) -> bool:
+    """The two check digits of a CPF (11 digits, not all the same)."""
+    d = _digits(text)
+    if len(d) != 11 or len(set(d)) == 1:
+        return False
+    for size in (9, 10):
+        total = sum(digit * weight for digit, weight in zip(d[:size], range(size + 1, 1, -1)))
+        if (total * 10 % 11) % 10 != d[size]:
+            return False
+    return True
+
+
+def valid_cnpj(text: str) -> bool:
+    """The two check digits of a CNPJ (14 digits, not all the same)."""
+    d = _digits(text)
+    if len(d) != 14 or len(set(d)) == 1:
+        return False
+    for size in (12, 13):
+        weights = list(range(size - 7, 1, -1)) + list(range(9, 1, -1))
+        rest = sum(digit * weight for digit, weight in zip(d[:size], weights)) % 11
+        if (0 if rest < 2 else 11 - rest) != d[size]:
+            return False
+    return True
+
+
+def valid_card(text: str) -> bool:
+    """13 to 19 digits that pass the Luhn check."""
+    d = _digits(text)
+    if not 13 <= len(d) <= 19:
+        return False
+    total = sum(digit if i % 2 == 0 else (digit * 2 - 9 if digit > 4 else digit * 2)
+                for i, digit in enumerate(reversed(d)))
+    return total % 10 == 0
+
+
+PERSONAL_CHECKS = {  # detector -> (regex with one value per alternative group, validator of the value)
+    "cpf": (CPF_RE, valid_cpf),
+    "cnpj": (CNPJ_RE, valid_cnpj),
+    "card": (CARD_RE, valid_card),
+    "labeled-document": (LABELED_DOCUMENT_RE, None),
+}
+
+
+def _personal_hit(line: str, detector: str) -> bool:
+    pattern, valid = PERSONAL_CHECKS[detector]
+    for m in pattern.finditer(line):
+        value = next((group for group in m.groups() if group), m.group(0))
+        if valid is None or valid(value):
+            return True
+    return False
+
+
+def find_personal_data(text: str, detectors=None, patterns=None) -> list:
+    """[(line, kind)] of the personal data written in text (1 = the first line), one per line and kind: valid CPF,
+    CNPJ and card (check digits, Luhn), labeled document (RG, CNH, passaporte...: with a digit) and each extra
+    pattern ({name: compiled regex}) under its name. detectors = the ones turned on (None = all). E-mail and phone
+    do not count. Never the value."""
+    detectors = PERSONAL_DETECTORS if detectors is None else [d for d in detectors if d in PERSONAL_CHECKS]
+    extra = dict(patterns or {})
+    found = []
+    for number, line in enumerate((text or "").splitlines(), 1):
+        if not any(char.isdigit() for char in line) and not extra:
+            continue
+        found += [(number, PERSONAL_KINDS[d]) for d in detectors if _personal_hit(line, d)]
+        found += [(number, name) for name, pattern in extra.items() if pattern.search(line)]
+    return found
+
+
+def compile_personal_data(lint) -> tuple:
+    """(detectors, patterns, problems) of the `lint` key of brain-config.yml: lint.personal_data = the detectors
+    turned on (absent = all of PERSONAL_DETECTORS); lint.personal_data_patterns = {name: regex} extra. A regex that
+    is invalid, longer than MAX_CONFLICT_PATTERN or with a nested quantifier is a problem naming the pattern (the
+    protection of compile_conflict_patterns), never compiled; the others still count."""
+    if not lint:
+        lint = {}
+    if not isinstance(lint, dict):
+        return list(PERSONAL_DETECTORS), {}, [f"lint precisa ser um mapa: {one_line(lint)}"]
+    problems, given = [], lint.get("personal_data")
+    if given is None:
+        detectors = list(PERSONAL_DETECTORS)
+    else:
+        items = [given] if isinstance(given, str) else given if isinstance(given, list) else None
+        if items is None:
+            items = list(PERSONAL_DETECTORS)
+            problems.append(f"lint.personal_data precisa ser uma lista: {one_line(given)} — usando todos")
+        names = [str(item).strip() for item in items if str(item).strip()]
+        unknown = [name for name in names if name not in PERSONAL_DETECTORS]
+        if unknown:
+            problems.append(f"lint.personal_data: detector desconhecido {one_line(', '.join(unknown))} — detectores: "
+                            f"{', '.join(PERSONAL_DETECTORS)}")
+        detectors = [name for name in PERSONAL_DETECTORS if name in names]
+    extra = lint.get("personal_data_patterns") or {}
+    if not isinstance(extra, dict):
+        problems.append(f"lint.personal_data_patterns precisa ser um mapa nome: regex: {one_line(extra)}")
+        return detectors, {}, problems
+    patterns = {}
+    for name, item in extra.items():
+        text, label = str(item), f"lint.personal_data_patterns.{one_line(name)}"
+        if len(text) > MAX_CONFLICT_PATTERN:
+            problems.append(f"{label}: regex com {len(text)} caracteres (limite {MAX_CONFLICT_PATTERN}) — não usado")
+        elif nested_quantifier(text):
+            problems.append(f"{label}: regex com quantificador aninhado {one_line(text)!r} — como (a+)+, trava a "
+                            "busca; não usado")
+        else:
+            try:
+                patterns[str(name)] = re.compile(text)
+            except re.error as e:
+                problems.append(f"{label}: regex inválido {one_line(text)!r} ({e}) — não usado")
+    return detectors, patterns, problems
+
+
+# ---------------------------------------------------------------- links and search (read only)
+
 def _link_key(target: str) -> str:
     """Comparison key of a link target or a note path: NFC (a name typed in NFC finds a file stored in NFD), "/",
     without a leading "./" or "/" nor ".md", lowercased."""
@@ -1024,9 +1250,12 @@ def make_snippet(note: Note, terms) -> str:
     return piece
 
 
-def search(notes: list, query: str, context=None, note_type=None, tag=None, limit=10) -> list:
+def search(notes: list, query: str, context=None, note_type=None, tag=None, limit=10,
+           include_confidential=False) -> list:
     """Notes of the query by score: sum per query term of tf * idf, weighting title 3, tags 2 and body 1.
-    Only score > 0, descending; filters by context, frontmatter.type and tag."""
+    Only score > 0, descending; filters by context, frontmatter.type and tag. Confidential notes are left out
+    (never counted in the idf either) unless include_confidential."""
+    notes = visible_notes(notes, include_confidential)
     terms = unique(tokenize(query))
     if not terms:
         return []
@@ -1049,12 +1278,13 @@ def search(notes: list, query: str, context=None, note_type=None, tag=None, limi
 
 
 def link_graph(notes: list, index: LinkIndex) -> dict:
-    """Undirected neighborhood of each note: the notes it links to and the ones that link to it."""
+    """Undirected neighborhood of each note: the notes it links to and the ones that link to it. The index may know
+    more notes than `notes` (the confidential ones left out): a link to one of them is not an edge."""
     graph = {note.path: set() for note in notes}
     for note in notes:
         for target in note.links:
             dest = index.resolve(target)
-            if dest and dest != note.path:
+            if dest and dest != note.path and dest in graph:
                 graph[note.path].add(dest)
                 graph[dest].add(note.path)
     return graph
@@ -1079,22 +1309,27 @@ def moc_notes(paths, values=None) -> set:
     return {path for path in paths if _link_key(path).startswith(folder + "/")}
 
 
-def related(notes: list, note=None, text=None, limit=10, values=None) -> list:
+def related(notes: list, note=None, text=None, limit=10, values=None, include_confidential=False) -> list:
     """Notes like `note` (a Note.path) or like a free `text`, by 0.5 * TF-IDF cosine + 0.2 * tag Jaccard
     + 0.1 * same context + 0.2 * neighborhood (1 direct link, 0.5 two hops). Excludes the note itself and the
     generated index.md and log.md (never results nor a path between neighbors); descending; each result says why
-    (reasons)."""
-    generated = generated_notes((n.path for n in notes), values)
+    (reasons). Confidential notes are neither results nor neighbors unless include_confidential; a confidential
+    `note` without it = BrainError (exit 2)."""
     index = LinkIndex(n.path for n in notes)
-    graph = link_graph(notes, index)
     if note is not None:
         ref = next((n for n in notes if n.path == note), None)
         if ref is None:
             raise BrainError(f"nota não encontrada: {note}")
+        if not include_confidential and is_confidential(ref):
+            raise BrainError(CONFIDENTIAL_REFUSED)
+    notes = visible_notes(notes, include_confidential)
+    generated = generated_notes((n.path for n in notes), values)
+    graph = link_graph(notes, index)
+    if note is not None:
         direct = graph[ref.path] - generated
     else:
         ref = parse_note("", text or "")
-        direct = {index.resolve(target) for target in ref.links} - {None} - generated
+        direct = {index.resolve(target) for target in ref.links} & graph.keys() - generated
     two_hops = set().union(*(graph[p] for p in direct)) - direct - {ref.path} - generated if direct else set()
 
     df = Counter()
@@ -1143,14 +1378,22 @@ def related_reasons(common_tags, same_context, neighborhood, contributions) -> l
     return reasons
 
 
-def note_links(notes: list, path: str, index: LinkIndex) -> dict:
-    """Outgoing links of the note at `path` (resolved or None), its backlinks and its broken targets."""
+def note_links(notes: list, path: str, index: LinkIndex, include_confidential=False) -> dict:
+    """Outgoing links of the note at `path` (resolved or None), its backlinks and its broken targets. Without
+    include_confidential a confidential note is neither an outgoing link nor a backlink (nor broken: it exists),
+    "confidential_omitted" counts them (distinct notes), and a confidential `path` = BrainError (exit 2)."""
     note = next(n for n in notes if n.path == path)
-    outgoing = [{"target": target, "path": index.resolve(target)} for target in note.links]
-    backlinks = sorted(n.path for n in notes
-                       if n.path != path and any(index.resolve(target) == path for target in n.links))
+    hidden = set() if include_confidential else confidential_paths(notes)
+    if path in hidden:
+        raise BrainError(CONFIDENTIAL_REFUSED)
+    resolved = [{"target": target, "path": index.resolve(target)} for target in note.links]
+    outgoing = [item for item in resolved if item["path"] not in hidden]
+    linking = [n.path for n in notes if n.path != path and any(index.resolve(target) == path for target in n.links)]
+    backlinks = sorted(p for p in linking if p not in hidden)
+    omitted = {item["path"] for item in resolved if item["path"] in hidden} | (set(linking) & hidden)
     return {"outgoing": outgoing, "backlinks": backlinks,
-            "broken": [item["target"] for item in outgoing if item["path"] is None]}
+            "broken": [item["target"] for item in outgoing if item["path"] is None],
+            "confidential_omitted": len(omitted)}
 
 
 # ---------------------------------------------------------------- query: context package (pure)
@@ -1177,18 +1420,11 @@ def neighbors(seeds: list, graph: dict, hops: int, blocked=()) -> dict:
     return found
 
 
-def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_chars=40000, values=None) -> dict:
-    """Package of notes that answer the query: the MOC of `context` (when given), the search results by score and
-    their link neighbors (outgoing links and backlinks) up to `hops` steps, by distance and title; no note repeats.
-    The MOC is never walked through (it would bring the whole context): notes reached only through it stay out;
-    without `context` the MOC is an ordinary note. The generated index.md and log.md may be search results but are
-    never walked through either. In that priority order each note goes in whole when it still
-    fits max_chars (sum of len(content)); one that does not fit goes to "omitted" (path, title, reason) and the
-    next ones are still tried. "broken" lists the broken links of the notes in the package. Nothing found by
-    the search = empty package (no MOC alone)."""
+def context_picks(notes: list, index: LinkIndex, query: str, context, hops: int, limit: int, values) -> list:
+    """[(path, reason)] of build_context in the contract order (MOC, search results, link neighbors); `notes` are
+    the ones that may be picked and `index` resolves links over the whole vault."""
     by_path = {note.path: note for note in notes}
-    index = LinkIndex(by_path)
-    results = search(notes, query, context=context, limit=limit)
+    results = search(notes, query, context=context, limit=limit, include_confidential=True)
     moc = moc_path(context, values) if context and results else None
     picked = [(moc, "moc")] if moc in by_path else []  # (path, reason) in the contract order
     generated = generated_notes(by_path, values)
@@ -1199,6 +1435,27 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     picked += [(path, f"link:{distance}")
                for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
                                                                               item[0]))]
+    return picked
+
+
+def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_chars=40000, values=None,
+                  include_confidential=False) -> dict:
+    """Package of notes that answer the query: the MOC of `context` (when given), the search results by score and
+    their link neighbors (outgoing links and backlinks) up to `hops` steps, by distance and title; no note repeats.
+    The MOC is never walked through (it would bring the whole context): notes reached only through it stay out;
+    without `context` the MOC is an ordinary note. The generated index.md and log.md may be search results but are
+    never walked through either. In that priority order each note goes in whole when it still
+    fits max_chars (sum of len(content)); one that does not fit goes to "omitted" (path, title, reason) and the
+    next ones are still tried. "broken" lists the broken links of the notes in the package. Nothing found by
+    the search = empty package (no MOC alone). Without include_confidential the confidential notes are neither
+    picked nor walked through (a link to one is not broken) and "confidential_omitted" counts the distinct ones that
+    the package would have picked with them."""
+    by_path = {note.path: note for note in notes}
+    index = LinkIndex(by_path)
+    shown = visible_notes(notes, include_confidential)
+    picked = context_picks(shown, index, query, context, hops, limit, values)
+    hidden = by_path.keys() - {note.path for note in shown}
+    every = context_picks(notes, index, query, context, hops, limit, values) if hidden else []
     package, omitted, broken, size = [], [], [], 0
     for path, reason in picked:
         note = by_path[path]
@@ -1209,7 +1466,8 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
         else:
             omitted.append({"path": path, "title": note.title, "reason": reason})
         broken += [{"note": path, "target": target} for target in note.links if index.resolve(target) is None]
-    return {"query": query, "notes": package, "omitted": omitted, "broken": broken}
+    return {"query": query, "notes": package, "omitted": omitted, "broken": broken,
+            "confidential_omitted": len({path for path, _ in every if path in hidden})}
 
 
 # ---------------------------------------------------------------- export: NotebookLM package (pure; SPEC-0024)
@@ -1239,17 +1497,20 @@ def flatten_links(text: str) -> str:
     return "".join(line if code else outside_code(line) for line, code in fenced_lines(text.splitlines(True)))
 
 
-def export_notes(notes: list, moc: str, hops: int, values=None) -> list:
+def export_notes(notes: list, moc: str, hops: int, values=None, include_confidential=False) -> list:
     """[(path, origin)] of the NotebookLM package of the MOC at `moc`: the MOC, the notes it cites (in its order)
     and their link neighbors up to `hops` steps, by distance and title (neighbors of build_context). The MOC is
     never walked through, nor any other MOC of layout.mocs, nor the generated index.md and log.md: notes reached
-    only through them stay out."""
+    only through them stay out. Confidential notes are never cited nor walked through (include_confidential only
+    serves to count what was left out)."""
     by_path = {note.path: note for note in notes}
     index = LinkIndex(by_path)
+    shown = visible_notes(notes, include_confidential)
+    hidden = by_path.keys() - {note.path for note in shown}
     blocked = [moc] + sorted((generated_notes(by_path, values) | moc_notes(by_path, values)) - {moc})
     cited = unique(path for path in (index.resolve(target) for target in by_path[moc].links)
-                   if path and path not in blocked)
-    found = neighbors(cited, link_graph(notes, index), hops, blocked) if cited and hops > 0 else {}
+                   if path and path not in blocked and path not in hidden)
+    found = neighbors(cited, link_graph(shown, index), hops, blocked) if cited and hops > 0 else {}
     picked = [(moc, "MOC")] + [(path, "citada pelo MOC") for path in cited]
     picked += [(path, f"link:{distance}")
                for path, distance in sorted(found.items(), key=lambda item: (item[1], by_path[item[0]].title.lower(),
@@ -1291,9 +1552,15 @@ def export_name(title: str, path: str, taken: set) -> str:
 
 
 def export_package(notes: list, moc: str, hops: int, values=None) -> dict:
-    """{"notes": [{"path", "title", "origin", "file"}], "files": {name: text}}: one .md per note of export_notes,
-    sources.md (where each one came from) and combined.md (every note in one file; dropped without --combined)."""
+    """{"notes": [{"path", "title", "origin", "file"}], "files": {name: text}, "confidential_omitted": N}: one .md
+    per note of export_notes, sources.md (where each one came from) and combined.md (every note in one file;
+    dropped without --combined). A confidential note never goes in (N = the distinct ones left out); a
+    confidential MOC = BrainError (exit 2)."""
     by_path = {note.path: note for note in notes}
+    if is_confidential(by_path[moc]):
+        raise BrainError("MOC confidencial — o export-notebooklm nunca exporta item confidencial")
+    hidden = confidential_paths(notes)
+    every = export_notes(notes, moc, hops, values, include_confidential=True) if hidden else []
     taken = {export_key(name) for name in EXPORT_EXTRA}
     items, files = [], {}
     for path, origin in export_notes(notes, moc, hops, values):
@@ -1308,7 +1575,7 @@ def export_package(notes: list, moc: str, hops: int, values=None) -> dict:
     files["sources.md"] = "\n".join(lines) + "\n"
     files["combined.md"] = (f"# {moc_title} — todas as notas\n\n"
                             + "\n---\n\n".join(files[item["file"]] for item in items))
-    return {"notes": items, "files": files}
+    return {"notes": items, "files": files, "confidential_omitted": len({path for path, _ in every if path in hidden})}
 
 
 # ---------------------------------------------------------------- store: note paths, relations, regions (pure)
@@ -1501,9 +1768,10 @@ def render_note(template: str, tags=(), **fields) -> str:
     return head + fill_template(rest[end.start():], **fields)
 
 
-def render_source_note(title: str, date: str, context, file_rel, url, extracted: str) -> str:
+def render_source_note(title: str, date: str, context, file_rel, url, extracted: str, opaque=None) -> str:
     """Source note of ingest: frontmatter type: source, title, context, created, tags, source_url or files, and
-    the extracted text (or _(pending)_) under "## Extracted text"."""
+    the extracted text (or _(pending)_) under "## Extracted text". opaque = (size, sha256) of a confidential file
+    (ingest --confidential): confidential: true, size and sha256, and NOT_EXTRACTED in place of any text."""
     frontmatter = {"type": "source", "title": title}
     if context:
         frontmatter["context"] = context
@@ -1512,6 +1780,9 @@ def render_source_note(title: str, date: str, context, file_rel, url, extracted:
         frontmatter["source_url"] = url
     else:
         frontmatter["files"] = [file_rel]
+    if opaque is not None:
+        frontmatter.update(confidential="true", size=str(opaque[0]), sha256=opaque[1])
+        extracted = NOT_EXTRACTED
     text = extracted.strip("\n").rstrip() or PENDING_TEXT
     return (f"---\n{dump_yaml(frontmatter)}---\n\n# {title}\n\n## Summary\n\n## Extracted text\n\n{text}\n\n"
             f"{RELATIONS_HEADING}\n")
@@ -1532,11 +1803,13 @@ def wikilink(path: str, title: str, index: LinkIndex) -> str:
 
 
 class IndexEntry:
-    """What index needs of a note: path, title, type, context and created (AAAA-MM-DD or "")."""
-    __slots__ = ("context", "created", "note_type", "path", "title")
+    """What index needs of a note: path, title, type, context, created (AAAA-MM-DD or "") and whether it is
+    confidential (then it is listed neither in a MOC nor in index.md)."""
+    __slots__ = ("confidential", "context", "created", "note_type", "path", "title")
 
-    def __init__(self, path, title, note_type, context, created):
+    def __init__(self, path, title, note_type, context, created, confidential=False):
         self.path, self.title, self.note_type, self.context, self.created = path, title, note_type, context, created
+        self.confidential = confidential
 
 
 def index_entry(rel: str, text: str, contexts) -> IndexEntry:
@@ -1545,7 +1818,8 @@ def index_entry(rel: str, text: str, contexts) -> IndexEntry:
     title = note_title(rel, frontmatter, "" if isinstance(frontmatter.get("title"), str) else prose(body))
     note_type = frontmatter.get("type")
     return IndexEntry(rel, title, note_type.strip() if isinstance(note_type, str) else "",
-                      note_context(rel, frontmatter, contexts), created_date(frontmatter.get("created")))
+                      note_context(rel, frontmatter, contexts), created_date(frontmatter.get("created")),
+                      marked_confidential(frontmatter, text))
 
 
 def created_date(value) -> str:
@@ -1827,6 +2101,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
         rows += kebab_context_items(str(name), folder, f"contexts.{name}.folder" in problems)
     rows += processor_items(values["processors"])
     rows.append(lint_item(values, problems))
+    rows.append(confidential_item(values, problems))
     return rows + provider_items(values)
 
 
@@ -1887,6 +2162,22 @@ def provider_items(values: dict) -> list:
     return [(status, f"provider {provider}", note)]
 
 
+def confidential_item(values: dict, problems: dict) -> tuple:
+    """The doctor line of confidential items: "OK confidential — N notas confidenciais" (only the number: never a
+    title nor a path)."""
+    if problems:
+        return ("AVISO", "confidential", "não conferido (brain-config.yml com valores fora do vault)")
+    count = 0
+    try:
+        for path, _ in walk_notes(values):
+            text = path.read_bytes().decode("utf-8-sig", errors="replace")
+            if CONFIDENTIAL_LINE_RE.search(frontmatter_block(text)):  # only then the YAML is parsed
+                count += marked_confidential(read_frontmatter(text)[0], text)
+    except (BrainError, OSError) as e:
+        return ("AVISO", "confidential", f"não conferido: {e.strerror if isinstance(e, OSError) else e}")
+    return ("OK", "confidential", f"{count} notas confidenciais")
+
+
 def cmd_doctor(as_json: bool, config_home=None) -> int:
     rows = doctor_items(read_config(config_home), local_config_path(config_home))
     code = 1 if any(status == "ERRO" for status, _, _ in rows) else 0
@@ -1935,13 +2226,33 @@ def find_note(ref: str, index: LinkIndex) -> str:
     return path
 
 
+def has_confidential(notes: list) -> bool:
+    return any(is_confidential(note) for note in notes)
+
+
+def confidential_omitted(every: list, notes: list) -> int:
+    """How many distinct confidential notes are in `every`, the output the command would give with
+    --include-confidential (the ones left out of the output without it)."""
+    return len({item["path"] for item in every} & confidential_paths(notes))
+
+
+def print_confidential_omitted(omitted: int):
+    if omitted:
+        print(f"({omitted} nota(s) confidencial(is) fora da lista — {INCLUDE_CONFIDENTIAL} só a pedido da pessoa)")
+
+
 def cmd_search(args, config_home=None) -> int:
     check_limit(args.limit)
     query = " ".join(args.query)
     notes, warnings = load_notes(config_home)
-    results = search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit)
+    include = args.include_confidential
+    results = search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
+                     include_confidential=include)
+    omitted = 0 if include or not has_confidential(notes) else confidential_omitted(
+        search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
+               include_confidential=True), notes)
     if args.json:
-        print_json({"query": query, "results": results, "warnings": warnings})
+        print_json({"query": query, "results": results, "warnings": warnings, "confidential_omitted": omitted})
         return 0
     print_warnings(warnings)
     if not results:
@@ -1950,19 +2261,21 @@ def cmd_search(args, config_home=None) -> int:
         print(f"{result['score']:.2f}  {result['path']}  — {result['title']}")
         if result["snippet"]:
             print(f"    {result['snippet']}")
+    print_confidential_omitted(omitted)
     return 0
 
 
 def cmd_related(args, config_home=None) -> int:
     check_limit(args.limit)
     values, notes, warnings = load_vault(config_home)
-    if args.note is not None:
-        path = find_note(args.note, LinkIndex(n.path for n in notes))
-        results = related(notes, note=path, limit=args.limit, values=values)
-    else:
-        results = related(notes, text=args.text, limit=args.limit, values=values)
+    include = args.include_confidential
+    path = find_note(args.note, LinkIndex(n.path for n in notes)) if args.note is not None else None
+    results = related(notes, note=path, text=args.text, limit=args.limit, values=values,
+                      include_confidential=include)
+    omitted = 0 if include or not has_confidential(notes) else confidential_omitted(
+        related(notes, note=path, text=args.text, limit=args.limit, values=values, include_confidential=True), notes)
     if args.json:
-        print_json({"results": results, "warnings": warnings})
+        print_json({"results": results, "warnings": warnings, "confidential_omitted": omitted})
         return 0
     print_warnings(warnings)
     if not results:
@@ -1970,6 +2283,7 @@ def cmd_related(args, config_home=None) -> int:
     for result in results:
         print(f"{result['score']:.2f}  {result['path']}  — {result['title']}")
         print(f"    {'; '.join(result['reasons'])}")
+    print_confidential_omitted(omitted)
     return 0
 
 
@@ -1977,7 +2291,7 @@ def cmd_links(args, config_home=None) -> int:
     notes, warnings = load_notes(config_home)
     index = LinkIndex(n.path for n in notes)
     path = find_note(args.note, index)
-    data = note_links(notes, path, index)
+    data = note_links(notes, path, index, include_confidential=args.include_confidential)
     if args.json:
         print_json(dict(data, warnings=warnings))
         return 0
@@ -1991,6 +2305,7 @@ def cmd_links(args, config_home=None) -> int:
     print(f"Quebrados ({len(data['broken'])}):")
     for target in data["broken"]:
         print(f"  {target}")
+    print_confidential_omitted(data["confidential_omitted"])
     return 0
 
 
@@ -2003,13 +2318,14 @@ def cmd_context(args, config_home=None) -> int:
     query = " ".join(args.query)
     values, notes, warnings = load_vault(config_home)
     data = build_context(notes, query, context=args.context, hops=args.hops, limit=args.limit,
-                         max_chars=args.max_chars, values=values)
+                         max_chars=args.max_chars, values=values, include_confidential=args.include_confidential)
     if args.json:
         print_json(dict(data, warnings=warnings))
         return 0
     print_warnings(warnings)
     if not data["notes"] and not data["omitted"]:
         print(f"Nenhuma nota encontrada para: {query}")
+        print_confidential_omitted(data["confidential_omitted"])
         return 0
     for item in data["notes"]:
         print(f"=== {item['path']} ({item['reason']}) ===")
@@ -2023,6 +2339,7 @@ def cmd_context(args, config_home=None) -> int:
         print("Links quebrados:")
         for item in data["broken"]:
             print(f"  {item['note']} → {item['target']}")
+    print_confidential_omitted(data["confidential_omitted"])
     return 0
 
 
@@ -2107,13 +2424,15 @@ def cmd_export_notebooklm(args, config_home=None) -> int:
     write_export(folder, files)
     if args.json:
         print_json({"moc": moc, "out": str(folder), "notes": data["notes"], "files": list(files),
-                    "warnings": warnings})
+                    "warnings": warnings, "confidential_omitted": data["confidential_omitted"]})
         return 0
     print_warnings(warnings)
     print(f"Pacote do NotebookLM: {len(data['notes'])} notas de {moc} em {one_line(str(folder))}")
     for item in data["notes"]:
         print(f"  {item['file']} — {item['path']} ({item['origin']})")
     print(f"  {', '.join(name for name in files if name in EXPORT_EXTRA)}")
+    if data["confidential_omitted"]:
+        print(f"  ({data['confidential_omitted']} nota(s) confidencial(is) fora do pacote: nunca são exportadas)")
     print("Suba os arquivos como fontes no NotebookLM (references/notebooklm.md).")
     return 0
 
@@ -2207,10 +2526,34 @@ def free_raw_path(vault: Path, layout: dict, title: str) -> str:
     return candidate
 
 
+def file_digest(path: Path) -> tuple:
+    """(size in bytes, sha256 hex) of a stored file, read in blocks; only the numbers go into the vault."""
+    digest, size = hashlib.sha256(), 0
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+            size += len(block)
+    return size, digest.hexdigest()
+
+
+def check_confidential_ingest(args, url):
+    """ingest --confidential takes only a file and never extracts: a URL, --text-file, --kind or --timestamps =
+    BrainError (exit 2), before anything is written."""
+    if url is not None:
+        raise BrainError("--confidential só vale para arquivo: um link não é guardado como item confidencial")
+    given = [flag for flag, value in (("--text-file", args.text_file), ("--kind", args.kind),
+                                      ("--timestamps", args.timestamps)) if value]
+    if given:
+        raise BrainError(f"--confidential não extrai texto: não use {', '.join(given)} "
+                         "(o documento fica opaco, references/confidential.md)")
+
+
 def cmd_ingest(args, config_home=None) -> int:
     values, vault, layout = store_config(config_home)
     source = args.source.strip()
     url = source if URL_RE.match(source) else None
+    if args.confidential:
+        check_confidential_ingest(args, url)
     if args.context:
         check_context(args.context, values)
     if args.move:  # only an item of the inbox, checked before anything is written
@@ -2222,7 +2565,7 @@ def cmd_ingest(args, config_home=None) -> int:
     if url is None and not Path(source).is_file():
         raise BrainError(f"fonte não encontrada: {args.source}")
     kind = args.kind or detect_kind(source)
-    process = bool(kind) and not args.text_file and not args.no_process
+    process = bool(kind) and not args.text_file and not args.no_process and not args.confidential
     if process and not processor_of(kind, values["processors"]):
         process = False
         print_warnings([f"sem processador para {kind} — veja references/processors.md"])
@@ -2245,7 +2588,10 @@ def cmd_ingest(args, config_home=None) -> int:
         file_rel = f"{folder}/{moved.name}"
     else:
         file_rel = copy_to_files(Path(source), values, args.context)  # the copy comes first
-    extraction = ""
+    extraction, opaque = "", None
+    if args.confidential:  # opaque: never a processor, only the size and the hash of the stored file
+        opaque = file_digest(Path(values["files"]) / file_rel)
+        extraction = "; confidencial"
     if process:  # on the stored copy (or the URL); a failure keeps the raw and is written in the note
         try:
             extracted = run_processor(kind, url or str(Path(values["files"]) / file_rel), values["processors"],
@@ -2257,16 +2603,17 @@ def cmd_ingest(args, config_home=None) -> int:
             extraction = f"; extração falhou ({kind}): {e.reason}"
     raw_rel = free_raw_path(vault, layout, title)
     try:
-        write_new_file(vault / raw_rel, render_source_note(title, today(), args.context, file_rel, url, extracted))
+        write_new_file(vault / raw_rel, render_source_note(title, today(), args.context, file_rel, url, extracted,
+                                                           opaque))
     except OSError as e:
         where = "o arquivo foi movido para" if args.move else "a cópia ficou em"
         kept = f"; {where} {file_rel} (na pasta files)" if file_rel else ""
         raise BrainError(f"não consegui criar a nota de fonte {raw_rel}: {e.strerror or e}{kept}", 1) from e
     append_log(vault, layout, "ingest", f"{raw_rel} — {url or file_rel}{extraction}")
     if args.json:
-        print_json({"raw": raw_rel, "file": file_rel, "url": url})
+        print_json(dict({"raw": raw_rel, "file": file_rel, "url": url}, **({"confidential": True} if opaque else {})))
         return 0
-    print(f"Nota de fonte: {one_line(raw_rel)}")
+    print(f"Nota de fonte: {one_line(raw_rel)}" + (" (confidencial: texto não extraído)" if opaque else ""))
     if url:
         print(f"Link: {url}")
     else:
@@ -2287,10 +2634,27 @@ def source_value(source, vault: Path) -> str:
     return f"[[{rel[:-3] if rel.lower().endswith('.md') else rel}]]"
 
 
+def check_secret_ref(note_type: str, vault_ref):
+    """--vault-ref only with type secret-ref, which requires it in the <esquema>://<caminho> format = BrainError
+    (exit 2) otherwise. The reference is only validated, never opened (ADR-0014)."""
+    if note_type != SECRET_REF_TYPE:
+        if vault_ref is not None:
+            raise BrainError(f"--vault-ref só vale com --type {SECRET_REF_TYPE}")
+        return
+    if vault_ref is None:
+        raise BrainError(f"--type {SECRET_REF_TYPE} precisa de --vault-ref <esquema>://<caminho> "
+                         "(ex.: keepass://Pessoal/Banco) — o segredo fica no gerenciador de senhas")
+    if not is_vault_ref(vault_ref.strip()):
+        raise BrainError(f"--vault-ref fora do formato <esquema>://<caminho> (ex.: keepass://Pessoal/Banco): "
+                         f"{one_line(vault_ref)}")
+
+
 def cmd_new_note(args, config_home=None) -> int:
     values, vault, layout = store_config(config_home)
     if args.type not in NOTE_TYPES:
         raise BrainError(f"tipo desconhecido: {args.type} — use um de: {', '.join(NOTE_TYPES)}")
+    check_secret_ref(args.type, args.vault_ref)
+    vault_ref = (args.vault_ref or "").strip()
     title = " ".join(args.title.split())
     rel = note_path(title, args.context, values)
     tags = unique(frontmatter_tags(args.tags or ""))
@@ -2298,9 +2662,15 @@ def cmd_new_note(args, config_home=None) -> int:
     if not template.is_file():
         template = TEMPLATES_DIR / f"{args.type}.md"
     text = render_note(template.read_text(encoding="utf-8"), tags=tags, title=title, date=today(),
-                       context=args.context or "", source=source_value(args.source, vault))
+                       context=args.context or "", source=source_value(args.source, vault), vault_ref=vault_ref)
+    confidential = args.confidential or args.type == SECRET_REF_TYPE
+    if confidential:  # whatever the vault's template has: confidential: true (and vault_ref in a secret-ref)
+        keys = {"confidential": "true"}
+        if vault_ref:
+            keys["vault_ref"] = json.dumps(vault_ref, ensure_ascii=False)
+        text = with_frontmatter_keys(text, keys)
     write_new_file(vault / rel, text)
-    append_log(vault, layout, "new-note", f"{rel} — {args.type}")
+    append_log(vault, layout, "new-note", f"{rel} — {args.type}" + ("; confidencial" if confidential else ""))
     if args.json:
         print_json({"path": rel})
     else:
@@ -2370,7 +2740,9 @@ def cmd_index(args, config_home=None) -> int:
         if rel in own or (mocs and rel.startswith(mocs + "/")):
             continue
         text = path.read_bytes().decode("utf-8", errors="replace")
-        entries.append(index_entry(rel, text, contexts))
+        entry = index_entry(rel, text, contexts)
+        if not entry.confidential:  # a confidential note is never listed (SPEC-0050)
+            entries.append(entry)
     links = LinkIndex(paths)
     by_context = {name: [e for e in entries if e.context == name] for name in contexts}
 
@@ -3038,8 +3410,8 @@ def layout_paths(layout: dict, keys) -> list:
 
 def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
     """One warning per note with no outgoing link that resolves, no incoming link and outside any MOC (a MOC's
-    links are incoming links). Notes of raw/, inbox/, mocs/ and templates/ and index.md and log.md are not judged;
-    the lists of index.md and log.md do not count as incoming links."""
+    links are incoming links). Notes of raw/, inbox/, mocs/ and templates/, index.md and log.md and confidential
+    notes (never listed in a MOC) are not judged; the lists of index.md and log.md do not count as incoming links."""
     folders = [_link_key(folder) + "/" for folder in layout_paths(layout, LAYOUT_DIRS)]
     generated = generated_notes((note.path for note in notes), {"layout": layout})
     linked = set()
@@ -3052,7 +3424,7 @@ def check_orphan(notes: list, index: LinkIndex, layout: dict) -> list:
     return [Finding("orphan", note.path, "sem links de entrada nem de saída e fora de qualquer MOC",
                     "relacione com relate ou ligue a uma nota nova; se a nota tem contexto, index a põe no MOC dele")
             for note in notes if note.path not in linked and note.path not in generated
-            and not _link_key(note.path).startswith(tuple(folders))]
+            and not _link_key(note.path).startswith(tuple(folders)) and not is_confidential(note)]
 
 
 def check_stale_inbox(entries: list, stale_after: int) -> list:
@@ -3083,6 +3455,25 @@ def check_frontmatter(notes: list) -> list:
             found.append(Finding("frontmatter", note.path, f"type {note.note_type} sem {' e '.join(missing)}",
                                  f"acrescente {', '.join(missing)} ao frontmatter (references/note-types.md)"))
     return found
+
+
+def check_secret_in_note(notes: list) -> list:
+    """One warning per line of a note without confidential: true with a secret (find_secrets): "<path>:<line>"
+    and the kind, never the value."""
+    return [Finding("secret-in-note", f"{note.path}:{line}", kind,
+                    "tire o valor da nota e guarde no gerenciador de senhas; no vault, só uma nota secret-ref "
+                    "(references/confidential.md)")
+            for note in notes if not is_confidential(note) for line, kind in find_secrets(note.text)]
+
+
+def check_personal_data(notes: list, detectors=None, patterns=None) -> list:
+    """One warning per line and kind of personal data (find_personal_data) in a note without confidential: true:
+    "<path>:<line>" and the kind, never the value."""
+    return [Finding("personal-data", f"{note.path}:{line}", kind,
+                    "tire o dado da nota ou marque a nota com confidential: true; documento pessoal entra com "
+                    "ingest --confidential (references/confidential.md)")
+            for note in notes if not is_confidential(note)
+            for line, kind in find_personal_data(note.text, detectors, patterns)]
 
 
 def _repeats_group(pattern: str, i: int) -> bool:
@@ -3163,7 +3554,8 @@ class LintVault:
     """What the rules read, from a single scan of the vault (walk_vault): notes, the link index of the notes and
     of the attachments, every file path, the inbox items, the files folder (None = inaccessible), the valid
     conflict patterns and the config findings, each with the rule it affects."""
-    __slots__ = ("attachments", "config", "files", "inbox", "index", "notes", "paths", "patterns", "values")
+    __slots__ = ("attachments", "config", "detectors", "files", "inbox", "index", "notes", "paths", "patterns",
+                 "personal_patterns", "values")
 
     def __init__(self, values: dict):
         vault, layout = vault_dir(values), values["layout"]
@@ -3187,6 +3579,11 @@ class LintVault:
         self.config += [("conflict-copy", Finding("config", "brain-config.yml", problem,
                                                   "corrija conflict_patterns (references/maintenance.md)"))
                         for problem in problems]
+        self.detectors, self.personal_patterns, problems = compile_personal_data(values.get("lint"))
+        self.config += [("personal-data", Finding("config", "brain-config.yml", problem,
+                                                  "corrija lint.personal_data ou lint.personal_data_patterns "
+                                                  "(references/confidential.md)"))
+                        for problem in problems]
         self.files = Path(values["files"]) if values["files"] else None
         try:
             if self.files is None:
@@ -3207,6 +3604,8 @@ LINT_CHECKS = {  # rule -> check over the LintVault; "config" findings come from
     "orphan": lambda v: check_orphan(v.notes, v.index, v.values["layout"]),
     "stale-inbox": lambda v: check_stale_inbox(v.inbox, v.values["inbox_stale_days"]),
     "frontmatter": lambda v: check_frontmatter(v.notes),
+    "secret-in-note": lambda v: check_secret_in_note(v.notes),
+    "personal-data": lambda v: check_personal_data(v.notes, v.detectors, v.personal_patterns),
     "config": lambda v: [],
 }
 
@@ -3270,6 +3669,11 @@ def cmd_lint(args, config_home=None) -> int:
 
 # ---------------------------------------------------------------- cli
 
+def add_include_confidential(p: argparse.ArgumentParser):
+    p.add_argument(INCLUDE_CONFIDENTIAL, action="store_true",
+                   help="inclui notas com confidential: true (só quando a pessoa pede; references/confidential.md)")
+
+
 def context_add_parser() -> argparse.ArgumentParser:
     """`context add` (exactly "add" right after "context"); any other text after "context" is a query."""
     p = argparse.ArgumentParser(prog="brain.py context add", description="registra um contexto, cria a pasta e o MOC")
@@ -3306,6 +3710,7 @@ def main(argv=None) -> int:
     p.add_argument("--hops", type=int, default=1, help=f"passos de link a partir da busca (0..{MAX_HOPS}, padrão 1)")
     p.add_argument("--limit", type=int, default=8, help="resultados da busca (padrão 8)")
     p.add_argument("--max-chars", type=int, default=40000, help="soma máxima do conteúdo das notas (padrão 40000)")
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
@@ -3322,15 +3727,18 @@ def main(argv=None) -> int:
     p.add_argument("--type", help="só notas com este frontmatter.type")
     p.add_argument("--tag", help="só notas com esta tag")
     p.add_argument("--limit", type=int, default=10)
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("related", help="notas parecidas com uma nota ou com um texto, com os motivos; só leitura")
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--note", metavar="CAMINHO", help="caminho (ou nome) da nota de referência")
     group.add_argument("--text", metavar="TEXTO", help="texto livre de referência")
     p.add_argument("--limit", type=int, default=10)
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("links", help="links de saída, backlinks e links quebrados de uma nota; só leitura")
     p.add_argument("note", metavar="NOTA", help="caminho ou nome da nota")
+    add_include_confidential(p)
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("ingest", help="guarda uma fonte (arquivo ou URL): cópia em files e nota de fonte em raw/")
     p.add_argument("source", metavar="FONTE", help="arquivo local ou URL http(s)")
@@ -3341,6 +3749,8 @@ def main(argv=None) -> int:
     p.add_argument("--kind", help="tipo da fonte para o processador (padrão: detectado; youtube, video, audio, pdf)")
     p.add_argument("--no-process", action="store_true", help="não roda o processador do tipo")
     p.add_argument("--timestamps", action="store_true", help="legendas com '[mm:ss]' (no YouTube, link para o trecho)")
+    p.add_argument("--confidential", action="store_true",
+                   help="documento confidencial: guarda o arquivo opaco (tamanho e sha256), nunca roda processador")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("process", help="roda o processador do tipo da fonte e devolve o texto (references/processors.md)")
     p.add_argument("source", metavar="ENTRADA", help="arquivo local ou URL http(s)")
@@ -3353,6 +3763,9 @@ def main(argv=None) -> int:
     p.add_argument("--context", help="contexto (sem ele, a nota vai para para.resources)")
     p.add_argument("--source", metavar="CAMINHO_OU_URL", help="nota de fonte (raw/...) ou URL")
     p.add_argument("--tags", metavar="A,B", help="tags separadas por vírgula")
+    p.add_argument("--vault-ref", metavar="REF",
+                   help="só com --type secret-ref: onde o segredo está no gerenciador (<esquema>://<caminho>)")
+    p.add_argument("--confidential", action="store_true", help="marca a nota com confidential: true")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("relate", help="acrescenta '- [[PARA]] — motivo' na seção Relations de DE")
     p.add_argument("source", metavar="DE", help="caminho ou nome da nota")

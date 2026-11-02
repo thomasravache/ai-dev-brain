@@ -35,3 +35,9 @@ inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inb
 # conflict_patterns:
 #   - '(?P<base>.+) \(\d+\)\.md$'
 #   - '(?P<base>.+)[ _-]conflict.*\.md$'
+# lint: detectores de dado pessoal da regra personal-data (references/confidential.md). Ausente = todos ligados e
+# nenhum padrão extra. Para escolher, por exemplo:
+# lint:
+#   personal_data: [cpf, cnpj, card, labeled-document]
+#   personal_data_patterns:
+#     nif: '\bNIF:\s*\d{9}\b'
