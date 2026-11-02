@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 4, approved 5, implemented 33
+- Validação (G0): **5 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 4, approved 4, in-progress 1, implemented 33
 - Impedimentos: **0 aberto(s)**, 16 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0037  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0037
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0037 |
@@ -65,7 +65,7 @@ flowchart LR
     S0034["SPEC-0034<br/>org-atlas: coletores generic e GitHub"]:::implemented
     S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::implemented
     S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::implemented
-    S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::approved
+    S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::inprogress
     S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::approved
     S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::approved
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
@@ -134,7 +134,7 @@ flowchart LR
 | [SPEC-0034](SPEC-0034-org-atlas-coletores-generic-e-github.md) | org-atlas: coletores generic e GitHub | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
-| [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
+| [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | in-progress | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
 | [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@1 |
 | [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@1 |
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
