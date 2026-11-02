@@ -172,7 +172,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=9, errors=16)); nota: red da org-atlas conferido em worktree limpa em dc295e8: FAILED (failures=9, errors=16), só testes da SPEC-0039; se a cadeia parar antes, é o SPEC-0004:IT-10 (tempo, sob carga) — dc295e8 | 2026-11-02 |
-| G2 Green | PENDING | | |
+| G2 Green | FAIL | test exit 1 (FAILED (failures=2)); lint exit 0 (All checks passed!) — 6a555da | 2026-11-02 |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
