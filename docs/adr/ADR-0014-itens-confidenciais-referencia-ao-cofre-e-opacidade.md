@@ -1,7 +1,7 @@
 ---
 id: ADR-0014
 title: "Itens confidenciais: referência ao cofre e opacidade"
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-02
 pillars: [arquitetura]

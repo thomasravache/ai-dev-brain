@@ -1,7 +1,7 @@
 ---
 id: ADR-0015
 title: Rotação de backups como única remoção do brain.py
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-02
 pillars: [arquitetura]
@@ -33,7 +33,7 @@ O ADR-0007 diz que o `brain.py` só cria e acrescenta, e nunca apaga arquivo do 
 **Opção escolhida:** A, porque controla o espaço sem trabalho manual e limita a remoção ao que a própria skill criou.
 
 **Regras (verificáveis):**
-- Remoção de arquivo (`os.remove`, `os.unlink`, `Path.unlink`, `os.rmdir`, `Path.rmdir`, `shutil.rmtree`) só dentro de `rotate_backups`. A limpeza do `.partial` que o próprio backup criou, quando a escrita falha, fica na mesma função.
+- Remoção de arquivo (`os.remove`, `os.unlink`, `Path.unlink`, `os.rmdir`, `Path.rmdir`, `shutil.rmtree`) só dentro de `rotate_backups` e de uma lista fechada de limpezas que só removem o que a própria chamada criou: `write_export` (pasta de staging), `copy_to_files` (cópia incompleta) e `move_out_of_inbox` (reserva vazia). A limpeza do `.partial` que o próprio backup criou, quando a escrita falha, fica em `rotate_backups`. Entrar na lista exige emenda deste ADR.
 - `rotate_backups` só considera nomes `second-brain-AAAA-MM-DD-HHMMSS.zip` e `second-brain-AAAA-MM-DD-HHMMSS-files.zip`, conta cada tipo separado, e só age dentro de um destino de backup.
 - Um destino de backup nunca pode estar dentro do vault nem da pasta `files` (exit 2 antes de gravar).
 - A rotação só roda num destino depois que o zip novo desse destino foi gravado e passou na verificação. O zip novo nunca é removido.

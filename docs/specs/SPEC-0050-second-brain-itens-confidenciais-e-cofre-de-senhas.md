@@ -4,7 +4,7 @@ title: "second-brain: itens confidenciais e cofre de senhas"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0023, SPEC-0024, SPEC-0044]
@@ -14,8 +14,8 @@ touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, sk
 adrs: [ADR-0007, ADR-0013, ADR-0014]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-02
 ---
 
 # SPEC-0050 — second-brain: itens confidenciais e cofre de senhas
@@ -212,6 +212,28 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Marca confidencial, secret-ref e ingest opaco**
+- [ ] Red: UT-01, UT-02, IT-01, IT-02 e IT-03 com a tag `SPEC-0050:<ID>`, falhando pelo motivo certo
+- [ ] Green: `confidential`/`vault_ref`, `new-note --type secret-ref --vault-ref` e `--confidential`, `ingest --confidential` sem processador (size, sha256)
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Fora de vista por padrão**
+- [ ] Red: UT-07, IT-04 e IT-05 falhando pelo motivo certo
+- [ ] Green: filtro em `search`, `related`, `context`, `links`, `index` e `export-notebooklm`, `--include-confidential` e `confidential_omitted`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: Lint, doctor e instruções**
+- [ ] Red: UT-03, UT-04, UT-05, UT-06, UT-08, IT-06 e IT-07 falhando pelo motivo certo
+- [ ] Green: regras `secret-in-note` e `personal-data` (configuráveis, sem imprimir valor), `orphan` sem confidenciais, linha `confidential` do `doctor`, `SKILL.md`, `references/confidential.md` e as referências tocadas
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

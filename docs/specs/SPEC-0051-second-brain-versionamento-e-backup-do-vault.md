@@ -4,7 +4,7 @@ title: "second-brain: versionamento e backup do vault"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0017]
@@ -14,8 +14,8 @@ touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, sk
 adrs: [ADR-0007, ADR-0008, ADR-0015]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-02
 ---
 
 # SPEC-0051 — second-brain: versionamento e backup do vault
@@ -166,7 +166,7 @@ doctor, por destino:
 | Restaurar tudo | `--to` pasta nova | vault (e files) extraídos; pasta com arquivos ou dentro do vault, exit 2 | IT-06 |
 | Doctor | destino com backup recente, velho, sem backup, inacessível, nenhum destino | uma linha OK ou AVISO por caso | IT-08 |
 | Instruções | `SKILL.md` e `references/backup.md` | destinos, quando rodar, restaurar, agendar, aviso de cifra | UT-06 |
-| Remoção só na rotação | código do `brain.py` | apagar arquivo só em `rotate_backups` | UT-07 |
+| Remoção só na rotação | código do `brain.py` | apagar arquivo só em `rotate_backups` e na lista fechada de limpezas do que a própria chamada criou | UT-07 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 
@@ -180,7 +180,7 @@ doctor, por destino:
 - **UT-04** — Dado um zip íntegro, um com uma entrada alterada, um sem uma entrada do manifesto e um truncado, quando verificados, então só o primeiro passa, e os outros trazem o motivo (hash diferente, entrada faltando, zip inválido).
 - **UT-05** — Dado entradas `vault/a.md`, `vault/../x.md`, `/etc/x` e `vault/sub/../../x.md`, quando checadas para extração, então só a primeira é aceita.
 - **UT-06** — Dado `SKILL.md` e `references/backup.md`, quando lidos, então trazem: pelo menos dois destinos, um fora do provedor e outro em outro provedor ou conta; rodar antes de operação grande e quando o `doctor` avisar; restaurar com `restore`, que cria arquivo novo; agendar pelo agendador do sistema, sem instalar nada; e o aviso de que o zip não é cifrado.
-- **UT-07** — Dado o código de `skills/second-brain/scripts/brain.py`, quando o teste de arquitetura do ADR-0015 analisa as chamadas, então `os.remove`, `os.unlink`, `Path.unlink`, `os.rmdir`, `Path.rmdir` e `shutil.rmtree` só aparecem dentro de `rotate_backups`.
+- **UT-07** — Dado o código de `skills/second-brain/scripts/brain.py`, quando o teste de arquitetura do ADR-0015 analisa as chamadas, então `os.remove`, `os.unlink`, `Path.unlink`, `os.rmdir`, `Path.rmdir` e `shutil.rmtree` só aparecem dentro de `rotate_backups` e das funções de limpeza já existentes, numa lista fechada (`write_export`, `copy_to_files` e `move_out_of_inbox`, que só removem o que a própria chamada criou); uma remoção em qualquer outra função reprova o teste.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um vault criado pelo `init`, quando roda `backup target add <pasta>` duas vezes e com uma pasta dentro do vault, então a configuração local tem a pasta uma vez, a segunda chamada diz "destino já existe" com exit 0, e a terceira sai com 2 sem mudar a configuração.
@@ -224,6 +224,28 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Configuração, manifesto e rotação**
+- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05 e UT-07 com a tag `SPEC-0051:<ID>`, falhando pelo motivo certo
+- [ ] Green: leitura de `backup`, manifesto sha256, verificação, checagem de entradas e `rotate_backups`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Comandos backup e restore**
+- [ ] Red: IT-01 a IT-07 falhando pelo motivo certo
+- [ ] Green: `backup target add`, `backup` (.partial → verificado → renomeado → rotação), `backup list`, `backup verify`, `restore NOTA` e `restore --to`
+- [ ] Refactor mantendo tudo verde
+
+**Fase 3: Doctor e instruções**
+- [ ] Red: IT-08 e UT-06 falhando pelo motivo certo
+- [ ] Green: linhas `backup` do `doctor`, `SKILL.md`, `references/backup.md` e `references/config.md`
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -243,6 +265,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-02 | G1 | spec | UT-07 e ADR-0015 exigem remoção de arquivo só em rotate_backups, mas o brain.py já remove, em write_export, copy_to_files e move_out_of_inbox, só o que a própria chamada criou (pasta de staging, cópia incompleta, reserva vazia). O teste falharia sem relação com o backup. | grep de os.remove/unlink/rmdir/rmtree no brain.py 2026.11.2 | Architect + thomas | Emenda v1 (contrato inalterado) — lista fechada de limpezas no UT-07 e no ADR-0015 | 2026-11-02 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -284,3 +307,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0051`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (emenda v1, contrato inalterado) | 2026-11-02 | UT-07 e o Mapa aceitam, além de `rotate_backups`, a lista fechada de limpezas existentes (`write_export`, `copy_to_files`, `move_out_of_inbox`), que só removem o que a própria chamada criou; ADR-0015 ajustado | IMP-01: o `brain.py` 2026.11.2 já tem essas três limpezas, e o teste reprovaria código correto | Nenhuma | thomas, 2026-11-02 ("pode fazer no piloto automático com o recomendado") |
