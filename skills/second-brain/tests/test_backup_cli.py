@@ -31,6 +31,7 @@ import json
 import os
 import re
 import shutil
+import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
@@ -408,3 +409,118 @@ class DoctorTest(BackupCliTestCase):
         """SPEC-0051:IT-08"""
         rows = self.backup_rows()
         self.assertIn(("AVISO", "backup", "nenhum destino configurado (references/backup.md)"), rows)
+
+
+# ---------------------------------------------------------------- regressões da revisão G4 (emenda v2)
+
+CAN_CHMOD = os.name != "nt" and getattr(os, "geteuid", lambda: 0)() != 0
+
+
+class BackupHardeningTest(BackupCliTestCase):
+    @unittest.skipUnless(CAN_CHMOD, "chmod 000 não impede a leitura como root nem no Windows")
+    def test_unreadable_vault_file_is_skipped_and_the_rest_is_backed_up(self):
+        """SPEC-0051:IT-02"""
+        secret = self.write("projects/college/Sem leitura.md", "# sem leitura\n")
+        secret.chmod(0)
+        self.addCleanup(secret.chmod, 0o644)
+        self.add_target(self.a)
+        self.add_target(self.b)
+        data = self.backup_json(code=1)
+        skipped = [str(item) for item in data.get("skipped", [])]
+        self.assertTrue([s for s in skipped if s.endswith("projects/college/Sem leitura.md")], f"skipped: {data}")
+        for folder in (self.a, self.b):
+            self.assertEqual(self.target_of(data, folder)["status"], "ok")
+            zip_path = folder / data["name"]
+            self.assertExit(self.box.run("backup", "verify", zip_path), 0)
+            entries = manifest_of(zip_path)["entries"]
+            self.assertIn(f"vault/{NOTE_A}", entries)
+            self.assertNotIn("vault/projects/college/Sem leitura.md", entries)
+        other = self.box.root / "backups-c"
+        other.mkdir()
+        out = self.box.run("backup", "--dest", other)
+        self.assertExit(out, 1)
+        self.assertIn("Sem leitura.md", output(out))
+
+    def test_symlink_to_a_file_outside_the_vault_is_not_backed_up(self):
+        """SPEC-0051:IT-02"""
+        outside = self.box.root / "fora.md"
+        outside.write_text("# fora do vault\n", encoding="utf-8")
+        (self.box.vault / "projects" / "college" / "Link fora.md").symlink_to(outside)
+        name = self.backup_json("--dest", self.a)["name"]
+        entries = manifest_of(self.a / name)["entries"]
+        self.assertNotIn("vault/projects/college/Link fora.md", entries)
+        with zipfile.ZipFile(self.a / name) as zf:
+            self.assertFalse([n for n in zf.namelist() if n.endswith("Link fora.md")], zf.namelist())
+            self.assertNotIn(b"# fora do vault\n", [zf.read(n) for n in zf.namelist()])
+        self.assertIn(f"vault/{NOTE_A}", entries)
+
+    def test_same_target_by_two_paths_counts_once(self):
+        """SPEC-0051:IT-01 SPEC-0051:IT-02"""
+        alias = self.box.root / "apelido-a"
+        alias.symlink_to(self.a, target_is_directory=True)
+        self.add_target(self.a)
+        before = self.local_config().read_bytes()
+        out = self.add_target(alias)
+        self.assertIn("destino já existe", output(out))
+        self.assertEqual(self.local_config().read_bytes(), before, "configuração local não muda")
+        out = self.box.run("backup", "--dest", self.a, "--dest", alias)
+        self.assertExit(out, 0)
+        self.assertEqual(len(patterned(self.a)), 1, patterned(self.a))
+
+
+class StalePartialTest(BackupCliTestCase):
+    def test_stale_partial_is_warned_by_list_and_doctor_and_never_removed(self):
+        """SPEC-0051:IT-04 SPEC-0051:IT-08"""
+        self.add_target(self.a)
+        moment = dt.datetime.now().replace(microsecond=0) - dt.timedelta(days=1)
+        self.fake_backup(self.a, moment - dt.timedelta(days=1))
+        partial = self.a / (stamp(moment) + ".partial")
+        partial.write_bytes(b"PK\x03\x04 interrompido")
+        out = self.box.run("backup", "list")
+        self.assertExit(out, 0)
+        self.assertTrue([line for line in out.stdout.splitlines() if "AVISO" in line and ".partial" in line],
+                        f"backup list sem AVISO do .partial:\n{output(out)}")
+        rows = [row for row in doctor_lines(self.box.run("doctor").stdout)
+                if row[0] == "AVISO" and row[1].startswith("backup") and ".partial" in f"{row[1]} {row[2]}"]
+        self.assertTrue(rows, "doctor sem AVISO do .partial")
+        self.shared_block("backup:\n  keep: 1\n")
+        self.backup_json()
+        self.assertEqual(partial.read_bytes(), b"PK\x03\x04 interrompido", "a rotação nunca remove o .partial")
+
+
+class RestoreHardeningTest(BackupCliTestCase):
+    def test_restore_note_into_a_folder_linked_outside_the_vault_exits_2(self):
+        """SPEC-0051:IT-05"""
+        outside = self.box.root / "pasta-fora"
+        outside.mkdir()
+        (self.box.vault / "ext").symlink_to(outside, target_is_directory=True)
+        zip_path = make_backup_zip(self.box.root / "bk" / stamp(dt.datetime(2026, 11, 2, 8)),
+                                   {"vault/ext/o.md": b"# o\n", "vault/a.md": b"# a\n"})
+        out = self.box.run("restore", "ext/o.md", "--from", zip_path)
+        self.assertExit(out, 2)
+        self.assertEqual(list(outside.iterdir()), [], "nada gravado fora do vault")
+
+    def test_restore_json_reports_from_as_an_absolute_path(self):
+        """SPEC-0051:IT-05 SPEC-0051:IT-06"""
+        name = self.backup_json("--dest", self.a)["name"]
+        relative = f"backups-a/{name}"  # relativo ao cwd do Sandbox (a raiz)
+        note = self.json_of("restore", NOTE_A, "--from", relative)
+        self.assertTrue(Path(note["from"]).is_absolute(), note)
+        self.assertEqual(Path(note["from"]).resolve(), (self.a / name).resolve())
+        everything = self.json_of("restore", "--from", relative, "--to", self.box.root / "tudo")
+        self.assertTrue(Path(everything["from"]).is_absolute(), everything)
+        self.assertEqual(Path(everything["from"]).resolve(), (self.a / name).resolve())
+
+
+class VerifyCountTest(BackupCliTestCase):
+    def test_verify_json_counts_the_verified_zips(self):
+        """SPEC-0051:IT-04"""
+        self.add_target(self.a)
+        self.add_target(self.b)
+        shutil.rmtree(self.b)
+        out = self.box.run("backup", "verify", "--json")
+        self.assertNotIn("Traceback", output(out))
+        self.assertEqual(json.loads(out.stdout).get("verified"), 0, out.stdout)
+        self.backup_json(code=1)
+        out = self.box.run("backup", "verify", "--json")
+        self.assertEqual(json.loads(out.stdout).get("verified"), 1, out.stdout)

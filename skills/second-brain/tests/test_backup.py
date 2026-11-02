@@ -176,6 +176,15 @@ class VerifyTest(unittest.TestCase):
 
 
 class SafeEntryTest(unittest.TestCase):
+    def test_entries_ending_in_slash_are_not_accepted(self):
+        """SPEC-0051:UT-05"""
+        safe_entry = fn("safe_entry", SPEC)
+        for name in ("vault/", "vault/sub/", "files/"):
+            with self.subTest(name=name):
+                self.assertFalse(safe_entry(name), name)
+        self.assertTrue(safe_entry("vault/sub/a.md"))
+
+
     def test_only_entries_without_dotdot_or_absolute_path_are_accepted(self):
         """SPEC-0051:UT-05"""
         safe_entry = fn("safe_entry", SPEC)

@@ -160,6 +160,33 @@ class RemovalRulesTest(unittest.TestCase):
         self.assertIn("scripts/brain.py:18", findings[5])
         self.assertIn("remove", findings[5])
 
+    def test_aliases_and_references_to_removal_functions_are_reported(self):
+        """SPEC-0051:UT-07"""
+        source = (
+            "import os as o\n"
+            "import shutil as s\n"
+            "import os\n"
+            "from pathlib import Path\n"
+            "def rotate_backups(folder, keep):\n"
+            "    o.remove(folder / 'a.zip')\n"
+            "def sneaky(p):\n"
+            "    o.remove(p)\n"
+            "    rm = os.remove\n"
+            "    u = Path.unlink\n"
+            "    getattr(os, 'remove')(p)\n"
+            "    s.rmtree(p)\n"
+            "    getattr(o, 'rmdir')(p)\n"
+            "    getattr(p, 'unlink')()\n"
+            "    names = ['a']\n"
+            "    names.remove('a')\n"
+            "    getattr(names, 'remove')('a')\n"
+            "    return rm, u\n"
+        )
+        findings = removal_findings(source, "scripts/brain.py", ("rotate_backups",))
+        lines = [int(f.split(":")[1].split(" ")[0]) for f in findings]
+        self.assertEqual(lines, [8, 9, 10, 11, 12, 13, 14], report(findings))
+        self.assertTrue(all("sneaky" in f for f in findings), report(findings))
+
     def test_brain_removes_files_only_in_rotate_backups_and_the_closed_cleanup_list(self):
         """SPEC-0051:UT-07"""
         findings = removal_findings(script_source(), "scripts/brain.py", ALLOWED_REMOVAL_FUNCTIONS)
