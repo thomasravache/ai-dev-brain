@@ -175,9 +175,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 6bb888d | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6bb888d | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 3, 6bb888d): APPROVED — B1 da rodada 2 corrigido (máscara por componente e por radical em path, detail, suggestion, --json e stderr); rodadas anteriores conferidas de novo; 3 menores de máscara em padrões extras montados para isso, na SPEC-0048 — 6bb888d | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do PR #20 em 6058173 verde (run 41494254877 Python 3.9/3.15; run 41494258273 sdd/pr-check) — 6058173 | 2026-11-02 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
