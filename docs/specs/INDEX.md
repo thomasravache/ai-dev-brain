@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 11, in-progress 1, implemented 28
+- Validação (G0): **3 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 10, in-progress 2, implemented 28
 - Impedimentos: **0 aberto(s)**, 15 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,7 +23,7 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0050  
+**Em andamento:** SPEC-0050, SPEC-0051  
 **Paradas por impedimento:** —  
 **Próximo lote:** SPEC-0032
 
@@ -31,8 +31,8 @@ Perfil: **minimo**
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0050 | second-brain: itens confidenciais e cofre de senhas | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0032 | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full/M | approved | ✅ pronta |  |
+| 2 | SPEC-0051 | second-brain: versionamento e backup do vault | full/M | in-progress | 🔄 em andamento | saiu da onda 1: arquivos em comum com SPEC-0050 |
 | 2 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | approved | ⛔ aguarda implementação de SPEC-0032 |  |
-| 2 | SPEC-0051 | second-brain: versionamento e backup do vault | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0050 |
 | 3 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033 |
 | 3 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0050; saiu da onda 2: arquivos em comum com SPEC-0051 |
 | 4 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033; saiu da onda 3: arquivos em comum com SPEC-0034 |
@@ -62,7 +62,7 @@ flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
   S0044["SPEC-0044<br/>second-brain: captura e leitura pelo co…"]:::implemented
   S0050["SPEC-0050<br/>second-brain: itens confidenciais e cof…"]:::inprogress
-  S0051["SPEC-0051<br/>second-brain: versionamento e backup do…"]:::approved
+  S0051["SPEC-0051<br/>second-brain: versionamento e backup do…"]:::inprogress
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0017["SPEC-0017<br/>second-brain: esqueleto, configuração e…"]:::implemented
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
@@ -154,7 +154,7 @@ flowchart LR
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | in-progress | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
-| [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | approved | 2026-11-02 | — | SPEC-0017 | — |
+| [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | in-progress | 2026-11-02 | — | SPEC-0017 | — |
 
 ## ADRs
 

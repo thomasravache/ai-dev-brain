@@ -249,8 +249,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 0192fc4 | 2026-11-02 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 0192fc4 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (0192fc4; 2ª rodada após emenda v2: CRLF/BOM, [confidencial] no export, MOC confidencial exit 2, cartão de dígitos iguais, vault_ref fullmatch, ordem do lint; 2 nits de doc não bloqueantes) — 0192fc4 | 2026-11-02 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — e0ee5a7 | 2026-11-02 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
 

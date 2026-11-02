@@ -4,7 +4,7 @@ title: "second-brain: versionamento e backup do vault"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0017]
