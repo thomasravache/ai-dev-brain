@@ -4,7 +4,7 @@ title: "second-brain: localizar o vault pelo conector em sessão sem configuraç
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0044]
