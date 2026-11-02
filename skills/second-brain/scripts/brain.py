@@ -2564,23 +2564,37 @@ def rotate_backups(folder, keep: int = BACKUP_DEFAULTS["keep"], new=None, discar
 
 def tree_files(root: Path):
     """(absolute path, posix path relative to root) of every file below root, in path order (hidden folders
-    included: a backup keeps .obsidian/ and .trash/)."""
+    included: a backup keeps .obsidian/ and .trash/). Left out: what is not a regular file (a broken link, a socket,
+    a pipe) and a symbolic link that points outside root (its content is not the vault's); folder links are not
+    followed (os.walk)."""
+    real_root = Path(root).resolve()
     for base, dirs, files in os.walk(root):
         dirs.sort()
         rel = Path(base).relative_to(root).as_posix()
         for name in sorted(files):
-            if (Path(base) / name).is_file():  # a broken link, a socket or a pipe is not content
-                yield Path(base) / name, name if rel == "." else f"{rel}/{name}"
+            path = Path(base) / name
+            if not path.is_file():
+                continue
+            if path.is_symlink() and not is_inside(str(path.resolve()), str(real_root)):
+                continue
+            yield path, name if rel == "." else f"{rel}/{name}"
 
 
-def build_manifest(vault, files=None, clock=None) -> dict:
+def build_manifest(vault, files=None, clock=None, skipped=None) -> dict:
     """brain-backup.json of a backup: brain_version, created, with_files (files given) and entries, the sha256 of
-    each "vault/<rel>" and "files/<rel>". Paths are relative: no folder of this machine goes into the zip."""
+    each "vault/<rel>" and "files/<rel>". Paths are relative: no folder of this machine goes into the zip.
+    A file that cannot be read stays out of the entries; its "vault/<rel>" goes into `skipped` (a list) when given,
+    else the OSError propagates."""
     entries = {}
     for root, folder in (("vault", vault), ("files", files)):
         if folder is not None:
             for path, rel in tree_files(Path(folder)):
-                entries[f"{root}/{rel}"] = file_digest(path)[1]
+                try:
+                    entries[f"{root}/{rel}"] = file_digest(path)[1]
+                except OSError:
+                    if skipped is None:
+                        raise
+                    skipped.append(f"{root}/{rel}")
     return {"brain_version": BRAIN_VERSION, "created": (clock or dt.datetime.now)().isoformat(timespec="seconds"),
             "with_files": files is not None, "entries": entries}
 
@@ -2621,10 +2635,10 @@ def write_backup_zip(partial: Path, manifest: dict, vault: Path, files=None):
 
 
 def safe_entry(name: str) -> bool:
-    """False for a zip entry that could land outside the destination: empty, absolute ("/x", "\\x", "C:..."), or
-    with a ".." part."""
+    """False for a zip entry that could land outside the destination: empty, absolute ("/x", "\\x", "C:..."), a
+    folder (ending in "/"), or with a ".." part."""
     text = str(name).replace("\\", "/")
-    if not text or text.startswith("/") or re.match(r"^[A-Za-z]:", text) or "\x00" in text:
+    if not text or text.startswith("/") or text.endswith("/") or re.match(r"^[A-Za-z]:", text) or "\x00" in text:
         return False
     return ".." not in text.split("/")
 
@@ -2711,12 +2725,43 @@ def check_backup_target(target: str, values: dict, what: str) -> str:
     return folder
 
 
+def same_folder(a: str, b: str) -> bool:
+    """True when a and b are the same folder: the same resolved path, or the same folder on disk (samefile)."""
+    if os.path.realpath(a) == os.path.realpath(b):
+        return True
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def distinct_folders(folders) -> list:
+    """folders without repeats, the first spelling of each folder kept (same_folder)."""
+    kept = []
+    for folder in folders:
+        if not any(same_folder(folder, other) for other in kept):
+            kept.append(folder)
+    return kept
+
+
+def stale_partials(folder: Path) -> list:
+    """Names "<backup name>.partial" in a target: left by an interrupted backup (or one running right now). Only
+    reported: brain.py never removes them (ADR-0015); the person can delete them by hand."""
+    names = [entry.name for entry in os.scandir(folder) if entry.name.endswith(BACKUP_PARTIAL)
+             and backup_moment(entry.name[:-len(BACKUP_PARTIAL)]) and entry.is_file(follow_symlinks=False)]
+    return sorted(names)
+
+
+PARTIAL_HINT = "backup interrompido; pode ser apagado à mão (references/backup.md)"
+
+
 def cmd_backup_target_add(args, config_home=None) -> int:
     config = read_config(config_home)
     values, local_path = config["values"], local_config_path(config_home)
     folder = check_backup_target(args.folder, values, "destino")
-    if folder in values["backup_targets"]:
-        print(f"destino já existe: {folder}")
+    known = next((target for target in values["backup_targets"] if same_folder(folder, target)), None)
+    if known is not None:
+        print(f"destino já existe: {known}" + (f" (mesma pasta de {folder})" if known != folder else ""))
         return 0
     local = read_yaml(local_path)
     local["backup_targets"] = values["backup_targets"] + [folder]
@@ -2780,25 +2825,30 @@ def cmd_backup(args, config_home=None) -> int:
     targets = args.dest or values["backup_targets"]
     if not targets:
         raise BrainError(NO_BACKUP_TARGET)
-    folders = unique(check_backup_target(target, values, "--dest" if args.dest else "destino") for target in targets)
+    folders = distinct_folders(check_backup_target(target, values, "--dest" if args.dest else "destino")
+                               for target in targets)
     with_files = args.with_files or settings["with_files"]
     files = values["files"] if with_files else None
     if with_files and not (files and Path(files).is_dir()):
         raise BrainError(f"pasta files não encontrada: {files or '(sem files na configuração local)'}", 1)
     clock = dt.datetime.now().replace(microsecond=0)
     name = backup_name(with_files, clock=lambda: clock)
-    manifest = build_manifest(vault, Path(files) if files else None, clock=lambda: clock)
+    skipped = []  # files that could not be read: out of the zip, and the exit is 1
+    manifest = build_manifest(vault, Path(files) if files else None, clock=lambda: clock, skipped=skipped)
     results = [backup_to(Path(folder), name, manifest, vault, files, settings["keep"]) for folder in folders]
     ok = sum(1 for item in results if item["status"] == "ok")
     if ok:
         failed = len(results) - ok
         append_log(vault, values["layout"], "backup",
-                   f"— {name} → {ok} destino(s)" + (f", {failed} falhou(aram)" if failed else ""))
-    code = 0 if ok == len(results) else 1
+                   f"— {name} → {ok} destino(s)" + (f", {failed} falhou(aram)" if failed else "")
+                   + (f", {len(skipped)} arquivo(s) sem leitura fora do zip" if skipped else ""))
+    code = 0 if ok == len(results) and not skipped else 1
     if args.json:
-        print_json({"name": name, "entries": len(manifest["entries"]), "targets": results})
+        print_json({"name": name, "entries": len(manifest["entries"]), "targets": results, "skipped": skipped})
         return code
     print(f"Backup {name} — {len(manifest['entries'])} entradas")
+    for item in skipped:
+        print(f"AVISO {one_line(item)} — sem leitura: ficou fora do zip")
     for item in results:
         print(f"{'OK' if item['status'] == 'ok' else 'ERRO'} {one_line(item['path'])} — {one_line(item['detail'])}")
         for removed in item["removed"]:
@@ -2811,11 +2861,12 @@ def cmd_backup_list(args, config_home=None) -> int:
     targets = []
     for target in values["backup_targets"]:
         folder = Path(target)
-        item = {"path": target, "status": "ok", "detail": "", "backups": []}
+        item = {"path": target, "status": "ok", "detail": "", "backups": [], "partials": []}
         problem = target_problem(folder)
         if problem is None:
             try:
                 item["backups"] = [zip_summary(folder / name) for name in backup_names(folder)]
+                item["partials"] = stale_partials(folder)
             except OSError as e:
                 problem = e.strerror or str(e)
         if problem:
@@ -2834,6 +2885,8 @@ def cmd_backup_list(args, config_home=None) -> int:
             entries = backup["entries"] if backup["entries"] is not None else backup.get("detail", "?")
             print(f"  {backup['name']}  {backup['created']}  {backup['size']} bytes  {entries} entradas"
                   + ("  (com files)" if backup["with_files"] else ""))
+        for partial in item["partials"]:
+            print(f"  AVISO {partial} — {PARTIAL_HINT}")
     return 0
 
 
@@ -2863,7 +2916,8 @@ def cmd_backup_verify(args, config_home=None) -> int:
                 results.append((path, *verify_backup(path)))
     code = 0 if all(ok for _, ok, _ in results) else 1
     if args.json:
-        print_json({"ok": code == 0, "backups": [{"zip": str(path), "ok": ok, "detail": detail}
+        print_json({"ok": code == 0, "verified": len(results),
+                    "backups": [{"zip": str(path), "ok": ok, "detail": detail}
                                                   for path, ok, detail in results],
                     "warnings": [{"path": target, "detail": detail} for target, detail in warnings]})
         return code
@@ -2875,8 +2929,9 @@ def cmd_backup_verify(args, config_home=None) -> int:
 
 
 def restore_zip(source: str) -> Path:
-    """--from of restore: an existing zip (missing = exit 2) that passes verify_backup (else exit 1)."""
-    path = Path(source).expanduser()
+    """--from of restore, as an absolute path: an existing zip (missing = exit 2) that passes verify_backup (else
+    exit 1)."""
+    path = Path(absolute(source))
     if not path.is_file():
         raise BrainError(f"zip não encontrado: {source}")
     ok, detail = verify_backup(path)
@@ -2914,6 +2969,8 @@ def cmd_restore_note(args, config_home=None) -> int:
             raise BrainError(f"nota não está no backup: {rel} ({path.name})")
         data = zf.read(f"vault/{rel}")
     date, n = today(), 0
+    if not inside_on_disk(vault / restored_name(rel, date), vault):  # a folder linked outside the vault
+        raise BrainError(f"restore fora do vault: {rel} — a pasta aponta para fora do vault; nada foi gravado")
     while not create_bytes(vault / restored_name(rel, date, n), data):
         n += 1
     new = restored_name(rel, date, n)
@@ -3008,6 +3065,10 @@ def backup_items(values: dict) -> list:
                 rows.append(("AVISO", item, f"último há {days} dia(s), mais que warn_days ({warn_days}) ({names[0]})"))
             else:
                 rows.append(("OK", item, f"último há {days} dia(s) ({names[0]})"))
+        if problem is None:
+            with contextlib.suppress(OSError):
+                rows += [("AVISO", f"backup {target} .partial", f"{name} — {PARTIAL_HINT}")
+                         for name in stale_partials(Path(target))]
     return rows
 
 

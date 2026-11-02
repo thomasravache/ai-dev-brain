@@ -22,6 +22,10 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Changed
 - `init` mantém os `backup_targets` da configuração local quando a regrava (SPEC-0051).
 
+### Fixed
+- Revisão (Emenda v2): arquivo ilegível do vault fica fora do zip e do manifesto, aparece em `skipped` (e na saída) e o `backup` sai com 1, gravando e verificando o resto; link simbólico que aponta para fora do vault (ou da pasta files) fica fora do zip; o mesmo destino por dois caminhos (link simbólico, outra grafia) conta uma vez no `target add` e no `backup` (SPEC-0051).
+- `.partial` de um backup interrompido vira AVISO no `backup list` e no `doctor` (`AVISO backup <destino> .partial — …`), sem remoção automática; `restore NOTA` sai com 2 quando o destino fica fora do vault (pasta com link simbólico); `restore --json` traz `from` absoluto; `backup verify --json` traz `verified`; `safe_entry` recusa entrada terminada em `/` (SPEC-0051).
+
 ## [2026.11.3] - 2026-11-02
 
 ### Added
