@@ -33,7 +33,7 @@ SHARED_FILE = "atlas-config.yml"
 MODES = ("repo", "local")
 LOCAL_KEYS = ("atlas", "credentials")
 SHARED_KEYS = ("version", "organization", "mode", "language", "stale_days", "categories", "collectors",
-               "redaction")
+               "redaction", "curation")
 REQUIRED_SHARED = ("version", "organization", "mode")
 SHARED_VERSION = "1"
 STRUCTURE_DIRS = ("services", "platform", "conventions", "process", "snapshots")
@@ -1065,16 +1065,24 @@ def cmd_scan(only=None, as_json=False):
         build = build_atlas(atlas, shared)
     except (AtlasError, OSError) as e:  # scan --json stays one object: the error goes into "build"
         build = {"ok": False, "error": str(e)}
-    failed = failed or not build["ok"]
+    try:  # SPEC-0037: proposals (inferred) and fresh evidence; never a decision
+        curation = curate_propose(atlas, shared)
+    except (AtlasError, OSError) as e:
+        curation = {"ok": False, "error": str(e)}
+    failed = failed or not build["ok"] or not curation["ok"]
     if as_json:
-        print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports, "build": build},
-                         ensure_ascii=False, indent=2))
+        print(json.dumps({"version": ATLAS_VERSION, "ok": not failed, "collectors": reports, "build": build,
+                          "curation": curation}, ensure_ascii=False, indent=2))
     else:
         print_scan(reports)
         if build["ok"]:
             print_build(build)
         else:
             print(f"erro no build: {build['error']}", file=sys.stderr)
+        if curation["ok"]:
+            print(curation_line(curation))
+        else:
+            print(f"erro na curadoria: {curation['error']}", file=sys.stderr)
     return 1 if failed else 0
 
 
@@ -1620,14 +1628,345 @@ def cmd_build(as_json=False):
     return 0
 
 
-# ---------------------------------------------------------------- curate (conventions)
+# ---------------------------------------------------------------- curate (conventions, ADR-0012)
+
+CONVENTIONS_DIR = "conventions"
+CONVENTION_PAGE = "convention.md"
+CURATION_DEFAULTS = {"min_share": 0.6, "min_total": 20, "min_repos": 3}
+CONVENTION_KINDS = ("pr-title", "branch-prefix", "merge-method", "pr-template")
+CONVENTION_STATUSES = ("inferred", "confirmed", "rejected")
+CONVENTION_KEYS = ("id", "title", "kind", "scope", "status", "proposed_at", "confirmed_by", "confirmed_at",
+                   "confirmed_via", "reason")
+CONVENTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+VIA_RE = re.compile(r"^(PR #\d+|local)$")
+BAD_VIA = "--via aceita 'PR #<n>' ou 'local'"
+SAMPLE_MAX = 10
+MERGE_METHODS = ("merge", "squash", "rebase")
+# signal type -> convention kind; per-item kinds (a pattern dominates in a repository) and per-repository kinds
+ITEM_SIGNALS = {"pr-titles": "pr-title", "branch-prefixes": "branch-prefix"}
+REPOSITORY_SIGNALS = {"merge-methods": "merge-method", "pr-template": "pr-template"}
+PR_TITLE_TITLES = {"conventional": "Títulos de PR em Conventional Commits",
+                   "ticket_key": "Títulos de PR com chave de ticket",
+                   "other": "Títulos de PR sem Conventional Commits nem chave de ticket"}
+
+
+def curation_settings(curation) -> dict:
+    """{min_share, min_total, min_repos} from the `curation` key (values may come as text from parse_yaml);
+    missing = the default; invalid = AtlasError (code 2)."""
+    curation = curation if isinstance(curation, dict) else {}
+    result = {}
+    for key, default in CURATION_DEFAULTS.items():
+        value = curation.get(key, default)
+        if value in (None, ""):
+            value = default
+        try:
+            number = float(value) if key == "min_share" else int(str(value).strip())
+        except (TypeError, ValueError):
+            number = None
+        valid = number is not None and not isinstance(value, bool) and (
+            0 < number <= 1 if key == "min_share" else number >= 1)
+        if not valid:
+            rule = "um número entre 0 e 1" if key == "min_share" else "um número inteiro ≥ 1"
+            raise AtlasError(f"curation.{key} precisa ser {rule}: {value}", 2)
+        result[key] = number
+    return result
+
+
+def _number(value) -> float:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def _percent(part, whole) -> str:
+    return f"{round(100 * part / whole) if whole else 0}%"
+
+
+def _id_part(text) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-") or "x"
+
+
+def _clean_line(text) -> str:
+    """A sample title as one Markdown line that cannot close the generated region."""
+    return " ".join(str(text).split()).replace("<!--", "&lt;!--").replace("-->", "--&gt;")
+
+
+def _signals_by_type(signals) -> dict:
+    """{type: {repository: signal}}: the first signal of each type per repository (snapshots in config order)."""
+    result = {}
+    for item in signals or []:
+        if not isinstance(item, dict) or not isinstance(item.get("repository"), str):
+            continue
+        result.setdefault(item.get("type"), {}).setdefault(item["repository"], item)
+    return result
+
+
+def _item_title(kind, pattern) -> str:
+    if kind == "pr-title":
+        return PR_TITLE_TITLES.get(pattern, f"Títulos de PR no padrão {pattern}")
+    return f"Branches com o prefixo {pattern}"
+
+
+def _item_evidence(kind, pattern, repos, by_repo, follows) -> str:
+    """Evidence of a pr-title or branch-prefix convention over `repos` (the repositories in its scope)."""
+    total = sum(_number(by_repo[r].get("total")) for r in repos)
+    count = sum(_number((by_repo[r].get("pattern_counts" if kind == "pr-title" else "counts") or {}).get(pattern))
+                for r in repos)
+    unit = "PRs" if kind == "pr-title" else "branches"
+    lines = [f"- Padrão: `{pattern}`", (f"- Total: {total} {unit} da amostra; seguem o padrão: {count} "
+                                         f"({_percent(count, total)})"),
+             f"- Repositórios com o padrão dominante: {len([r for r in repos if r in follows])} de {len(repos)}"]
+    for repo in repos:
+        item = by_repo[repo]
+        counts = item.get("pattern_counts" if kind == "pr-title" else "counts") or {}
+        part, whole = _number(counts.get(pattern)), _number(item.get("total"))
+        mark = "" if repo in follows else " — sem padrão dominante"
+        lines.append(f"  - {repo}: {part} de {whole} ({_percent(part, whole)}){mark}")
+    sample = [title for repo in repos if repo in follows
+              for title in (by_repo[repo].get("sample") or []) if isinstance(title, str)][:SAMPLE_MAX]
+    if sample:
+        lines.append("- Amostra:")
+        lines += [f"  - {_clean_line(title)}" for title in sample]
+    return "\n".join(lines)
+
+
+def _item_proposals(kind, by_repo, settings) -> list:
+    """pr-title and branch-prefix: a pattern dominates in a repository with ≥ min_share of ≥ min_total items;
+    organization scope when more than half of the repositories with the signal have the same dominant pattern."""
+    field = "pattern_counts" if kind == "pr-title" else "counts"
+    dominant = {}
+    for repo, item in by_repo.items():
+        total, counts = _number(item.get("total")), item.get(field)
+        if total < settings["min_total"] or not isinstance(counts, dict) or total <= 0:
+            continue
+        best = sorted(((_number(n), p) for p, n in counts.items()), key=lambda item: (-item[0], item[1]))
+        if best and best[0][0] / total >= settings["min_share"]:
+            dominant[repo] = best[0][1]
+    repos, proposals = sorted(by_repo), []
+    for pattern in sorted(set(dominant.values())):
+        follows = sorted(r for r, p in dominant.items() if p == pattern)
+        base = f"{kind}-{_id_part(pattern)}"
+        title = _item_title(kind, pattern)
+        if len(follows) * 2 > len(repos):
+            proposals.append({"id": base, "title": title, "kind": kind, "scope": "organization",
+                              "pattern": pattern, "evidence": _item_evidence(kind, pattern, repos, by_repo, follows)})
+            continue
+        for repo in follows:
+            proposals.append({"id": f"{base}-{_id_part(repo)}", "title": f"{title} em {repo}", "kind": kind,
+                              "scope": f"repository:{repo}", "pattern": pattern,
+                              "evidence": _item_evidence(kind, pattern, [repo], by_repo, follows)})
+    return proposals
+
+
+def _repository_pattern(kind, item):
+    present = item.get("present") if isinstance(item.get("present"), dict) else {}
+    if kind == "pr-template":
+        return "present" if present.get("pr_template") is True else None
+    allowed = [m for m in MERGE_METHODS if present.get(m) is True]
+    return allowed[0] if len(allowed) == 1 else None  # several methods allowed count for no pattern
+
+
+def _repository_proposals(kind, by_repo, settings) -> list:
+    """merge-method and pr-template: items = repositories with the signal; a pattern dominates with ≥ min_share of
+    them and ≥ min_repos repositories with the signal; scope always organization."""
+    repos = sorted(by_repo)
+    if len(repos) < settings["min_repos"]:
+        return []
+    patterns = {repo: _repository_pattern(kind, by_repo[repo]) for repo in repos}
+    proposals = []
+    for pattern in sorted({p for p in patterns.values() if p}):
+        follows = [r for r in repos if patterns[r] == pattern]
+        if len(follows) / len(repos) < settings["min_share"]:
+            continue
+        if kind == "pr-template":
+            title, label = "Repositórios com template de PR", "template de PR presente"
+        else:
+            title, label = f"Merge de PR só por {pattern}", f"só `{pattern}` permitido"
+        lines = [f"- Padrão: {label}", (f"- Repositórios com o sinal: {len(repos)}; seguem o padrão: "
+                                        f"{len(follows)} ({_percent(len(follows), len(repos))})")]
+        for repo in repos:
+            other = patterns[repo] if kind == "merge-method" else None
+            if repo in follows:
+                lines.append(f"  - {repo}: segue")
+            elif kind == "merge-method" and other is None:
+                lines.append(f"  - {repo}: mais de um método (ou nenhum) permitido")
+            elif other:
+                lines.append(f"  - {repo}: só `{other}`")
+            else:
+                lines.append(f"  - {repo}: sem template")
+        proposals.append({"id": f"{kind}-{pattern}", "title": title, "kind": kind, "scope": "organization",
+                          "pattern": pattern, "evidence": "\n".join(lines)})
+    return proposals
+
 
 def propose_conventions(signals: list, curation=None) -> list:
-    raise NotImplementedError("SPEC-0037: propose_conventions")
+    """Proposals {id, title, kind, scope, pattern, evidence} from the signals of the snapshots, sorted by id
+    (references/curation.md). Never decides: every proposal is only a candidate for status inferred."""
+    settings = curation_settings(curation)
+    by_type = _signals_by_type(signals)
+    proposals = []
+    for signal_type, kind in ITEM_SIGNALS.items():
+        proposals += _item_proposals(kind, by_type.get(signal_type, {}), settings)
+    for signal_type, kind in REPOSITORY_SIGNALS.items():
+        proposals += _repository_proposals(kind, by_type.get(signal_type, {}), settings)
+    return sorted(proposals, key=lambda p: p["id"])
+
+
+def split_frontmatter(text: str) -> tuple:
+    """(frontmatter text, body) of a convention file; without a frontmatter = ("", text)."""
+    if not text.startswith("---\n"):
+        return "", text
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return "", text
+    return text[4:end + 1], text[end + 5:]
+
+
+def read_convention(path: Path) -> tuple:
+    """(metadata with text values, text) of conventions/<id>.md."""
+    text = read_text(path)
+    head, _ = split_frontmatter(text)
+    try:
+        data = parse_yaml(head) if head else {}
+    except ValueError:
+        data = {}
+    return {k: "" if v is None else str(v) for k, v in data.items()}, text
+
+
+def _conventions(atlas: Path) -> dict:
+    folder = atlas / CONVENTIONS_DIR
+    if not folder.is_dir():
+        return {}
+    return {path.stem: read_convention(path) for path in sorted(folder.glob("*.md"))}
+
+
+def _new_convention(proposal: dict, organization: str, today: str) -> str:
+    text = _template(CONVENTION_PAGE, organization, id=proposal["id"], title=proposal["title"],
+                     title_yaml=fmt_scalar(proposal["title"]), kind=proposal["kind"],
+                     scope=fmt_scalar(proposal["scope"]), proposed_at=today)
+    return fill_regions(text, {"evidence": "\n" + proposal["evidence"] + "\n"})
+
+
+def curate_propose(atlas: Path, shared: dict) -> dict:
+    """Creates conventions/<id>.md (status inferred) for each new proposal and refreshes only the evidence region
+    of the existing ones, whatever their status (a rejected id is never proposed again: its file already exists).
+    Never writes a decision."""
+    collectors = validate_collectors(shared.get("collectors"))
+    snapshots, warnings = read_snapshots(atlas, [c["id"] for c in collectors])
+    signals = [s for cid in snapshots for s in snapshots[cid].get("signals", [])]
+    proposals = propose_conventions(signals, shared.get("curation"))
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    organization = str(shared.get("organization") or "")
+    folder = atlas / CONVENTIONS_DIR
+    existing = _conventions(atlas)
+    new, updated = [], []
+    for proposal in proposals:
+        path = folder / f"{proposal['id']}.md"
+        if proposal["id"] in existing:
+            text = existing[proposal["id"]][1]
+            changed = fill_regions(text, {"evidence": "\n" + proposal["evidence"] + "\n"})
+            if changed != text:
+                write_atomic(path, changed)
+                updated.append(proposal["id"])
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        write_atomic(path, _new_convention(proposal, organization, today))
+        new.append(proposal["id"])
+    current = _conventions(atlas)
+    waiting = [cid for cid, (meta, _) in current.items() if meta.get("status") == "inferred"]
+    return {"ok": True, "new": new, "updated": updated, "waiting": waiting, "warnings": warnings}
+
+
+def curation_line(report: dict) -> str:
+    return (f"Convenções: {len(report['new'])} nova(s), {len(report['updated'])} atualizada(s), "
+            f"{len(report['waiting'])} esperando decisão")
+
+
+def _decision_lines(head: str, values: dict) -> str:
+    """Frontmatter text with each `key:` line of `values` replaced (or added at the end)."""
+    lines = head.splitlines()
+    for key, value in values.items():
+        line = f"{key}: {value}".rstrip()
+        for index, current in enumerate(lines):
+            if re.match(rf"^{re.escape(key)}\s*:", current):
+                lines[index] = line
+                break
+        else:
+            lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+def _write_decision(atlas: Path, args, action: str, status: str) -> int:
+    """The only writer of a decision (ADR-0012): checks --by, --via and the current status, then records status,
+    confirmed_by, confirmed_at, confirmed_via (and reason on reject) in the frontmatter. Exit 2 when refused."""
+    by, via = (args.by or "").strip(), (args.via or "").strip()
+    if not by or not via:
+        raise AtlasError(f"{action} exige --by e --via", 2)
+    if not VIA_RE.match(via):
+        raise AtlasError(BAD_VIA, 2)
+    cid = args.id
+    path = atlas / CONVENTIONS_DIR / f"{cid}.md"
+    if not CONVENTION_ID_RE.match(cid or "") or not path.is_file():
+        raise AtlasError(f"convenção não encontrada: {cid}", 2)
+    meta, text = read_convention(path)
+    if meta.get("status") != "inferred":
+        raise AtlasError(f"convenção já está {meta.get('status') or 'sem status'}", 2)
+    head, body = split_frontmatter(text)
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    values = {"status": status, "confirmed_by": fmt_scalar(by), "confirmed_at": today,
+              "confirmed_via": json.dumps(via, ensure_ascii=False)}
+    reason = (getattr(args, "reason", None) or "").strip()
+    if reason:
+        values["reason"] = fmt_scalar(reason)
+    write_atomic(path, "---\n" + _decision_lines(head, values) + "---\n" + body)
+    print(f"{cid}: {status} por {by} ({via})")
+    return 0
+
+
+def confirm_convention(atlas: Path, args) -> int:
+    return _write_decision(atlas, args, "confirm", "confirmed")
+
+
+def reject_convention(atlas: Path, args) -> int:
+    return _write_decision(atlas, args, "reject", "rejected")
+
+
+def _list_conventions(atlas: Path, status, as_json) -> int:
+    rows = []
+    for cid, (meta, _) in _conventions(atlas).items():
+        if status and meta.get("status") != status:
+            continue
+        row = {key: meta.get(key, "") for key in CONVENTION_KEYS}
+        row["id"] = cid
+        rows.append(row)
+    if as_json:
+        print(json.dumps({"version": ATLAS_VERSION, "conventions": rows}, ensure_ascii=False, indent=2))
+        return 0
+    for row in rows:
+        decided = (f" — {row['confirmed_by']}, {row['confirmed_at']}, {row['confirmed_via']}"
+                   if row["confirmed_by"] else "")
+        print(f"{row['status'] or '?'} {row['id']} — {row['title']} ({row['scope']}){decided}")
+    print(f"{len(rows)} convenção(ões)")
+    return 0
 
 
 def cmd_curate(args):
-    raise NotImplementedError("SPEC-0037: curate")
+    """curate propose [--json] | list [--status S] [--json] | confirm ID --by --via | reject ID --by --via
+    [--reason]. Only confirm and reject record a decision; propose (also run at the end of every scan) only
+    creates inferred conventions and refreshes evidence."""
+    atlas, shared = scan_config()
+    if args.action == "propose":
+        report = curate_propose(atlas, shared)
+        if args.json:
+            print(json.dumps({"version": ATLAS_VERSION, **report}, ensure_ascii=False, indent=2))
+        else:
+            for warning in report["warnings"]:
+                print(warning, file=sys.stderr)
+            print(curation_line(report))
+        return 0
+    if args.action == "list":
+        return _list_conventions(atlas, args.status, args.json)
+    if args.action == "confirm":
+        return confirm_convention(atlas, args)
+    return reject_convention(atlas, args)
 
 
 # ---------------------------------------------------------------- init
@@ -1774,6 +2113,14 @@ def check_shared(data: dict) -> list:
             problems.append(f"{key} precisa ser uma lista")
     if "redaction" in data and not isinstance(data["redaction"], dict):
         problems.append("redaction precisa ser um mapa")
+    if "curation" in data:
+        if not isinstance(data["curation"], dict):
+            problems.append("curation precisa ser um mapa {min_share, min_total, min_repos}")
+        else:
+            try:
+                curation_settings(data["curation"])
+            except AtlasError as e:
+                problems.append(str(e))
     problems += [f"caminho absoluto em {key}" for key, _ in absolute_values(data)]
     return problems
 

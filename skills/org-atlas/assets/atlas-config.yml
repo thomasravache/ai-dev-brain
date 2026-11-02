@@ -19,3 +19,8 @@ collectors: []
 # redaction.extra_patterns: regex (Python, entre aspas simples) mascaradas como [REDACTED] antes de gravar, além
 # dos padrões embutidos (references/redaction.md). Ex.: {extra_patterns: ['acme-internal-[0-9]{4}']}
 redaction: {extra_patterns: []}
+# curation: limiares da curadoria de convenções (references/curation.md). Um padrão vira convenção inferred quando
+# tem pelo menos min_share (0 a 1) de pelo menos min_total itens (títulos de PR, branches); para sinais por
+# repositório (método de merge, template de PR), pelo menos min_share de pelo menos min_repos repositórios.
+# Só uma pessoa confirma ou rejeita (atlas.py curate confirm|reject).
+curation: {min_share: 0.6, min_total: 20, min_repos: 3}
