@@ -1620,6 +1620,16 @@ def cmd_build(as_json=False):
     return 0
 
 
+# ---------------------------------------------------------------- curate (conventions)
+
+def propose_conventions(signals: list, curation=None) -> list:
+    raise NotImplementedError("SPEC-0037: propose_conventions")
+
+
+def cmd_curate(args):
+    raise NotImplementedError("SPEC-0037: curate")
+
+
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
@@ -1901,6 +1911,20 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("build", help="junta os snapshots no graph.json, infere relações e gera as páginas")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("curate", help="propõe convenções (inferred) e registra a decisão humana (confirm | reject)")
+    curate = p.add_subparsers(dest="action", required=True)
+    q = curate.add_parser("propose", help="cria ou atualiza conventions/<id>.md a partir dos sinais")
+    q.add_argument("--json", action="store_true")
+    q = curate.add_parser("list", help="convenções e o status de cada uma")
+    q.add_argument("--status", choices=("inferred", "confirmed", "rejected"))
+    q.add_argument("--json", action="store_true")
+    for action in ("confirm", "reject"):
+        q = curate.add_parser(action, help=f"{action}: decisão humana sobre uma convenção (exige --by e --via)")
+        q.add_argument("id")
+        q.add_argument("--by", help="quem decide")
+        q.add_argument("--via", help="'PR #<n>' ou 'local'")
+        if action == "reject":
+            q.add_argument("--reason", help="motivo (opcional)")
     args = parser.parse_args(argv)
 
     try:
@@ -1914,6 +1938,8 @@ def main(argv=None):
             return cmd_scan(args.only, args.json)
         if args.command == "build":
             return cmd_build(args.json)
+        if args.command == "curate":
+            return cmd_curate(args)
     except AtlasError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
