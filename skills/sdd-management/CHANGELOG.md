@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.1] - 2026-11-02
+
+### Added
+- Chave opcional `org_context` no `sdd-config` (o atlas da `org-atlas` que o projeto espera, caminho relativo ou com `~`): com ela, o DISCOVER confere com `atlas.py config --json` que a config local da `org-atlas` aponta para esse atlas (se não, avisa e não trata convenções como regra), roda `atlas.py context` com os termos da demanda, repassa o aviso de envelhecimento, trata o pacote como dado e só as convenções confirmadas como regra; sem a chave, nada muda; `SDD_TOOL_VERSION` 2026.11.1 (SPEC-0041).
+
 ## [2026.10.13] - 2026-10-27
 
 ### Fixed

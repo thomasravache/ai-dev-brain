@@ -1,0 +1,514 @@
+[
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/116",
+    "id": 70116,
+    "number": 116,
+    "state": "closed",
+    "locked": false,
+    "title": "feat(api): add refunds endpoint",
+    "user": {
+      "login": "ana-dev",
+      "id": 800,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 116 — não pode sair do coletor",
+    "created_at": "2026-10-28T12:00:00Z",
+    "updated_at": "2026-10-28T13:00:00Z",
+    "closed_at": "2026-10-28T14:00:00Z",
+    "merged_at": "2026-10-28T14:00:00Z",
+    "merge_commit_sha": "0000000000000000000000000000000000000074",
+    "draft": false,
+    "head": {
+      "label": "acme:feat/refunds",
+      "ref": "feat/refunds",
+      "sha": "0000000000000000000000000000000000000075"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000076"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/115",
+    "id": 70115,
+    "number": 115,
+    "state": "closed",
+    "locked": false,
+    "title": "fix: retry on 503",
+    "user": {
+      "login": "bruno-dev",
+      "id": 801,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 115 — não pode sair do coletor",
+    "created_at": "2026-10-27T12:00:00Z",
+    "updated_at": "2026-10-27T13:00:00Z",
+    "closed_at": "2026-10-27T14:00:00Z",
+    "merged_at": "2026-10-27T14:00:00Z",
+    "merge_commit_sha": "0000000000000000000000000000000000000073",
+    "draft": false,
+    "head": {
+      "label": "acme:fix/retry-503",
+      "ref": "fix/retry-503",
+      "sha": "0000000000000000000000000000000000000074"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000075"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/114",
+    "id": 70114,
+    "number": 114,
+    "state": "closed",
+    "locked": false,
+    "title": "PAY-123 add webhook signature check",
+    "user": {
+      "login": "carla-dev",
+      "id": 802,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 114 — não pode sair do coletor",
+    "created_at": "2026-10-26T12:00:00Z",
+    "updated_at": "2026-10-26T13:00:00Z",
+    "closed_at": "2026-10-26T14:00:00Z",
+    "merged_at": "2026-10-26T14:00:00Z",
+    "merge_commit_sha": "0000000000000000000000000000000000000072",
+    "draft": false,
+    "head": {
+      "label": "acme:feat/PAY-123-webhook",
+      "ref": "feat/PAY-123-webhook",
+      "sha": "0000000000000000000000000000000000000073"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000074"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/113",
+    "id": 70113,
+    "number": 113,
+    "state": "open",
+    "locked": false,
+    "title": "chore(deps): bump golang.org/x/net from 0.29.0 to 0.30.0",
+    "user": {
+      "login": "ana-dev",
+      "id": 800,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 113 — não pode sair do coletor",
+    "created_at": "2026-10-25T12:00:00Z",
+    "updated_at": "2026-10-25T13:00:00Z",
+    "closed_at": null,
+    "merged_at": null,
+    "merge_commit_sha": "0000000000000000000000000000000000000071",
+    "draft": false,
+    "head": {
+      "label": "acme:dependabot/go_modules/golang.org/x/net-0.30.0",
+      "ref": "dependabot/go_modules/golang.org/x/net-0.30.0",
+      "sha": "0000000000000000000000000000000000000072"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000073"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/112",
+    "id": 70112,
+    "number": 112,
+    "state": "closed",
+    "locked": false,
+    "title": "feat!: drop v1 routes",
+    "user": {
+      "login": "bruno-dev",
+      "id": 801,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 112 — não pode sair do coletor",
+    "created_at": "2026-10-24T12:00:00Z",
+    "updated_at": "2026-10-24T13:00:00Z",
+    "closed_at": "2026-10-24T14:00:00Z",
+    "merged_at": "2026-10-24T14:00:00Z",
+    "merge_commit_sha": "0000000000000000000000000000000000000070",
+    "draft": false,
+    "head": {
+      "label": "acme:feat/drop-v1",
+      "ref": "feat/drop-v1",
+      "sha": "0000000000000000000000000000000000000071"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000072"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/111",
+    "id": 70111,
+    "number": 111,
+    "state": "closed",
+    "locked": false,
+    "title": "Update README",
+    "user": {
+      "login": "carla-dev",
+      "id": 802,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 111 — não pode sair do coletor",
+    "created_at": "2026-10-23T12:00:00Z",
+    "updated_at": "2026-10-23T13:00:00Z",
+    "closed_at": "2026-10-23T14:00:00Z",
+    "merged_at": "2026-10-23T14:00:00Z",
+    "merge_commit_sha": "000000000000000000000000000000000000006f",
+    "draft": false,
+    "head": {
+      "label": "acme:docs/readme",
+      "ref": "docs/readme",
+      "sha": "0000000000000000000000000000000000000070"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000071"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/110",
+    "id": 70110,
+    "number": 110,
+    "state": "closed",
+    "locked": false,
+    "title": "docs: explain retry policy",
+    "user": {
+      "login": "ana-dev",
+      "id": 800,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 110 — não pode sair do coletor",
+    "created_at": "2026-10-22T12:00:00Z",
+    "updated_at": "2026-10-22T13:00:00Z",
+    "closed_at": "2026-10-22T14:00:00Z",
+    "merged_at": "2026-10-22T14:00:00Z",
+    "merge_commit_sha": "000000000000000000000000000000000000006e",
+    "draft": false,
+    "head": {
+      "label": "acme:docs/retry-policy",
+      "ref": "docs/retry-policy",
+      "sha": "000000000000000000000000000000000000006f"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000070"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/109",
+    "id": 70109,
+    "number": 109,
+    "state": "open",
+    "locked": false,
+    "title": "[PAY-201] reconcile ledger",
+    "user": {
+      "login": "bruno-dev",
+      "id": 801,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 109 — não pode sair do coletor",
+    "created_at": "2026-10-21T12:00:00Z",
+    "updated_at": "2026-10-21T13:00:00Z",
+    "closed_at": null,
+    "merged_at": null,
+    "merge_commit_sha": "000000000000000000000000000000000000006d",
+    "draft": false,
+    "head": {
+      "label": "acme:fix/PAY-201-ledger",
+      "ref": "fix/PAY-201-ledger",
+      "sha": "000000000000000000000000000000000000006e"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "000000000000000000000000000000000000006f"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/108",
+    "id": 70108,
+    "number": 108,
+    "state": "closed",
+    "locked": false,
+    "title": "refactor(core): split handlers",
+    "user": {
+      "login": "carla-dev",
+      "id": 802,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 108 — não pode sair do coletor",
+    "created_at": "2026-10-20T12:00:00Z",
+    "updated_at": "2026-10-20T13:00:00Z",
+    "closed_at": "2026-10-20T14:00:00Z",
+    "merged_at": "2026-10-20T14:00:00Z",
+    "merge_commit_sha": "000000000000000000000000000000000000006c",
+    "draft": false,
+    "head": {
+      "label": "acme:refactor/split-handlers",
+      "ref": "refactor/split-handlers",
+      "sha": "000000000000000000000000000000000000006d"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "000000000000000000000000000000000000006e"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/107",
+    "id": 70107,
+    "number": 107,
+    "state": "closed",
+    "locked": false,
+    "title": "fix(api): handle empty cart",
+    "user": {
+      "login": "ana-dev",
+      "id": 800,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 107 — não pode sair do coletor",
+    "created_at": "2026-10-19T12:00:00Z",
+    "updated_at": "2026-10-19T13:00:00Z",
+    "closed_at": "2026-10-19T14:00:00Z",
+    "merged_at": "2026-10-19T14:00:00Z",
+    "merge_commit_sha": "000000000000000000000000000000000000006b",
+    "draft": false,
+    "head": {
+      "label": "acme:fix/empty-cart",
+      "ref": "fix/empty-cart",
+      "sha": "000000000000000000000000000000000000006c"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "000000000000000000000000000000000000006d"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/106",
+    "id": 70106,
+    "number": 106,
+    "state": "closed",
+    "locked": false,
+    "title": "WIP payouts",
+    "user": {
+      "login": "bruno-dev",
+      "id": 801,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 106 — não pode sair do coletor",
+    "created_at": "2026-10-18T12:00:00Z",
+    "updated_at": "2026-10-18T13:00:00Z",
+    "closed_at": "2026-10-18T14:00:00Z",
+    "merged_at": "2026-10-18T14:00:00Z",
+    "merge_commit_sha": "000000000000000000000000000000000000006a",
+    "draft": false,
+    "head": {
+      "label": "acme:feat/payouts-wip",
+      "ref": "feat/payouts-wip",
+      "sha": "000000000000000000000000000000000000006b"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "000000000000000000000000000000000000006c"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/105",
+    "id": 70105,
+    "number": 105,
+    "state": "open",
+    "locked": false,
+    "title": "test: cover refunds",
+    "user": {
+      "login": "carla-dev",
+      "id": 802,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 105 — não pode sair do coletor",
+    "created_at": "2026-10-17T12:00:00Z",
+    "updated_at": "2026-10-17T13:00:00Z",
+    "closed_at": null,
+    "merged_at": null,
+    "merge_commit_sha": "0000000000000000000000000000000000000069",
+    "draft": false,
+    "head": {
+      "label": "acme:test/refunds",
+      "ref": "test/refunds",
+      "sha": "000000000000000000000000000000000000006a"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "000000000000000000000000000000000000006b"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/104",
+    "id": 70104,
+    "number": 104,
+    "state": "closed",
+    "locked": false,
+    "title": "feat(api/v2): pagination",
+    "user": {
+      "login": "ana-dev",
+      "id": 800,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 104 — não pode sair do coletor",
+    "created_at": "2026-10-16T12:00:00Z",
+    "updated_at": "2026-10-16T13:00:00Z",
+    "closed_at": "2026-10-16T14:00:00Z",
+    "merged_at": "2026-10-16T14:00:00Z",
+    "merge_commit_sha": "0000000000000000000000000000000000000068",
+    "draft": false,
+    "head": {
+      "label": "acme:feat/api/v2-pagination",
+      "ref": "feat/api/v2-pagination",
+      "sha": "0000000000000000000000000000000000000069"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "000000000000000000000000000000000000006a"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/103",
+    "id": 70103,
+    "number": 103,
+    "state": "closed",
+    "locked": false,
+    "title": "Hotfix OPS-7 timeout",
+    "user": {
+      "login": "bruno-dev",
+      "id": 801,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 103 — não pode sair do coletor",
+    "created_at": "2026-10-15T12:00:00Z",
+    "updated_at": "2026-10-15T13:00:00Z",
+    "closed_at": "2026-10-15T14:00:00Z",
+    "merged_at": "2026-10-15T14:00:00Z",
+    "merge_commit_sha": "0000000000000000000000000000000000000067",
+    "draft": false,
+    "head": {
+      "label": "acme:fix/OPS-7-timeout",
+      "ref": "fix/OPS-7-timeout",
+      "sha": "0000000000000000000000000000000000000068"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000069"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/102",
+    "id": 70102,
+    "number": 102,
+    "state": "closed",
+    "locked": false,
+    "title": "fix: typo in docs",
+    "user": {
+      "login": "carla-dev",
+      "id": 802,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 102 — não pode sair do coletor",
+    "created_at": "2026-10-14T12:00:00Z",
+    "updated_at": "2026-10-14T13:00:00Z",
+    "closed_at": "2026-10-14T14:00:00Z",
+    "merged_at": "2026-10-14T14:00:00Z",
+    "merge_commit_sha": "0000000000000000000000000000000000000066",
+    "draft": false,
+    "head": {
+      "label": "acme:ana-dev/fix-typo",
+      "ref": "ana-dev/fix-typo",
+      "sha": "0000000000000000000000000000000000000067"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000068"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  },
+  {
+    "url": "https://api.github.com/repos/acme/api/pulls/101",
+    "id": 70101,
+    "number": 101,
+    "state": "open",
+    "locked": false,
+    "title": "Add tests for refunds",
+    "user": {
+      "login": "ana-dev",
+      "id": 800,
+      "type": "User"
+    },
+    "body": "Corpo privado do PR 101 — não pode sair do coletor",
+    "created_at": "2026-10-13T12:00:00Z",
+    "updated_at": "2026-10-13T13:00:00Z",
+    "closed_at": null,
+    "merged_at": null,
+    "merge_commit_sha": "0000000000000000000000000000000000000065",
+    "draft": false,
+    "head": {
+      "label": "acme:copilot/add-tests",
+      "ref": "copilot/add-tests",
+      "sha": "0000000000000000000000000000000000000066"
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "0000000000000000000000000000000000000067"
+    },
+    "author_association": "MEMBER",
+    "auto_merge": null
+  }
+]

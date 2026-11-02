@@ -1,0 +1,16 @@
+version: 1
+organization: Acme
+mode: local
+language: auto
+stale_days: 14
+categories: [code, delivery]
+collectors:
+  - id: facts
+    category: delivery
+    command: ["python3", "{skill}/assets/collectors/generic.py", "--facts", "{atlas}/facts/graph.json", "--category", "delivery", "--source", "facts"]
+    timeout: 60
+  - id: signals
+    category: code
+    command: ["python3", "{skill}/tests/fixtures/curate/signals.py", "signals", "{atlas}/facts/signals.json"]
+    timeout: 60
+redaction: {extra_patterns: []}

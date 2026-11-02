@@ -1,0 +1,546 @@
+{
+    "apiVersion": "v1",
+    "kind": "List",
+    "items": [
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "name": "api-prod",
+                "namespace": "argocd",
+                "uid": "0b6f3c1e-0000-4000-8000-000000000001",
+                "resourceVersion": "48211",
+                "generation": 12,
+                "creationTimestamp": "2026-09-01T10:00:00Z",
+                "labels": {
+                    "app.kubernetes.io/part-of": "api",
+                    "env": "prod",
+                    "acme.io/team": "payments"
+                },
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"name\":\"api-prod\",\"namespace\":\"argocd\",\"labels\":{\"app.kubernetes.io/part-of\":\"api\",\"env\":\"prod\",\"acme.io/team\":\"payments\"}},\"spec\":{\"project\":\"payments\",\"source\":{\"repoURL\":\"https://github.com/acme/api.git\",\"path\":\"deploy/helm\",\"targetRevision\":\"main\",\"helm\":{\"releaseName\":\"api\",\"parameters\":[{\"name\":\"env.DB_URL\",\"value\":\"postgres://api:fake-pass@db-prod.interno:5432/payments?sslmode=require\"},{\"name\":\"env.DB_PASSWORD\",\"value\":\"fake-pass\"},{\"name\":\"replicaCount\",\"value\":\"3\"}],\"values\":\"replicaCount: 3\\n# refer\\u00eancias de infraestrutura\\nenv:\\n  CACHE_HOST: redis-prod.interno\\n  LOG_LEVEL: info\\n  EVENTS_TOPIC: \\\"payments.events\\\"\\nsecrets:\\n  API_TOKEN: not-a-real-token\\n\"}},\"destination\":{\"server\":\"https://kubernetes.default.svc\",\"namespace\":\"payments-prod\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true}}}}\n"
+                }
+            },
+            "spec": {
+                "project": "payments",
+                "source": {
+                    "repoURL": "https://github.com/acme/api.git",
+                    "path": "deploy/helm",
+                    "targetRevision": "main",
+                    "helm": {
+                        "releaseName": "api",
+                        "parameters": [
+                            {
+                                "name": "env.DB_URL",
+                                "value": "postgres://api:fake-pass@db-prod.interno:5432/payments?sslmode=require"
+                            },
+                            {
+                                "name": "env.DB_PASSWORD",
+                                "value": "fake-pass"
+                            },
+                            {
+                                "name": "replicaCount",
+                                "value": "3"
+                            }
+                        ],
+                        "values": "replicaCount: 3\n# referências de infraestrutura\nenv:\n  CACHE_HOST: redis-prod.interno\n  LOG_LEVEL: info\n  EVENTS_TOPIC: \"payments.events\"\nsecrets:\n  API_TOKEN: not-a-real-token\n"
+                    }
+                },
+                "destination": {
+                    "server": "https://kubernetes.default.svc",
+                    "namespace": "payments-prod"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    }
+                }
+            },
+            "status": {
+                "sync": {
+                    "status": "Synced",
+                    "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                    "comparedTo": {
+                        "source": {
+                            "repoURL": "https://github.com/acme/api.git",
+                            "path": "deploy/helm",
+                            "targetRevision": "main",
+                            "helm": {
+                                "releaseName": "api",
+                                "parameters": [
+                                    {
+                                        "name": "env.DB_URL",
+                                        "value": "postgres://api:fake-pass@db-prod.interno:5432/payments?sslmode=require"
+                                    },
+                                    {
+                                        "name": "env.DB_PASSWORD",
+                                        "value": "fake-pass"
+                                    },
+                                    {
+                                        "name": "replicaCount",
+                                        "value": "3"
+                                    }
+                                ],
+                                "values": "replicaCount: 3\n# referências de infraestrutura\nenv:\n  CACHE_HOST: redis-prod.interno\n  LOG_LEVEL: info\n  EVENTS_TOPIC: \"payments.events\"\nsecrets:\n  API_TOKEN: not-a-real-token\n"
+                            }
+                        },
+                        "destination": {
+                            "server": "https://kubernetes.default.svc",
+                            "namespace": "payments-prod"
+                        }
+                    }
+                },
+                "health": {
+                    "status": "Healthy"
+                },
+                "resources": [
+                    {
+                        "group": "apps",
+                        "version": "v1",
+                        "kind": "Deployment",
+                        "namespace": "payments-prod",
+                        "name": "api",
+                        "status": "Synced",
+                        "health": {
+                            "status": "Healthy"
+                        }
+                    },
+                    {
+                        "version": "v1",
+                        "kind": "Secret",
+                        "namespace": "payments-prod",
+                        "name": "api-db",
+                        "status": "Synced"
+                    }
+                ],
+                "summary": {
+                    "images": [
+                        "ghcr.io/acme/api:1.4.2"
+                    ]
+                },
+                "reconciledAt": "2026-10-30T11:58:00Z",
+                "sourceType": "Helm",
+                "history": [
+                    {
+                        "id": 7,
+                        "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                        "deployedAt": "2026-10-29T18:00:00Z",
+                        "source": {
+                            "repoURL": "https://github.com/acme/api.git",
+                            "path": "deploy/helm",
+                            "targetRevision": "main",
+                            "helm": {
+                                "releaseName": "api",
+                                "parameters": [
+                                    {
+                                        "name": "env.DB_URL",
+                                        "value": "postgres://api:fake-pass@db-prod.interno:5432/payments?sslmode=require"
+                                    },
+                                    {
+                                        "name": "env.DB_PASSWORD",
+                                        "value": "fake-pass"
+                                    },
+                                    {
+                                        "name": "replicaCount",
+                                        "value": "3"
+                                    }
+                                ],
+                                "values": "replicaCount: 3\n# referências de infraestrutura\nenv:\n  CACHE_HOST: redis-prod.interno\n  LOG_LEVEL: info\n  EVENTS_TOPIC: \"payments.events\"\nsecrets:\n  API_TOKEN: not-a-real-token\n"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "name": "api-staging",
+                "namespace": "argocd",
+                "uid": "0b6f3c1e-0000-4000-8000-000000000002",
+                "resourceVersion": "48211",
+                "generation": 12,
+                "creationTimestamp": "2026-09-01T10:00:00Z",
+                "labels": {
+                    "app.kubernetes.io/part-of": "api",
+                    "env": "staging"
+                },
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"name\":\"api-staging\",\"namespace\":\"argocd\",\"labels\":{\"app.kubernetes.io/part-of\":\"api\",\"env\":\"staging\"}},\"spec\":{\"project\":\"payments\",\"source\":{\"repoURL\":\"git@github.com:acme/api.git\",\"path\":\"deploy/helm\",\"targetRevision\":\"develop\",\"helm\":{\"parameters\":[{\"name\":\"image.tag\",\"value\":\"1.5.0-rc.1\"}],\"valuesObject\":{\"replicaCount\":1,\"env\":{\"DB_URL\":\"postgres://api:fake-pass@db-staging.interno/payments\",\"ORDERS_QUEUE\":\"orders-staging\",\"FEATURE_FLAGS\":\"beta\"}}}},\"destination\":{\"server\":\"https://10.20.0.1:6443\",\"namespace\":\"payments-staging\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true}}}}\n"
+                }
+            },
+            "spec": {
+                "project": "payments",
+                "source": {
+                    "repoURL": "git@github.com:acme/api.git",
+                    "path": "deploy/helm",
+                    "targetRevision": "develop",
+                    "helm": {
+                        "parameters": [
+                            {
+                                "name": "image.tag",
+                                "value": "1.5.0-rc.1"
+                            }
+                        ],
+                        "valuesObject": {
+                            "replicaCount": 1,
+                            "env": {
+                                "DB_URL": "postgres://api:fake-pass@db-staging.interno/payments",
+                                "ORDERS_QUEUE": "orders-staging",
+                                "FEATURE_FLAGS": "beta"
+                            }
+                        }
+                    }
+                },
+                "destination": {
+                    "server": "https://10.20.0.1:6443",
+                    "namespace": "payments-staging"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    }
+                }
+            },
+            "status": {
+                "sync": {
+                    "status": "OutOfSync",
+                    "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                    "comparedTo": {
+                        "source": {
+                            "repoURL": "git@github.com:acme/api.git",
+                            "path": "deploy/helm",
+                            "targetRevision": "develop",
+                            "helm": {
+                                "parameters": [
+                                    {
+                                        "name": "image.tag",
+                                        "value": "1.5.0-rc.1"
+                                    }
+                                ],
+                                "valuesObject": {
+                                    "replicaCount": 1,
+                                    "env": {
+                                        "DB_URL": "postgres://api:fake-pass@db-staging.interno/payments",
+                                        "ORDERS_QUEUE": "orders-staging",
+                                        "FEATURE_FLAGS": "beta"
+                                    }
+                                }
+                            }
+                        },
+                        "destination": {
+                            "server": "https://10.20.0.1:6443",
+                            "namespace": "payments-staging"
+                        }
+                    }
+                },
+                "health": {
+                    "status": "Progressing"
+                },
+                "resources": [
+                    {
+                        "group": "apps",
+                        "version": "v1",
+                        "kind": "Deployment",
+                        "namespace": "payments-staging",
+                        "name": "api",
+                        "status": "OutOfSync",
+                        "health": {
+                            "status": "Progressing"
+                        }
+                    }
+                ],
+                "summary": {
+                    "images": [
+                        "ghcr.io/acme/api:1.5.0-rc.1"
+                    ]
+                },
+                "reconciledAt": "2026-10-30T11:58:00Z",
+                "sourceType": "Helm",
+                "history": [
+                    {
+                        "id": 7,
+                        "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                        "deployedAt": "2026-10-29T18:00:00Z",
+                        "source": {
+                            "repoURL": "git@github.com:acme/api.git",
+                            "path": "deploy/helm",
+                            "targetRevision": "develop",
+                            "helm": {
+                                "parameters": [
+                                    {
+                                        "name": "image.tag",
+                                        "value": "1.5.0-rc.1"
+                                    }
+                                ],
+                                "valuesObject": {
+                                    "replicaCount": 1,
+                                    "env": {
+                                        "DB_URL": "postgres://api:fake-pass@db-staging.interno/payments",
+                                        "ORDERS_QUEUE": "orders-staging",
+                                        "FEATURE_FLAGS": "beta"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "name": "web",
+                "namespace": "argocd",
+                "uid": "0b6f3c1e-0000-4000-8000-000000000003",
+                "resourceVersion": "48211",
+                "generation": 12,
+                "creationTimestamp": "2026-09-01T10:00:00Z",
+                "labels": {
+                    "acme.io/stage": "production",
+                    "acme.io/component": "storefront"
+                },
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"name\":\"web\",\"namespace\":\"argocd\",\"labels\":{\"acme.io/stage\":\"production\",\"acme.io/component\":\"storefront\"}},\"spec\":{\"project\":\"frontend\",\"source\":{\"repoURL\":\"https://github.com/acme/web\",\"path\":\"deploy\",\"targetRevision\":\"HEAD\",\"plugin\":{\"name\":\"envsubst\",\"env\":[{\"name\":\"API_URL\",\"value\":\"https://api.acme.example/v1?debug=1\"},{\"name\":\"SENTRY_DSN\",\"value\":\"https://fakepublickey@o0.ingest.example.io/42\"},{\"name\":\"UPLOADS_BUCKET\",\"value\":\"s3://acme-uploads/web/\"},{\"name\":\"NODE_ENV\",\"value\":\"production\"}]}},\"destination\":{\"name\":\"eks-prod-1\",\"namespace\":\"frontend\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true}}}}\n"
+                }
+            },
+            "spec": {
+                "project": "frontend",
+                "source": {
+                    "repoURL": "https://github.com/acme/web",
+                    "path": "deploy",
+                    "targetRevision": "HEAD",
+                    "plugin": {
+                        "name": "envsubst",
+                        "env": [
+                            {
+                                "name": "API_URL",
+                                "value": "https://api.acme.example/v1?debug=1"
+                            },
+                            {
+                                "name": "SENTRY_DSN",
+                                "value": "https://fakepublickey@o0.ingest.example.io/42"
+                            },
+                            {
+                                "name": "UPLOADS_BUCKET",
+                                "value": "s3://acme-uploads/web/"
+                            },
+                            {
+                                "name": "NODE_ENV",
+                                "value": "production"
+                            }
+                        ]
+                    }
+                },
+                "destination": {
+                    "name": "eks-prod-1",
+                    "namespace": "frontend"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    }
+                }
+            },
+            "status": {
+                "sync": {
+                    "status": "Synced",
+                    "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                    "comparedTo": {
+                        "source": {
+                            "repoURL": "https://github.com/acme/web",
+                            "path": "deploy",
+                            "targetRevision": "HEAD",
+                            "plugin": {
+                                "name": "envsubst",
+                                "env": [
+                                    {
+                                        "name": "API_URL",
+                                        "value": "https://api.acme.example/v1?debug=1"
+                                    },
+                                    {
+                                        "name": "SENTRY_DSN",
+                                        "value": "https://fakepublickey@o0.ingest.example.io/42"
+                                    },
+                                    {
+                                        "name": "UPLOADS_BUCKET",
+                                        "value": "s3://acme-uploads/web/"
+                                    },
+                                    {
+                                        "name": "NODE_ENV",
+                                        "value": "production"
+                                    }
+                                ]
+                            }
+                        },
+                        "destination": {
+                            "name": "eks-prod-1",
+                            "namespace": "frontend"
+                        }
+                    }
+                },
+                "health": {
+                    "status": "Healthy"
+                },
+                "resources": [
+                    {
+                        "group": "apps",
+                        "version": "v1",
+                        "kind": "Deployment",
+                        "namespace": "frontend",
+                        "name": "web",
+                        "status": "Synced",
+                        "health": {
+                            "status": "Healthy"
+                        }
+                    }
+                ],
+                "summary": {
+                    "images": [
+                        "ghcr.io/acme/web:2.0.3"
+                    ]
+                },
+                "reconciledAt": "2026-10-30T11:58:00Z",
+                "sourceType": "Plugin",
+                "history": [
+                    {
+                        "id": 7,
+                        "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                        "deployedAt": "2026-10-29T18:00:00Z",
+                        "source": {
+                            "repoURL": "https://github.com/acme/web",
+                            "path": "deploy",
+                            "targetRevision": "HEAD",
+                            "plugin": {
+                                "name": "envsubst",
+                                "env": [
+                                    {
+                                        "name": "API_URL",
+                                        "value": "https://api.acme.example/v1?debug=1"
+                                    },
+                                    {
+                                        "name": "SENTRY_DSN",
+                                        "value": "https://fakepublickey@o0.ingest.example.io/42"
+                                    },
+                                    {
+                                        "name": "UPLOADS_BUCKET",
+                                        "value": "s3://acme-uploads/web/"
+                                    },
+                                    {
+                                        "name": "NODE_ENV",
+                                        "value": "production"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "name": "ingress-nginx",
+                "namespace": "argocd",
+                "uid": "0b6f3c1e-0000-4000-8000-000000000004",
+                "resourceVersion": "48211",
+                "generation": 12,
+                "creationTimestamp": "2026-09-01T10:00:00Z",
+                "labels": {
+                    "env": "prod"
+                },
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"name\":\"ingress-nginx\",\"namespace\":\"argocd\",\"labels\":{\"env\":\"prod\"}},\"spec\":{\"project\":\"platform\",\"source\":{\"repoURL\":\"https://charts.example.com/stable\",\"chart\":\"ingress-nginx\",\"targetRevision\":\"4.10.0\",\"helm\":{\"values\":\"controller:\\n  replicaCount: 2\\n\"}},\"destination\":{\"server\":\"https://kubernetes.default.svc\",\"namespace\":\"ingress\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true}}}}\n"
+                }
+            },
+            "spec": {
+                "project": "platform",
+                "source": {
+                    "repoURL": "https://charts.example.com/stable",
+                    "chart": "ingress-nginx",
+                    "targetRevision": "4.10.0",
+                    "helm": {
+                        "values": "controller:\n  replicaCount: 2\n"
+                    }
+                },
+                "destination": {
+                    "server": "https://kubernetes.default.svc",
+                    "namespace": "ingress"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    }
+                }
+            },
+            "status": {
+                "sync": {
+                    "status": "Synced",
+                    "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                    "comparedTo": {
+                        "source": {
+                            "repoURL": "https://charts.example.com/stable",
+                            "chart": "ingress-nginx",
+                            "targetRevision": "4.10.0",
+                            "helm": {
+                                "values": "controller:\n  replicaCount: 2\n"
+                            }
+                        },
+                        "destination": {
+                            "server": "https://kubernetes.default.svc",
+                            "namespace": "ingress"
+                        }
+                    }
+                },
+                "health": {
+                    "status": "Healthy"
+                },
+                "resources": [
+                    {
+                        "group": "apps",
+                        "version": "v1",
+                        "kind": "Deployment",
+                        "namespace": "ingress",
+                        "name": "ingress-nginx-controller",
+                        "status": "Synced",
+                        "health": {
+                            "status": "Healthy"
+                        }
+                    }
+                ],
+                "summary": {
+                    "images": [
+                        "registry.example.com/ingress-nginx/controller:v1.10.0"
+                    ]
+                },
+                "reconciledAt": "2026-10-30T11:58:00Z",
+                "sourceType": "Helm",
+                "history": [
+                    {
+                        "id": 7,
+                        "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+                        "deployedAt": "2026-10-29T18:00:00Z",
+                        "source": {
+                            "repoURL": "https://charts.example.com/stable",
+                            "chart": "ingress-nginx",
+                            "targetRevision": "4.10.0",
+                            "helm": {
+                                "values": "controller:\n  replicaCount: 2\n"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "metadata": {
+        "resourceVersion": ""
+    }
+}

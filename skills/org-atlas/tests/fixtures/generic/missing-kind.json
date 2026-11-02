@@ -1,0 +1,6 @@
+{
+  "entities": [
+    {"id": "payments-api", "name": "payments-api", "attrs": {}}
+  ],
+  "relations": []
+}

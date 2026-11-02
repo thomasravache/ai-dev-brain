@@ -46,3 +46,7 @@ jobs:
       # Suíte da second-brain, com os testes de arquitetura do ADR-0007 (SPEC-0017).
       - name: Testes da second-brain
         run: python -m unittest discover -s skills/second-brain/tests -v
+
+      # Suíte da org-atlas, com os testes de arquitetura do ADR-0010 (SPEC-0032).
+      - name: Testes da org-atlas
+        run: python -m unittest discover -s skills/org-atlas/tests -v

@@ -87,6 +87,9 @@ Desenho:
 | SPEC-0039 | `lint` do atlas | full | feature | S | SPEC-0036 | SPEC-0037@1 |
 | SPEC-0040 | Modo repositório (scan agendado com PR) e modo local | full | feature | S | SPEC-0039 | — |
 | SPEC-0041 | `sdd-management`: `org_context` no DISCOVER | lite | feature | S | SPEC-0038 | — |
+| SPEC-0046 | Testes do endurecimento do `init`/`doctor` e regra de processo com alias (pendência do G4 da SPEC-0032) | lite | fix | S | SPEC-0032 | — |
+| SPEC-0047 | Ids de repositório sem diferença de caixa entre os coletores GitHub e Argo CD (pendência do G4 das SPEC-0034/0035) | lite | fix | S | SPEC-0034, SPEC-0035 | — |
+| SPEC-0048 | Endurecimento da curadoria, do context e do lint, e alcance da rejeição (pendências do G4 das SPEC-0037, 0038 e 0039) | lite | fix | S | SPEC-0037, SPEC-0038, SPEC-0039 | — |
 
 Os coletores (SPEC-0034, SPEC-0035) só consomem o contrato da SPEC-0033 e mexem em arquivos próprios, mas todas as filhas atualizam o `CHANGELOG.md` da skill, então o `waves` as coloca uma de cada vez. A SPEC-0041 mexe só na `sdd-management`.
 

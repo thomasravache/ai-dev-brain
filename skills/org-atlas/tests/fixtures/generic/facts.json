@@ -1,0 +1,13 @@
+{
+  "entities": [
+    {"kind": "service", "id": "payments-api", "name": "payments-api",
+     "attrs": {"language": "go", "tier": 1, "tags": ["pci", "core"], "public": false}},
+    {"kind": "datastore", "id": "payments-db", "name": "payments-db", "attrs": {"engine": "postgres"}},
+    {"kind": "queue", "id": "refunds", "name": "refunds", "attrs": {}}
+  ],
+  "relations": [
+    {"from": "service:payments-api", "to": "datastore:payments-db", "type": "writes"},
+    {"from": "service:payments-api", "to": "queue:refunds", "type": "publishes"},
+    {"from": "service:payments-api", "to": "repository:acme/api", "type": "depends_on"}
+  ]
+}
