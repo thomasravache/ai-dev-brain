@@ -126,6 +126,35 @@ def samples(data):
     return {s.get("repository"): s.get("sample") for s in data.get("signals", []) if s.get("type") == "pr-titles"}
 
 
+def expected_for(wanted):
+    """expected-acme.json só com os repositórios `wanted` ({"acme/api", ...}) e o que vem deles."""
+    full = expected()
+    relations = [r for r in full["relations"] if r["to"].split(":", 1)[1] in wanted]
+    owners = {r["from"] for r in relations}
+    entities = [e for e in full["entities"]
+                if (e["kind"] == "repository" and e["id"] in wanted)
+                or (e["kind"] == "pipeline" and e["id"].rsplit("/", 1)[0] in wanted)
+                or f"{e['kind']}:{e['id']}" in owners]
+    signals = [s for s in full["signals"] if s["repository"] in wanted]
+    return {"entities": entities, "relations": relations, "signals": signals}
+
+
+def big_org(folder, prs=250):
+    """Organização acme com um repositório `big` de `prs` PRs (mais de uma página da API), em `folder`."""
+    folder.mkdir(parents=True, exist_ok=True)
+    repo = dict(load("repos.json")[0], id=2001, name="big", full_name="acme/big")
+    (folder / "repos.json").write_text(json.dumps([repo]), encoding="utf-8")
+    for sub in ("repo", "pulls"):
+        (folder / sub).mkdir(exist_ok=True)
+    (folder / "repo" / "big.json").write_text(json.dumps(dict(repo, allow_merge_commit=True,
+                                                              allow_squash_merge=True,
+                                                              allow_rebase_merge=False)), encoding="utf-8")
+    pulls = [{"number": prs - i, "title": f"feat: change {prs - i}", "state": "closed",
+              "head": {"ref": f"feat/change-{prs - i}"}, "base": {"ref": "main"}} for i in range(prs)]
+    (folder / "pulls" / "big.json").write_text(json.dumps(pulls), encoding="utf-8")
+    return folder
+
+
 def make_bin(fake):
     """Pasta temporária com `fake` copiado como `gh` executável."""
     folder = Path(tempfile.mkdtemp()).resolve()
@@ -237,6 +266,22 @@ class TitlePatternsTest(unittest.TestCase):
         self.assertEqual(result, {"total": 4, "counts": {"feat/": 2, "fix/": 1, "dependabot/": 1}})
 
 
+    def test_branch_prefixes_count_only_known_types(self):
+        """SPEC-0034:UT-01 — revisão G4: só prefixos de tipo conhecidos (sem caixa, chave minúscula); outro
+        primeiro segmento (login, bot) conta só no total, como branch sem "/"."""
+        branches = ["feat/a", "FIX/b", "Feature/c", "hotfix/d", "bugfix/e", "perf/f", "dependabot/npm/x",
+                    "renovate/y", "release/1.0", "ana-dev/fix-x", "copilot/x", "main-hotfix", "wip/z"]
+        result = function("count_branch_prefixes")(branches)
+        self.assertEqual(result["total"], len(branches))
+        self.assertEqual(result["counts"], {"feat/": 1, "fix/": 1, "feature/": 1, "hotfix/": 1, "bugfix/": 1,
+                                            "perf/": 1, "dependabot/": 1, "renovate/": 1, "release/": 1})
+        self.assertNotIn("ana-dev", json.dumps(result))
+        known = ("feat", "fix", "chore", "docs", "refactor", "test", "perf", "build", "ci", "style", "revert",
+                 "feature", "bugfix", "hotfix", "release", "dependabot", "renovate")
+        everything = function("count_branch_prefixes")([f"{k.upper()}/x" for k in known])
+        self.assertEqual(everything["counts"], {f"{k}/": 1 for k in known})
+
+
 class MapRepositoryTest(unittest.TestCase):
     def test_repository_has_only_the_contract_attributes(self):
         """SPEC-0034:UT-02 — repository:<org>/<nome> com language, default_branch, topics, archived, visibility."""
@@ -251,6 +296,14 @@ class MapRepositoryTest(unittest.TestCase):
             "attrs": {"language": None, "default_branch": "master", "topics": [], "archived": True,
                       "visibility": "private"},
             "source": "github"})
+
+
+    def test_repository_id_uses_the_canonical_full_name(self):
+        """SPEC-0034:UT-02 — revisão G4: o id vem do full_name da API, não da caixa de --org."""
+        repos = {r["name"]: r for r in load("repos.json")}
+        result = function("map_repository")("ACME", repos["api"])
+        self.assertEqual(result["id"], "acme/api")
+        self.assertEqual(result["name"], "api")
 
 
 class MapWorkflowsTest(unittest.TestCase):
@@ -276,6 +329,18 @@ class MapWorkflowsTest(unittest.TestCase):
         self.assertEqual(entities[0]["name"], "Terraform Plan")
         self.assertEqual([r["from"] for r in relations], ["pipeline:acme/infra/terraform"])
         self.assertEqual(function("map_workflows")("acme", "legacy", load("workflows/legacy.json")), ([], []))
+
+
+    def test_paginated_output_is_read_page_by_page(self):
+        """SPEC-0034:UT-03 — revisão G4: a saída do gh api --paginate (páginas JSON coladas) vira uma lista de
+        páginas, inclusive objetos de actions/workflows."""
+        parse = function("parse_pages")
+        self.assertEqual(parse('[{"name": "a"}]\n[{"name": "b"}, {"name": "c"}][]'),
+                         [[{"name": "a"}], [{"name": "b"}, {"name": "c"}], []])
+        self.assertEqual(parse('{"total_count": 2, "workflows": [{"id": 1}]}{"total_count": 2, "workflows": '
+                               '[{"id": 2}]}\n'),
+                         [{"total_count": 2, "workflows": [{"id": 1}]}, {"total_count": 2, "workflows": [{"id": 2}]}])
+        self.assertEqual(parse(""), [])
 
 
 class ParseCodeownersTest(unittest.TestCase):
@@ -306,6 +371,15 @@ class ParseCodeownersTest(unittest.TestCase):
         self.assertEqual(function("parse_codeowners")("acme", "infra", text), ([], []))
 
 
+    def test_team_handles_are_case_insensitive(self):
+        """SPEC-0034:UT-04 — revisão G4: @Acme/Payments e @acme/payments são um time só, id em minúsculas."""
+        text = "*  @Acme/Payments\n/docs/  @acme/payments @ACME/Docs-Team\n"
+        entities, relations = function("parse_codeowners")("acme", "api", text)
+        self.assertEqual(sorted(e["id"] for e in entities), ["acme/docs-team", "acme/payments"])
+        self.assertEqual(sorted(r["from"] for r in relations), ["team:acme/docs-team", "team:acme/payments"])
+        self.assertTrue(all(r["to"] == "repository:acme/api" for r in relations), relations)
+
+
 class MapPolicyTest(unittest.TestCase):
     def assert_booleans(self, signals):
         for signal in signals:
@@ -331,6 +405,15 @@ class MapPolicyTest(unittest.TestCase):
         self.assertEqual(len(warnings), 1, warnings)
         self.assertIn("acme/legacy", warnings[0])
         self.assert_booleans(signals)
+
+
+    def test_template_listing_ignores_items_that_are_not_objects(self):
+        """SPEC-0034:UT-06 — revisão G4: item da listagem que não é objeto é ignorado, sem exceção."""
+        has = function("has_template_entry")
+        self.assertTrue(has(["x", None, 3, {"name": "Pull_Request_Template.md", "type": "file"}]))
+        self.assertTrue(has([["a"], {"name": "PULL_REQUEST_TEMPLATE", "type": "dir"}]))
+        self.assertFalse(has(["pull_request_template.md", None, {"name": "README.md", "type": "file"}]))
+        self.assertFalse(has({"name": "pull_request_template.md", "type": "file"}))
 
 
 # --------------------------------------------------------------------------- integração
@@ -366,17 +449,33 @@ class InputFolderTest(GithubCase):
     def test_repos_option_keeps_only_the_given_repositories(self):
         """SPEC-0034:IT-01 — --repos api,web: só esses repositórios e o que vem deles."""
         data, _ = self.collect("--org", "acme", "--input", ACME, "--repos", "api,web")
-        wanted = {"acme/api", "acme/web"}
-        full = expected()
-        relations = [r for r in full["relations"] if r["to"].split(":", 1)[1] in wanted]
-        owners = {r["from"] for r in relations}
-        entities = [e for e in full["entities"]
-                    if (e["kind"] == "repository" and e["id"] in wanted)
-                    or (e["kind"] == "pipeline" and e["id"].rsplit("/", 1)[0] in wanted)
-                    or f"{e['kind']}:{e['id']}" in owners]
-        signals = [s for s in full["signals"] if s["repository"] in wanted]
-        self.assertEqual(comparable(data), comparable({"entities": entities, "relations": relations,
-                                                       "signals": signals}))
+        self.assertEqual(comparable(data), comparable(expected_for({"acme/api", "acme/web"})))
+
+    def test_org_and_repos_are_case_insensitive(self):
+        """SPEC-0034:IT-01 — revisão G4: --org ACME dá os mesmos ids (full_name da API); --repos API acha api."""
+        data, _ = self.collect("--org", "ACME", "--input", ACME)
+        self.assertEqual(comparable(data), comparable(expected()))
+        data, _ = self.collect("--org", "acme", "--input", ACME, "--repos", "API,Web")
+        self.assertEqual(comparable(data), comparable(expected_for({"acme/api", "acme/web"})))
+
+    def test_codeowners_that_is_not_utf8_does_not_crash(self):
+        """SPEC-0034:IT-01 — revisão G4: CODEOWNERS que não é UTF-8 no --input não gera traceback."""
+        folder = self.tmp / "acme-bad-codeowners"
+        shutil.copytree(ACME, folder)
+        (folder / "codeowners" / "api").write_bytes(b"\xff\xfe* @acme/payments \xe9quipe\n")
+        result = self.run_github("--org", "acme", "--input", folder)
+        self.assertEqual(result.returncode, 0, output(result))
+        self.assertNotIn("Traceback", output(result))
+        json.loads(result.stdout)
+
+    def test_logins_in_branch_names_never_leave_the_collector(self):
+        """SPEC-0034:IT-01 — revisão G4: branch com login (ana-dev/...) ou bot (copilot/...) conta só no total."""
+        data, result = self.collect("--org", "acme", "--input", ACME)
+        self.assertNotIn("ana-dev", result.stdout)
+        self.assertNotIn("copilot", result.stdout)
+        prefixes = {s["repository"]: s for s in data["signals"] if s["type"] == "branch-prefixes"}
+        self.assertEqual(prefixes["acme/api"]["total"], 16)
+        self.assertEqual(sum(prefixes["acme/api"]["counts"].values()), 14)
 
 
 class FakeGhTest(GithubCase):
@@ -405,6 +504,33 @@ class FakeGhTest(GithubCase):
         self.assertEqual(samples(via_gh), samples(via_input))
 
 
+    def test_fake_gh_with_org_in_another_case(self):
+        """SPEC-0034:IT-02 — revisão G4: pelo gh, --org ACME e --repos API dão os ids canônicos."""
+        data, _ = self.collect("--org", "ACME", fake=FAKE_GH)
+        self.assertEqual(comparable(data), comparable(expected()))
+        data, _ = self.collect("--org", "acme", "--repos", "API,web", fake=FAKE_GH)
+        self.assertEqual(comparable(data), comparable(expected_for({"acme/api", "acme/web"})))
+
+    def test_paginated_lists_are_merged(self):
+        """SPEC-0034:IT-02 — revisão G4: listas com --paginate em várias páginas são juntadas."""
+        data, _ = self.collect("--org", "acme", fake=FAKE_GH, env={"FAKE_GH_PAGINATE_SIZE": "1"})
+        self.assertEqual(comparable(data), comparable(expected()))
+
+    def test_pr_sample_reads_more_than_one_page(self):
+        """SPEC-0034:IT-02 — revisão G4: --pr-sample 150 lê 150 PRs, mesmo passando de uma página (100)."""
+        folder = big_org(self.tmp / "big-org")
+        env = {"FAKE_GH_FIXTURES": str(folder)}
+        for name, kwargs in (("gh falso", {"fake": FAKE_GH}), ("--input", {"args": ("--input", folder)})):
+            with self.subTest(name):
+                data, _ = self.collect("--org", "acme", "--pr-sample", "150", *kwargs.get("args", ()),
+                                       fake=kwargs.get("fake"), env=env)
+                totals = {s["type"]: s.get("total") for s in data["signals"] if s["repository"] == "acme/big"}
+                self.assertEqual(totals["pr-titles"], 150)
+                self.assertEqual(totals["branch-prefixes"], 150)
+                pr_titles = next(s for s in data["signals"] if s["type"] == "pr-titles")
+                self.assertEqual(pr_titles["pattern_counts"], {"conventional": 150, "ticket_key": 0, "other": 0})
+
+
 class GhFailureTest(GithubCase):
     def test_gh_without_authentication_exits_1(self):
         """SPEC-0034:IT-03 — gh sem autenticação (ou token inválido): exit 1 "gh sem acesso à organização ORG"."""
@@ -424,6 +550,25 @@ class GhFailureTest(GithubCase):
         """SPEC-0034:IT-03 — organização inexistente: exit 1 "organização não encontrada: ORG"."""
         result = self.run_github("--org", "ghost", fake=FAKE_GH)
         self.assert_failure(result, "organização não encontrada: ghost")
+
+
+    def test_rate_limit_exits_1_with_a_rate_limit_message(self):
+        """SPEC-0034:IT-03 — revisão G4: 403 de limite de requisições ("API rate limit exceeded") sai com 1 e
+        fala do limite, não de falta de acesso — na primeira chamada e no meio da coleta."""
+        for name, env in (("primeira chamada", {"FAKE_GH_FAIL": "rate-limit"}),
+                          ("nos PRs", {"FAKE_GH_FAIL": "rate-limit", "FAKE_GH_FAIL_ON": "/pulls"})):
+            with self.subTest(name):
+                result = self.run_github("--org", "acme", fake=FAKE_GH, env=env)
+                self.assertEqual(result.returncode, 1, output(result))
+                self.assertRegex(output(result), re.compile("limite", re.IGNORECASE))
+                self.assertNotIn("sem acesso", output(result))
+                self.assertFalse(result.stdout.strip().startswith("{"), "nada de saída do contrato numa falha")
+
+    def test_plain_403_on_the_organization_is_no_access(self):
+        """SPEC-0034:IT-03 — revisão G4: 403 comum em orgs/<org>/repos segue "gh sem acesso à organização"."""
+        result = self.run_github("--org", "acme", fake=FAKE_GH, env={"FAKE_GH_FAIL": "forbidden"})
+        self.assert_failure(result, "gh sem acesso à organização acme")
+        self.assertNotRegex(output(result), re.compile("limite", re.IGNORECASE))
 
 
 # --------------------------------------------------------------------------- contrato

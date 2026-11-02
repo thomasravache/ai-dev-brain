@@ -203,17 +203,17 @@
     {
       "type": "pr-titles",
       "repository": "acme/api",
-      "total": 14,
+      "total": 16,
       "pattern_counts": {
-        "conventional": 9,
+        "conventional": 10,
         "ticket_key": 3,
-        "other": 2
+        "other": 3
       }
     },
     {
       "type": "branch-prefixes",
       "repository": "acme/api",
-      "total": 14,
+      "total": 16,
       "counts": {
         "feat/": 5,
         "fix/": 4,
@@ -363,8 +363,7 @@
       "repository": "acme/legacy",
       "total": 2,
       "counts": {
-        "chore/": 1,
-        "cleanup/": 1
+        "chore/": 1
       }
     },
     {

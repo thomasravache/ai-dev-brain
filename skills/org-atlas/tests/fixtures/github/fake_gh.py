@@ -5,13 +5,21 @@ organização fictícia, no formato que o `gh api` devolve. Só biblioteca padr�
 Os testes copiam este arquivo como `gh` para uma pasta no início do PATH. Variáveis:
 - FAKE_GH_FIXTURES: pasta das respostas (padrão: fixtures/github/acme, ao lado deste arquivo);
 - FAKE_GH_ORG: organização que existe (padrão: acme); qualquer outra responde 404;
-- FAKE_GH_LOG: arquivo onde cada chamada é anotada (uma linha JSON com os argumentos).
+- FAKE_GH_LOG: arquivo onde cada chamada é anotada (uma linha JSON com os argumentos);
+- FAKE_GH_PAGINATE_SIZE: com --paginate, o tamanho de cada página impressa (padrão: per_page ou 30);
+- FAKE_GH_FAIL: falha simulada (revisão G4): `rate-limit` = todo `gh api` responde HTTP 403 "API rate limit
+  exceeded"; `forbidden` = orgs/<org>/repos responde HTTP 403 "Forbidden" (sem acesso);
+- FAKE_GH_FAIL_ON: com FAKE_GH_FAIL=rate-limit, só os caminhos que contêm este texto falham (ex.: /pulls).
 
 Comandos: `gh --version`, `gh auth status` (sempre autenticado) e `gh api [opções] <caminho>`. O caminho é
-reconhecido sem a barra inicial e sem a query string; opções aceitas e ignoradas: --paginate, --slurp, --silent,
--i/--include, -H/--header (só `Accept: ...raw...` muda a resposta de um arquivo), -X/--method GET, -f/-F (campos
-da query, por exemplo state=all e per_page=N: a lista vem sempre inteira, quem limita a amostra é o coletor),
+reconhecido sem a barra inicial; org e repositório sem diferença de caixa (como no GitHub; a resposta traz o
+nome canônico). Opções aceitas: --paginate, --slurp, --silent, -i/--include, -H/--header (só `Accept: ...raw...`
+muda a resposta de um arquivo), -X/--method GET, -f/-F e a query string (page e per_page valem nas listas),
 --hostname e --cache. --jq/-q e --template/-t não são suportados (o coletor lê o JSON com a biblioteca padrão).
+
+Paginação das listas (repos, pulls e os workflows de actions/workflows), como na API: sem --paginate vem só a
+página `page` (padrão 1) com `per_page` itens (padrão 30, máximo 100); com --paginate vêm todas as páginas, uma
+depois da outra no stdout (`[...][...]`), como o gh imprime.
 
 Rotas (repositório existe se está em repos.json):
     orgs/<org>/repos                     -> repos.json
@@ -32,6 +40,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from urllib.parse import parse_qsl
 
 HERE = Path(__file__).resolve().parent
 FIXTURES = Path(os.environ.get("FAKE_GH_FIXTURES") or HERE / "acme")
@@ -124,8 +133,31 @@ def contents(repo, path, raw):
     return emit([entry(repo, prefix + name, kind) for name, kind in sorted(children.items())])
 
 
+def fail(status, message):
+    print(json.dumps({"message": message, "documentation_url": "https://docs.github.com/rest", "status": str(status)}))
+    print(f"gh: {message} (HTTP {status})", file=sys.stderr)
+    return 1
+
+
+def page_of(items, query, paginate, key=None):
+    """A página pedida (ou, com --paginate, todas em sequência) de uma lista; key = lista dentro de um objeto."""
+    per_page = min(int(query.get("per_page", 30)), 100)
+    size = int(os.environ.get("FAKE_GH_PAGINATE_SIZE") or per_page) if paginate else per_page
+    chunks = [items[i:i + size] for i in range(0, len(items), size)] or [[]]
+
+    def wrap(chunk):
+        return chunk if key is None else {"total_count": len(items), key: chunk}
+
+    if paginate:
+        for chunk in chunks:
+            print(json.dumps(wrap(chunk), ensure_ascii=False))
+        return 0
+    page = int(query.get("page", 1))
+    return emit(wrap(chunks[page - 1] if 0 < page <= len(chunks) else []))
+
+
 def api(args):
-    path, raw = None, False
+    path, raw, paginate, query = None, False, False, {}
     i = 0
     while i < len(args):
         arg = args[i]
@@ -137,9 +169,12 @@ def api(args):
             value = arg.split("=", 1)[1] if "=" in arg else (args[i + 1] if i + 1 < len(args) else "")
             if name in ("-H", "--header") and value.lower().startswith("accept") and "raw" in value.lower():
                 raw = True
+            if name in ("-f", "--raw-field", "-F", "--field") and "=" in value:
+                query.update([value.split("=", 1)])
             i += 1 if "=" in arg else 2
             continue
         if name in FLAG_OPTIONS:
+            paginate = paginate or name == "--paginate"
             i += 1
             continue
         if path is None and not arg.startswith("-"):
@@ -148,19 +183,31 @@ def api(args):
     if path is None:
         print("gh falso: faltou o caminho da API", file=sys.stderr)
         return 2
-    parts = path.split("?", 1)[0].strip("/").split("/")
+    base, _, qs = path.partition("?")
+    query = dict(parse_qsl(qs), **query)
+    parts = base.strip("/").split("/")
+    failure = os.environ.get("FAKE_GH_FAIL", "")
+    if failure == "rate-limit" and os.environ.get("FAKE_GH_FAIL_ON", "") in base:
+        return fail(403, "API rate limit exceeded for user ID 4242.")
+    names = {name.lower(): name for name in repo_names()}
     if parts[:1] == ["orgs"] and len(parts) == 3 and parts[2] == "repos":
-        return emit(read_json(FIXTURES / "repos.json", [])) if parts[1] == ORG else not_found()
-    if parts[:1] != ["repos"] or len(parts) < 3 or parts[1] != ORG or parts[2] not in repo_names():
+        if parts[1].lower() != ORG.lower():
+            return not_found()
+        if failure == "forbidden":
+            return fail(403, "Forbidden")
+        return page_of(read_json(FIXTURES / "repos.json", []), query, paginate)
+    if (parts[:1] != ["repos"] or len(parts) < 3 or parts[1].lower() != ORG.lower()
+            or parts[2].lower() not in names):
         return not_found()
-    repo, rest = parts[2], parts[3:]
+    repo, rest = names[parts[2].lower()], parts[3:]
     if not rest:
         data = read_json(FIXTURES / "repo" / f"{repo}.json")
         return emit(data) if data is not None else not_found()
     if rest == ["actions", "workflows"]:
-        return emit(read_json(FIXTURES / "workflows" / f"{repo}.json", {"total_count": 0, "workflows": []}))
+        data = read_json(FIXTURES / "workflows" / f"{repo}.json", {"total_count": 0, "workflows": []})
+        return page_of(data.get("workflows", []), query, paginate, key="workflows")
     if rest == ["pulls"]:
-        return emit(read_json(FIXTURES / "pulls" / f"{repo}.json", []))
+        return page_of(read_json(FIXTURES / "pulls" / f"{repo}.json", []), query, paginate)
     if rest[0] == "contents":
         return contents(repo, "/".join(rest[1:]), raw)
     return not_found()
