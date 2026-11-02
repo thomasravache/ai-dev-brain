@@ -228,27 +228,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Configuração, manifesto e rotação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05 e UT-07 com a tag `SPEC-0051:<ID>`, falhando pelo motivo certo
-- [ ] Green: leitura de `backup`, manifesto sha256, verificação, checagem de entradas e `rotate_backups`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05 e UT-07 com a tag `SPEC-0051:<ID>`, falhando pelo motivo certo
+- [x] Green: leitura de `backup`, manifesto sha256, verificação, checagem de entradas e `rotate_backups`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comandos backup e restore**
-- [ ] Red: IT-01 a IT-07 falhando pelo motivo certo
-- [ ] Green: `backup target add`, `backup` (.partial → verificado → renomeado → rotação), `backup list`, `backup verify`, `restore NOTA` e `restore --to`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: IT-01 a IT-07 falhando pelo motivo certo
+- [x] Green: `backup target add`, `backup` (.partial → verificado → renomeado → rotação), `backup list`, `backup verify`, `restore NOTA` e `restore --to`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Doctor e instruções**
-- [ ] Red: IT-08 e UT-06 falhando pelo motivo certo
-- [ ] Green: linhas `backup` do `doctor`, `SKILL.md`, `references/backup.md` e `references/config.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: IT-08 e UT-06 falhando pelo motivo certo
+- [x] Green: linhas `backup` do `doctor`, `SKILL.md`, `references/backup.md` e `references/config.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -260,8 +260,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — b5a482e | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (b5a482e; 2ª rodada após emenda v2: ilegível vai para skipped, symlink para fora fora do zip, dedupe de destinos, .partial antigo avisado, restore não grava fora do vault, verified e from absoluto, entrada com / recusada, regra de remoção com apelidos; rotação e descarte inalterados; 2 nits não bloqueantes) — b5a482e | 2026-11-02 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ea02b3a (árvore suja) | 2026-11-02 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | pilar entrega dispensado: a skill é distribuída por cópia da pasta (sem deploy) | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -274,37 +274,55 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+O vault ganhou backup restaurável em vários destinos. `backup target add PASTA` registra destinos (qualquer pasta: local fora do provedor, outro provedor ou conta, disco externo). `backup` grava em cada um um zip datado com manifesto sha256, escrito como `.partial`, verificado e só então renomeado; um destino que falha não impede os outros. A rotação mantém os `backup.keep` (padrão 10) mais recentes e só remove zips criados pelo próprio `backup`. `backup list` e `backup verify` mostram e conferem os backups. `restore NOTA --from ZIP` recupera uma nota como `<nome> (restaurado AAAA-MM-DD).md` sem tocar na atual, e `restore --from ZIP --to PASTA` recupera o vault inteiro numa pasta nova. O `doctor` avisa por destino quando o backup está velho, não existe, o destino está inacessível ou sobrou um `.partial` de uma execução interrompida.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.11.4): `backup_name`, `build_manifest`, `write_backup_zip`, `verify_backup`, `safe_entry`, `rotate_backups` (a única remoção nova, ADR-0015), `stale_partials`, `same_folder`/`distinct_folders`; comandos `backup target add`, `backup`, `backup list`, `backup verify`, `restore`; `backup_targets` em `LOCAL_KEYS` (preservado pelo `init`), `backup` em `SHARED_KEYS`; linhas do `doctor`.
+- `SKILL.md` (seção de backup), `references/backup.md` (novo: destinos, quando rodar, restaurar, cron/launchd/Agendador de Tarefas sem instalar nada, aviso de zip não cifrado), `config.md` e o exemplo `backup:` no `brain-config.yml`.
+- Emenda v1 (IMP-01): a regra de remoção aceita a lista fechada de limpezas já existentes. Emenda v2 (revisão G4 aprovada com minors): arquivo ilegível vai para `skipped`, link simbólico para fora fica fora do zip, destino duplicado conta uma vez, `.partial` antigo é avisado, `restore` nunca grava fora do vault; testes em d94a3a6 e correção em b5a482e; a segunda revisão aprovou.
+- Desempenho medido na entrega: vault sintético de 5.000 notas (20 MB) → `backup` em 0,65 s (zip de 1,5 MB), `backup verify` em 0,23 s, com a máquina em carga ~4.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | configuração `backup` com padrões e avisos | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| UT-02 | nome e rotação só do padrão | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| UT-03 | manifesto sha256 | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| UT-04 | verificação de zip íntegro, alterado, incompleto e truncado | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| UT-05 | entradas perigosas recusadas | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| UT-06 | instruções do agente | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| UT-07 | remoção só em `rotate_backups` e na lista fechada | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-01 | `backup target add` | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-02 | backup em vários destinos, falha parcial, `--with-files`, ilegível | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-03 | rotação real e falha no meio | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-04 | `backup list` e `backup verify` | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-05 | `restore` de nota sem sobrescrever | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-06 | `restore --to` pasta nova | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-07 | zip com entrada `..` recusado | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
+| IT-08 | linhas `backup` do doctor | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em b5a482e |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — desempenho medido (5.000 notas: backup 0,65 s, verify 0,23 s); segurança e resiliência por IT-02, IT-03, IT-07
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado, a skill é distribuída por cópia da pasta
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — linhas `backup` do doctor e linha no `log.md`; rollback por `git revert`
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não usa `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — sem deploy. A skill vale na máquina depois do merge, com a cópia de `skills/second-brain` para a pasta de skills do agente (README).
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Duas observações da revisão, sem impacto em segurança: um arquivo apagado pela sincronização no meio do backup aparece em `skipped` (exit 1, o resto é salvo), e no macOS um link simbólico interno escrito com maiúsculas diferentes fica fora do zip (o arquivo de destino entra).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0051`. -->

@@ -65,16 +65,16 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
 **Fase 1: Instruções do modo só conector**
-- [ ] Red: UT-01 e UT-02 com a tag `SPEC-0052:<ID>`, falhando pelo motivo certo
-- [ ] Green: `SKILL.md` (Antes de qualquer fluxo, Modo só conector, Regras) e `references/connectors.md`
-- [ ] `BRAIN_VERSION` (só a constante) e seção no `skills/second-brain/CHANGELOG.md`
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01 e UT-02 com a tag `SPEC-0052:<ID>`, falhando pelo motivo certo
+- [x] Green: `SKILL.md` (Antes de qualquer fluxo, Modo só conector, Regras) e `references/connectors.md`
+- [x] `BRAIN_VERSION` (só a constante) e seção no `skills/second-brain/CHANGELOG.md`
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega e CHANGELOG (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -86,8 +86,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 423a9d9 | 2026-11-02 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (423a9d9; 2ª rodada após emenda v2: caso Exit 3 condicionado, título do onboarding, 'siga no modo só conector', busca pelo nome exato; verify PASS com a spec da emenda v2; 1 minor deixado por decisão do usuário) — 423a9d9 | 2026-11-02 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ea02b3a (árvore suja) | 2026-11-02 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | pilar entrega dispensado: a skill é distribuída por cópia da pasta (sem deploy) | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -99,28 +99,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+Numa sessão nova na nuvem ou no celular, onde o `brain.py config` sai com 3, o agente com o conector do provedor busca pelo nome exato o `brain-config.yml`, usa a pasta dele como vault e entra direto no modo só conector, sem perguntar nem comentar configuração. Com mais de um `brain-config.yml`, usa o que tem `index.md` e `log.md` ao lado e só então faz uma pergunta curta. O onboarding fica para quando não há conector, o arquivo não é achado ou a pessoa pede para configurar a máquina. O limite do modo só conector não mudou.
 
 ### Como foi feito
+- `SKILL.md`: parágrafo "Exit 3 numa sessão nova é normal" em "Antes de qualquer fluxo", o caso "Exit 3" da lista condicionado a "sem conector do provedor (ou a pedido)", título do onboarding ajustado, "Localizar o vault" como primeiro item do modo só conector e a primeira regra com "Exit 3 com conector".
+- `references/connectors.md`: o mesmo passo de localizar o vault.
+- `scripts/brain.py`: só a constante `BRAIN_VERSION` (2026.11.5), e a seção no CHANGELOG (ADR-0007, resposta da Questão 1).
+- Emenda v1 (o texto citava um ID de teste da SPEC-0044) e emenda v2 (revisão G4: o teste novo fora de `touches` e quatro ajustes de texto; testes em 830e8b5 e correção em 423a9d9; a segunda revisão aprovou).
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+O teste de regressão falhou antes da correção: commit red 17d7c2f com 6 falhas (G1 rodado com `--at 17d7c2f`) e 830e8b5 com mais 6 falhas para os ajustes da revisão. Passa depois: commits green 34630e5 e 423a9d9, suíte completa OK (G2) e CI do PR.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | instruções do SKILL.md para localizar o vault pelo conector | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 423a9d9 |
+| UT-02 | connectors.md alinhado e limite do modo só conector mantido | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 423a9d9 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: pilar entrega dispensado, a skill é distribuída por cópia da pasta
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+N/A — sem deploy. A skill vale depois do merge, com a cópia de `skills/second-brain` e o zip novo no claude.ai.
 
 ### Pendências
+Nenhuma spec nova. Observação da revisão, deixada por decisão do usuário ("sem comentar"): num computador com shell e a pasta do provedor, mas sem configuração local, a skill entra no modo só conector sem sugerir o `init --join`.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

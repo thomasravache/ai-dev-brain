@@ -218,27 +218,27 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Marca confidencial, secret-ref e ingest opaco**
-- [ ] Red: UT-01, UT-02, IT-01, IT-02 e IT-03 com a tag `SPEC-0050:<ID>`, falhando pelo motivo certo
-- [ ] Green: `confidential`/`vault_ref`, `new-note --type secret-ref --vault-ref` e `--confidential`, `ingest --confidential` sem processador (size, sha256)
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, IT-01, IT-02 e IT-03 com a tag `SPEC-0050:<ID>`, falhando pelo motivo certo
+- [x] Green: `confidential`/`vault_ref`, `new-note --type secret-ref --vault-ref` e `--confidential`, `ingest --confidential` sem processador (size, sha256)
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Fora de vista por padrão**
-- [ ] Red: UT-07, IT-04 e IT-05 falhando pelo motivo certo
-- [ ] Green: filtro em `search`, `related`, `context`, `links`, `index` e `export-notebooklm`, `--include-confidential` e `confidential_omitted`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-07, IT-04 e IT-05 falhando pelo motivo certo
+- [x] Green: filtro em `search`, `related`, `context`, `links`, `index` e `export-notebooklm`, `--include-confidential` e `confidential_omitted`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Lint, doctor e instruções**
-- [ ] Red: UT-03, UT-04, UT-05, UT-06, UT-08, IT-06 e IT-07 falhando pelo motivo certo
-- [ ] Green: regras `secret-in-note` e `personal-data` (configuráveis, sem imprimir valor), `orphan` sem confidenciais, linha `confidential` do `doctor`, `SKILL.md`, `references/confidential.md` e as referências tocadas
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
+- [x] Red: UT-03, UT-04, UT-05, UT-06, UT-08, IT-06 e IT-07 falhando pelo motivo certo
+- [x] Green: regras `secret-in-note` e `personal-data` (configuráveis, sem imprimir valor), `orphan` sem confidenciais, linha `confidential` do `doctor`, `SKILL.md`, `references/confidential.md` e as referências tocadas
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `BRAIN_VERSION` e seção no `skills/second-brain/CHANGELOG.md` (ADR-0007)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
-- [ ] Relatório de Entrega, docs raiz e CHANGELOG (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: pilar entrega dispensado
+- [x] Relatório de Entrega, docs raiz e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -251,7 +251,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (0192fc4; 2ª rodada após emenda v2: CRLF/BOM, [confidencial] no export, MOC confidencial exit 2, cartão de dígitos iguais, vault_ref fullmatch, ordem do lint; 2 nits de doc não bloqueantes) — 0192fc4 | 2026-11-02 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ea02b3a | 2026-11-02 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | pilar entrega dispensado: a skill é distribuída por cópia da pasta (sem deploy) | 2026-11-02 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -263,37 +263,55 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+O segundo cérebro guarda o que é sensível sem expor. Uma nota `secret-ref` (`new-note --type secret-ref --vault-ref keepass://Pessoal/Banco`) registra onde está a senha, nunca a senha. `ingest ARQ --confidential` guarda um documento pessoal em `files/` sem processador e sem extrair texto; a nota de fonte só tem nome, tamanho e sha256. Notas com `confidential: true` ficam fora de `search`, `related`, `context`, `links`, dos MOCs e do `index.md` (com `--include-confidential` só a pedido da pessoa) e nunca saem na exportação para o NotebookLM, onde um link para elas vira `[confidencial]`. O `lint` avisa (`secret-in-note`, `personal-data`) quando há senha, token, chave, CPF, CNPJ, cartão ou documento rotulado numa nota comum, sem mostrar o valor, e o `doctor` mostra só quantas notas são confidenciais.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `scripts/brain.py` (`BRAIN_VERSION` 2026.11.3): `is_vault_ref`, `is_confidential` (só o booleano `true`, também com CRLF e BOM), `find_secrets`, `find_personal_data` (dígitos verificadores, Luhn, rótulos), `compile_personal_data` com a mesma proteção de regex perigosa do `conflict_patterns`, regras no `LINT_CHECKS`, filtro `include_confidential` em `search`/`related`/`build_context`/`note_links`, `index` e exportação; `lint` em `SHARED_KEYS`.
+- `SKILL.md` (seção "Itens confidenciais e segredos"), `references/confidential.md` (novo), `maintenance.md`, `note-types.md`, `config.md`, `assets/templates/secret-ref.md` e o exemplo `lint:` no `brain-config.yml`. Decisão no ADR-0014.
+- Emenda v2 (revisão G4 FAIL em b96973b): nota CRLF/BOM vazava; testes vermelhos em 5575d26 e correção em 0192fc4; a segunda revisão aprovou. Detalhe da correção: o `read_frontmatter` passou a ignorar o BOM em todos os comandos.
+- Sem dívida assumida.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | validação do `vault_ref` | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| UT-02 | só `confidential: true` booleano marca a nota (inclusive CRLF e BOM) | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| UT-03 | detector de segredo e marcadores | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| UT-04 | detector de dado pessoal sem falso positivo | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| UT-05 | achados sem o valor encontrado | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| UT-06 | detectores configuráveis e padrão perigoso | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| UT-07 | filtro em search, related, context e links | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| UT-08 | instruções do agente | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| IT-01 | `new-note` secret-ref e `--confidential` | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| IT-02 | `ingest --confidential` sem extração | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| IT-03 | processador nunca roda; log só com caminhos | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| IT-04 | busca padrão e `--include-confidential` | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| IT-05 | MOC, índice e exportação sem a confidencial | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| IT-06 | lint só na nota comum, sem o valor | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
+| IT-07 | linha `confidential` do doctor | PASS | CI run 41481880333 (ci 3.9 e 3.15) e sdd 41481880453 em fab1d83; G2 local em 0192fc4 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — segurança e privacidade cobertas por UT-05, UT-06, UT-07, IT-03 a IT-06; sem requisito de tempo novo
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: pilar entrega dispensado, a skill é distribuída por cópia da pasta
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — linha `confidential` do doctor e achados do lint; rollback por `git revert`
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não usa `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — sem deploy. A skill vale na máquina depois do merge, com a cópia de `skills/second-brain` para a pasta de skills do agente (README).
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma. Observação da revisão, sem spec: menções escritas à mão (código inline, link Markdown) a uma nota confidencial continuam com o título dentro do vault, como documentado em `references/confidential.md`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0050`. -->
