@@ -9,6 +9,8 @@ ingest, new-note, relate and index write only through write_new_file and the tex
 replace_region, always with a log.md line (SPEC-0019).
 capture, inbox list, inbox done and ingest --move handle the inbox; move_out_of_inbox is the only function that
 moves a file, and only out of the inbox, never overwriting nor deleting (SPEC-0021, ADR-0007).
+capture --print writes nothing and needs no configuration: it shows the path and content of the capture for the
+agent to create through the provider's connector (SPEC-0044, ADR-0013); brain.py itself never uses the network.
 process, ingest and doctor run the processors declared in brain-config.yml; run_processor is the only function
 that runs an external process: without a shell, in a temporary folder, with a timeout (SPEC-0022, ADR-0009).
 lint only reads: each rule is a check_<rule> function over a single scan of the vault; it never fixes nor deletes
@@ -41,7 +43,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.10.12"
+BRAIN_VERSION = "2026.11.1"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -2427,6 +2429,13 @@ def render_capture(text: str, created: str, context) -> str:
     return f"---\n{dump_yaml(frontmatter)}---\n\n{text.strip()}\n"
 
 
+def capture_note(text: str, context=None, clock=None) -> str:
+    """Content of the capture note that `capture` writes and `capture --print` shows: frontmatter type: capture,
+    created = clock().isoformat(timespec="seconds") (None = datetime.now), context when given, then the text.
+    Pure (no I/O)."""
+    return render_capture(text, (clock or dt.datetime.now)().isoformat(timespec="seconds"), context)
+
+
 def inbox_dir(vault: Path, layout: dict) -> Path:
     return vault / inside_vault(layout["inbox"], "layout.inbox")
 
@@ -2588,19 +2597,44 @@ def inbox_entries(vault: Path, layout: dict, stale_after: int, now=None, items=N
     return [entry for _, _, entry in sorted(rows, key=lambda row: (row[0], row[1]))]
 
 
+def capture_config(args, config_home=None):
+    """(values, vault, inbox folder relative to the vault) of a capture. capture --print without local configuration
+    = (None, None, --inbox or "inbox"); --inbox is only for that case: with configuration it is BrainError (code 2),
+    since the folder is layout.inbox."""
+    inbox = getattr(args, "inbox", None)
+    if inbox is not None and not args.print:
+        raise BrainError("--inbox só vale com --print")
+    try:
+        values, vault, layout = store_config(config_home)
+    except BrainError as e:
+        if not args.print or e.code != 3:
+            raise
+        return None, None, inside_vault(inbox if inbox is not None else "inbox", "--inbox")
+    if inbox is not None:
+        raise BrainError(f"--inbox só vale sem configuração; nesta máquina a inbox é layout.inbox: {layout['inbox']}")
+    return values, vault, inside_vault(layout["inbox"], "layout.inbox")
+
+
 def cmd_capture(args, config_home=None) -> int:
-    values, vault, layout = store_config(config_home)
     text = args.text.strip()
     if not text:
         raise BrainError("texto da captura vazio")
-    if args.context:
+    values, vault, inbox = capture_config(args, config_home)
+    if args.context and values is not None:
         check_context(args.context, values)
     moment = dt.datetime.now()
-    folder = inbox_dir(vault, layout)
-    existing = {p.name for p in folder.iterdir()} if folder.is_dir() else set()
-    rel = posixpath.join(inside_vault(layout["inbox"], "layout.inbox"), capture_name(text, existing, lambda: moment))
-    write_new_file(vault / rel, render_capture(text, moment.isoformat(timespec="seconds"), args.context))
-    append_log(vault, layout, "capture", rel)
+    folder = vault / inbox if vault is not None else None
+    existing = {p.name for p in folder.iterdir()} if folder is not None and folder.is_dir() else set()
+    rel = posixpath.join(inbox, capture_name(text, existing, lambda: moment))
+    content = capture_note(text, args.context, lambda: moment)
+    if args.print:  # writes nothing: the agent creates the file through the connector (SPEC-0044)
+        if args.json:
+            print_json({"path": rel, "content": content})
+        else:
+            print(f"{rel}\n\n{content}", end="")
+        return 0
+    write_new_file(vault / rel, content)
+    append_log(vault, values["layout"], "capture", rel)
     if args.json:
         print_json({"path": rel})
     else:
@@ -3282,6 +3316,9 @@ def main(argv=None) -> int:
     p = sub.add_parser("capture", help="nota rápida na inbox, com data e hora no nome")
     p.add_argument("text", metavar="TEXTO")
     p.add_argument("--context", help="contexto da captura (vai no frontmatter)")
+    p.add_argument("--print", action="store_true",
+                   help="só mostra o caminho e o conteúdo, sem escrever nada (para o conector do provedor)")
+    p.add_argument("--inbox", metavar="PASTA", help="com --print e sem configuração: pasta da inbox (padrão: inbox)")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("inbox", help="itens da inbox (list) e saída de um item já guardado (done)")
     inbox = p.add_subparsers(dest="inbox_command", required=True)
