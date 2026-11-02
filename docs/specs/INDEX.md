@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 5, approved 4, implemented 34
+- Validação (G0): **6 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 5, approved 3, in-progress 1, implemented 34
 - Impedimentos: **0 aberto(s)**, 17 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0038  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0038
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | approved | ✅ pronta |  |
+| 1 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0038 |
@@ -66,7 +66,7 @@ flowchart LR
     S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::implemented
     S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::implemented
     S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::implemented
-    S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::approved
+    S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::inprogress
     S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::approved
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
     S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::approved
@@ -137,7 +137,7 @@ flowchart LR
 | [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
 | [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
 | [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
-| [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
+| [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | in-progress | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
 | [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
 | [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
 | [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
