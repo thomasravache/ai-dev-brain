@@ -46,15 +46,17 @@ BASELINE = {
 #   2. skills/<nome novo ou antigo>/CHANGELOG.md: só as linhas dentro de seções "## [VERSÃO]" com versão menor ou
 #      igual à de antes da troca (BASELINE). [Unreleased] e as seções novas, onde entra "passa a se chamar", são
 #      varridas: a entrada da troca cita os nomes (`gluon-spec`, antes `sdd-management`), não o caminho velho.
-#   3. ".claude/skills/<nome antigo>": cópia antiga instalada na máquina de quem usa, fora do repositório; o README
-#      orienta apagá-la (§2 e §8 da spec). Só esse prefixo exato, nada mais com "skills/" no meio.
+#   3. "~/.claude/skills/<nome antigo>" e "$HOME/.claude/skills/<nome antigo>": cópia antiga instalada na máquina de
+#      quem usa, fora do repositório; o README orienta apagá-la (§2 e §8 da spec). Só esses dois prefixos exatos:
+#      ".claude/skills/<nome antigo>" sem "~/" ou "$HOME/" (ex.: uma pasta .claude/ versionada num repositório) é
+#      acusado.
 #   4. Identificadores mantidos pelo contrato ("org-atlas/collector@1", ".org-atlas/", "~/.config/org-atlas",
 #      "~/.config/second-brain") não precisam de exceção: o padrão exige "skills/" logo antes do nome, sem letra,
 #      dígito, "_" ou "-" antes de "skills", e nenhum desses caracteres depois do nome. O teste de exemplo garante
 #      que eles não são acusados.
 #   5. Arquivos que não são UTF-8 (binários) não são lidos.
 EXEMPT_PREFIXES = ("docs/specs/", "docs/adr/")
-INSTALLED_COPY_PREFIX = ".claude/"
+INSTALLED_COPY_PREFIXES = ("~/.claude/", "$HOME/.claude/")
 OLD_REF_RE = re.compile(
     r"(?<![A-Za-z0-9_-])skills/(" + "|".join(re.escape(n) for n in OLD_NAMES) + r")(?![A-Za-z0-9_-])")
 CHANGELOG_SECTION_RE = re.compile(r"^## \[([^\]]+)\]")
@@ -94,7 +96,7 @@ def old_ref_findings(text, rel_path):
             if in_old_section:
                 continue
         for match in OLD_REF_RE.finditer(line):
-            if line[:match.start()].endswith(INSTALLED_COPY_PREFIX):
+            if line[:match.start()].endswith(INSTALLED_COPY_PREFIXES):
                 continue
             findings.append(f"{rel_path}:{number} — {match.group(0)}")
     return findings
@@ -273,7 +275,10 @@ class OldReferenceSearchTest(unittest.TestCase):
                               "rm -rf ~/.claude/skills/" + "second-brain\n"
                               "contrato org-atlas/collector@1 e pasta .org-atlas/skill\n"
                               "config em ~/.config/org-atlas e ~/.config/second-brain\n"
-                              "skills/" + "org-atlas-v2 e myskills/" + "org-atlas não são o caminho velho\n"),
+                              "skills/" + "org-atlas-v2 e myskills/" + "org-atlas não são o caminho velho\n"
+                              "rm -rf $HOME/.claude/skills/" + "org-atlas\n"
+                              "versionado no repositório: .claude/skills/" + "second-brain/SKILL.md\n"
+                              "outro repositório: projeto/.claude/skills/" + "org-atlas\n"),
                 ".github/workflows/ci.yml": "run: python -m unittest discover -s skills/" + "org-atlas/tests\n",
                 "docs/specs/SPEC-0001-x.md": f"histórico: {old_path}\n",
                 "docs/adr/ADR-0001-x.md": f"histórico: {old_path}\n",
@@ -290,6 +295,8 @@ class OldReferenceSearchTest(unittest.TestCase):
             findings = find_old_refs(root, [*files, "binary.bin"])
         self.assertEqual(findings, [
             f"README.md:1 — {old_path}",
+            "README.md:7 — skills/" + "second-brain",
+            "README.md:8 — skills/" + "org-atlas",
             ".github/workflows/ci.yml:1 — skills/" + "org-atlas",
             "skills/gluon-spec/CHANGELOG.md:5 — " + old_path,
         ])
