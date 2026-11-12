@@ -176,7 +176,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=1)); nota: vermelho conferido em worktree destacada limpa em 8d9b167: test_vendor.py 12 testes, 18 falhas (vendor inexistente; ci desconhecida no config); suíte org-atlas sem outras falhas (1 skip macOS) — 8d9b167 | 2026-11-12 |
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 3dd206c | 2026-11-12 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 3dd206c | 2026-11-12 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 3, d1c7dac): APPROVED — rodada 1 (3dd206c) APPROVED com 7 menores/nits, corrigidos em ebfc847+767d5f1; rodada 2 APPROVED com ponto cego do lint na cópia (A) e doc (B), corrigidos em bc9525a+d1c7dac; rodada 3 sem regressão (333 OK, verify PASS, actionlint/shellcheck OK). Pendências menores: falso secret-leak quando a skill instalada difere da cópia vendorizada; --force-with-lease equivale a --force após o fetch (documentado); edição no atlas.py da cópia não é varrida quando o lint roda dela (documentado) — d1c7dac | 2026-11-12 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
