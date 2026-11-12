@@ -4,7 +4,7 @@ title: "org-atlas: modo repositório com scan agendado e modo local"
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0039]
@@ -180,7 +180,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do PR #20 em 6889f1a verde (run 43278375497 ci Python 3.9/3.15; run 43279264022 sdd/pr-check, após incluir a SPEC-0040 no corpo do PR) — 6889f1a | 2026-11-12 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-12 |
 | G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-12 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — f0486a6 | 2026-11-12 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
