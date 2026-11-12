@@ -24,3 +24,7 @@ redaction: {extra_patterns: []}
 # repositório (método de merge, template de PR), pelo menos min_share de pelo menos min_repos repositórios.
 # Só uma pessoa confirma ou rejeita (atlas.py curate confirm|reject).
 curation: {min_share: 0.6, min_total: 20, min_repos: 3}
+# ci: scan agendado do modo repo (atlas.py vendor --ci github|generic; references/modes.md). Opcional. Ex.:
+#   ci:
+#     env: [GH_TOKEN, ARGOCD_AUTH_TOKEN]   # só NOMES (^[A-Z_][A-Z0-9_]*$); o valor fica nos secrets da plataforma
+#     schedule: "0 6 * * 1"               # cron em UTC (padrão: segunda 06:00); vendor --schedule tem precedência

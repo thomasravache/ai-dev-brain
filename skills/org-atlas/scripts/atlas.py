@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import difflib
 import hashlib
 import json
 import os
@@ -35,7 +36,7 @@ SHARED_FILE = "atlas-config.yml"
 MODES = ("repo", "local")
 LOCAL_KEYS = ("atlas", "credentials")
 SHARED_KEYS = ("version", "organization", "mode", "language", "stale_days", "categories", "collectors",
-               "redaction", "curation")
+               "redaction", "curation", "ci")
 REQUIRED_SHARED = ("version", "organization", "mode")
 SHARED_VERSION = "1"
 STRUCTURE_DIRS = ("services", "platform", "conventions", "process", "snapshots")
@@ -46,7 +47,7 @@ ORIGIN_LOCAL, ORIGIN_ATLAS, ORIGIN_DEFAULT = "local", "atlas", "padrão"
 NOT_CONFIGURED = "org-atlas não configurado nesta máquina — rode init (ou init --join)"
 LOCAL_HEADER = ("# org-atlas — configuração local desta máquina (references/config.md). Não vai para o atlas.\n"
                 "# credentials: só NOMES de variável de ambiente e de profile, nunca valores.\n")
-ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*\Z")  # \Z: "NAME\n" is not a name
 KEY_RE = re.compile(r"^([^\s'\"#{}\[\],:][^:]*?)\s*:(?:\s+(.*))?$")
 NEEDS_QUOTES_RE = re.compile(r":\s|:$|\s#|^[\[\]{}&*!|>'\"%@`,#?:-]|^\s|\s$|\"|\\")
 ABSOLUTE_RE = re.compile(r"^(/|~|[A-Za-z]:[\\/]|\\\\)")
@@ -358,6 +359,41 @@ def validate_credentials(credentials) -> None:
             raise AtlasError(f"credentials aceita só um nome de profile, sem espaços: {collector}", 2)
 
 
+CI_KEYS = ("env", "schedule")
+CRON_FIELD_RE = re.compile(r"^[0-9A-Za-z*/,?#-]+$")
+CI_ENV_PROBLEM = "ci.env aceita só nomes de variável (^[A-Z_][A-Z0-9_]*$): o valor fica nos secrets da plataforma"
+
+
+def valid_cron(value) -> bool:
+    """A 5-field cron expression (minute hour day month weekday), as the CI platforms accept it."""
+    fields = str(value).split() if isinstance(value, (str, int)) else []
+    return len(fields) == 5 and all(CRON_FIELD_RE.match(f) for f in fields)
+
+
+def validate_ci(ci) -> None:
+    """ci = {env: [NAME, ...], schedule: CRON} (SPEC-0040): only variable names, never values. The error message
+    never repeats the value received."""
+    if ci in ("", None):
+        return
+    if not isinstance(ci, dict):
+        raise AtlasError("ci precisa ser um mapa {env: [NOME, ...], schedule: CRON}", 2)
+    unknown = [key for key in ci if key not in CI_KEYS]
+    if unknown:
+        raise AtlasError(f"ci aceita só as chaves {', '.join(CI_KEYS)}", 2)
+    names = ci.get("env")
+    names = [] if names in ("", None) else [names] if isinstance(names, str) else names
+    if not isinstance(names, list) or any(not isinstance(n, str) or not ENV_NAME_RE.match(n) for n in names):
+        raise AtlasError(CI_ENV_PROBLEM, 2)
+    schedule = ci.get("schedule")
+    if schedule not in (None, "") and not valid_cron(schedule):
+        raise AtlasError("ci.schedule precisa ser uma expressão cron de 5 campos (ex.: \"0 6 * * 1\")", 2)
+
+
+def ci_env_names(ci) -> list:
+    names = ci.get("env") if isinstance(ci, dict) else None
+    return [] if names in ("", None) else [names] if isinstance(names, str) else list(names)
+
+
 def read_local(config_home=None):
     """(path, local layer) of this machine; without it raises AtlasError(NOT_CONFIGURED, 3)."""
     path = local_config_path(config_home)
@@ -381,6 +417,7 @@ def load_config(config_home=None) -> dict:
     origins["credentials"] = ORIGIN_LOCAL if "credentials" in local else ORIGIN_DEFAULT
     shared_path = Path(values["atlas"]) / SHARED_FILE if values["atlas"] else None
     shared = read_yaml(shared_path) if shared_path and shared_path.is_file() else {}
+    validate_ci(shared.get("ci"))
     defaults = dict(default_shared(), organization="", mode="")
     for key in SHARED_KEYS:
         found = key in shared
@@ -2397,12 +2434,14 @@ def _special_kind(mode) -> str:
 
 
 class _AtlasFiles:
-    """Every regular file of the atlas (VCS folders skipped), read once. Symlinks, FIFOs, sockets and devices are
+    """Every regular file of the atlas (VCS folders skipped, and .org-atlas/skill/scripts/atlas.py, the tool written
+    by vendor, whose own patterns look like secrets; every other file of the copy is read), read once. Symlinks, FIFOs, sockets and devices are
     never read nor followed; they, unreadable files and folders, non-UTF-8 files (also kept, decoded with
     replacement, for secret-leak) and JSON with an invalid content or shape become `problems` (config findings)."""
 
     def __init__(self, atlas: Path):
         self.atlas, self.texts, self.lossy, self.names, self.problems, self._json = atlas, {}, {}, [], {}, {}
+        self._copy_tool = f"{SKILL_COPY}/scripts/atlas.py"
         for root, dirs, files in os.walk(atlas, onerror=self._walk_error):
             kept = []
             for name in sorted(d for d in dirs if d not in VCS_DIRS):
@@ -2422,6 +2461,8 @@ class _AtlasFiles:
             for name in sorted(files):
                 if name not in LINT_IGNORED_FILES:
                     path = os.path.join(root, name)
+                    if self._is_skill_copy(path, self.rel(path)):
+                        continue
                     self.names.append((self.rel(path), name))
                     self._read(path, self.rel(path))
 
@@ -2431,6 +2472,25 @@ class _AtlasFiles:
         except ValueError:
             return "."
         return rel or "."
+
+    def _is_skill_copy(self, path, rel) -> bool:
+        """.org-atlas/skill/scripts/atlas.py as vendor wrote it: identical to this atlas.py or, when the lint runs from
+        the copy itself (nothing else to compare with), that same file. Limitation: an edit to the atlas.py of the
+        copy is not scanned when the lint runs from it."""
+        if rel != self._copy_tool:
+            return False
+        source = Path(__file__).resolve()
+        try:
+            info = os.lstat(path)
+            if stat.S_ISREG(info.st_mode) and os.path.samefile(path, source):
+                return True
+            expected = source.read_bytes()
+            if not stat.S_ISREG(info.st_mode) or info.st_size != len(expected):
+                return False
+            with os.fdopen(os.open(path, LINT_OPEN_FLAGS), "rb") as handle:
+                return handle.read(len(expected) + 1) == expected
+        except OSError:
+            return False
 
     def problem(self, rel, detail, suggestion=READ_SUGGESTION) -> None:
         self.problems.setdefault(rel, (detail, suggestion))
@@ -2857,6 +2917,115 @@ def cmd_lint(args):
     return 1 if errors else 0
 
 
+# ---------------------------------------------------------------- vendor (modo repo: scan agendado na CI)
+
+CI_TARGETS = {"github": ("github-atlas-scan.yml", ".github/workflows/atlas-scan.yml"),
+              "generic": ("atlas-scan.sh", "ci/atlas-scan.sh")}
+SKILL_COPY = ".org-atlas/skill"  # the tool the CI runs: python3 .org-atlas/skill/scripts/atlas.py
+DEFAULT_SCHEDULE = "0 6 * * 1"
+LOCAL_ONLY = "vendor --ci é do modo repo — veja references/modes.md"
+COPY_SKIPPED = ("__pycache__",)
+
+
+def skill_files() -> list:
+    """(relative path, source) of what the copy of the skill needs: scripts/atlas.py and every file of assets/
+    (collectors, pages, models). Symlinks and caches are never copied."""
+    files = [("scripts/atlas.py", Path(__file__).resolve())]
+    for root, dirs, names in os.walk(ASSETS_DIR):
+        dirs[:] = sorted(d for d in dirs if d not in COPY_SKIPPED and not os.path.islink(os.path.join(root, d)))
+        for name in sorted(names):
+            path = Path(root) / name
+            if path.is_file() and not path.is_symlink() and not name.endswith(".pyc"):
+                files.append((path.relative_to(SKILL_DIR).as_posix(), path))
+    return files
+
+
+def copy_skill(atlas: Path) -> int:
+    """Copy the skill into <atlas>/.org-atlas/skill/, always overwritten (the CI runs this copy, never a customized
+    one); returns how many files changed."""
+    changed = 0
+    for rel, source in skill_files():
+        data, dest = source.read_bytes(), atlas / SKILL_COPY / rel
+        if dest.is_file() and not dest.is_symlink() and dest.read_bytes() == data:
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.is_symlink():
+            dest.unlink()
+        tmp = dest.with_name(dest.name + ".tmp")
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+        if source.suffix in (".py", ".sh"):
+            dest.chmod(0o755)
+        changed += 1
+    return changed
+
+
+def render_workflow(names: list, schedule: str) -> str:
+    """The GitHub Actions workflow from assets/ci/: the schedule and, in the Scan step only, one env entry per
+    ci.env name, read from the secret of the same name (the value stays in the platform's vault)."""
+    text = read_text(ASSETS_DIR / "ci" / CI_TARGETS["github"][0])
+    env = "".join(f"          {name}: ${{{{ secrets.{name} }}}}\n" for name in names)
+    return text.replace("__SCHEDULE__", schedule).replace("__ENV__", f"        env:\n{env}" if names else "")
+
+
+def differing_lines(current: str, content: str) -> int:
+    return sum(1 for line in difflib.unified_diff(current.splitlines(), content.splitlines(), lineterm="")
+               if line[:1] in "+-" and line[:3] not in ("+++", "---"))
+
+
+def put_file(atlas: Path, rel: str, content: str, force: bool, executable: bool = False) -> None:
+    """Same file = "já atualizado"; different without --force = kept, with how many lines differ; else written."""
+    dest = atlas / rel
+    if dest.is_file():
+        current = read_text(dest)
+        if current == content:
+            print(f"já atualizado: {rel}")
+            return
+        if not force:
+            print(f"mantido: {rel} — customizado — {differing_lines(current, content)} linha(s) diferem; "
+                  "use --force para sobrescrever")
+            return
+    elif dest.exists() or dest.is_symlink():
+        raise AtlasError(f"não é um arquivo comum: {rel}", 2)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(dest, content)
+    if executable:
+        dest.chmod(0o755)
+    print(f"escrito: {rel}")
+
+
+def cmd_vendor(args):
+    """vendor --ci github|generic [--schedule CRON] [--force] (SPEC-0040): writes the CI files of the atlas of this
+    machine and the copy of the skill they run; never runs git nor a platform CLI (ADR-0010). Everything is
+    validated before the first write: mode local, an invalid ci or --schedule = exit 2."""
+    atlas, shared = scan_config()
+    if shared.get("mode") == "local":
+        raise AtlasError(LOCAL_ONLY, 2)
+    problems = check_shared(shared)
+    if problems:
+        raise AtlasError(f"atlas-config.yml inválido: {'; '.join(problems)}", 2)
+    ci = shared.get("ci") if isinstance(shared.get("ci"), dict) else {}
+    if args.schedule is not None and not valid_cron(args.schedule):
+        raise AtlasError("--schedule precisa ser uma expressão cron de 5 campos (ex.: \"0 6 * * 1\")", 2)
+    schedule = " ".join(str(args.schedule or ci.get("schedule") or DEFAULT_SCHEDULE).split())
+    source, target = CI_TARGETS[args.ci]
+    if args.ci == "github":
+        content = render_workflow(ci_env_names(ci), schedule)
+    else:
+        content = read_text(ASSETS_DIR / "ci" / source)
+    changed = copy_skill(atlas)
+    print(f"{'atualizado' if changed else 'já atualizado'}: {SKILL_COPY}/ (cópia da skill, {ATLAS_VERSION})")
+    put_file(atlas, target, content, args.force, executable=target.endswith(".sh"))
+    if args.ci == "github":
+        names = ci_env_names(ci)
+        print(f"Agenda: {schedule} (UTC). Secrets esperados no repositório: {', '.join(names) or '(nenhum)'}")
+    else:
+        print(f"Na sua CI: rode `bash {target}` na raiz do atlas com as variáveis de ci.env; "
+              "exit 0 sem mudança, 10 com mudança (abra o PR/MR), 1 com falha")
+    print("Faça commit de .org-atlas/ e do arquivo da CI no atlas (o atlas.py não executa o git).")
+    return 0
+
+
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
@@ -3009,6 +3178,11 @@ def check_shared(data: dict) -> list:
                 curation_settings(data["curation"])
             except AtlasError as e:
                 problems.append(str(e))
+    if "ci" in data:
+        try:
+            validate_ci(data["ci"])
+        except AtlasError as e:
+            problems.append(str(e))
     problems += [f"caminho absoluto em {key}" for key, _ in absolute_values(data)]
     return problems
 
@@ -3169,6 +3343,10 @@ def main(argv=None):
         q.add_argument("--via", help="'PR #<n>' ou 'local'")
         if action == "reject":
             q.add_argument("--reason", help="motivo (opcional)")
+    p = sub.add_parser("vendor", help="modo repo: instala no atlas o scan agendado da CI e a cópia da skill que ela roda")
+    p.add_argument("--ci", required=True, choices=tuple(CI_TARGETS), help="github (GitHub Actions) | generic (script)")
+    p.add_argument("--schedule", help="agenda cron (padrão: ci.schedule, senão \"0 6 * * 1\")")
+    p.add_argument("--force", action="store_true", help="sobrescreve o arquivo da CI customizado")
     args = parser.parse_args(argv)
 
     try:
@@ -3188,6 +3366,8 @@ def main(argv=None):
             return cmd_context(args)
         if args.command == "curate":
             return cmd_curate(args)
+        if args.command == "vendor":
+            return cmd_vendor(args)
     except AtlasError as e:
         print(f"erro: {e}", file=sys.stderr)
         return e.code
