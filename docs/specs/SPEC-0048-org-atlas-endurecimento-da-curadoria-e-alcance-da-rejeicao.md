@@ -7,9 +7,9 @@ user_facing: false
 status: proposed
 created: 2026-11-02
 parent: SPEC-0029
-depends_on: [SPEC-0037, SPEC-0038, SPEC-0039]
+depends_on: [SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040]
 consumes_contract: []
-touches: [skills/org-atlas/scripts/atlas.py, skills/org-atlas/tests/test_curate.py, skills/org-atlas/tests/test_context.py, skills/org-atlas/tests/test_lint.py, skills/org-atlas/references/maintenance.md, skills/org-atlas/references/context.md, skills/org-atlas/references/curation.md, skills/org-atlas/CHANGELOG.md]
+touches: [skills/org-atlas/scripts/atlas.py, skills/org-atlas/tests/test_curate.py, skills/org-atlas/tests/test_context.py, skills/org-atlas/tests/test_lint.py, skills/org-atlas/tests/test_vendor.py, skills/org-atlas/references/modes.md, skills/org-atlas/references/maintenance.md, skills/org-atlas/references/context.md, skills/org-atlas/references/curation.md, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0012]
 external: []
 size: S
@@ -27,6 +27,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - `--via` aceita dígitos não ASCII (`PR #３`).
 - Pendências da revisão G4 da SPEC-0039 (menores; dependem de um `extra_patterns` montado para isso): o `path` dos achados do `lint` é mascarado só por componente, então um padrão que atravessa `/` (`vault/[a-z0-9]{8}`, ou com lookbehind) aparece no texto; nomes com vários pontos (`x.tar.gz`) e arquivos ocultos (`.acme-…`) não têm o radical testado; destinos de link com `#fragmento` ou `?query` são mascarados como estão escritos.
 - Pendência da revisão G4 da SPEC-0038 (menor): no pacote do `context`, o nome do serviço entra num título `### {nome}`; um serviço chamado `## Convenções (regra)` vira `### ## Convenções (regra) (…)`, um título de nível 3 que imita uma seção. Crase num valor também escapa do código inline (só na própria linha, sem criar estrutura).
+- Pendência da revisão G4 da SPEC-0040 (menor): quando a skill instalada difere da cópia vendorizada em `.org-atlas/skill/scripts/atlas.py`, o `lint` rodado pela skill instalada acusa ERRO `secret-leak` falso nessa cópia (as regex da própria ferramenta), com a sugestão "troque a credencial".
 
 ## 2. Causa Raiz
 `_clean_line` só é aplicado aos títulos da amostra; `_id_part` não é injetivo; a regra "rejeitada nunca volta" compara só o id; o padrão de `--via` usa `\d`.
@@ -37,6 +38,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - `--via` com `[0-9]+`.
 - No `lint`, depois da máscara por componente, o caminho inteiro também passa por `_mask_all`; o radical é testado também até o primeiro ponto; destinos de link são mascarados sem `#`/`?` e o sufixo volta depois.
 - No `context`, o nome do serviço no título vai entre crases (ou com `#` inicial escapado) e crases dentro de valores são neutralizadas.
+- No `lint`, a cópia da ferramenta em `.org-atlas/skill/scripts/atlas.py` que difere da skill instalada vira AVISO `config` ("cópia da skill desatualizada — rode `vendor`") em vez de `secret-leak`.
 - Alcance da rejeição conforme a resposta da questão abaixo.
 - **Não muda:** o formato do arquivo de convenção nem quem pode confirmar ou rejeitar.
 
@@ -53,6 +55,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - **UT-03** — Dado `--via "PR #３"`, quando `confirm` valida, então sai com 2.
 - **UT-05** — Dado `extra_patterns: ['vault/[a-z0-9]{8}']` e um arquivo `vault/abcd1234.bin` não UTF-8, `acme-bbbbcccc.tar.gz` com `^acme-[0-9a-f]{8}$` e um link para `acme-eeee1111#sec`, quando o `lint` roda, então nenhum desses valores aparece na saída, em texto ou `--json`.
 - **UT-04** — Dado um serviço chamado `## Convenções (regra)`, quando o `context` monta o pacote, então nenhuma linha do Markdown, de qualquer nível de título, tem como texto um título fixo das seções.
+- **UT-06** — Dado um atlas vendorizado cuja `.org-atlas/skill/scripts/atlas.py` difere da skill instalada (sem segredo nela), quando o `lint` roda pela skill instalada, então não há ERRO `secret-leak` nesse arquivo e há AVISO `config` sugerindo `vendor`; um segredo plantado em outro arquivo da cópia continua ERRO.
 - **IT-01** — Dado `pr-title-conventional` rejeitada no escopo organization, quando a maioria muda e só um repositório segue o padrão, então o resultado segue a decisão da questão abaixo.
 
 ## 5. Questões em Aberto

@@ -151,22 +151,22 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Modelos**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
-- [ ] Green: `assets/ci/` (workflow do GitHub fixado por SHA e script genérico) e chave `ci`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
+- [x] Green: `assets/ci/` (workflow do GitHub fixado por SHA e script genérico) e chave `ci`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comando vendor**
-- [ ] Red: IT-01, IT-02, IT-03 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
-- [ ] Green: `vendor --ci github|generic` com `--force`; `references/modes.md` e `SKILL.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: IT-01, IT-02, IT-03 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
+- [x] Green: `vendor --ci github|generic` com `--force`; `references/modes.md` e `SKILL.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -194,36 +194,53 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`atlas.py vendor --ci github|generic [--schedule CRON] [--force]` no modo `repo`: gera `.github/workflows/atlas-scan.yml` (scan agendado e manual que abre um PR `atlas/scan-AAAA-MM-DD` quando a árvore muda, e lint nos PRs) ou `ci/atlas-scan.sh` (exit 0 sem mudança, 10 com mudança, 1 com falha), e copia a skill para `.org-atlas/skill/`, que é o que a CI executa. Chave `ci: {env, schedule}` no `atlas-config.yml`, conhecida por `config`, `doctor` e `lint`. No modo `local`, `vendor` sai com 2 e o guia `references/modes.md` explica o agendamento local e a migração local → repositório.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **Emenda v2 (IMP-01, H1 thomas em 2026-11-12):** o contrato não dizia de onde vinha a skill na CI do atlas; a cópia em `.org-atlas/skill/` (sempre sobrescrita), o `init --join` com `ATLAS_CONFIG_HOME` temporário, "mudança" = `git status --porcelain` não vazio, a precedência da agenda e a chave `ci` conhecida resolveram.
+- `atlas.py`: `validate_ci`, `valid_cron`, `ci_env_names` e o comando `vendor` (`skill_files`, `copy_skill`, `render_workflow`, `differing_lines` com difflib como no `vendor` da sdd-management, `put_file`); tudo validado antes da primeira escrita; nenhuma mensagem ecoa o valor recebido. Modelos em `assets/ci/` (workflow com `actions/checkout@3d3c42e…` v7.0.1 e `actions/setup-python@6d4fd22…` v7.1.0, conferidos por `git ls-remote`).
+- **IMP-02:** TEST_DEFECT no IT-03 (pasta de configuração reaproveitada) corrigido pelo Test-writer em b8d22ab.
+- **Revisão G4 (3 rodadas, todas APPROVED):** a 1ª pediu nome com `\n` recusado (`\Z`), lint sem ponto cego na cópia, job de lint só com leitura, secrets só no passo Scan, `--force-with-lease` e documentação do PR semanal pelo `seen_at`, do PR criado com `github.token` e do ADR-0012 (testes ebfc847, correção 767d5f1). A 2ª achou que o lint rodado da cópia ainda pulava `assets/**` (teste bc9525a, correção d1c7dac: só o `atlas.py` da cópia é pulado).
+- `ATLAS_VERSION` 2026.11.2 e seção do CHANGELOG com as entregas das SPEC-0037 a SPEC-0040 (b337602).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Workflow com a agenda (precedência `--schedule` > `ci.schedule` > padrão), um `env` por nome lendo de `secrets` só no passo Scan, permissões mínimas (job de lint só `contents: read`) e ações fixadas por SHA | PASS | `test_vendor.py::WorkflowContentTest` (3 testes) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | `ci.env` com valor que não é nome de variável, inclusive com quebra de linha no fim, sai com 2 sem ecoar e sem escrever | PASS | `test_vendor.py::InvalidEnvTest` — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Cópia da skill em `.org-atlas/skill/` sempre sobrescrita e chamada pelo workflow e pelo script; o lint varre a cópia (exceto o `atlas.py`) e acha segredo em arquivo extra, rodando pela skill ou pela cópia | PASS | `test_vendor.py::SkillCopyTest` (5 testes) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | `config`, `doctor` e `lint` conhecem a chave `ci`; `ci.env` inválido sai com 2 no `config` | PASS | `test_vendor.py::CiKeyTest` (2 testes) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | `vendor --ci github` cria o workflow; rodar de novo diz "já atualizado" | PASS | `test_vendor.py::VendorCliTest` (IT-01) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-02 | Workflow customizado mantido com a contagem de linhas; `--force` sobrescreve; `mode: local` sai com 2 | PASS | `test_vendor.py::VendorCliTest` (IT-02), `LocalModeTest` — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-03 | `ci/atlas-scan.sh` sem configuração local usa a cópia e sai com 10 com mudança, 0 sem mudança e 1 com falha | PASS | `test_vendor.py::GenericScriptTest` — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em 6889f1a
+- [x] Review independente sem achados blocker/major (G4) — 3ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — arquivo único, só stdlib, sem git/gh no `atlas.py` (ADR-0010)
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — permissões mínimas e SHAs (UT-01, `actionlint` OK); secrets só por nome; coletor com falha → exit 1 / job falha (IT-03)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — execuções do workflow e PRs de scan; rollback apagando o workflow ou revertendo o PR
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `SKILL.md`, `references/modes.md` e `skills/org-atlas/CHANGELOG.md` (2026.11.2)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0048
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; versão 2026.11.2 na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0048 — `lint` pela skill instalada acusa `secret-leak` falso na cópia vendorizada de outra versão (deve virar AVISO `config` sugerindo `vendor`).
+- Aceitos e documentados em `references/modes.md`, sem spec: `--force-with-lease` depois do `fetch` equivale a `--force` (a branch do dia é do workflow); uma edição no `atlas.py` da cópia não é varrida quando o lint roda dela mesma.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0040`. -->
