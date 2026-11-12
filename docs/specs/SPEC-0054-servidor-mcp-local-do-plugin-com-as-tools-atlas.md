@@ -146,7 +146,7 @@ tools/call {name, arguments}
 - N/A — o servidor repassa o JSON da CLI sem interpretar o conteúdo; a igualdade com a CLI é provada no IT-01.
 
 ### 7.5 Testes E2E
-- N/A — a jornada de instalação é a da SPEC-0053 (E2E-01); o protocolo é provado com o processo real nos IT-01 a IT-03, e a conexão no Claude Code é conferida no G4 (`/mcp` mostra `plugin:fermion:fermion` conectado).
+- N/A — a jornada de instalação é a do teste E2E da SPEC-0053; o protocolo é provado com o processo real nos IT-01 a IT-03, e a conexão no Claude Code é conferida no G4 (`/mcp` mostra `plugin:fermion:fermion` conectado).
 
 ### 7.6 Outros
 - Tempo de resposta no IT-01 (menos de 5 s por chamada no atlas de fixture).

@@ -123,7 +123,7 @@ referência velha
 - N/A — os contratos entre skills e com projetos (identificadores mantidos) são cobertos pelo UT-04.
 
 ### 7.5 Testes E2E
-- N/A — nenhuma jornada muda além do nome; a instalação pelo plugin com os nomes novos é provada pela SPEC-0053 (E2E-01).
+- N/A — nenhuma jornada muda além do nome; a instalação pelo plugin com os nomes novos é provada pelo teste E2E da SPEC-0053.
 
 ### 7.6 Outros
 - N/A.
