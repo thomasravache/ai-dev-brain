@@ -9,7 +9,7 @@ created: 2026-10-30
 parent:
 depends_on: [SPEC-0023]
 consumes_contract: []
-touches: [skills/second-brain/scripts/brain.py, skills/second-brain/tests/**, skills/second-brain/references/providers.md, skills/second-brain/CHANGELOG.md]
+touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, skills/photon-brain/references/providers.md, skills/photon-brain/CHANGELOG.md]
 adrs: [ADR-0008]
 external: []
 size: S

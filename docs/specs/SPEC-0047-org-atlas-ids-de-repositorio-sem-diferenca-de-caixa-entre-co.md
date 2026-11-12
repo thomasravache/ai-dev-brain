@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: [SPEC-0034, SPEC-0035]
 consumes_contract: []
-touches: [skills/org-atlas/assets/collectors/github.py, skills/org-atlas/assets/collectors/argocd.py, skills/org-atlas/tests/test_collector_github.py, skills/org-atlas/tests/test_collector_argocd.py, skills/org-atlas/tests/fixtures/github/**, skills/org-atlas/tests/fixtures/argocd/**, skills/org-atlas/references/collectors/github.md, skills/org-atlas/references/collectors/argocd.md, skills/org-atlas/CHANGELOG.md]
+touches: [skills/boson-atlas/assets/collectors/github.py, skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_github.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/github/**, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/github.md, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md]
 adrs: [ADR-0011]
 external: []
 size: S

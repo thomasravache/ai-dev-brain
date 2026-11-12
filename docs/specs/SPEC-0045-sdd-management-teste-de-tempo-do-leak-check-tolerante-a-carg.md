@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: []
 consumes_contract: []
-touches: [skills/sdd-management/tests/test_private_mode.py]
+touches: [skills/gluon-spec/tests/test_private_mode.py]
 adrs: []
 external: []
 size: S
