@@ -221,10 +221,10 @@ class SkillSuitesGuardTest(unittest.TestCase):
                 arch = subprocess.run(
                     [sys.executable, "-m", "unittest", "discover", "-s", str(folder / "tests"),
                      "-p", "test_architecture.py"],
-                    cwd=REPO, capture_output=True, text=True, timeout=600)
+                    cwd=REPO, capture_output=True, text=True, timeout=600, check=False)
                 self.assertEqual(arch.returncode, 0, arch.stdout + arch.stderr)
                 helped = subprocess.run([sys.executable, str(folder / "scripts" / cli), "--help"],
-                                        cwd=REPO, capture_output=True, text=True, timeout=60)
+                                        cwd=REPO, capture_output=True, text=True, timeout=60, check=False)
                 self.assertEqual(helped.returncode, 0, helped.stdout + helped.stderr)
 
 
@@ -340,7 +340,7 @@ class KeptIdentifiersTest(unittest.TestCase):
                                       ("boson-atlas", "atlas.py", "org-atlas ")):
             with self.subTest(version_output=skill):
                 out = subprocess.run([sys.executable, str(SKILLS / skill / "scripts" / script), "--version"],
-                                     capture_output=True, text=True, timeout=60)
+                                     capture_output=True, text=True, timeout=60, check=False)
                 self.assertEqual(out.returncode, 0, out.stderr)
                 self.assertTrue(out.stdout.startswith(prefix), f"--version mudou: {out.stdout!r}")
 
