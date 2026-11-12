@@ -3,7 +3,7 @@
 
 Este projeto usa Spec-Driven Development. Vale para qualquer mudança de comportamento (feature, bug, refactor, migração), qualquer agente e qualquer modelo:
 
-1. **Carregue a skill `sdd-management` antes de agir.** Sem ela disponível, siga `docs/specs/INDEX.md` e as regras abaixo.
+1. **Carregue a skill `gluon-spec` (antes `sdd-management`) antes de agir.** Sem ela disponível, siga `docs/specs/INDEX.md` e as regras abaixo.
 2. **Não dependa da memória da conversa.** Antes de cada passo rode `python3 tools/sdd/spec_graph.py status` (ou `status SPEC-NNNN`) e execute o próximo passo indicado.
 3. **Nada é implementado sem spec aprovada pelo humano (H1).** Dúvidas vão para "Questões em Aberto"; paradas, para o "Registro de Impedimentos" (`impede` / `resolve`).
 4. **Testes antes do código.** Commit `test(...)` antes de `feat|fix|refactor(...)`. Mensagens em Conventional Commits com rodapé `Refs: SPEC-NNNN`.
