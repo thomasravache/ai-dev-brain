@@ -172,7 +172,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests && python3 -m unittest discover -s tests/plugin` exit 1 (red: FAILED (failures=14)); nota: vermelho em 5b54330: test_skill_names.py 7 testes, 14 falhas em UT-01..UT-05; guarda CH-01/IT-01 verde antes da troca — 5b54330 | 2026-11-12 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 52afe25 | 2026-11-12 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 52afe25 | 2026-11-12 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (c7cba33/9a0f8da): APPROVED — renomeado e mantido conforme o contrato; nenhuma string de runtime mudou; compatibilidade pelo apelido na description e aviso no README; 0 esquecimentos no git grep; 2 minor (exceção .claude larga demais, corrigida em e8bdb60; IT-01 provado pelas suítes completas no G2/G5) e 3 nits (ATLAS.md gerado cita org-atlas, tools/sdd em 2026.11.1, 'antes' em description em inglês) — e8bdb60 | 2026-11-12 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
