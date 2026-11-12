@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 5, approved 3, implemented 41
+- Validação (G0): **5 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 5, approved 2, in-progress 1, implemented 41
 - Impedimentos: **0 aberto(s)**, 20 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0055  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0055
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | in-progress | 🔄 em andamento |  |
 | 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | approved | ⛔ aguarda implementação de SPEC-0055 |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
 | 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
@@ -74,7 +74,7 @@ flowchart LR
   subgraph E0031["SPEC-0031 · Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"]
     S0053["SPEC-0053<br/>Plugin fermion e marketplace fermion-la…"]:::approved
     S0054["SPEC-0054<br/>Servidor MCP local do plugin com as too…"]:::approved
-    S0055["SPEC-0055<br/>Renomear as skills para gluon-spec, pho…"]:::approved
+    S0055["SPEC-0055<br/>Renomear as skills para gluon-spec, pho…"]:::inprogress
   end
   S0023 --> S0028
   S0033 -. contrato v1 .-> S0034
@@ -156,7 +156,7 @@ flowchart LR
 | [SPEC-0052](SPEC-0052-second-brain-localizar-o-vault-pelo-conector-em-sessao-sem-c.md) | second-brain: localizar o vault pelo conector em sessão sem configuração | lite | fix | implemented | 2026-11-02 | — | SPEC-0044 | — |
 | [SPEC-0053](SPEC-0053-plugin-fermion-e-marketplace-fermion-lab-com-as-skills.md) | Plugin fermion e marketplace fermion-lab com as skills | full | feature | approved | 2026-11-12 | SPEC-0031 | SPEC-0055 | — |
 | [SPEC-0054](SPEC-0054-servidor-mcp-local-do-plugin-com-as-tools-atlas.md) | Servidor MCP local do plugin com as tools atlas | full | feature | approved | 2026-11-12 | SPEC-0031 | SPEC-0053, SPEC-0055 | — |
-| [SPEC-0055](SPEC-0055-renomear-as-skills-para-gluon-spec-photon-brain-e-boson-atla.md) | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full | migration | approved | 2026-11-12 | SPEC-0031 | SPEC-0029 | — |
+| [SPEC-0055](SPEC-0055-renomear-as-skills-para-gluon-spec-photon-brain-e-boson-atla.md) | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full | migration | in-progress | 2026-11-12 | SPEC-0031 | SPEC-0029 | — |
 
 ## ADRs
 

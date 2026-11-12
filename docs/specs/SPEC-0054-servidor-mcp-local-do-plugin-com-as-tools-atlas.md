@@ -172,6 +172,21 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Protocolo e tools**
+- [ ] Red: UT-01 a UT-07 em `mcp/tests/` com a tag `SPEC-0054:<ID>`, falhando pelo motivo certo
+- [ ] Green: `mcp/fermion_mcp.py` (duas eras, cinco tools, executor por subprocess) e regras do ADR-0017
+- [ ] Refactor mantendo tudo verde
+
+**Fase 2: Processo real**
+- [ ] Red: IT-01 a IT-03 falhando pelo motivo certo
+- [ ] Green: servidor real por stdio contra um atlas de fixture; `mcpServers` no `plugin.json`; `mcp/README.md`; passo `mcp/tests` na CI
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4), com `/mcp` mostrando `plugin:fermion:fermion` conectado
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: o servidor sobe com o plugin
+- [ ] Relatório de Entrega, README (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

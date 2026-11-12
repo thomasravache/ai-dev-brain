@@ -4,7 +4,7 @@ title: Renomear as skills para gluon-spec, photon-brain e boson-atlas
 tier: full
 type: migration
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0029]
@@ -148,6 +148,21 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 0: Caracterização**
+- [ ] CH-01: suítes das três skills verdes antes da troca (guarda)
+
+**Fase 1: Troca de nomes**
+- [ ] Red: UT-01 a UT-05 em `tests/plugin/test_skill_names.py` com a tag `SPEC-0055:<ID>`, falhando pelo motivo certo
+- [ ] Green: `git mv` das pastas, `name`/`description`, textos, bloco SDD, CI, regras de arquitetura, versões e CHANGELOGs
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suítes das três skills (IT-01), lint e arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Architect: `test`/`arch_test` do `sdd-config.yml` e `touches` das specs abertas com os caminhos novos
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [ ] Relatório de Entrega, README e CHANGELOGs (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
