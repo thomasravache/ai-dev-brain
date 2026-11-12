@@ -169,7 +169,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
-| G1 Red | PENDING | | |
+| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0055:CH-01, SPEC-00; nota: vermelho conferido pelo Test-writer em c6f89ba: test_skill_names.py 6 testes, 14 falhas (pastas novas inexistentes, 26 referências velhas); CH-01 guarda: suítes atuais verdes (sdd 164 OK, second-brain 334 OK, org-atlas 333 OK) — c6f89ba | 2026-11-12 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
