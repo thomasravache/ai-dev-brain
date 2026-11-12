@@ -20,7 +20,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 - `references/modes.md`: modo `repo` e modo `local`, agendamento local com cron ou `/schedule` e a migração local → repositório (SPEC-0040).
 
 ### Changed
-- `lint` pula só os arquivos de `.org-atlas/skill/` idênticos aos da skill (mesmo caminho relativo e mesmo conteúdo: a cópia da ferramenta escrita pelo `vendor`); qualquer outro arquivo ali é varrido normalmente, inclusive por `secret-leak` (SPEC-0040).
+- `lint` pula só `.org-atlas/skill/scripts/atlas.py` (a ferramenta copiada pelo `vendor`, cujas regex parecem segredo), quando idêntico ao `atlas.py` da skill que roda o lint; o resto da cópia, `assets/**` incluído, é varrido normalmente, inclusive por `secret-leak`. Limitação: rodando da própria cópia, uma edição no `atlas.py` dela não é varrida (SPEC-0040).
 
 ### Fixed
 - `CHANGELOG.md`: as entradas dos coletores `generic`, `github` e `argocd` (SPEC-0034, SPEC-0035) voltam para "Added" da 2026.11.1 (SPEC-0037).

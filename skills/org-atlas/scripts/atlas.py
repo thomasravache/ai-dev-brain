@@ -2434,14 +2434,14 @@ def _special_kind(mode) -> str:
 
 
 class _AtlasFiles:
-    """Every regular file of the atlas (VCS folders skipped, and the files of .org-atlas/skill/ identical to the
-    skill's: the tool written by vendor, not content of the atlas; any other file there is read), read once. Symlinks, FIFOs, sockets and devices are
+    """Every regular file of the atlas (VCS folders skipped, and .org-atlas/skill/scripts/atlas.py, the tool written
+    by vendor, whose own patterns look like secrets; every other file of the copy is read), read once. Symlinks, FIFOs, sockets and devices are
     never read nor followed; they, unreadable files and folders, non-UTF-8 files (also kept, decoded with
     replacement, for secret-leak) and JSON with an invalid content or shape become `problems` (config findings)."""
 
     def __init__(self, atlas: Path):
         self.atlas, self.texts, self.lossy, self.names, self.problems, self._json = atlas, {}, {}, [], {}, {}
-        self._copy = {f"{SKILL_COPY}/{rel}": source for rel, source in skill_files()}
+        self._copy_tool = f"{SKILL_COPY}/scripts/atlas.py"
         for root, dirs, files in os.walk(atlas, onerror=self._walk_error):
             kept = []
             for name in sorted(d for d in dirs if d not in VCS_DIRS):
@@ -2474,12 +2474,17 @@ class _AtlasFiles:
         return rel or "."
 
     def _is_skill_copy(self, path, rel) -> bool:
-        """A regular file of .org-atlas/skill/ with the same relative path and the same bytes as the skill's."""
-        source = self._copy.get(rel)
-        if source is None:
+        """.org-atlas/skill/scripts/atlas.py as vendor wrote it: identical to this atlas.py or, when the lint runs from
+        the copy itself (nothing else to compare with), that same file. Limitation: an edit to the atlas.py of the
+        copy is not scanned when the lint runs from it."""
+        if rel != self._copy_tool:
             return False
+        source = Path(__file__).resolve()
         try:
-            info, expected = os.lstat(path), source.read_bytes()
+            info = os.lstat(path)
+            if stat.S_ISREG(info.st_mode) and os.path.samefile(path, source):
+                return True
+            expected = source.read_bytes()
             if not stat.S_ISREG(info.st_mode) or info.st_size != len(expected):
                 return False
             with os.fdopen(os.open(path, LINT_OPEN_FLAGS), "rb") as handle:

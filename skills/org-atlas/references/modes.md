@@ -27,8 +27,10 @@ roda git e abre o PR é o workflow (ADR-0010).
 - **`.org-atlas/skill/`** — cópia da skill (`scripts/atlas.py` e `assets/`: coletores, páginas, modelos), **sempre
   sobrescrita** pelo `vendor`. O workflow e o script rodam `python3 .org-atlas/skill/scripts/atlas.py`, e `{skill}`
   nos `command` dos coletores aponta para essa cópia. Não edite a cópia: rode o `vendor` de novo depois de atualizar a
-  skill. O `lint` pula só os arquivos da cópia idênticos aos da skill (mesmo caminho e mesmo conteúdo); qualquer
-  outro arquivo ali (editado ou extra) é varrido como o resto do atlas, inclusive por `secret-leak`.
+  skill. O `lint` pula só o `scripts/atlas.py` da cópia (as regex dele parecem segredo), e só quando é idêntico ao
+  `atlas.py` da skill que roda o lint; todo o resto da cópia, `assets/**` incluído, é varrido como o resto do atlas,
+  inclusive por `secret-leak`. Limitação: quando o `lint` roda da própria cópia (como na CI), não há com o que
+  comparar, e uma edição no `atlas.py` da cópia não é varrida; rode o `vendor` de novo para restaurá-lo.
 - **`--ci github`** → `.github/workflows/atlas-scan.yml`:
   - `schedule` e `workflow_dispatch`: liga o atlas com `init --join --atlas "$PWD"` e um `ATLAS_CONFIG_HOME`
     temporário fora do atlas (mantém um que já venha definido), roda `scan` e `lint` e, quando a árvore git mudou
