@@ -9,7 +9,7 @@ created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0055]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [.claude-plugin/**, tests/plugin/**, README.md, .github/workflows/ci.yml]
 adrs: [ADR-0016]
@@ -86,7 +86,12 @@ O repositório passa a ser um marketplace do Claude Code chamado `fermion-lab`, 
 
 skills/<pasta>/SKILL.md (as três)
   frontmatter com name igual ao nome da pasta e description não vazia
-  nenhuma referência a arquivo fora da própria pasta da skill (nem "../", nem caminho do repositório como tools/ ou docs/)
+  nenhuma referência que a skill resolve a partir da própria pasta e que caia fora dela   (v2):
+    links Markdown relativos ([x](caminho)) em SKILL.md, references/ e assets/ cujo destino, resolvido a partir do arquivo, sai de skills/<nome>/
+    "<skill-dir>/.." em qualquer texto da skill
+    nos scripts: Path(__file__) subindo além da pasta da skill, ou sys.path/caminho apontando para outra skill ou para o tools/ deste repositório
+  caminhos citados como do projeto, vault ou atlas de quem usa (docs/specs/, tools/sdd/, ../{repo}.worktrees, ../ de vault) são permitidos   (v2)
+  tests/ de cada skill fica fora da checagem (fixtures e exemplos de violação)   (v2)
   a pasta copiada sozinha para outro lugar continua funcionando (a CLI responde a --help e ao comando de diagnóstico)
 
 instalação
@@ -109,7 +114,7 @@ erros
 | Manifestos válidos | marketplace.json e plugin.json do repositório | campos e nomes do contrato; plugin e marketplace coerentes | UT-01, UT-02 |
 | Manifesto inválido | JSON quebrado, nome fora de kebab-case, nomes divergentes, source diferente de "./" | a checagem acusa cada caso | UT-03 |
 | Skills achadas pelo scan | `skills/*/SKILL.md` | três skills, name igual à pasta, description não vazia | UT-04 |
-| Skill autocontida | referência a `../`, `tools/` ou `docs/` num SKILL.md, script ou referência da skill | a checagem acusa; as três skills reais passam | UT-05 |
+| Skill autocontida | link relativo, `<skill-dir>/..` ou caminho de script que sai da pasta da skill | a checagem acusa; caminhos do projeto alvo não; as três skills reais passam | UT-05 |
 | Plugin copiado para o cache | raiz copiada (só arquivos versionados) para uma pasta temporária | as três CLIs rodam a partir da cópia | IT-01 |
 | Cópia da pasta continua funcionando | só `skills/<nome>` copiada para outra pasta | a CLI da skill roda | IT-01 |
 | Instalação real | Claude Code CLI disponível | `validate` exit 0; marketplace e plugin instalados; três skills listadas | E2E-01 |
@@ -123,7 +128,7 @@ erros
 - **UT-02** — Dado o `.claude-plugin/plugin.json`, quando é lido, então `name` é `fermion` (igual ao do marketplace), `version` segue `AAAA.MM.N`, há `description` e `repository`, e nenhum caminho de componente é declarado.
 - **UT-03** — Dados manifestos inválidos montados no teste (JSON quebrado, nome `Fermion_Lab`, plugin.json com `name` diferente, `source: "./plugins/x"`), quando a checagem roda, então cada um gera um achado próprio.
 - **UT-04** — Dado `skills/`, quando o scan é simulado como o do Claude Code (`skills/<pasta>/SKILL.md`), então acha exatamente `gluon-spec`, `photon-brain` e `boson-atlas`, cada uma com `name` igual à pasta e `description` não vazia.
-- **UT-05** — Dado um `SKILL.md` de exemplo com `../shared`, `tools/sdd/` e `docs/specs/`, quando a checagem de autocontenção roda, então acusa os três; nas três skills reais não há achado.
+- **UT-05** — Dada uma skill de exemplo com `[x](../shared/a.md)`, `<skill-dir>/../tools/sdd/x` e um script com `sys.path.insert(0, str(Path(__file__).parents[2] / "tools"))`, e com o texto "rode `docs/specs/INDEX.md`" e "`tools/sdd/spec_graph.py` do projeto", quando a checagem de autocontenção roda, então acusa os três primeiros e não os dois textos do projeto alvo; nas três skills reais (fora de `tests/`) não há achado (v2).
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado o repositório, quando os arquivos versionados (`git ls-files`) são copiados para uma pasta temporária, como o cache do plugin, e, à parte, só `skills/<nome>` é copiada para outra pasta, então `spec_graph.py --help`, `brain.py --help` e `atlas.py --help` rodam com exit 0 a partir das duas cópias.
@@ -160,7 +165,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Manifestos e skills autocontidas**
 - [ ] Red: UT-01 a UT-05 e IT-01 em `tests/plugin/test_plugin.py` com a tag `SPEC-0053:<ID>`, falhando pelo motivo certo
-- [ ] Green: `.claude-plugin/marketplace.json` e `plugin.json`; skills sem referência para fora da pasta
+- [ ] Green: `.claude-plugin/marketplace.json` e `plugin.json` (as skills já passam na checagem de autocontenção v2)
 - [ ] Refactor mantendo tudo verde
 - [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
 
@@ -193,6 +198,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-12 | G1 | spec | SPEC_DEFECT do Test-writer: UT-05 manda acusar '../', 'tools/' e 'docs/' por texto, mas as três skills citam esses caminhos como caminhos do projeto, vault ou atlas de quem usa (gluon-spec: docs/specs, tools/sdd, ../{repo}.worktrees; photon-brain e boson-atlas: ../ de vault e páginas), e o UT-04 da SPEC-0055 exige tools/sdd/spec_graph.py | Test-writer contou as ocorrências e propôs a regra por links e <skill-dir>/..; nenhum teste escrito | thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -234,3 +240,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0053`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-12 | Autocontenção (UT-05) passa a valer só para o que a skill resolve a partir da própria pasta: links Markdown relativos, `<skill-dir>/..` e caminhos de script (`Path(__file__)`, `sys.path`) que saem de `skills/<nome>/`; caminhos do projeto, vault ou atlas de quem usa (`docs/specs/`, `tools/sdd/`, `../` do vault) são permitidos; `tests/` fica fora | IMP-01: a regra por texto acusaria as três skills, que citam esses caminhos como do projeto alvo, e contradiria a SPEC-0055:UT-04 | nenhuma (sem consumidores) | pendente (H1) |

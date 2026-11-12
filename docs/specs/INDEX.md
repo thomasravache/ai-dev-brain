@@ -4,15 +4,15 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 5, approved 2, in-progress 1, implemented 41
-- Impedimentos: **1 aberto(s)**, 20 resolvido(s)
+- Validação (G0): **5 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 5, approved 1, in-progress 2, implemented 41
+- Impedimentos: **1 aberto(s)**, 21 resolvido(s)
 
 ## Impedimentos Abertos
 
 | Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
 |---|---|---|---|---|---|---|---|
-| SPEC-0055 | IMP-01 | falha | G1 | thomas | 2026-11-12 | 0d | 3 FAILs seguidos no G1, nenhum por defeito do código ou dos testes: (1) CH-01/IT-01 sem tag (corrigido em 5b54330); (2) o verify leu o E2E-01 da SPEC-0053 citado no N/A como teste desta spec (redação corrigida); (3) o test do sdd-config não roda tests/plugin, então a suíte dá verde no commit red |
+| SPEC-0053 | IMP-01 | spec | G1 | thomas | 2026-11-12 | 0d | SPEC_DEFECT do Test-writer: UT-05 manda acusar '../', 'tools/' e 'docs/' por texto, mas as três skills citam esses caminhos como caminhos do projeto, vault ou atlas de quem usa (gluon-spec: docs/specs, tools/sdd, ../{repo}.worktrees; photon-brain e boson-atlas: ../ de vault e páginas), e o UT-04 da SPEC-0055 exige tools/sdd/spec_graph.py |
 
 ## Cobertura de Pilares
 
@@ -29,14 +29,14 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
-**Paradas por impedimento:** SPEC-0055  
+**Em andamento:** SPEC-0055  
+**Paradas por impedimento:** SPEC-0053  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | in-progress | 🚧 parada por impedimento: IMP-01 (falha → thomas, 0d) |  |
-| 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | approved | ⛔ aguarda implementação de SPEC-0055 |  |
+| 1 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | in-progress | 🔄 em andamento |  |
+| 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | in-progress | 🚧 parada por impedimento: IMP-01 (spec → thomas, 0d) |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
 | 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
 | 3 | SPEC-0054 | Servidor MCP local do plugin com as tools atlas | full/M | approved | ⛔ aguarda implementação de SPEC-0053; aguarda implementação de SPEC-0055 |  |
@@ -78,7 +78,7 @@ flowchart LR
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::implemented
   end
   subgraph E0031["SPEC-0031 · Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"]
-    S0053["SPEC-0053<br/>Plugin fermion e marketplace fermion-la…"]:::approved
+    S0053["SPEC-0053<br/>Plugin fermion e marketplace fermion-la…"]:::inprogress
     S0054["SPEC-0054<br/>Servidor MCP local do plugin com as too…"]:::approved
     S0055["SPEC-0055<br/>Renomear as skills para gluon-spec, pho…"]:::inprogress
   end
@@ -160,7 +160,7 @@ flowchart LR
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | implemented | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
 | [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | implemented | 2026-11-02 | — | SPEC-0017 | — |
 | [SPEC-0052](SPEC-0052-second-brain-localizar-o-vault-pelo-conector-em-sessao-sem-c.md) | second-brain: localizar o vault pelo conector em sessão sem configuração | lite | fix | implemented | 2026-11-02 | — | SPEC-0044 | — |
-| [SPEC-0053](SPEC-0053-plugin-fermion-e-marketplace-fermion-lab-com-as-skills.md) | Plugin fermion e marketplace fermion-lab com as skills | full | feature | approved | 2026-11-12 | SPEC-0031 | SPEC-0055 | — |
+| [SPEC-0053](SPEC-0053-plugin-fermion-e-marketplace-fermion-lab-com-as-skills.md) | Plugin fermion e marketplace fermion-lab com as skills | full | feature | in-progress | 2026-11-12 | SPEC-0031 | SPEC-0055 | — |
 | [SPEC-0054](SPEC-0054-servidor-mcp-local-do-plugin-com-as-tools-atlas.md) | Servidor MCP local do plugin com as tools atlas | full | feature | approved | 2026-11-12 | SPEC-0031 | SPEC-0053, SPEC-0055 | — |
 | [SPEC-0055](SPEC-0055-renomear-as-skills-para-gluon-spec-photon-brain-e-boson-atla.md) | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full | migration | in-progress | 2026-11-12 | SPEC-0031 | SPEC-0029 | — |
 
