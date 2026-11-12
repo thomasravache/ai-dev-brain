@@ -6,7 +6,13 @@
 
 - Validação (G0): **6 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 5, in-progress 1, implemented 40
-- Impedimentos: **0 aberto(s)**, 19 resolvido(s)
+- Impedimentos: **1 aberto(s)**, 19 resolvido(s)
+
+## Impedimentos Abertos
+
+| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
+|---|---|---|---|---|---|---|---|
+| SPEC-0040 | IMP-02 | trabalho | G2 | Test-writer | 2026-11-12 | 0d | TEST_DEFECT do Implementer: IT-03 cria a pasta ci-config-<state> com mkdir() e chama run_script('v1') duas vezes, então a 2ª chamada dá FileExistsError no próprio teste |
 
 ## Cobertura de Pilares
 
@@ -23,13 +29,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0040  
-**Paradas por impedimento:** —  
+**Em andamento:** —  
+**Paradas por impedimento:** SPEC-0040  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | in-progress | 🚧 parada por impedimento: IMP-02 (trabalho → Test-writer, 0d) |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0040 |
