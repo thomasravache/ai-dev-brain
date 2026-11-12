@@ -4,7 +4,7 @@ title: Servidor MCP local do plugin com as tools atlas
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0055]
@@ -15,8 +15,8 @@ touches: [mcp/**, .claude-plugin/plugin.json, .github/workflows/ci.yml]
 adrs: [ADR-0017]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-12
 ---
 
 # SPEC-0054 — Servidor MCP local do plugin com as tools atlas

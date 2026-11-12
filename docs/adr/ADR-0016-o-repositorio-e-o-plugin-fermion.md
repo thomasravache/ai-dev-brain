@@ -1,7 +1,7 @@
 ---
 id: ADR-0016
 title: O repositório é o plugin fermion
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-12
 pillars: []

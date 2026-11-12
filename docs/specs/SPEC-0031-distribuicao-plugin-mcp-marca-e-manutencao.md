@@ -3,13 +3,13 @@ id: SPEC-0031
 title: "Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-10-30
 depends_on: [SPEC-0029]
 adrs: [ADR-0016, ADR-0017, ADR-0018]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-12
 ---
 
 # SPEC-0031 — Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção (Épico)
@@ -32,6 +32,7 @@ Hoje cada skill é instalada copiando a sua pasta, e o usuário chama uma de cad
 2. **Encadeamento e entrada única:** hook `SessionStart` que coloca no contexto o índice do atlas e o `status` do SDD quando existirem; comando de entrada única (ex.: `/deliver <tarefa>`) que dispara atlas → spec → aprovação → implementação → PR. É atalho: a lógica continua nas skills.
 3. **Servidor MCP local:** um servidor só, stdio, com tools separadas por prefixo (`atlas_*`, `brain_*`, `sdd_*`); cada tool é camada fina sobre a CLI da skill, que continua a fonte da verdade (sem lógica duplicada, ADR-0001). Ordem: `atlas` primeiro (grafo tipado e, com a SPEC-0030, política de probes no servidor), `brain` depois (uso no desktop e no celular, sem shell), `sdd` por último (ganho marginal).
 4. **Auto-melhoria (manutenção da própria skill):** `doctor` de cada skill avisa quando o ambiente sai do suporte (ex.: versão do Python sem suporte); uma skill ou agente mantenedor abre a spec de atualização. Subir a versão mínima do Python é spec `type: migration` com um ADR que substitui a regra de versão do ADR-0001/ADR-0007. A base já existe: `whats-new`, CHANGELOG e versão por skill.
+   - **Radar (thomas, 2026-11-12): atualizar o que é antigo para as versões novas.** Quando a skill ou o servidor MCP for usado, ele mesmo confere o que está instalado e diz como atualizar, para o usuário sempre ter o melhor. Exemplos: cópia antiga em `~/.claude/skills/` com o nome antigo (`sdd-management`, `second-brain`, `org-atlas`) ao lado do plugin `fermion`; `tools/sdd/` do projeto mais velho que a `gluon-spec` (o `whats-new` já faz parte disso); bloco `sdd:start` antigo; atlas vendorizado (`.org-atlas/skill/`) mais velho que a `boson-atlas`; skill mais velha que o plugin instalado. A checagem é só de leitura e vira aviso com o comando de atualização (nunca atualiza sozinha); no MCP, uma tool ou um aviso no resultado. Entra na filha de auto-melhoria.
 5. **Marca:** nome do plugin (`fermion`, SPEC-0053) e das skills (SPEC-0055, antes do plugin). Renomear é migração: muda o nome visível e a descrição continua dizendo o que a skill faz (é ela que faz o agente acionar a skill); caminhos já instalados nos projetos (`tools/sdd/`, `sdd-config.yml`, bloco `sdd:start`) ficam como estão.
 6. **Proteção do "como a gente faz" (última frente):** usar a skill numa organização sem entregar o código e o método. Caminhos, do mais aberto ao mais fechado: (a) instalar menos no projeto — a CI baixa a ferramenta numa versão fixa em vez de uma cópia no repo, como o modo privado já faz para as specs; (b) **MCP remoto** hospedado, em que o cliente só tem o conector. Limite: o texto do `SKILL.md` é sempre legível quando roda localmente; só o hospedado esconde o método de verdade.
 
@@ -77,7 +78,7 @@ Desenho:
 | a criar | Hook `SessionStart` e comando de entrada única | full | feature | S | SPEC-0053 | — |
 | a criar | Servidor MCP: tools `brain_*` | full | feature | M | MCP atlas | — |
 | a criar | Servidor MCP: tools `sdd_*` | full | feature | S | MCP atlas | — |
-| a criar | Auto-melhoria: `doctor` de ambiente e fluxo do mantenedor | full | feature | S | — | — |
+| a criar | Auto-melhoria: `doctor` de ambiente, aviso de instalação antiga (cópias, `tools/sdd/`, bloco SDD, atlas vendorizado) com o comando de atualização, e fluxo do mantenedor | full | feature | M | SPEC-0053 | — |
 | a criar | Distribuição sem cópia do código e MCP remoto | full | feature | M | MCP | — |
 
 ## 5. Estratégia de Entrega

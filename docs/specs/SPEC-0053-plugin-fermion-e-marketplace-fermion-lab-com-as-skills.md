@@ -4,7 +4,7 @@ title: Plugin fermion e marketplace fermion-lab com as skills
 tier: full
 type: feature
 user_facing: true
-status: proposed
+status: approved
 created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0055]
@@ -15,8 +15,8 @@ touches: [.claude-plugin/**, tests/plugin/**, README.md, .github/workflows/ci.ym
 adrs: [ADR-0016]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-12
 ---
 
 # SPEC-0053 — Plugin fermion e marketplace fermion-lab com as skills

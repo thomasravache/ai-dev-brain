@@ -4,7 +4,7 @@ title: Renomear as skills para gluon-spec, photon-brain e boson-atlas
 tier: full
 type: migration
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0029]
@@ -15,8 +15,8 @@ touches: [skills/**, .github/workflows/ci.yml, README.md, AGENTS.md, tests/plugi
 adrs: [ADR-0018]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-12
 ---
 
 # SPEC-0055 — Renomear as skills para gluon-spec, photon-brain e boson-atlas

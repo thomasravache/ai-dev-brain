@@ -1,7 +1,7 @@
 ---
 id: ADR-0017
 title: Servidor MCP local como camada fina sobre as CLIs
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-12
 pillars: []

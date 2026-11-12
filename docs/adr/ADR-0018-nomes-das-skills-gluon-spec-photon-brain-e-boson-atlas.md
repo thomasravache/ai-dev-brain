@@ -1,7 +1,7 @@
 ---
 id: ADR-0018
 title: "Nomes das skills: gluon-spec, photon-brain e boson-atlas"
-status: proposed
+status: accepted
 origin: user
 date: 2026-11-12
 pillars: []
