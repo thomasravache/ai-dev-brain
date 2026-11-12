@@ -132,6 +132,27 @@ class VendorCase(unittest.TestCase):
             self.assertFalse((self.atlas / rel).exists(), f"{rel} não devia existir")
 
 
+def invalid_env_values():
+    """(rótulo, valor) de ci.env fora de ^[A-Z_][A-Z0-9_]*$ (o token é montado em tempo de execução)."""
+    return (("token", secret_like()), ("lowercase", "gh_token"), ("dash", "GH-TOKEN"), ("digit", "1TOKEN"),
+            ("assignment", "GH_TOKEN=abc"), ("newline", "GH_TOKEN\n"))
+
+
+def split_lint_job(text):
+    """(nome, bloco, resto) do job que roda só em pull_request (if: ... == 'pull_request'); o resto é o
+    workflow sem esse bloco (nível do workflow e os outros jobs). Sem esse job: (None, None, text)."""
+    head, sep, body = text.partition("\njobs:\n")
+    if not sep:
+        return None, None, text
+    blocks = re.split(r"(?m)^(?=  [A-Za-z_][\w-]*:\s*$)", body)
+    for i, block in enumerate(blocks):
+        if re.search(r"(?m)^ {4}if:.*==\s*['\"]pull_request['\"]", block):
+            name = block.split(":", 1)[0].strip()
+            rest = head + sep + "".join(blocks[:i] + blocks[i + 1:])
+            return name, block, rest
+    return None, None, text
+
+
 def cron_of(text):
     """Valores de cron: no workflow (aspas simples ou duplas, ou sem aspas)."""
     return [m.group(2) for m in re.finditer(r"cron:\s*(['\"]?)([^'\"\n#]+?)\1\s*(#.*)?$", text, re.MULTILINE)]
@@ -149,8 +170,15 @@ class WorkflowContentTest(VendorCase):
         for name in ("GH_TOKEN", "ARGOCD_AUTH_TOKEN"):
             with self.subTest(env=name):
                 self.assertRegex(text, rf"(?m)^\s*{name}:\s*\$\{{\{{\s*secrets\.{name}\s*\}}\}}\s*$")
-        permissions = {(m.group(1), m.group(2)) for m in PERMISSION.finditer(text)}
-        self.assertEqual(permissions, {("contents", "write"), ("pull-requests", "write")}, text)
+        lint_name, lint_job, rest = split_lint_job(text)
+        self.assertIsNotNone(lint_job, f"nenhum job roda só em pull_request: {text}")
+        self.assertRegex(lint_job, r"(?m)^ {4}permissions:\s*(#.*)?$",
+                         f"job {lint_name} sem permissions no nível do job")
+        self.assertEqual({(m.group(1), m.group(2)) for m in PERMISSION.finditer(lint_job)}, {("contents", "read")},
+                         f"job {lint_name} (pull_request) deve ter só contents: read")
+        self.assertEqual({(m.group(1), m.group(2)) for m in PERMISSION.finditer(rest)},
+                         {("contents", "write"), ("pull-requests", "write")},
+                         "scan / workflow: só contents: write e pull-requests: write")
         self.assertNotRegex(text, r"(?m)^\s*permissions:\s*(write-all|read-all)")
         uses = [line for line in text.splitlines() if USES.match(line)]
         self.assertTrue(uses, "nenhuma ação (uses:) no workflow")
@@ -180,16 +208,18 @@ class WorkflowContentTest(VendorCase):
 class InvalidEnvTest(VendorCase):
     def test_env_value_that_is_not_a_variable_name_exits_2_without_echo_or_writes(self):
         """SPEC-0040:UT-02"""
-        for bad in (secret_like(), "gh_token", "GH-TOKEN", "1TOKEN", "GH_TOKEN=abc"):
-            with self.subTest(value=bad[:4]):
+        for label, bad in invalid_env_values():
+            with self.subTest(value=label):
                 path = self.shared_path()
                 original = path.read_text(encoding="utf-8")
-                self.add_to_config(f'ci:\n  env: [GH_TOKEN, "{bad}"]\n')
+                # aspas duplas com escapes de JSON: "GH_TOKEN\n" chega ao atlas.py com a quebra de linha
+                self.add_to_config(f"ci:\n  env: [GH_TOKEN, {json.dumps(bad)}]\n")
                 try:
                     for kind in ("github", "generic"):
                         out = self.vendor("--ci", kind)
                         self.assert_vendor_ran(out, 2)
-                        self.assertNotIn(bad, output(out), "a mensagem repete o valor recebido")
+                        if label != "newline":  # "GH_TOKEN" (sem a quebra) é um nome válido e pode aparecer
+                            self.assertNotIn(bad, output(out), "a mensagem repete o valor recebido")
                         self.assert_nothing_written()
                 finally:
                     path.write_text(original, encoding="utf-8")
@@ -241,6 +271,20 @@ class SkillCopyTest(VendorCase):
         self.assertTrue(path.read_text(encoding="utf-8").endswith("# customizado\n"), "workflow não foi mantido")
         self.assert_copy_is_current()
 
+    def test_lint_finds_a_secret_in_an_extra_file_of_the_copy(self):
+        """SPEC-0040:UT-03 (a cópia não é ponto cego do lint: arquivo extra com segredo é ERRO)"""
+        self.workflow()
+        token = "ghp_" + "Zx9" * 12  # mesmo formato dos testes do lint (SPEC-0039)
+        (self.atlas / COPY / "notes.txt").write_text(f"token do time: {token}\n", encoding="utf-8")
+        for args in (("lint", "--only", "secret-leak"), ("lint", "--only", "secret-leak", "--json")):
+            with self.subTest(args=args):
+                out = self.box.run(*args)
+                self.assertNotEqual(out.returncode, 0, f"lint não acusou o segredo na cópia: {output(out)}")
+                self.assertEqual(out.returncode, 1, output(out))
+                self.assertIn("secret-leak", output(out))
+                self.assertIn(".org-atlas/skill/notes.txt", output(out))
+                self.assertNotIn(token, output(out), "o lint repete o valor do segredo")
+
 
 class CiKeyTest(VendorCase):
     def test_config_doctor_and_lint_know_the_ci_key(self):
@@ -267,13 +311,17 @@ class CiKeyTest(VendorCase):
 
     def test_invalid_ci_env_exits_2_in_config(self):
         """SPEC-0040:UT-04 (ci.env inválido -> config sai com 2, sem repetir o valor)"""
-        bad = secret_like()
-        self.add_to_config(f'ci:\n  env: ["{bad}"]\n')
-        for args in (("config",), ("config", "--json")):
-            with self.subTest(args=args):
-                out = self.box.run(*args)
-                self.assertEqual(out.returncode, 2, output(out))
-                self.assertNotIn(bad, output(out))
+        path = self.shared_path()
+        original = path.read_text(encoding="utf-8")
+        for label, bad in invalid_env_values():
+            path.write_text(original, encoding="utf-8")
+            self.add_to_config(f"ci:\n  env: [{json.dumps(bad)}]\n")
+            for args in (("config",), ("config", "--json")):
+                with self.subTest(value=label, args=args):
+                    out = self.box.run(*args)
+                    self.assertEqual(out.returncode, 2, output(out))
+                    if label != "newline":  # "GH_TOKEN" (sem a quebra) pode aparecer como nome válido
+                        self.assertNotIn(bad, output(out))
 
 
 class VendorCliTest(VendorCase):
