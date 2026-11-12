@@ -47,7 +47,7 @@ ORIGIN_LOCAL, ORIGIN_ATLAS, ORIGIN_DEFAULT = "local", "atlas", "padrão"
 NOT_CONFIGURED = "org-atlas não configurado nesta máquina — rode init (ou init --join)"
 LOCAL_HEADER = ("# org-atlas — configuração local desta máquina (references/config.md). Não vai para o atlas.\n"
                 "# credentials: só NOMES de variável de ambiente e de profile, nunca valores.\n")
-ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*\Z")  # \Z: "NAME\n" is not a name
 KEY_RE = re.compile(r"^([^\s'\"#{}\[\],:][^:]*?)\s*:(?:\s+(.*))?$")
 NEEDS_QUOTES_RE = re.compile(r":\s|:$|\s#|^[\[\]{}&*!|>'\"%@`,#?:-]|^\s|\s$|\"|\\")
 ABSOLUTE_RE = re.compile(r"^(/|~|[A-Za-z]:[\\/]|\\\\)")
@@ -2434,20 +2434,19 @@ def _special_kind(mode) -> str:
 
 
 class _AtlasFiles:
-    """Every regular file of the atlas (VCS folders and the copy of the skill in .org-atlas/skill/ skipped: it is
-    the tool, written by vendor, not content of the atlas), read once. Symlinks, FIFOs, sockets and devices are
+    """Every regular file of the atlas (VCS folders skipped, and the files of .org-atlas/skill/ identical to the
+    skill's: the tool written by vendor, not content of the atlas; any other file there is read), read once. Symlinks, FIFOs, sockets and devices are
     never read nor followed; they, unreadable files and folders, non-UTF-8 files (also kept, decoded with
     replacement, for secret-leak) and JSON with an invalid content or shape become `problems` (config findings)."""
 
     def __init__(self, atlas: Path):
         self.atlas, self.texts, self.lossy, self.names, self.problems, self._json = atlas, {}, {}, [], {}, {}
+        self._copy = {f"{SKILL_COPY}/{rel}": source for rel, source in skill_files()}
         for root, dirs, files in os.walk(atlas, onerror=self._walk_error):
             kept = []
             for name in sorted(d for d in dirs if d not in VCS_DIRS):
                 path = os.path.join(root, name)
                 rel = self.rel(path)
-                if rel == SKILL_COPY:
-                    continue
                 self.names.append((rel + "/", name))
                 try:
                     mode = os.lstat(path).st_mode
@@ -2462,6 +2461,8 @@ class _AtlasFiles:
             for name in sorted(files):
                 if name not in LINT_IGNORED_FILES:
                     path = os.path.join(root, name)
+                    if self._is_skill_copy(path, self.rel(path)):
+                        continue
                     self.names.append((self.rel(path), name))
                     self._read(path, self.rel(path))
 
@@ -2471,6 +2472,20 @@ class _AtlasFiles:
         except ValueError:
             return "."
         return rel or "."
+
+    def _is_skill_copy(self, path, rel) -> bool:
+        """A regular file of .org-atlas/skill/ with the same relative path and the same bytes as the skill's."""
+        source = self._copy.get(rel)
+        if source is None:
+            return False
+        try:
+            info, expected = os.lstat(path), source.read_bytes()
+            if not stat.S_ISREG(info.st_mode) or info.st_size != len(expected):
+                return False
+            with os.fdopen(os.open(path, LINT_OPEN_FLAGS), "rb") as handle:
+                return handle.read(len(expected) + 1) == expected
+        except OSError:
+            return False
 
     def problem(self, rel, detail, suggestion=READ_SUGGESTION) -> None:
         self.problems.setdefault(rel, (detail, suggestion))
@@ -2941,11 +2956,11 @@ def copy_skill(atlas: Path) -> int:
 
 
 def render_workflow(names: list, schedule: str) -> str:
-    """The GitHub Actions workflow from assets/ci/: the schedule and one env entry per ci.env name, read from the
-    secret of the same name (the value stays in the platform's vault)."""
+    """The GitHub Actions workflow from assets/ci/: the schedule and, in the Scan step only, one env entry per
+    ci.env name, read from the secret of the same name (the value stays in the platform's vault)."""
     text = read_text(ASSETS_DIR / "ci" / CI_TARGETS["github"][0])
-    env = "".join(f"      {name}: ${{{{ secrets.{name} }}}}\n" for name in names)
-    return text.replace("__SCHEDULE__", schedule).replace("__ENV__", f"    env:\n{env}" if names else "")
+    env = "".join(f"          {name}: ${{{{ secrets.{name} }}}}\n" for name in names)
+    return text.replace("__SCHEDULE__", schedule).replace("__ENV__", f"        env:\n{env}" if names else "")
 
 
 def differing_lines(current: str, content: str) -> int:
