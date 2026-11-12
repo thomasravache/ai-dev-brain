@@ -6,7 +6,7 @@ type: fix
 user_facing: false
 status: proposed
 created: 2026-11-02
-parent: SPEC-0029
+parent:
 depends_on: [SPEC-0034, SPEC-0035]
 consumes_contract: []
 touches: [skills/org-atlas/assets/collectors/github.py, skills/org-atlas/assets/collectors/argocd.py, skills/org-atlas/tests/test_collector_github.py, skills/org-atlas/tests/test_collector_argocd.py, skills/org-atlas/tests/fixtures/github/**, skills/org-atlas/tests/fixtures/argocd/**, skills/org-atlas/references/collectors/github.md, skills/org-atlas/references/collectors/argocd.md, skills/org-atlas/CHANGELOG.md]

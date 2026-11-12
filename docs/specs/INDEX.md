@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **6 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 5, implemented 41
 - Impedimentos: **0 aberto(s)**, 20 resolvido(s)
 
@@ -41,7 +41,7 @@ Perfil: **minimo**
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
-| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 10/13 implementadas |
+| SPEC-0029 | org-atlas: mapa da organização para agentes | implemented | 10/10 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/0 implementadas |
 
@@ -53,6 +53,9 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
   S0045["SPEC-0045<br/>sdd-management: teste de tempo do leak-…"]:::proposed
+  S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::proposed
+  S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::proposed
+  S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
@@ -64,9 +67,6 @@ flowchart LR
     S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::implemented
     S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::implemented
     S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::implemented
-    S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::proposed
-    S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::proposed
-    S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::proposed
   end
   S0023 --> S0028
   S0033 -. contrato v1 .-> S0034
@@ -120,7 +120,7 @@ flowchart LR
 | [SPEC-0026](SPEC-0026-second-brain-ajustes-da-busca-apontados-na-revisao-da-spec-0.md) | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
 | [SPEC-0027](SPEC-0027-second-brain-padroes-de-conflito-reais-e-ajustes-do-lint.md) | second-brain: ajustes do lint, da busca e da exportação | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0023, SPEC-0024, SPEC-0026 | — |
 | [SPEC-0028](SPEC-0028-second-brain-padroes-de-copia-de-conflito-reais-por-provedor.md) | second-brain: padrões de cópia de conflito reais por provedor | lite | feature | proposed | 2026-10-30 | — | SPEC-0023 | — |
-| [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | approved | 2026-10-30 | — | — | — |
+| [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | implemented | 2026-10-30 | — | — | — |
 | [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | org-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | proposed | 2026-10-30 | — | SPEC-0029 | — |
 | [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | proposed | 2026-10-30 | — | — | — |
 | [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | implemented | 2026-10-30 | SPEC-0029 | — | — |
@@ -137,9 +137,9 @@ flowchart LR
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
 | [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | proposed | 2026-11-02 | — | — | — |
-| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
-| [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0034, SPEC-0035 | — |
-| [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | proposed | 2026-11-02 | SPEC-0029 | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |
+| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | — | SPEC-0033 | — |
+| [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | proposed | 2026-11-02 | — | SPEC-0034, SPEC-0035 | — |
+| [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | proposed | 2026-11-02 | — | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | implemented | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
 | [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | implemented | 2026-11-02 | — | SPEC-0017 | — |
 | [SPEC-0052](SPEC-0052-second-brain-localizar-o-vault-pelo-conector-em-sessao-sem-c.md) | second-brain: localizar o vault pelo conector em sessão sem configuração | lite | fix | implemented | 2026-11-02 | — | SPEC-0044 | — |

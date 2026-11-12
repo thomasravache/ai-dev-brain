@@ -6,7 +6,7 @@ type: fix
 user_facing: false
 status: proposed
 created: 2026-10-30
-parent: SPEC-0029
+parent:
 depends_on: [SPEC-0033]
 consumes_contract: []
 touches: [skills/org-atlas/tests/architecture_rules.py, skills/org-atlas/tests/test_architecture.py, skills/org-atlas/tests/test_hardening.py, skills/org-atlas/references/collector-contract.md, skills/org-atlas/references/redaction.md, skills/org-atlas/scripts/atlas.py, skills/org-atlas/CHANGELOG.md]
