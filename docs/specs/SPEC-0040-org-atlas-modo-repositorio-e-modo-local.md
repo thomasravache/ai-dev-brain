@@ -177,9 +177,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 3dd206c | 2026-11-12 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 3dd206c | 2026-11-12 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 3, d1c7dac): APPROVED — rodada 1 (3dd206c) APPROVED com 7 menores/nits, corrigidos em ebfc847+767d5f1; rodada 2 APPROVED com ponto cego do lint na cópia (A) e doc (B), corrigidos em bc9525a+d1c7dac; rodada 3 sem regressão (333 OK, verify PASS, actionlint/shellcheck OK). Pendências menores: falso secret-leak quando a skill instalada difere da cópia vendorizada; --force-with-lease equivale a --force após o fetch (documentado); edição no atlas.py da cópia não é varrida quando o lint roda dela (documentado) — d1c7dac | 2026-11-12 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do PR #20 em 6889f1a verde (run 43278375497 ci Python 3.9/3.15; run 43279264022 sdd/pr-check, após incluir a SPEC-0040 no corpo do PR) — 6889f1a | 2026-11-12 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-12 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-12 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
