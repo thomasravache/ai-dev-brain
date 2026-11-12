@@ -6,7 +6,13 @@
 
 - Validação (G0): **5 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 5, approved 2, in-progress 1, implemented 41
-- Impedimentos: **0 aberto(s)**, 20 resolvido(s)
+- Impedimentos: **1 aberto(s)**, 20 resolvido(s)
+
+## Impedimentos Abertos
+
+| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
+|---|---|---|---|---|---|---|---|
+| SPEC-0055 | IMP-01 | falha | G1 | thomas | 2026-11-12 | 0d | 3 FAILs seguidos no G1, nenhum por defeito do código ou dos testes: (1) CH-01/IT-01 sem tag (corrigido em 5b54330); (2) o verify leu o E2E-01 da SPEC-0053 citado no N/A como teste desta spec (redação corrigida); (3) o test do sdd-config não roda tests/plugin, então a suíte dá verde no commit red |
 
 ## Cobertura de Pilares
 
@@ -23,13 +29,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0055  
-**Paradas por impedimento:** —  
+**Em andamento:** —  
+**Paradas por impedimento:** SPEC-0055  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | in-progress | 🚧 parada por impedimento: IMP-01 (falha → thomas, 0d) |  |
 | 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | approved | ⛔ aguarda implementação de SPEC-0055 |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
 | 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
