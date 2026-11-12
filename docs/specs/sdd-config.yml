@@ -10,7 +10,7 @@ max_parallel: 3
 # Exemplos: "dotnet build" | "npm run build" | "./gradlew build" | "go build ./..."
 build: ""
 # Suíte completa. Exemplos: "dotnet test" | "npm test" | "pytest" | "go test ./..."
-test: "python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests"
+test: "python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests && python3 -m unittest discover -s tests/plugin"
 test_integration: ""
 # E2E da jornada do usuário. Exemplos: "npx playwright test" | "npx cypress run" | "maestro test flows/"
 test_e2e: ""

@@ -169,7 +169,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
-| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0055:E2E-01; nota: vermelho em 5b54330: test_skill_names.py 7 testes, 14 falhas em UT-01..UT-05 (pastas novas inexistentes, referências velhas); guarda CH-01/IT-01 verde antes da troca; suítes atuais verdes — 5b54330 | 2026-11-12 |
+| G1 Red | FAIL | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 0 (verde: OK (skipped=1)); HEAD já verde: rode com --at 5b54330 (último commit red); nota: vermelho em 5b54330: test_skill_names.py 7 testes, 14 falhas em UT-01..UT-05 (pastas novas inexistentes, referências velhas); guarda CH-01/IT-01 verde antes da troca; suítes atuais verdes — ff6ce28 | 2026-11-12 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
@@ -182,6 +182,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-12 | G1 | falha | 3 FAILs seguidos no G1, nenhum por defeito do código ou dos testes: (1) CH-01/IT-01 sem tag (corrigido em 5b54330); (2) o verify leu o E2E-01 da SPEC-0053 citado no N/A como teste desta spec (redação corrigida); (3) o test do sdd-config não roda tests/plugin, então a suíte dá verde no commit red | Test-writer acrescentou a guarda tagueada; Architect corrigiu o texto de N/A; diagnóstico do 3º: falta tests/plugin no comando test do sdd-config | thomas | Diagnóstico: falhas de configuração do processo, não do código. Correções: guarda tagueada (5b54330), redação do N/A e tests/plugin no comando test. 4ª execução liberada pelo thomas em 2026-11-12 | 2026-11-12 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
