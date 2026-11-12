@@ -3,7 +3,7 @@ id: SPEC-0029
 title: "org-atlas: mapa da organização para agentes"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-10-30
 depends_on: []
 adrs: [ADR-0010, ADR-0011, ADR-0012]
@@ -88,6 +88,8 @@ Desenho:
 | SPEC-0040 | Modo repositório (scan agendado com PR) e modo local | full | feature | S | SPEC-0039 | — |
 | SPEC-0041 | `sdd-management`: `org_context` no DISCOVER | lite | feature | S | SPEC-0038 | — |
 
+As pendências menores das revisões G4 (SPEC-0046, SPEC-0047, SPEC-0048) saíram do épico em 2026-11-12, por decisão do thomas, e seguem como specs de endurecimento avulsas, ainda propostas.
+
 Os coletores (SPEC-0034, SPEC-0035) só consomem o contrato da SPEC-0033 e mexem em arquivos próprios, mas todas as filhas atualizam o `CHANGELOG.md` da skill, então o `waves` as coloca uma de cada vez. A SPEC-0041 mexe só na `sdd-management`.
 
 **Fase 2 (pós-MVP, mesmo épico ou épico novo):** coletores de nuvem (ex.: AWS, GCP, Azure — inventário só de metadados), runtime (ex.: Kubernetes), dados (schemas: ex.: PostgreSQL, MySQL, MongoDB, com dono por tabela e colunas sensíveis marcadas para a SPEC-0030), mensageria, observabilidade, tracker e documentação (ex.: Jira, Linear, Confluence, ADRs e runbooks).
@@ -108,12 +110,12 @@ Os coletores (SPEC-0034, SPEC-0035) só consomem o contrato da SPEC-0033 e mexem
 
 ## 7. Critérios de Aceite do Épico
 <!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-- [ ] Uma organização com coletores de código e entrega declarados gera o atlas e o grafo de dependências entre aplicações — SPEC-0036:IT-01
-- [ ] Um segundo scan mostra só o que mudou — SPEC-0033:IT-02
-- [ ] Nenhum valor de segredo chega ao atlas, e um segredo colado à mão é acusado pelo `lint` — SPEC-0033:IT-03, SPEC-0039:IT-02
-- [ ] O `context` de uma tarefa traz os serviços, dados e convenções certos e avisa quando o atlas está velho — SPEC-0038:IT-03, SPEC-0038:IT-02
-- [ ] Convenção inferida só vira regra depois de confirmada — SPEC-0037:IT-02, SPEC-0037:UT-04
-- [ ] Com `org_context`, o DISCOVER da `sdd-management` usa o atlas; sem a chave, nada muda — SPEC-0041:UT-01, SPEC-0041:UT-02
+- [x] Uma organização com coletores de código e entrega declarados gera o atlas e o grafo de dependências entre aplicações — SPEC-0036:IT-01
+- [x] Um segundo scan mostra só o que mudou — SPEC-0033:IT-02
+- [x] Nenhum valor de segredo chega ao atlas, e um segredo colado à mão é acusado pelo `lint` — SPEC-0033:IT-03, SPEC-0039:IT-02
+- [x] O `context` de uma tarefa traz os serviços, dados e convenções certos e avisa quando o atlas está velho — SPEC-0038:IT-03, SPEC-0038:IT-02
+- [x] Convenção inferida só vira regra depois de confirmada — SPEC-0037:IT-02, SPEC-0037:UT-04
+- [x] Com `org_context`, o DISCOVER da `sdd-management` usa o atlas; sem a chave, nada muda — SPEC-0041:UT-01, SPEC-0041:UT-02
 
 ## 8. Questões em Aberto
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
@@ -136,6 +138,39 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico: o que foi entregue, como (ondas e deploys com versão/data), resultado dos critérios de aceite com os testes que os provam, métricas pós-release, pendências como novas specs. `spec_graph.py report SPEC-0029` ajuda a montar. -->
+
+### O que foi entregue
+A skill `org-atlas` (versão 2026.11.2, `scripts/atlas.py` só com a biblioteca padrão, Python 3.9+) mantém um atlas de como uma organização desenvolve e opera software:
+- `init`/`init --join`, `config` e `doctor` com configuração em duas camadas e credenciais só pelo nome (SPEC-0032);
+- `scan` com o contrato `org-atlas/collector@1`, snapshots, diff e redaction (SPEC-0033), coletores `generic`, GitHub (SPEC-0034) e Argo CD (SPEC-0035);
+- `build` com `graph.json` e páginas geradas por regiões (SPEC-0036);
+- curadoria de convenções em que o agente propõe e só uma pessoa confirma (SPEC-0037, ADR-0012);
+- `context`, o pacote para agentes com aviso de envelhecimento (SPEC-0038), e `lint` antes de compartilhar (SPEC-0039);
+- modo repositório com `vendor --ci` e scan agendado que abre PR, e modo local (SPEC-0040);
+- na `sdd-management`, a chave `org_context`, que faz o DISCOVER consultar o atlas (SPEC-0041).
+
+### Como foi feito
+Dez filhas, uma de cada vez (todas tocam o `CHANGELOG.md` da skill), cada uma com Test-writer → Implementer → Reviewer em worktree própria e integração na branch `sdd/SPEC-0029`, PR #20, com o CI verde (Python 3.9 e 3.15, `sdd`/`pr-check`). Emendas aprovadas pelo thomas: SPEC-0034 v2, SPEC-0037 v2 e SPEC-0040 v2. G6 N/A em todas: a skill é distribuída por cópia (critério da SPEC-0017). Versões da skill: 2026.10.1, 2026.10.2, 2026.11.1 e 2026.11.2.
+
+### Critérios de aceite
+| Critério | Resultado | Prova |
+|---|---|---|
+| Atlas e grafo de dependências a partir dos coletores | PASS | SPEC-0036:IT-01 |
+| Segundo scan mostra só o que mudou | PASS | SPEC-0033:IT-02 |
+| Nenhum segredo chega ao atlas; segredo colado é acusado | PASS | SPEC-0033:IT-03, SPEC-0039:IT-02 |
+| `context` certo e com aviso de envelhecimento | PASS | SPEC-0038:IT-03, SPEC-0038:IT-02 |
+| Convenção só vira regra depois de confirmada | PASS | SPEC-0037:IT-02, SPEC-0037:UT-04 |
+| `org_context` no DISCOVER; sem a chave nada muda | PASS | SPEC-0041:UT-01, SPEC-0041:UT-02 |
+
+Todos verdes no CI do PR #20 em 6889f1a (run 43278375497) e na suíte local do G5 da SPEC-0040.
+
+### Métricas pós-release
+N/A — sem deploy; a skill é distribuída por cópia.
+
+### Pendências
+- SPEC-0046, SPEC-0047 e SPEC-0048 — endurecimento (menores dos G4), fora do épico, propostas.
+- `vendor --force` para levar `tools/sdd/` à 2026.11.1, num PR `[no-spec]` próprio depois do merge, como nas atualizações anteriores (`tools/sdd/` não está no `touches` das filhas).
+- Fase 2 (coletores de nuvem, runtime, dados e outros) e as SPEC-0030 e SPEC-0031, em rascunho.
 
 ## 12. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

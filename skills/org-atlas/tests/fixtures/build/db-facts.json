@@ -1,0 +1,10 @@
+{
+  "entities": [
+    {"kind": "datastore", "id": "payments-db", "name": "payments-db",
+     "attrs": {"engine": "postgres", "host": "db-prod.interno"}},
+    {"kind": "service", "id": "billing", "name": "billing", "attrs": {"tier": 2}}
+  ],
+  "relations": [
+    {"from": "service:billing", "to": "service:api", "type": "depends_on"}
+  ]
+}

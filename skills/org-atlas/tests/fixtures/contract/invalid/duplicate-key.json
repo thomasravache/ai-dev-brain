@@ -1,0 +1,39 @@
+{
+  "contract": "org-atlas/collector@1",
+  "collector": "github",
+  "category": "code",
+  "collected_at": "2026-10-30T12:00:00Z",
+  "entities": [
+    {
+      "kind": "repository",
+      "id": "acme/api",
+      "name": "api",
+      "attrs": {
+        "default_branch": "main"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "pipeline",
+      "id": "acme/api/ci",
+      "name": "ci",
+      "attrs": {},
+      "source": "github"
+    },
+    {
+      "kind": "repository",
+      "id": "acme/api",
+      "name": "api-copy",
+      "attrs": {},
+      "source": "github"
+    }
+  ],
+  "relations": [
+    {
+      "from": "pipeline:acme/api/ci",
+      "to": "repository:acme/api",
+      "type": "builds",
+      "source": "github"
+    }
+  ]
+}

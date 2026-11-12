@@ -1,12 +1,12 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-11-02 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-12 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 10, implemented 31
-- Impedimentos: **0 aberto(s)**, 15 resolvido(s)
+- Validação (G0): **6 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 5, implemented 41
+- Impedimentos: **0 aberto(s)**, 20 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -25,21 +25,15 @@ Perfil: **minimo**
 
 **Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0032
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0032 | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full/M | approved | ✅ pronta |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0033 | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full/M | approved | ⛔ aguarda implementação de SPEC-0032 |  |
-| 3 | SPEC-0034 | org-atlas: coletores generic e GitHub | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033 |
-| 4 | SPEC-0035 | org-atlas: coletor Argo CD | full/M | approved | ⛔ aguarda implementação de SPEC-0032 | saiu da onda 2: arquivos em comum com SPEC-0033; saiu da onda 3: arquivos em comum com SPEC-0034 |
-| 5 | SPEC-0036 | org-atlas: cruzamento de fontes, grafo e páginas geradas | full/M | approved | ⛔ aguarda implementação de SPEC-0033 | saiu da onda 3: arquivos em comum com SPEC-0034; saiu da onda 4: arquivos em comum com SPEC-0035 |
-| 6 | SPEC-0037 | org-atlas: curadoria de convenções | full/M | approved | ⛔ aguarda implementação de SPEC-0036 |  |
-| 7 | SPEC-0038 | org-atlas: context com aviso de envelhecimento | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 6: arquivos em comum com SPEC-0037 |
-| 8 | SPEC-0039 | org-atlas: lint do atlas | full/S | approved | ⛔ aguarda implementação de SPEC-0036 | saiu da onda 6: arquivos em comum com SPEC-0037; saiu da onda 7: arquivos em comum com SPEC-0038 |
-| 8 | SPEC-0041 | sdd-management: org_context no DISCOVER | lite/S | approved | ⛔ aguarda implementação de SPEC-0038 |  |
-| 9 | SPEC-0040 | org-atlas: modo repositório com scan agendado e modo local | full/S | approved | ⛔ aguarda implementação de SPEC-0039 |  |
+| 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 1 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 2 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0046 |
+| 3 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0046; saiu da onda 2: arquivos em comum com SPEC-0047 |
 
 ## Épicos
 
@@ -47,7 +41,7 @@ Perfil: **minimo**
 |---|---|---|---|
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
-| SPEC-0029 | org-atlas: mapa da organização para agentes | approved | 0/10 implementadas |
+| SPEC-0029 | org-atlas: mapa da organização para agentes | implemented | 10/10 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/0 implementadas |
 
@@ -58,35 +52,35 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
+  S0045["SPEC-0045<br/>sdd-management: teste de tempo do leak-…"]:::proposed
+  S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::proposed
+  S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::proposed
+  S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
-    S0032["SPEC-0032<br/>org-atlas: esqueleto, configuração em d…"]:::approved
-    S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::approved
-    S0034["SPEC-0034<br/>org-atlas: coletores generic e GitHub"]:::approved
-    S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::approved
-    S0036["SPEC-0036<br/>org-atlas: cruzamento de fontes, grafo …"]:::approved
-    S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::approved
-    S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::approved
-    S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::approved
-    S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::approved
-    S0041["SPEC-0041<br/>sdd-management: org_context no DISCOVER"]:::approved
+    S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::implemented
+    S0034["SPEC-0034<br/>org-atlas: coletores generic e GitHub"]:::implemented
+    S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::implemented
+    S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::implemented
+    S0038["SPEC-0038<br/>org-atlas: context com aviso de envelhe…"]:::implemented
+    S0039["SPEC-0039<br/>org-atlas: lint do atlas"]:::implemented
+    S0040["SPEC-0040<br/>org-atlas: modo repositório com scan ag…"]:::implemented
   end
   S0023 --> S0028
-  S0032 --> S0033
-  S0032 --> S0034
   S0033 -. contrato v1 .-> S0034
-  S0032 --> S0035
   S0033 -. contrato v1 .-> S0035
-  S0033 --> S0036
-  S0036 --> S0037
-  S0036 --> S0038
-  S0037 -. contrato v1 .-> S0038
-  S0036 --> S0039
-  S0037 -. contrato v1 .-> S0039
+  S0037 -. contrato v2 .-> S0038
+  S0037 -. contrato v2 .-> S0039
   S0039 --> S0040
-  S0038 --> S0041
+  S0033 --> S0046
+  S0034 --> S0047
+  S0035 --> S0047
+  S0037 --> S0048
+  S0038 --> S0048
+  S0039 --> S0048
+  S0040 --> S0048
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -126,22 +120,26 @@ flowchart LR
 | [SPEC-0026](SPEC-0026-second-brain-ajustes-da-busca-apontados-na-revisao-da-spec-0.md) | second-brain: ajustes da busca apontados nas revisões das SPEC-0018 e SPEC-0020 | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0020 | — |
 | [SPEC-0027](SPEC-0027-second-brain-padroes-de-conflito-reais-e-ajustes-do-lint.md) | second-brain: ajustes do lint, da busca e da exportação | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0023, SPEC-0024, SPEC-0026 | — |
 | [SPEC-0028](SPEC-0028-second-brain-padroes-de-copia-de-conflito-reais-por-provedor.md) | second-brain: padrões de cópia de conflito reais por provedor | lite | feature | proposed | 2026-10-30 | — | SPEC-0023 | — |
-| [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | approved | 2026-10-30 | — | — | — |
+| [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | implemented | 2026-10-30 | — | — | — |
 | [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | org-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | proposed | 2026-10-30 | — | SPEC-0029 | — |
 | [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | proposed | 2026-10-30 | — | — | — |
-| [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | approved | 2026-10-30 | SPEC-0029 | — | — |
-| [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
-| [SPEC-0034](SPEC-0034-org-atlas-coletores-generic-e-github.md) | org-atlas: coletores generic e GitHub | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
-| [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
-| [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
-| [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
-| [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@1 |
-| [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@1 |
-| [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
-| [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | approved | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
+| [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | implemented | 2026-10-30 | SPEC-0029 | — | — |
+| [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
+| [SPEC-0034](SPEC-0034-org-atlas-coletores-generic-e-github.md) | org-atlas: coletores generic e GitHub | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
+| [SPEC-0035](SPEC-0035-org-atlas-coletor-argo-cd.md) | org-atlas: coletor Argo CD | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
+| [SPEC-0036](SPEC-0036-org-atlas-cruzamento-grafo-e-paginas.md) | org-atlas: cruzamento de fontes, grafo e páginas geradas | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0033 | — |
+| [SPEC-0037](SPEC-0037-org-atlas-curadoria-de-convencoes.md) | org-atlas: curadoria de convenções | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | — |
+| [SPEC-0038](SPEC-0038-org-atlas-context-com-aviso-de-envelhecimento.md) | org-atlas: context com aviso de envelhecimento | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
+| [SPEC-0039](SPEC-0039-org-atlas-lint.md) | org-atlas: lint do atlas | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0036 | SPEC-0037@2 |
+| [SPEC-0040](SPEC-0040-org-atlas-modo-repositorio-e-modo-local.md) | org-atlas: modo repositório com scan agendado e modo local | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0039 | — |
+| [SPEC-0041](SPEC-0041-sdd-management-org-context-no-discover.md) | sdd-management: org_context no DISCOVER | lite | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0038 | — |
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
+| [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | proposed | 2026-11-02 | — | — | — |
+| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | proposed | 2026-10-30 | — | SPEC-0033 | — |
+| [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | proposed | 2026-11-02 | — | SPEC-0034, SPEC-0035 | — |
+| [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | proposed | 2026-11-02 | — | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | implemented | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
 | [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | implemented | 2026-11-02 | — | SPEC-0017 | — |
 | [SPEC-0052](SPEC-0052-second-brain-localizar-o-vault-pelo-conector-em-sessao-sem-c.md) | second-brain: localizar o vault pelo conector em sessão sem configuração | lite | fix | implemented | 2026-11-02 | — | SPEC-0044 | — |

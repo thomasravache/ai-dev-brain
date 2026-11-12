@@ -4,12 +4,12 @@ title: "org-atlas: modo repositório com scan agendado e modo local"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0039]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/org-atlas/references/modes.md, skills/org-atlas/assets/ci/**, skills/org-atlas/assets/atlas-config.yml, skills/org-atlas/tests/test_vendor.py, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0010]
 external: []
@@ -80,6 +80,13 @@ atlas.py vendor --ci github|generic [--schedule CRON] [--force]
   generic: ci/atlas-scan.sh — roda scan e lint; exit 0 sem mudança, 10 com mudança (para a CI decidir), 1 com falha
   arquivo existente igual: "já atualizado"; diferente sem --force: mantido, "customizado — N linha(s) diferem;
            use --force para sobrescrever"; com --force: sobrescrito
+  as duas formas também copiam a skill para .org-atlas/skill/ (scripts/atlas.py, assets/collectors/ e o que o scan
+           usa), sempre sobrescrita, como o vendor da sdd-management faz com a própria ferramenta; o workflow e o
+           script rodam python3 .org-atlas/skill/scripts/atlas.py, e {skill} aponta para essa cópia   (v2)
+  no CI: init --join --atlas "$PWD" com um ATLAS_CONFIG_HOME temporário (mantém o que já vier definido)   (v2)
+  "mudança" = árvore git do atlas diferente depois do scan (git status --porcelain não vazio)   (v2)
+  agenda: --schedule, senão ci.schedule, senão "0 6 * * 1"   (v2)
+  a chave ci é conhecida pelo config, doctor e lint; ci.env inválido sai com 2 também no config   (v2)
   mode: local: exit 2 "vendor --ci é do modo repo — veja references/modes.md"
   nome em ci.env fora de ^[A-Z_][A-Z0-9_]*$: exit 2
 ```
@@ -96,6 +103,8 @@ atlas.py vendor --ci github|generic [--schedule CRON] [--force]
 | Arquivo customizado | workflow diferente do modelo | mantido sem `--force`; sobrescrito com `--force` | IT-02 |
 | Modo local | `mode: local` | exit 2 | IT-02 |
 | Nome inválido | `ci.env` com valor de segredo | exit 2 | UT-02 |
+| Skill no atlas | `vendor --ci github\|generic` | cópia da skill em `.org-atlas/skill/`, sempre sobrescrita; workflow e script usam essa cópia (v2) | UT-03, IT-03 |
+| Chave `ci` | atlas com `ci` válido | `config`, `doctor` e `lint` aceitam; `ci.env` inválido sai com 2 no `config` (v2) | UT-04 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 ### 7.1 Testes de Caracterização
@@ -106,9 +115,11 @@ atlas.py vendor --ci github|generic [--schedule CRON] [--force]
 - **UT-02** — Dado `ci.env` com um valor que não é nome de variável, quando a configuração é validada, então sai com 2.
 
 ### 7.3 Testes de Integração
+- **UT-03** — Dado `vendor --ci github` e depois `vendor --ci generic`, quando os arquivos são gerados, então `.org-atlas/skill/scripts/atlas.py` é cópia do atlas.py da skill (e é sobrescrita se alterada), os coletores estão em `.org-atlas/skill/assets/collectors/`, e o workflow e o script chamam essa cópia (v2).
+- **UT-04** — Dado um `atlas-config.yml` com `ci` válido, quando `config`, `doctor` e `lint` rodam, então nenhum acusa chave desconhecida; com `ci.env` inválido, `config` sai com 2 (v2).
 - **IT-01** — `vendor --ci github` pela CLI num atlas no modo `repo` cria `.github/workflows/atlas-scan.yml`; rodar de novo diz "já atualizado".
 - **IT-02** — Com o workflow alterado à mão, `vendor` mantém o arquivo e mostra quantas linhas diferem; com `--force`, sobrescreve; num atlas `mode: local`, sai com 2.
-- **IT-03** — O `ci/atlas-scan.sh` gerado, rodado num atlas git com coletor falso, sai com 10 quando o coletor muda a saída e com 0 quando não muda.
+- **IT-03** — O `ci/atlas-scan.sh` gerado, rodado num atlas git com coletor falso e sem configuração local na máquina (ATLAS_CONFIG_HOME vazio), usa a cópia em `.org-atlas/skill/`, sai com 10 quando o coletor muda a saída e com 0 quando não muda (v2).
 
 ### 7.4 Testes de Contrato
 - N/A — não há contrato entre specs.
@@ -140,79 +151,99 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Modelos**
-- [ ] Red: UT-01, UT-02 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
-- [ ] Green: `assets/ci/` (workflow do GitHub fixado por SHA e script genérico) e chave `ci`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-04 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
+- [x] Green: `assets/ci/` (workflow do GitHub fixado por SHA e script genérico) e chave `ci`
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Comando vendor**
-- [ ] Red: IT-01, IT-02, IT-03 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
-- [ ] Green: `vendor --ci github|generic` com `--force`; `references/modes.md` e `SKILL.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: IT-01, IT-02, IT-03 com a tag `SPEC-0040:<ID>`, falhando pelo motivo certo
+- [x] Green: `vendor --ci github|generic` com `--force`; `references/modes.md` e `SKILL.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=1)); nota: vermelho conferido em worktree destacada limpa em 8d9b167: test_vendor.py 12 testes, 18 falhas (vendor inexistente; ci desconhecida no config); suíte org-atlas sem outras falhas (1 skip macOS) — 8d9b167 | 2026-11-12 |
+| G2 Green | PASS | test exit 0 (OK (skipped=1)); lint exit 0 (All checks passed!) — 3dd206c | 2026-11-12 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 3dd206c | 2026-11-12 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 3, d1c7dac): APPROVED — rodada 1 (3dd206c) APPROVED com 7 menores/nits, corrigidos em ebfc847+767d5f1; rodada 2 APPROVED com ponto cego do lint na cópia (A) e doc (B), corrigidos em bc9525a+d1c7dac; rodada 3 sem regressão (333 OK, verify PASS, actionlint/shellcheck OK). Pendências menores: falso secret-leak quando a skill instalada difere da cópia vendorizada; --force-with-lease equivale a --force após o fetch (documentado); edição no atlas.py da cópia não é varrida quando o lint roda dela (documentado) — d1c7dac | 2026-11-12 |
+| G5 Integração & CI | PASS | test exit 0 (OK (skipped=1)); arch_test exit 0 (OK); nota: CI do PR #20 em 6889f1a verde (run 43278375497 ci Python 3.9/3.15; run 43279264022 sdd/pr-check, após incluir a SPEC-0040 no corpo do PR) — 6889f1a | 2026-11-12 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-12 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-12 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — f0486a6 | 2026-11-12 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-02 | G1 | spec | SPEC_DEFECT do Test-writer: o contrato não diz de onde vem a skill (scripts/atlas.py e assets/collectors, para onde {skill} aponta) quando o workflow ou o ci/atlas-scan.sh rodam no repositório do atlas, que não contém a skill; sem isso o scan agendado não roda e a origem do código não é fixada (§5 pede SHA). Lacunas menores: configuração local no CI, o que é 'mudança', precedência da agenda, chave ci desconhecida para lint/config | Test-writer leu a spec, SPEC-0029, ADR-0010/0011/0012, SKILL.md e as referências; nenhum teste escrito | thomas | Emenda v2 — cópia da skill em .org-atlas/skill/, init --join com ATLAS_CONFIG_HOME temporário no CI, mudança = árvore git alterada, precedência da agenda, chave ci conhecida (H1 thomas, 2026-11-12) | 2026-11-12 |
+| IMP-02 | 2026-11-12 | G2 | trabalho | TEST_DEFECT do Implementer: IT-03 cria a pasta ci-config-<state> com mkdir() e chama run_script('v1') duas vezes, então a 2ª chamada dá FileExistsError no próprio teste | Implementer confirmou numa cópia no scratchpad que, com pasta única por chamada, test_vendor fica 12/12 OK | Test-writer | corrigido dentro da própria SPEC-0040 pelo Test-writer: b8d22ab test(org-atlas): pasta de config única por execução no IT-03 | 2026-11-12 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`atlas.py vendor --ci github|generic [--schedule CRON] [--force]` no modo `repo`: gera `.github/workflows/atlas-scan.yml` (scan agendado e manual que abre um PR `atlas/scan-AAAA-MM-DD` quando a árvore muda, e lint nos PRs) ou `ci/atlas-scan.sh` (exit 0 sem mudança, 10 com mudança, 1 com falha), e copia a skill para `.org-atlas/skill/`, que é o que a CI executa. Chave `ci: {env, schedule}` no `atlas-config.yml`, conhecida por `config`, `doctor` e `lint`. No modo `local`, `vendor` sai com 2 e o guia `references/modes.md` explica o agendamento local e a migração local → repositório.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **Emenda v2 (IMP-01, H1 thomas em 2026-11-12):** o contrato não dizia de onde vinha a skill na CI do atlas; a cópia em `.org-atlas/skill/` (sempre sobrescrita), o `init --join` com `ATLAS_CONFIG_HOME` temporário, "mudança" = `git status --porcelain` não vazio, a precedência da agenda e a chave `ci` conhecida resolveram.
+- `atlas.py`: `validate_ci`, `valid_cron`, `ci_env_names` e o comando `vendor` (`skill_files`, `copy_skill`, `render_workflow`, `differing_lines` com difflib como no `vendor` da sdd-management, `put_file`); tudo validado antes da primeira escrita; nenhuma mensagem ecoa o valor recebido. Modelos em `assets/ci/` (workflow com `actions/checkout@3d3c42e…` v7.0.1 e `actions/setup-python@6d4fd22…` v7.1.0, conferidos por `git ls-remote`).
+- **IMP-02:** TEST_DEFECT no IT-03 (pasta de configuração reaproveitada) corrigido pelo Test-writer em b8d22ab.
+- **Revisão G4 (3 rodadas, todas APPROVED):** a 1ª pediu nome com `\n` recusado (`\Z`), lint sem ponto cego na cópia, job de lint só com leitura, secrets só no passo Scan, `--force-with-lease` e documentação do PR semanal pelo `seen_at`, do PR criado com `github.token` e do ADR-0012 (testes ebfc847, correção 767d5f1). A 2ª achou que o lint rodado da cópia ainda pulava `assets/**` (teste bc9525a, correção d1c7dac: só o `atlas.py` da cópia é pulado).
+- `ATLAS_VERSION` 2026.11.2 e seção do CHANGELOG com as entregas das SPEC-0037 a SPEC-0040 (b337602).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Workflow com a agenda (precedência `--schedule` > `ci.schedule` > padrão), um `env` por nome lendo de `secrets` só no passo Scan, permissões mínimas (job de lint só `contents: read`) e ações fixadas por SHA | PASS | `test_vendor.py::WorkflowContentTest` (3 testes) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | `ci.env` com valor que não é nome de variável, inclusive com quebra de linha no fim, sai com 2 sem ecoar e sem escrever | PASS | `test_vendor.py::InvalidEnvTest` — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Cópia da skill em `.org-atlas/skill/` sempre sobrescrita e chamada pelo workflow e pelo script; o lint varre a cópia (exceto o `atlas.py`) e acha segredo em arquivo extra, rodando pela skill ou pela cópia | PASS | `test_vendor.py::SkillCopyTest` (5 testes) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | `config`, `doctor` e `lint` conhecem a chave `ci`; `ci.env` inválido sai com 2 no `config` | PASS | `test_vendor.py::CiKeyTest` (2 testes) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | `vendor --ci github` cria o workflow; rodar de novo diz "já atualizado" | PASS | `test_vendor.py::VendorCliTest` (IT-01) — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-02 | Workflow customizado mantido com a contagem de linhas; `--force` sobrescreve; `mode: local` sai com 2 | PASS | `test_vendor.py::VendorCliTest` (IT-02), `LocalModeTest` — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-03 | `ci/atlas-scan.sh` sem configuração local usa a cópia e sai com 10 com mudança, 0 sem mudança e 1 com falha | PASS | `test_vendor.py::GenericScriptTest` — CI do PR #20 em 6889f1a (run 43278375497, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em 6889f1a
+- [x] Review independente sem achados blocker/major (G4) — 3ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — arquivo único, só stdlib, sem git/gh no `atlas.py` (ADR-0010)
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — permissões mínimas e SHAs (UT-01, `actionlint` OK); secrets só por nome; coletor com falha → exit 1 / job falha (IT-03)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — execuções do workflow e PRs de scan; rollback apagando o workflow ou revertendo o PR
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `SKILL.md`, `references/modes.md` e `skills/org-atlas/CHANGELOG.md` (2026.11.2)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0048
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; versão 2026.11.2 na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0048 — `lint` pela skill instalada acusa `secret-leak` falso na cópia vendorizada de outra versão (deve virar AVISO `config` sugerindo `vendor`).
+- Aceitos e documentados em `references/modes.md`, sem spec: `--force-with-lease` depois do `fetch` equivale a `--force` (a branch do dia é do workflow); uma edição no `atlas.py` da cópia não é varrida quando o lint roda dela mesma.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0040`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-02 | `vendor --ci` copia a skill para `.org-atlas/skill/` (sempre sobrescrita) e o workflow e o script usam essa cópia; no CI, `init --join` com `ATLAS_CONFIG_HOME` temporário; "mudança" = árvore git alterada; precedência da agenda; chave `ci` conhecida por `config`/`doctor`/`lint`; UT-03 e UT-04 novos, IT-03 ajustado | IMP-01: o contrato não dizia de onde vem a skill no CI, então o scan agendado gerado não rodaria | nenhuma (sem consumidores) | thomas, 2026-11-12 |

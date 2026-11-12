@@ -1,0 +1,50 @@
+{
+  "id": 1002,
+  "node_id": "R_kgDOacme1002",
+  "name": "web",
+  "full_name": "acme/web",
+  "private": false,
+  "owner": {
+    "login": "acme",
+    "id": 900001,
+    "type": "Organization",
+    "site_admin": false
+  },
+  "html_url": "https://github.com/acme/web",
+  "description": "acme web",
+  "fork": false,
+  "url": "https://api.github.com/repos/acme/web",
+  "created_at": "2024-03-01T10:00:00Z",
+  "updated_at": "2026-10-29T18:00:00Z",
+  "pushed_at": "2026-10-29T18:00:00Z",
+  "size": 2048,
+  "stargazers_count": 3,
+  "watchers_count": 3,
+  "language": "TypeScript",
+  "forks_count": 0,
+  "open_issues_count": 2,
+  "license": null,
+  "topics": [
+    "frontend"
+  ],
+  "archived": false,
+  "disabled": false,
+  "visibility": "public",
+  "default_branch": "main",
+  "permissions": {
+    "admin": false,
+    "maintain": false,
+    "push": true,
+    "triage": true,
+    "pull": true
+  },
+  "has_issues": true,
+  "has_wiki": false,
+  "allow_merge_commit": true,
+  "allow_squash_merge": true,
+  "allow_rebase_merge": true,
+  "allow_auto_merge": false,
+  "delete_branch_on_merge": true,
+  "network_count": 0,
+  "subscribers_count": 2
+}

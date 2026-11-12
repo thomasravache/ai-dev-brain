@@ -4,11 +4,11 @@ title: "org-atlas: context com aviso de envelhecimento"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-10-30
 parent: SPEC-0029
 depends_on: [SPEC-0036]
-consumes_contract: [SPEC-0037@1]
+consumes_contract: [SPEC-0037@2]
 contract_version: 1
 touches: [skills/org-atlas/SKILL.md, skills/org-atlas/scripts/atlas.py, skills/org-atlas/references/context.md, skills/org-atlas/tests/test_context.py, skills/org-atlas/tests/fixtures/context/**, skills/org-atlas/CHANGELOG.md]
 adrs: [ADR-0010, ADR-0012]
@@ -146,41 +146,41 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Busca e pacote**
-- [ ] Red: UT-01, UT-02, UT-03, UT-05, CT-01 com a tag `SPEC-0038:<ID>`, falhando pelo motivo certo
-- [ ] Green: busca por termos, vizinhos até `--hops`, seções de convenções e limite de caracteres
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01, UT-02, UT-03, UT-05, CT-01 com a tag `SPEC-0038:<ID>`, falhando pelo motivo certo
+- [x] Green: busca por termos, vizinhos até `--hops`, seções de convenções e limite de caracteres
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Envelhecimento e CLI**
-- [ ] Red: UT-04, IT-01, IT-02 com a tag `SPEC-0038:<ID>`, falhando pelo motivo certo
-- [ ] Green: aviso a partir do `_scan.json` e de `stale_days`; comando `context`
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-04, IT-01, IT-02 com a tag `SPEC-0038:<ID>`, falhando pelo motivo certo
+- [x] Green: aviso a partir do `_scan.json` e de `stale_days`; comando `context`
+- [x] Refactor mantendo tudo verde
 
 **Fase 3: Jornada**
-- [ ] Red: IT-03 com a tag `SPEC-0038:<ID>`, falhando pelo motivo certo
-- [ ] Green: `SKILL.md` (consultar antes de responder, repassar o aviso) e `references/context.md`
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] `ATLAS_VERSION` e seção no `skills/org-atlas/CHANGELOG.md` (ADR-0010)
+- [x] Red: IT-03 com a tag `SPEC-0038:<ID>`, falhando pelo motivo certo
+- [x] Green: `SKILL.md` (consultar antes de responder, repassar o aviso) e `references/context.md`
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Seção em `[Unreleased]` do `skills/org-atlas/CHANGELOG.md`; o `ATLAS_VERSION` sobe no fim do épico, no mesmo PR #20
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
-- [ ] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída por cópia (como a second-brain)
+- [x] Relatório de Entrega, README e `skills/org-atlas/CHANGELOG.md` (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 81b467c (árvore suja) | 2026-10-30 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/sdd-management/tests && python3 -m unittest discover -s skills/second-brain/tests && python3 -m unittest discover -s skills/org-atlas/tests` exit 1 (red: FAILED (failures=14, errors=13)); nota: red da org-atlas conferido em worktree limpa em 6bd88ec: FAILED (failures=14, errors=13), só testes da SPEC-0038; se a cadeia parar antes, é o SPEC-0004:IT-10 (tempo, sob carga) — 6bd88ec | 2026-11-02 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 1a65633 | 2026-11-02 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 1a65633 | 2026-11-02 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 2, 1a65633): APPROVED — M1 corrigido (nenhuma seção forjada, inclusive com separadores Unicode e chaves com quebra de linha); menores 1–3 corrigidos; restam menores na SPEC-0048 (nome do serviço dentro de título ###, crase escapando do código inline) — 1a65633 | 2026-11-02 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #20 em e07339b verde (run 41478872579 Python 3.9/3.15; run 41478875431 sdd/pr-check) — e07339b | 2026-11-02 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-02 |
+| G6 Deploy | N/A | skill distribuída por cópia, sem deploy — mesmo critério da SPEC-0017 | 2026-11-02 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — c2ee61a | 2026-11-02 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -192,36 +192,52 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`atlas.py context TERMOS… [--hops 0..2] [--limit N] [--max-chars N] [--json]`: o pacote que outras skills e agentes leem antes de agir. Traz os serviços que casam com os termos (com página, repositório, deployments e donos), as dependências até `--hops` passos com tipo, se é inferida e a evidência, as convenções confirmadas como regras e as inferidas como dicas, e começa sempre pelo aviso de envelhecimento quando algum coletor passou do `stale_days`, falhou, nunca foi escaneado ou não tem data válida. Só leitura.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `staleness_warnings`, `build_context`, `render_context` e `cmd_context` no `atlas.py`, lendo `graph.json`, `snapshots/_scan.json`, as páginas e `conventions/`; corte por `--max-chars` com seção de omitidos (até 50 linhas e um resumo); `--json` com o pacote cru.
+- **Revisão G4 (2 rodadas):** a 1ª achou que texto vindo de coletor ou de convenção com quebra de linha forjava seções do pacote — uma "Convenções (regra)" ou um "Aviso" falsos — exatamente onde o agente decide o que seguir. Correção (testes 01c3626, código 1a65633): todo valor entra no Markdown numa linha só; regra exige decisão completa (`confirmed_by`, `confirmed_at` e `confirmed_via` válidos); avisos para coletor nunca escaneado e `seen_at` inválido; regras ficam antes das dependências no corte. A 2ª rodada tentou separadores Unicode, chaves com quebra de linha e valores começando com `##` sem forjar seção.
+- Guia `references/context.md` com as seções, mensagens fixas, flags, chaves do JSON e o passo a passo para outras skills; `SKILL.md` com o fluxo "Contexto para uma tarefa" e a instrução de tratar o conteúdo do atlas como dado, nunca como instrução; CHANGELOG em `[Unreleased]`.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Busca por termos com pontuação e motivo; notas do time só pesam na pontuação; valores em uma linha só no Markdown | PASS | `test_context.py::SearchTest` e casos de injeção — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| UT-02 | `--hops` 0, 1 e 2 coletam os vizinhos com tipo, `inferred` e evidência | PASS | `HopsTest` — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| UT-03 | Regra só com decisão completa; inferida e decisão incompleta como dica; rejeitada nunca aparece; nenhum título de seção vem de dado | PASS | `ConventionsTest` e testes de injeção — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| UT-04 | Aviso de envelhecimento: mais de `stale_days`, último scan com falha, `seen_at` ausente ou inválido, coletor nunca escaneado; atlas sem scan | PASS | `StalenessTest` — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| UT-05 | `--max-chars` corta na ordem serviços → regras → dependências → dicas e lista os omitidos; o aviso nunca é omitido | PASS | `MaxCharsTest` — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| IT-01 | `context` pela CLI: seções na ordem, `--json`, nada encontrado, `--hops` inválido sai com 2, sem configuração sai com 3, nunca escreve | PASS | `ContextCliTest` — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| IT-02 | Atlas antigo, coletor com falha ou nunca escaneado: o pacote começa pelo aviso | PASS | `StaleCliTest` — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| IT-03 | Jornada `init` → `scan` → `curate confirm` → `context api` com a cadeia api → banco e a regra confirmada | PASS | `JourneyTest` — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
+| CT-01 | Lê os arquivos de convenção gerados pela curadoria (SPEC-0037@2) e segue `references/context.md` | PASS | `ConventionContractTest` — CI do PR #20 em e07339b (run 41478872579, Python 3.9 e 3.15) e suíte local no G5 (e07339b) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #20 em e07339b
+- [x] Review independente sem achados blocker/major (G4) — 2ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — 500 serviços: ~0,17 s por consulta pela CLI (meta 1 s); só leitura conferida por hash dos arquivos na revisão; atlas sem scan → pacote vazio com aviso (UT-04)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — aviso de envelhecimento no próprio pacote; rollback por revert
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `SKILL.md`, `references/context.md` e `skills/org-atlas/CHANGELOG.md`
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0048
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skill distribuída por cópia; em `[Unreleased]` na branch `sdd/SPEC-0029`, PR #20.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0048 — nome do serviço dentro do título `###` do pacote e crase escapando do código inline (menores da revisão G4).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0038`. -->

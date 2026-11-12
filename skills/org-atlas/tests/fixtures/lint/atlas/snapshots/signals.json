@@ -1,0 +1,221 @@
+{
+  "category": "code",
+  "collected_at": "2026-10-30T12:00:00Z",
+  "collector": "signals",
+  "contract": "org-atlas/collector@1",
+  "entities": [
+    {
+      "attrs": {},
+      "id": "acme/backoffice",
+      "kind": "repository",
+      "name": "backoffice",
+      "source": "signals"
+    },
+    {
+      "attrs": {},
+      "id": "acme/payments",
+      "kind": "repository",
+      "name": "payments",
+      "source": "signals"
+    },
+    {
+      "attrs": {},
+      "id": "acme/r3",
+      "kind": "repository",
+      "name": "r3",
+      "source": "signals"
+    },
+    {
+      "attrs": {},
+      "id": "acme/r4",
+      "kind": "repository",
+      "name": "r4",
+      "source": "signals"
+    },
+    {
+      "attrs": {},
+      "id": "acme/r5",
+      "kind": "repository",
+      "name": "r5",
+      "source": "signals"
+    }
+  ],
+  "relations": [],
+  "signals": [
+    {
+      "counts": {
+        "feat/": 21,
+        "fix/": 3
+      },
+      "repository": "acme/backoffice",
+      "total": 30,
+      "type": "branch-prefixes"
+    },
+    {
+      "counts": {
+        "feat/": 3,
+        "fix/": 21
+      },
+      "repository": "acme/r3",
+      "total": 30,
+      "type": "branch-prefixes"
+    },
+    {
+      "counts": {
+        "feat/": 9,
+        "fix/": 9
+      },
+      "repository": "acme/payments",
+      "total": 30,
+      "type": "branch-prefixes"
+    },
+    {
+      "counts": {
+        "feat/": 9,
+        "fix/": 9
+      },
+      "repository": "acme/r4",
+      "total": 30,
+      "type": "branch-prefixes"
+    },
+    {
+      "counts": {
+        "feat/": 9,
+        "fix/": 9
+      },
+      "repository": "acme/r5",
+      "total": 30,
+      "type": "branch-prefixes"
+    },
+    {
+      "pattern_counts": {
+        "conventional": 21,
+        "other": 6,
+        "ticket_key": 3
+      },
+      "repository": "acme/backoffice",
+      "total": 30,
+      "type": "pr-titles"
+    },
+    {
+      "pattern_counts": {
+        "conventional": 21,
+        "other": 6,
+        "ticket_key": 3
+      },
+      "repository": "acme/payments",
+      "total": 30,
+      "type": "pr-titles"
+    },
+    {
+      "pattern_counts": {
+        "conventional": 21,
+        "other": 6,
+        "ticket_key": 3
+      },
+      "repository": "acme/r3",
+      "total": 30,
+      "type": "pr-titles"
+    },
+    {
+      "pattern_counts": {
+        "conventional": 21,
+        "other": 6,
+        "ticket_key": 3
+      },
+      "repository": "acme/r4",
+      "total": 30,
+      "type": "pr-titles"
+    },
+    {
+      "pattern_counts": {
+        "conventional": 9,
+        "other": 12,
+        "ticket_key": 9
+      },
+      "repository": "acme/r5",
+      "total": 30,
+      "type": "pr-titles"
+    },
+    {
+      "present": {
+        "merge": false,
+        "rebase": false,
+        "squash": true
+      },
+      "repository": "acme/backoffice",
+      "type": "merge-methods"
+    },
+    {
+      "present": {
+        "merge": false,
+        "rebase": false,
+        "squash": true
+      },
+      "repository": "acme/payments",
+      "type": "merge-methods"
+    },
+    {
+      "present": {
+        "merge": false,
+        "rebase": false,
+        "squash": true
+      },
+      "repository": "acme/r3",
+      "type": "merge-methods"
+    },
+    {
+      "present": {
+        "merge": false,
+        "rebase": false,
+        "squash": true
+      },
+      "repository": "acme/r4",
+      "type": "merge-methods"
+    },
+    {
+      "present": {
+        "merge": false,
+        "rebase": false,
+        "squash": true
+      },
+      "repository": "acme/r5",
+      "type": "merge-methods"
+    },
+    {
+      "present": {
+        "pr_template": false
+      },
+      "repository": "acme/r5",
+      "type": "pr-template"
+    },
+    {
+      "present": {
+        "pr_template": true
+      },
+      "repository": "acme/backoffice",
+      "type": "pr-template"
+    },
+    {
+      "present": {
+        "pr_template": true
+      },
+      "repository": "acme/payments",
+      "type": "pr-template"
+    },
+    {
+      "present": {
+        "pr_template": true
+      },
+      "repository": "acme/r3",
+      "type": "pr-template"
+    },
+    {
+      "present": {
+        "pr_template": true
+      },
+      "repository": "acme/r4",
+      "type": "pr-template"
+    }
+  ]
+}
