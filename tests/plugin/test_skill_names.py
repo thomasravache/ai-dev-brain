@@ -195,6 +195,39 @@ def changelog_new_sections(skill):
     return "\n".join(chunks)
 
 
+# ---------------------------------------------------------------- CH-01 / IT-01
+
+SKILL_CLIS = {"gluon-spec": "spec_graph.py", "photon-brain": "brain.py", "boson-atlas": "atlas.py"}
+
+
+def skill_dir(new):
+    """Pasta da skill pelo nome novo; enquanto ela não existe (antes da troca), pelo nome antigo."""
+    path = SKILLS / new
+    return path if path.is_dir() else SKILLS / RENAMES[new]
+
+
+class SkillSuitesGuardTest(unittest.TestCase):
+    def test_architecture_suite_and_cli_help_pass_before_and_after_rename(self):
+        """SPEC-0055:CH-01 SPEC-0055:IT-01 (guarda: passa antes e depois da troca)
+
+        Para cada skill (pasta nova, ou antiga se a nova ainda não existe), os testes de arquitetura e o --help da
+        CLI saem com 0. As suítes completas de cada skill (python3 -m unittest discover -s skills/<nome>/tests)
+        rodam na CI e no G2.
+        """
+        for new, cli in SKILL_CLIS.items():
+            folder = skill_dir(new)
+            with self.subTest(skill=folder.name):
+                self.assertTrue(folder.is_dir(), f"nem skills/{new} nem a pasta antiga existem")
+                arch = subprocess.run(
+                    [sys.executable, "-m", "unittest", "discover", "-s", str(folder / "tests"),
+                     "-p", "test_architecture.py"],
+                    cwd=REPO, capture_output=True, text=True, timeout=600)
+                self.assertEqual(arch.returncode, 0, arch.stdout + arch.stderr)
+                helped = subprocess.run([sys.executable, str(folder / "scripts" / cli), "--help"],
+                                        cwd=REPO, capture_output=True, text=True, timeout=60)
+                self.assertEqual(helped.returncode, 0, helped.stdout + helped.stderr)
+
+
 # ---------------------------------------------------------------- UT-01
 
 class SkillFoldersTest(unittest.TestCase):
