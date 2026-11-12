@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -329,8 +330,8 @@ class GenericScriptTest(VendorCase):
         self.git("commit", "-q", "--allow-empty", "-m", message)
 
     def run_script(self, state):
-        empty = self.box.root / f"ci-config-{state}"
-        empty.mkdir()  # sem configuração local na máquina do CI
+        # pasta vazia nova a cada execução: sem configuração local na máquina do CI
+        empty = Path(tempfile.mkdtemp(prefix=f"ci-config-{state}-", dir=self.box.root))
         env = dict(os.environ, HOME=str(self.box.home), ATLAS_CONFIG_HOME=str(empty), FAKE_STATE=state)
         return subprocess.run(["bash", str(GENERIC)], cwd=self.atlas, capture_output=True, text=True, env=env,
                               check=False, timeout=300)
