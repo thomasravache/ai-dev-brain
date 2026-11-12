@@ -123,7 +123,7 @@ referência velha
 - N/A — os contratos entre skills e com projetos (identificadores mantidos) são cobertos pelo UT-04.
 
 ### 7.5 Testes E2E
-- N/A — nenhuma jornada muda além do nome; a instalação pelo plugin com os nomes novos é provada pela SPEC-0053 (E2E-01).
+- N/A — nenhuma jornada muda além do nome; a instalação pelo plugin com os nomes novos é provada pelo teste E2E da SPEC-0053.
 
 ### 7.6 Outros
 - N/A.
@@ -169,7 +169,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
-| G1 Red | PENDING | | |
+| G1 Red | FAIL | verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0055:E2E-01; nota: vermelho em 5b54330: test_skill_names.py 7 testes, 14 falhas em UT-01..UT-05 (pastas novas inexistentes, referências velhas); guarda CH-01/IT-01 verde antes da troca; suítes atuais verdes — 5b54330 | 2026-11-12 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
