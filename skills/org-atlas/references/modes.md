@@ -1,0 +1,94 @@
+# Modos do atlas: repositório e local
+
+O atlas vive num de dois modos, escolhidos no `init --mode` e gravados em `mode` no `atlas-config.yml`. A skill
+detecta e avisa sozinha, mas não roda sozinha (não tem relógio): em cada modo alguém diferente garante que o `scan`
+aconteça.
+
+| | Modo `repo` | Modo `local` |
+|---|---|---|
+| Onde fica | repositório git compartilhado com o time | pasta só desta máquina (com `git init` para ter histórico) |
+| Quem roda o `scan` | a CI, agendada (`atlas.py vendor --ci`) | a pessoa, ou um agendamento desta máquina (cron, `/schedule`) |
+| Revisão | o PR de scan que a CI abre | o diff local antes do commit |
+| Quem avisa que está velho | a própria agenda; `lint` (`stale`) no PR | o aviso de envelhecimento do `context` e o `lint` (`stale`) |
+
+## Modo repositório: `vendor --ci`
+
+```bash
+python3 <skill-dir>/scripts/atlas.py vendor --ci github  [--schedule "0 6 * * 1"] [--force]
+python3 <skill-dir>/scripts/atlas.py vendor --ci generic [--force]
+```
+
+Usa o atlas desta máquina (configuração local, como `scan` e `lint`). Em `mode: local` sai com 2
+(`vendor --ci é do modo repo — veja references/modes.md`) sem escrever nada. O `atlas.py` só escreve arquivos: quem
+roda git e abre o PR é o workflow (ADR-0010).
+
+### O que é escrito
+
+- **`.org-atlas/skill/`** — cópia da skill (`scripts/atlas.py` e `assets/`: coletores, páginas, modelos), **sempre
+  sobrescrita** pelo `vendor`. O workflow e o script rodam `python3 .org-atlas/skill/scripts/atlas.py`, e `{skill}`
+  nos `command` dos coletores aponta para essa cópia. Não edite a cópia: rode o `vendor` de novo depois de atualizar a
+  skill. O `lint` não olha essa pasta (é a ferramenta, não conteúdo do atlas).
+- **`--ci github`** → `.github/workflows/atlas-scan.yml`:
+  - `schedule` e `workflow_dispatch`: liga o atlas com `init --join --atlas "$PWD"` e um `ATLAS_CONFIG_HOME`
+    temporário fora do atlas (mantém um que já venha definido), roda `scan` e `lint` e, quando a árvore git mudou
+    (`git status --porcelain` não vazio), faz commit na branch `atlas/scan-AAAA-MM-DD` e abre o PR com `gh pr create`
+    (ou atualiza o PR que já estiver aberto para a branch). Se `lint --only secret-leak` acusar segredo, nada é
+    enviado. Coletor falhando: o PR (ou o log, sem mudanças) mostra a falha e o job termina com falha.
+  - `pull_request`: roda o `lint` em todo PR do atlas; ERRO falha o job.
+  - Permissões só `contents: write` e `pull-requests: write`; ações fixadas por SHA.
+- **`--ci generic`** → `ci/atlas-scan.sh`, para qualquer outra CI. Rode `bash ci/atlas-scan.sh` na raiz do atlas, com
+  git e python3. Saída: **0** sem mudança, **10** com mudança (a CI abre o PR/MR com o diff), **1** com falha
+  (coletor, `lint` com ERRO, git).
+
+Arquivo de CI igual ao modelo: `já atualizado`. Diferente (customizado pelo time): mantido, com
+`customizado — N linha(s) diferem; use --force para sobrescrever`. Com `--force`: sobrescrito. A cópia da skill é
+atualizada nos dois casos. Depois do `vendor`, faça commit de `.org-atlas/` e do arquivo da CI.
+
+### Chave `ci` do `atlas-config.yml`
+
+```yaml
+ci:
+  env: [GH_TOKEN, ARGOCD_AUTH_TOKEN]   # só nomes; o valor fica nos secrets da plataforma
+  schedule: "0 6 * * 1"               # cron em UTC
+```
+
+- `env`: os **nomes** das variáveis que os coletores leem. No GitHub, cada nome vira `NOME: ${{ secrets.NOME }}`
+  no job de scan: crie no repositório do atlas um secret com o mesmo nome. Na CI genérica, exporte as variáveis com
+  esses nomes a partir do cofre da plataforma. Um item fora de `^[A-Z_][A-Z0-9_]*$` (um valor colado, por exemplo)
+  faz `config` e `vendor` saírem com 2 e `doctor`/`lint` acusarem ERRO, sem repetir o valor.
+- `schedule`: agenda do workflow. Precedência: `vendor --schedule`, senão `ci.schedule`, senão `0 6 * * 1` (segunda,
+  06:00 UTC). Mudou a agenda? Rode `vendor --ci github --force` (ou edite o `cron` do workflow).
+
+### Revisão pelo PR
+
+O PR de scan é a revisão do time: o diff mostra o serviço novo, a fila nova, a convenção proposta. Aprovar o PR também
+confirma as convenções que ele muda (ADR-0012): registre com
+`atlas.py curate confirm <id> --by <nome> --via "PR #<n>"`.
+
+## Modo local: agendar nesta máquina
+
+Sem CI, quem garante é o aviso de envelhecimento: o `context` abre com `## Aviso de envelhecimento` e o `lint` acusa
+`stale` quando um coletor passou de `stale_days`. Para não depender de lembrar, agende o `scan`:
+
+- **cron** (macOS, Linux), toda segunda às 07:00, com as credenciais disponíveis no ambiente do cron:
+
+  ```cron
+  0 7 * * 1  cd /caminho/do/atlas && python3 /caminho/da/skill/scripts/atlas.py scan && python3 /caminho/da/skill/scripts/atlas.py lint
+  ```
+
+  O cron não lê o perfil do shell: exporte ali as variáveis de `credentials` (ou carregue-as de um gerenciador de
+  segredos), nunca escreva o valor no crontab nem num arquivo versionado.
+- **`/schedule`** (agente agendado): peça para rodar `atlas.py scan` e `atlas.py lint` na pasta do atlas e resumir o
+  que mudou e os achados.
+
+Revise o diff (`git diff`) e faça commit na pasta do atlas.
+
+## Migração local → repositório
+
+1. Crie o repositório do atlas na plataforma (vazio).
+2. Na pasta do atlas: `git remote add origin <url>` e envie a branch principal (`git push -u origin main`).
+3. Troque `mode: local` por `mode: repo` no `atlas-config.yml` (é uma linha; não há comando para mudar de modo).
+4. Declare `ci.env` (só nomes) e crie os secrets com os mesmos nomes na plataforma.
+5. Rode `atlas.py vendor --ci github` (ou `generic`), faça commit de `.org-atlas/` e do arquivo da CI e envie.
+6. Nas outras máquinas: clone o repositório e rode `atlas.py init --join --atlas <pasta>`.
+7. Remova o agendamento local (cron ou `/schedule`) para não haver dois scans.

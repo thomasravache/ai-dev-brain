@@ -1,0 +1,111 @@
+# org-atlas — scan agendado do atlas no GitHub Actions (gerado por `atlas.py vendor --ci github`; SPEC-0040).
+# Agenda e variáveis vêm do atlas-config.yml (ci.schedule e ci.env) ou de --schedule; para refazer este arquivo a
+# partir do modelo da skill: `atlas.py vendor --ci github --force`. Cada nome de ci.env é lido do secret de mesmo
+# nome do repositório: o valor fica só no cofre do GitHub, nunca no atlas (references/modes.md).
+# A ferramenta roda da cópia em .org-atlas/skill/, que o vendor sempre atualiza.
+name: atlas-scan
+
+on:
+  schedule:
+    - cron: "__SCHEDULE__"
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: atlas-scan-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+__ENV__    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Ligar o atlas (configuração local temporária, fora do atlas)
+        run: |
+          : "${ATLAS_CONFIG_HOME:=$RUNNER_TEMP/org-atlas}"
+          export ATLAS_CONFIG_HOME
+          echo "ATLAS_CONFIG_HOME=$ATLAS_CONFIG_HOME" >> "$GITHUB_ENV"
+          python3 .org-atlas/skill/scripts/atlas.py init --join --atlas "$PWD"
+      - name: Scan
+        id: scan
+        continue-on-error: true
+        run: python3 .org-atlas/skill/scripts/atlas.py scan
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: python3 .org-atlas/skill/scripts/atlas.py lint
+      - name: Abrir PR com o diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.ref_name }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Sem mudanças no atlas."
+            exit 0
+          fi
+          if ! python3 .org-atlas/skill/scripts/atlas.py lint --only secret-leak; then
+            echo "::error::lint acusou segredo no atlas: nada foi enviado. Corrija e rode o workflow de novo."
+            exit 1
+          fi
+          day="$(date -u +%Y-%m-%d)"
+          branch="atlas/scan-$day"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add -A
+          git commit -q -m "chore(atlas): scan de $day"
+          git push --force origin "$branch"
+          if [ -n "$(gh pr list --head "$branch" --base "$BASE_REF" --state open --json number --jq '.[]')" ]; then
+            echo "PR de $branch já está aberto: atualizado com o scan de agora."
+            exit 0
+          fi
+          {
+            echo "Scan agendado do atlas ($day): o diff mostra o que mudou (serviço novo, fila nova, convenção proposta)."
+            echo
+            echo "- scan: $SCAN_OUTCOME"
+            echo "- lint: $LINT_OUTCOME"
+            echo
+            echo "Aprovar este PR também confirma as convenções que ele muda (ADR-0012):"
+            echo "\`atlas.py curate confirm <id> --by <nome> --via \"PR #<n>\"\`."
+          } > "$RUNNER_TEMP/atlas-pr-body.md"
+          gh pr create --base "$BASE_REF" --head "$branch" --title "atlas: scan de $day" \
+            --body-file "$RUNNER_TEMP/atlas-pr-body.md"
+      - name: Falhar o job se o scan ou o lint falharam
+        if: steps.scan.outcome == 'failure' || steps.lint.outcome == 'failure'
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          echo "::error::scan: $SCAN_OUTCOME, lint: $LINT_OUTCOME — veja os passos Scan e Lint."
+          exit 1
+
+  lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Ligar o atlas (configuração local temporária, fora do atlas)
+        run: |
+          : "${ATLAS_CONFIG_HOME:=$RUNNER_TEMP/org-atlas}"
+          export ATLAS_CONFIG_HOME
+          echo "ATLAS_CONFIG_HOME=$ATLAS_CONFIG_HOME" >> "$GITHUB_ENV"
+          python3 .org-atlas/skill/scripts/atlas.py init --join --atlas "$PWD"
+      - name: Lint
+        run: python3 .org-atlas/skill/scripts/atlas.py lint
