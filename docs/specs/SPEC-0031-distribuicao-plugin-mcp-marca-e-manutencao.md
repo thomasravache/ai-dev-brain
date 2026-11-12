@@ -6,7 +6,7 @@ type: feature
 status: proposed
 created: 2026-10-30
 depends_on: [SPEC-0029]
-adrs: [ADR-0016, ADR-0017]
+adrs: [ADR-0016, ADR-0017, ADR-0018]
 external: []
 approved_by:
 approved_at:
@@ -32,7 +32,7 @@ Hoje cada skill é instalada copiando a sua pasta, e o usuário chama uma de cad
 2. **Encadeamento e entrada única:** hook `SessionStart` que coloca no contexto o índice do atlas e o `status` do SDD quando existirem; comando de entrada única (ex.: `/deliver <tarefa>`) que dispara atlas → spec → aprovação → implementação → PR. É atalho: a lógica continua nas skills.
 3. **Servidor MCP local:** um servidor só, stdio, com tools separadas por prefixo (`atlas_*`, `brain_*`, `sdd_*`); cada tool é camada fina sobre a CLI da skill, que continua a fonte da verdade (sem lógica duplicada, ADR-0001). Ordem: `atlas` primeiro (grafo tipado e, com a SPEC-0030, política de probes no servidor), `brain` depois (uso no desktop e no celular, sem shell), `sdd` por último (ganho marginal).
 4. **Auto-melhoria (manutenção da própria skill):** `doctor` de cada skill avisa quando o ambiente sai do suporte (ex.: versão do Python sem suporte); uma skill ou agente mantenedor abre a spec de atualização. Subir a versão mínima do Python é spec `type: migration` com um ADR que substitui a regra de versão do ADR-0001/ADR-0007. A base já existe: `whats-new`, CHANGELOG e versão por skill.
-5. **Marca:** nome do plugin e, num futuro distante, das skills. Renomear é migração: muda o nome visível e a descrição continua dizendo o que a skill faz (é ela que faz o agente acionar a skill); caminhos já instalados nos projetos (`tools/sdd/`, `sdd-config.yml`, bloco `sdd:start`) ficam como estão.
+5. **Marca:** nome do plugin (`fermion`, SPEC-0053) e das skills (SPEC-0055, antes do plugin). Renomear é migração: muda o nome visível e a descrição continua dizendo o que a skill faz (é ela que faz o agente acionar a skill); caminhos já instalados nos projetos (`tools/sdd/`, `sdd-config.yml`, bloco `sdd:start`) ficam como estão.
 6. **Proteção do "como a gente faz" (última frente):** usar a skill numa organização sem entregar o código e o método. Caminhos, do mais aberto ao mais fechado: (a) instalar menos no projeto — a CI baixa a ferramenta numa versão fixa em vez de uma cópia no repo, como o modo privado já faz para as specs; (b) **MCP remoto** hospedado, em que o cliente só tem o conector. Limite: o texto do `SKILL.md` é sempre legível quando roda localmente; só o hospedado esconde o método de verdade.
 
 ### Nomes e por quê
@@ -71,18 +71,18 @@ Desenho:
 <!-- Uma linha por spec filha. As colunas de dependência são informativas: a fonte da verdade é o frontmatter de cada filha. -->
 | Spec | Título | Tier | Tipo | Tamanho | Depende de | Consome contrato de |
 |---|---|---|---|---|---|---|
-| SPEC-0053 | Plugin `fermion` e marketplace `fermion-lab` com as skills | full | feature | S | SPEC-0029 | — |
+| SPEC-0055 | Renomear as skills para `gluon-spec`, `photon-brain` e `boson-atlas` | full | migration | M | SPEC-0029 | — |
+| SPEC-0053 | Plugin `fermion` e marketplace `fermion-lab` com as skills | full | feature | S | SPEC-0055 | — |
 | SPEC-0054 | Servidor MCP local do plugin com as tools `atlas_*` | full | feature | M | SPEC-0053 | — |
 | a criar | Hook `SessionStart` e comando de entrada única | full | feature | S | SPEC-0053 | — |
 | a criar | Servidor MCP: tools `brain_*` | full | feature | M | MCP atlas | — |
 | a criar | Servidor MCP: tools `sdd_*` | full | feature | S | MCP atlas | — |
 | a criar | Auto-melhoria: `doctor` de ambiente e fluxo do mantenedor | full | feature | S | — | — |
-| a criar | Marca: nomes das skills (o do plugin já é `fermion`, na SPEC-0053) | full | migration | S | SPEC-0053 | — |
 | a criar | Distribuição sem cópia do código e MCP remoto | full | feature | M | MCP | — |
 
 ## 5. Estratégia de Entrega
 - **Ambientes:** N/A até a frente 6 (MCP remoto exige ambiente hospedado; definido na filha).
-- **Entrega por onda:** plugin (SPEC-0053) → MCP do atlas (SPEC-0054) → entrada única → demais tools MCP → auto-melhoria → nomes das skills → distribuição fechada. O caminho mínimo combinado com o thomas é plugin e MCP do atlas.
+- **Entrega por onda:** nomes das skills (SPEC-0055) → plugin (SPEC-0053) → MCP do atlas (SPEC-0054) → entrada única → demais tools MCP → auto-melhoria → distribuição fechada. O caminho mínimo combinado com o thomas é renomear, plugin e MCP do atlas; a troca de nomes veio para antes do plugin para ele já sair com os nomes finais (thomas, 2026-11-12).
 - **Feature flags:** N/A; cada embalagem é opcional.
 - **Rollback:** a instalação por cópia continua funcionando em qualquer ponto.
 - **Métricas de sucesso pós-release:** instalação do plugin em uma máquina nova com um comando; uma tarefa entregue com uma única chamada do usuário.
@@ -103,7 +103,7 @@ Desenho:
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
 - [x] Um plugin ou um por skill? — Um plugin com todas as skills (thomas, 2026-10-30)
 - [x] MCP só do atlas ou do conjunto? — Do conjunto, começando pelo atlas (thomas, 2026-10-30)
-- [x] Renomear as skills? — Sim, mas bem no futuro; por ora os nomes ficam (thomas, 2026-10-30)
+- [x] Renomear as skills? — Sim, mas bem no futuro; por ora os nomes ficam (thomas, 2026-10-30). Revisto: renomear agora, antes do plugin, para ele já sair com os nomes finais (SPEC-0055, ADR-0018) (thomas, 2026-11-12)
 - [x] Nome da marca e das skills — tema partículas: cada parte é uma partícula cujo papel físico espelha o da skill. Padrão `<nome>-<função>`, com a função em uma palavra em inglês para o agente entender o que a skill faz. Marca falada **Hadron** (a partícula composta: o conjunto); repositório, marketplace e domínio `hadron-lab`; plugin instalado `hadron`. `sdd-management` → `gluon-spec` (o glúon segura os quarks dentro do hádron: o processo segura a entrega); `second-brain` → `photon-brain` (a luz das estrelas é o passado que chega: memória viajando); `org-atlas` → `boson-atlas` (os bósons carregam as interações; o atlas mapeia as interações entre sistemas — o glúon é o bóson que segura o hádron); probes da SPEC-0030 chamados **Muon** como nome da capacidade (comando continua `probe`; se um dia virar skill, `muon-probe`). Renomear fica para bem no futuro; os nomes antigos ficam como apelidos na transição. Descartados: tema cérebro (`engrama`, `egide`, `hipocampo`, `talamo`), filosofia grega (`organon`, `kanon`, `hegemonikon`, `anamnesis`, `gnomon` e variações — terminações em -mon/-kon lembram Pokémon), mito do labirinto (`daedala`, `eunomia`, `mneme`, `ariadne`), `noether`, `horizon` e `gaia` (fora do tema partículas; `noether` é nome de pessoa), `graviton` (colide com o AWS Graviton), `quark` (lembra o Quarkus), `pion` (biblioteca WebRTC), `higgs` (nome de pessoa), `neutrino` para os probes e o sufixo `-dev` na marca (thomas, 2026-10-30)
 - [x] Os nomes escolhidos estão livres (GitHub, PyPI, npm, domínio, registro de marca), principalmente `hadron-lab`? — Não: `github.com/hadron-lab` existe desde 2026-10-12 (outra pessoa) e a Hadron Memory (hadronmemory.com, memória para IA) publica um marketplace e um plugin do Claude Code chamados `hadron`, com comandos `/hadron:*`; `hadron` também está ocupado no PyPI, no npm e em `hadron.dev`. A marca passa a **Fermion**: `fermion-lab` livre no GitHub, PyPI, npm e em .dev/.com/.io (só `fermion` sem sufixo existe no npm); `gluon-spec`, `photon-brain` e `boson-atlas` livres (`photon-brain` tem um repositório homônimo sem estrelas, mesmo conceito). Checagem só de leitura em 2026-11-12 (APIs do GitHub, PyPI, npm, RDAP, registro MCP); registro de marca (INPI/USPTO) fica para a filha de marca (thomas, 2026-11-12)
 - [x] O plugin aponta para as pastas de `skills/` ou a release gera uma cópia? — Aponta: com `"source": "./"` o repositório é o plugin e o Claude Code faz o scan de `skills/` sozinho; caminhos fora da raiz do plugin são rejeitados, então um plugin em subpasta não alcançaria `skills/`. Na instalação a partir do GitHub a raiz é copiada para o cache (`${CLAUDE_PLUGIN_ROOT}`, que muda a cada versão; estado vai em `${CLAUDE_PLUGIN_DATA}`). Fonte: code.claude.com/docs/en/plugins (manifest-reference, marketplace-reference, loading), lida em 2026-11-12 (thomas, 2026-11-12)

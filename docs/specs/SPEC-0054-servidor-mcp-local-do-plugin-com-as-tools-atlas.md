@@ -7,7 +7,7 @@ user_facing: false
 status: proposed
 created: 2026-11-12
 parent: SPEC-0031
-depends_on: [SPEC-0053]
+depends_on: [SPEC-0053, SPEC-0055]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
@@ -24,14 +24,14 @@ approved_at:
 <!-- type: feature | fix | refactor | migration | foundation. user_facing: true quando a mudança altera uma jornada do usuário (UI ou API pública) — exige teste E2E. Substitua todos os marcadores com chaves duplas: o G0 (`spec_graph.py validate`) reprova a spec enquanto restar algum. As seções de Checklist em diante são preenchidas depois da aprovação, sem marcadores. -->
 
 ## 1. Visão Geral
-O plugin `fermion` ganha um servidor MCP local (`mcp/fermion_mcp.py`, stdio, só biblioteca padrão) com cinco tools de leitura do atlas da organização: `atlas_config`, `atlas_doctor`, `atlas_context`, `atlas_lint` e `atlas_curate_list`. Cada tool só chama a CLI da `org-atlas` e devolve o mesmo resultado dela. Qualquer agente com MCP passa a consultar o atlas sem shell e com entradas tipadas.
+O plugin `fermion` ganha um servidor MCP local (`mcp/fermion_mcp.py`, stdio, só biblioteca padrão) com cinco tools de leitura do atlas da organização: `atlas_config`, `atlas_doctor`, `atlas_context`, `atlas_lint` e `atlas_curate_list`. Cada tool só chama a CLI da `boson-atlas` (antes `org-atlas`) e devolve o mesmo resultado dela. Qualquer agente com MCP passa a consultar o atlas sem shell e com entradas tipadas.
 
 ## 2. Motivação & Escopo
 **Motivação:** hoje um agente só usa o atlas montando a linha de comando da CLI. Tools tipadas funcionam em qualquer cliente MCP (inclusive sem shell) e deixam a política fora do alcance do agente: o servidor só expõe leitura, e confirmar convenção continua sendo de pessoas (ADR-0012).
 
 **Objetivos (dentro do escopo):**
 - `mcp/fermion_mcp.py`: JSON-RPC 2.0 sobre stdio, das duas eras do protocolo (legada com `initialize`, versão `2025-11-25`; moderna sem handshake, versão `2026-07-28`, com `server/discover` e versão em `_meta`), com `tools/list` e `tools/call`.
-- As cinco tools sobre `skills/org-atlas/scripts/atlas.py`, declaradas no `plugin.json` (`mcpServers.fermion`, com `${CLAUDE_PLUGIN_ROOT}`).
+- As cinco tools sobre `skills/boson-atlas/scripts/atlas.py`, declaradas no `plugin.json` (`mcpServers.fermion`, com `${CLAUDE_PLUGIN_ROOT}`).
 - Testes de arquitetura do ADR-0017 e guia `mcp/README.md`.
 
 **Não-objetivos (fora do escopo):**
@@ -44,9 +44,9 @@ O plugin `fermion` ganha um servidor MCP local (`mcp/fermion_mcp.py`, stdio, só
 - **Pré-requisitos externos:** especificação do MCP (modelcontextprotocol.io/specification/versioning e 2026-07-28/basic/versioning, lidas em 2026-11-12: revisão atual `2026-07-28`; legadas com `initialize` até `2025-11-25`; servidor das duas eras é permitido); `python3` 3.9+ no PATH de quem usa o plugin.
 
 ## 4. Decisão Arquitetural
-**Contexto:** brownfield. Referência: `skills/org-atlas/assets/collectors/github.py`, que chama uma CLI por `subprocess` com lista de argumentos, sem shell, com timeout, e devolve o exit code; `skills/*/tests/test_architecture.py` para as regras de arquitetura (regra testada contra exemplo e contra o código real).
+**Contexto:** brownfield. Referência: `skills/boson-atlas/assets/collectors/github.py`, que chama uma CLI por `subprocess` com lista de argumentos, sem shell, com timeout, e devolve o exit code; `skills/*/tests/test_architecture.py` para as regras de arquitetura (regra testada contra exemplo e contra o código real).
 
-**Decisão:** servidor de arquivo único, stdlib, em `mcp/` na raiz do plugin. Cada tool vira uma linha de comando da CLI (`python3 <raiz>/skills/org-atlas/scripts/atlas.py <comando> ... --json`) por `subprocess.run` com lista de argumentos, `--` antes de texto livre, timeout de 120 s e o ambiente herdado (`ATLAS_CONFIG_HOME` e afins). Nenhum `import` de código das skills (ADR-0017).
+**Decisão:** servidor de arquivo único, stdlib, em `mcp/` na raiz do plugin. Cada tool vira uma linha de comando da CLI (`python3 <raiz>/skills/boson-atlas/scripts/atlas.py <comando> ... --json`) por `subprocess.run` com lista de argumentos, `--` antes de texto livre, timeout de 120 s e o ambiente herdado (`ATLAS_CONFIG_HOME` e afins). Nenhum `import` de código das skills (ADR-0017).
 
 **Justificativa:** a CLI continua a fonte da verdade (ADR-0001: sem lógica duplicada); o servidor é trocável e testável com processo real; stdlib mantém a regra de instalação zero.
 
@@ -100,7 +100,7 @@ tools/call {name, arguments}
   tool desconhecida ou argumento fora do schema → erro -32602, sem chamar a CLI
   CLI com exit 0 (e exit 1 no atlas_lint, que significa "há ERRO no relatório") →
       {content: [{type: "text", text: <stdout>}], structuredContent: <stdout como JSON, se for objeto>, isError: false}
-  CLI com exit 3 → isError: true, texto "atlas não configurado nesta máquina — rode a skill org-atlas (onboarding)" + stderr da CLI
+  CLI com exit 3 → isError: true, texto "atlas não configurado nesta máquina — rode a skill boson-atlas (onboarding)" + stderr da CLI
   outro exit diferente de 0 (e de 1 no lint) → isError: true, texto com o exit code e o stderr da CLI
   timeout (120 s) → isError: true, texto "atlas.py não respondeu em 120 s"
   python3/CLI ausente → isError: true, texto com o caminho procurado
@@ -151,7 +151,7 @@ tools/call {name, arguments}
 ### 7.6 Outros
 - Tempo de resposta no IT-01 (menos de 5 s por chamada no atlas de fixture).
 
-**Dublês e dados de teste:** executor de processo substituível nos UT; atlas de fixture e coletor falso como nos testes da `org-atlas` (`skills/org-atlas/tests/helpers.py` como referência, sem importar dela).
+**Dublês e dados de teste:** executor de processo substituível nos UT; atlas de fixture e coletor falso como nos testes da `org-atlas` (`skills/boson-atlas/tests/helpers.py` como referência, sem importar dela).
 
 **Ambiente de execução:** local e CI, sem rede; IT abrem o servidor e a CLI como processos reais.
 
@@ -177,7 +177,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PASS | validate: 0 erro(s) — 3beae75 (árvore suja) | 2026-11-12 |
+| G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |

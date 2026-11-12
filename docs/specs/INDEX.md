@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **5 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 7, implemented 41
+- Specs: proposed 8, implemented 41
 - Impedimentos: **0 aberto(s)**, 20 resolvido(s)
 
 ## Cobertura de Pilares
@@ -33,9 +33,10 @@ Perfil: **minimo**
 | 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 1 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0046 |
-| 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: max_parallel=3 |
 | 3 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0046; saiu da onda 2: arquivos em comum com SPEC-0047 |
-| 3 | SPEC-0054 | Servidor MCP local do plugin com as tools atlas | full/M | proposed | ⏳ aguardando aprovação (H1) |  |
+| 4 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0028, SPEC-0045, SPEC-0046; saiu da onda 2: arquivos em comum com SPEC-0047; saiu da onda 3: arquivos em comum com SPEC-0048 |
+| 5 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 6 | SPEC-0054 | Servidor MCP local do plugin com as tools atlas | full/M | proposed | ⏳ aguardando aprovação (H1) |  |
 
 ## Épicos
 
@@ -45,7 +46,7 @@ Perfil: **minimo**
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
 | SPEC-0029 | org-atlas: mapa da organização para agentes | implemented | 10/10 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
-| SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/2 implementadas |
+| SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | proposed | 0/3 implementadas |
 
 ## Grafo de Dependências
 
@@ -73,6 +74,7 @@ flowchart LR
   subgraph E0031["SPEC-0031 · Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"]
     S0053["SPEC-0053<br/>Plugin fermion e marketplace fermion-la…"]:::proposed
     S0054["SPEC-0054<br/>Servidor MCP local do plugin com as too…"]:::proposed
+    S0055["SPEC-0055<br/>Renomear as skills para gluon-spec, pho…"]:::proposed
   end
   S0023 --> S0028
   S0033 -. contrato v1 .-> S0034
@@ -87,7 +89,9 @@ flowchart LR
   S0038 --> S0048
   S0039 --> S0048
   S0040 --> S0048
+  S0055 --> S0053
   S0053 --> S0054
+  S0055 --> S0054
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -150,8 +154,9 @@ flowchart LR
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | implemented | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
 | [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | implemented | 2026-11-02 | — | SPEC-0017 | — |
 | [SPEC-0052](SPEC-0052-second-brain-localizar-o-vault-pelo-conector-em-sessao-sem-c.md) | second-brain: localizar o vault pelo conector em sessão sem configuração | lite | fix | implemented | 2026-11-02 | — | SPEC-0044 | — |
-| [SPEC-0053](SPEC-0053-plugin-fermion-e-marketplace-fermion-lab-com-as-skills.md) | Plugin fermion e marketplace fermion-lab com as skills | full | feature | proposed | 2026-11-12 | SPEC-0031 | SPEC-0029 | — |
-| [SPEC-0054](SPEC-0054-servidor-mcp-local-do-plugin-com-as-tools-atlas.md) | Servidor MCP local do plugin com as tools atlas | full | feature | proposed | 2026-11-12 | SPEC-0031 | SPEC-0053 | — |
+| [SPEC-0053](SPEC-0053-plugin-fermion-e-marketplace-fermion-lab-com-as-skills.md) | Plugin fermion e marketplace fermion-lab com as skills | full | feature | proposed | 2026-11-12 | SPEC-0031 | SPEC-0055 | — |
+| [SPEC-0054](SPEC-0054-servidor-mcp-local-do-plugin-com-as-tools-atlas.md) | Servidor MCP local do plugin com as tools atlas | full | feature | proposed | 2026-11-12 | SPEC-0031 | SPEC-0053, SPEC-0055 | — |
+| [SPEC-0055](SPEC-0055-renomear-as-skills-para-gluon-spec-photon-brain-e-boson-atla.md) | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full | migration | proposed | 2026-11-12 | SPEC-0031 | SPEC-0029 | — |
 
 ## ADRs
 
@@ -173,3 +178,4 @@ flowchart LR
 | [ADR-0015](../adr/ADR-0015-rotacao-de-backups-como-unica-remocao-do-brain-py.md) | Rotação de backups como única remoção do brain.py | accepted | SPEC-0051 |
 | [ADR-0016](../adr/ADR-0016-o-repositorio-e-o-plugin-fermion.md) | O repositório é o plugin fermion | proposed | tests/plugin/test_plugin.py (SPEC-0053:UT-01, UT-02, UT-05, IT-01) |
 | [ADR-0017](../adr/ADR-0017-servidor-mcp-local-como-camada-fina-sobre-as-clis.md) | Servidor MCP local como camada fina sobre as CLIs | proposed | mcp/tests/test_architecture.py (SPEC-0054:UT-07) |
+| [ADR-0018](../adr/ADR-0018-nomes-das-skills-gluon-spec-photon-brain-e-boson-atlas.md) | Nomes das skills: gluon-spec, photon-brain e boson-atlas | proposed | tests/plugin/test_skill_names.py (SPEC-0055:UT-01 a UT-04) |

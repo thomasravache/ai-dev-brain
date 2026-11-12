@@ -7,7 +7,7 @@ user_facing: true
 status: proposed
 created: 2026-11-12
 parent: SPEC-0031
-depends_on: [SPEC-0029]
+depends_on: [SPEC-0055]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
@@ -24,7 +24,7 @@ approved_at:
 <!-- type: feature | fix | refactor | migration | foundation. user_facing: true quando a mudança altera uma jornada do usuário (UI ou API pública) — exige teste E2E. Substitua todos os marcadores com chaves duplas: o G0 (`spec_graph.py validate`) reprova a spec enquanto restar algum. As seções de Checklist em diante são preenchidas depois da aprovação, sem marcadores. -->
 
 ## 1. Visão Geral
-O repositório passa a ser um marketplace do Claude Code chamado `fermion-lab`, com um plugin `fermion` que traz as três skills (`sdd-management`, `second-brain`, `org-atlas`). Instalar vira um comando (`claude plugin marketplace add thomasravache/ai-dev-brain` e `claude plugin install fermion@fermion-lab`), e as skills aparecem como `/fermion:sdd-management`, `/fermion:second-brain` e `/fermion:org-atlas`. A instalação por cópia da pasta continua funcionando.
+O repositório passa a ser um marketplace do Claude Code chamado `fermion-lab`, com um plugin `fermion` que traz as três skills (`gluon-spec`, `photon-brain`, `boson-atlas`, renomeadas pela SPEC-0055). Instalar vira um comando (`claude plugin marketplace add thomasravache/ai-dev-brain` e `claude plugin install fermion@fermion-lab`), e as skills aparecem como `/fermion:gluon-spec`, `/fermion:photon-brain` e `/fermion:boson-atlas`. A instalação por cópia da pasta continua funcionando.
 
 ## 2. Motivação & Escopo
 **Motivação:** hoje cada skill é copiada à mão, uma por uma, e atualizar é copiar de novo. Um plugin instala e atualiza o conjunto de uma vez e é a base do servidor MCP (SPEC-0054) e do hook de início de sessão.
@@ -40,7 +40,7 @@ O repositório passa a ser um marketplace do Claude Code chamado `fermion-lab`, 
 - Rodar `claude plugin validate` na CI (exigiria instalar o Claude Code no runner): roda no G4 e no E2E-01 local.
 
 ## 3. Dependências
-- **Implementações necessárias:** SPEC-0029 — as três skills que o plugin empacota já estão entregues.
+- **Implementações necessárias:** SPEC-0055 — as três skills já com os nomes finais, que viram os comandos do plugin.
 - **Contratos consumidos:** N/A.
 - **Pré-requisitos externos:** formato de plugin e marketplace do Claude Code (code.claude.com/docs/en/plugins: manifest-reference, marketplace-reference, loading, cli-reference, lidos em 2026-11-12); Claude Code CLI instalado só para o E2E-01 e o `claude plugin validate`.
 
@@ -91,7 +91,7 @@ skills/<pasta>/SKILL.md (as três)
 
 instalação
   claude plugin marketplace add <owner/repo | caminho>  → marketplace fermion-lab
-  claude plugin install fermion@fermion-lab              → skills /fermion:sdd-management, /fermion:second-brain, /fermion:org-atlas
+  claude plugin install fermion@fermion-lab              → skills /fermion:gluon-spec, /fermion:photon-brain, /fermion:boson-atlas
   claude plugin validate .                               → exit 0 (avisos aceitos: CLAUDE.md na raiz não é carregado)
 
 erros
@@ -122,7 +122,7 @@ erros
 - **UT-01** — Dado o `.claude-plugin/marketplace.json` do repositório, quando é lido, então tem `name: fermion-lab`, `owner.name` não vazio, um único plugin `fermion` com `source: "./"` e descrição, e nenhuma chave de topo fora de `name`, `owner`, `plugins`, `metadata`.
 - **UT-02** — Dado o `.claude-plugin/plugin.json`, quando é lido, então `name` é `fermion` (igual ao do marketplace), `version` segue `AAAA.MM.N`, há `description` e `repository`, e nenhum caminho de componente é declarado.
 - **UT-03** — Dados manifestos inválidos montados no teste (JSON quebrado, nome `Fermion_Lab`, plugin.json com `name` diferente, `source: "./plugins/x"`), quando a checagem roda, então cada um gera um achado próprio.
-- **UT-04** — Dado `skills/`, quando o scan é simulado como o do Claude Code (`skills/<pasta>/SKILL.md`), então acha exatamente `sdd-management`, `second-brain` e `org-atlas`, cada uma com `name` igual à pasta e `description` não vazia.
+- **UT-04** — Dado `skills/`, quando o scan é simulado como o do Claude Code (`skills/<pasta>/SKILL.md`), então acha exatamente `gluon-spec`, `photon-brain` e `boson-atlas`, cada uma com `name` igual à pasta e `description` não vazia.
 - **UT-05** — Dado um `SKILL.md` de exemplo com `../shared`, `tools/sdd/` e `docs/specs/`, quando a checagem de autocontenção roda, então acusa os três; nas três skills reais não há achado.
 
 ### 7.3 Testes de Integração
@@ -163,7 +163,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PASS | validate: 0 erro(s) — 3beae75 (árvore suja) | 2026-11-12 |
+| G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
