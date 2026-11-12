@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -283,6 +284,35 @@ class SkillCopyTest(VendorCase):
                 self.assertEqual(out.returncode, 1, output(out))
                 self.assertIn("secret-leak", output(out))
                 self.assertIn(".org-atlas/skill/notes.txt", output(out))
+                self.assertNotIn(token, output(out), "o lint repete o valor do segredo")
+
+    def run_copy(self, *args):
+        """python3 .org-atlas/skill/scripts/atlas.py ... a partir da pasta do atlas, como no CI, com a mesma
+        configuração local isolada do Sandbox."""
+        env = dict(os.environ, HOME=str(self.box.home), ATLAS_CONFIG_HOME=str(self.box.config_home))
+        return subprocess.run([sys.executable, str(COPY_SCRIPT), *args], cwd=self.atlas, capture_output=True,
+                              text=True, env=env, check=False)
+
+    def test_lint_run_from_the_copy_right_after_vendor_has_no_error(self):
+        """SPEC-0040:UT-03 (lint rodado da cópia, logo depois do vendor, sem arquivo plantado: 0 erros)"""
+        self.workflow()
+        out = self.run_copy("lint", "--json")
+        self.assertEqual(out.returncode, 0, output(out))
+        self.assertEqual(json.loads(out.stdout)["errors"], 0, out.stdout)
+
+    def test_lint_run_from_the_copy_finds_a_secret_in_assets_of_the_copy(self):
+        """SPEC-0040:UT-03 (lint rodado da cópia, como no CI, acha segredo em arquivos extras de assets/)"""
+        self.workflow()
+        token = "ghp_" + "Zx9" * 12  # mesmo formato dos testes do lint (SPEC-0039)
+        planted = (COPY / "assets" / "collectors" / "x.bak", COPY / "assets" / "notes.txt")
+        for rel in planted:
+            (self.atlas / rel).write_text(f"token do time: {token}\n", encoding="utf-8")
+        for args in (("lint", "--only", "secret-leak"), ("lint", "--only", "secret-leak", "--json")):
+            with self.subTest(args=args):
+                out = self.run_copy(*args)
+                self.assertEqual(out.returncode, 1, f"lint da cópia não acusou o segredo: {output(out)}")
+                for rel in planted:
+                    self.assertIn(rel.as_posix(), output(out))
                 self.assertNotIn(token, output(out), "o lint repete o valor do segredo")
 
 
