@@ -149,20 +149,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01: suítes das três skills verdes antes da troca (guarda)
+- [x] CH-01: suítes das três skills verdes antes da troca (guarda)
 
 **Fase 1: Troca de nomes**
-- [ ] Red: UT-01 a UT-05 em `tests/plugin/test_skill_names.py` com a tag `SPEC-0055:<ID>`, falhando pelo motivo certo
-- [ ] Green: `git mv` das pastas, `name`/`description`, textos, bloco SDD, CI, regras de arquitetura, versões e CHANGELOGs
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suítes das três skills (IT-01), lint e arquitetura (G2/G3)
+- [x] Red: UT-01 a UT-05 em `tests/plugin/test_skill_names.py` com a tag `SPEC-0055:<ID>`, falhando pelo motivo certo
+- [x] Green: `git mv` das pastas, `name`/`description`, textos, bloco SDD, CI, regras de arquitetura, versões e CHANGELOGs
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suítes das três skills (IT-01), lint e arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Architect: `test`/`arch_test` do `sdd-config.yml` e `touches` das specs abertas com os caminhos novos
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, README e CHANGELOGs (G7)
+- [x] Review independente (G4)
+- [x] Architect: `test`/`arch_test` do `sdd-config.yml` e `touches` das specs abertas com os caminhos novos
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, README e CHANGELOGs (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -188,37 +188,47 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+As skills passaram a se chamar `gluon-spec` (antes `sdd-management`), `photon-brain` (antes `second-brain`) e `boson-atlas` (antes `org-atlas`): pasta, `name`, `description` com o nome antigo como apelido, títulos e textos de apresentação, bloco SDD (`Carregue a skill \`gluon-spec\` (antes \`sdd-management\`)`), CI, README e versões novas (`SDD_TOOL_VERSION` 2026.11.2, `BRAIN_VERSION` 2026.11.6, `ATLAS_VERSION` 2026.11.3). Scripts, pastas de configuração da máquina, o contrato `org-atlas/collector@1`, a pasta `.org-atlas/`, `tools/sdd/`, o bloco `sdd:start` e as saídas das CLIs ficaram iguais: nenhuma máquina, vault ou atlas precisa fazer nada.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `git mv` das três pastas (261 renomeações) e textos em c7cba33; testes em c6f89ba, 5b54330, 9a0f8da e e8bdb60 (`tests/plugin/test_skill_names.py`).
+- Regras de arquitetura das skills acusam os nomes novos e os antigos; `test_whats_new.py` e `test_instructions.py` ajustados aos caminhos novos.
+- O Architect atualizou `test`/`arch_test` do `sdd-config.yml` e os `touches` das specs abertas (SPEC-0028, 0045–0048).
+- **Impedimento IMP-01 (falha, 3 FAILs no G1):** todos de configuração do processo (guarda CH-01/IT-01 sem tag, ID de teste de outra spec num N/A, `tests/plugin` fora do `test`); 4ª execução liberada pelo thomas em 2026-11-12.
+- **Revisão G4:** APPROVED; o minor da exceção `.claude/` larga demais foi corrigido em e8bdb60.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type` não é `fix`.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Suítes das três skills verdes antes da troca (guarda) | PASS | `test_skill_names.py::SkillSuitesGuardTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-01 | Só as três pastas novas, `name` igual à pasta | PASS | `SkillFoldersTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | `description` e bloco SDD citam o nome antigo | PASS | `OldNameAliasTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Nenhuma referência ao caminho antigo fora das exceções | PASS | `OldReferenceSearchTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | Identificadores mantidos (configuração, contrato, `.org-atlas/`, scripts) | PASS | `KeptIdentifiersTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-05 | Versão nova e entrada da troca em cada CHANGELOG | PASS | `VersionAndChangelogTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Suítes completas e arquitetura das três skills verdes com as pastas novas | PASS | `SkillSuitesGuardTest` e as três suítes completas no G2/G5 — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #25 em adc8663
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — migração coberta pelo ADR-0018
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — N/A — sem mudança de comportamento; identificadores mantidos provados pelo UT-04
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin; versões novas das skills
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — rollback por revert do `git mv`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `AGENTS.md` e os três CHANGELOGs das skills
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — nenhuma; o nit do `ATLAS.md` gerado que ainda cita `org-atlas` fica como está pelo contrato (arquivos gerados não mudam)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — skills distribuídas por cópia e pelo plugin; `SDD_TOOL_VERSION` 2026.11.2, `BRAIN_VERSION` 2026.11.6 e `ATLAS_VERSION` 2026.11.3 na branch `sdd/SPEC-0031`, PR #25.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0055`. -->

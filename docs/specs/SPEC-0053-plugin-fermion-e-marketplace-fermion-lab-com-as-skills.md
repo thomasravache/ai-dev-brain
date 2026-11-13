@@ -164,21 +164,21 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Manifestos e skills autocontidas**
-- [ ] Red: UT-01 a UT-05 e IT-01 em `tests/plugin/test_plugin.py` com a tag `SPEC-0053:<ID>`, falhando pelo motivo certo
-- [ ] Green: `.claude-plugin/marketplace.json` e `plugin.json` (as skills já passam na checagem de autocontenção v2)
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01 a UT-05 e IT-01 em `tests/plugin/test_plugin.py` com a tag `SPEC-0053:<ID>`, falhando pelo motivo certo
+- [x] Green: `.claude-plugin/marketplace.json` e `plugin.json` (as skills já passam na checagem de autocontenção v2)
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase 2: Jornada de instalação**
-- [ ] Red: E2E-01 (pulado sem o Claude Code CLI) falhando pelo motivo certo localmente
-- [ ] Green: `claude plugin validate .`, `marketplace add` e `install fermion@fermion-lab` passando localmente
-- [ ] README com a instalação pelo plugin e o passo `tests/plugin` na CI
+- [x] Red: E2E-01 (pulado sem o Claude Code CLI) falhando pelo motivo certo localmente
+- [x] Green: `claude plugin validate .`, `marketplace add` e `install fermion@fermion-lab` passando localmente
+- [x] README com a instalação pelo plugin e o passo `tests/plugin` na CI
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: o marketplace existe quando o merge chega à main
-- [ ] Relatório de Entrega e README (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: o marketplace existe quando o merge chega à main
+- [x] Relatório de Entrega e README (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -204,37 +204,49 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+O repositório é o marketplace `fermion-lab` com um plugin `fermion` (`source: "./"`, versão 2026.11.1) que traz as três skills: `claude plugin marketplace add thomasravache/ai-dev-brain` e `claude plugin install fermion@fermion-lab` (ou `claude plugin install fermion --marketplace thomasravache/ai-dev-brain`) instalam `/fermion:gluon-spec`, `/fermion:photon-brain` e `/fermion:boson-atlas`. A instalação por cópia da pasta continua funcionando. README com instalação, atualização e desinstalação.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `.claude-plugin/marketplace.json` e `plugin.json` (ADR-0016) em ea6f6d6; README em ea6f6d6 e 5a70b3b; testes em 1962030, 3af8f52 e 11636bb (`tests/plugin/test_plugin.py`).
+- **Emenda v2 (IMP-01, H1 thomas 2026-11-13):** autocontenção das skills medida por links relativos, `<skill-dir>/..` e caminhos de script que saem da pasta, e não por texto (as skills citam `docs/specs/` e `tools/sdd/` do projeto de quem usa).
+- **Emenda v3 (IMP-02 da SPEC-0054, H1 thomas 2026-11-13):** o `plugin.json` pode declarar `mcpServers` só com o servidor `fermion`.
+- O E2E-01 roda o Claude Code de verdade com `HOME`, `CLAUDE_CONFIG_DIR` e `XDG_*` temporários e confere que a configuração real não muda.
+- **Revisão G4:** APPROVED; minors de autocontenção (path com `/ ".."`, `os.path.join`, links de referência e `href`), guarda de componentes acidentais na raiz, casos do UT-03, isolamento do E2E e o comando de um passo corrigidos em 3af8f52 e 5a70b3b.
+- `claude plugin validate .` sai com 0; avisos aceitos: falta `author`, `CLAUDE.md` na raiz não é carregado, falta LICENSE e ícone (só para o diretório de plugins).
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type` não é `fix`.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | marketplace.json `fermion-lab`, um plugin `fermion` com `source: "./"`, sem e-mail | PASS | `test_plugin.py::MarketplaceManifestTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | plugin.json coerente, versão AAAA.MM.N, só o `mcpServers` do `fermion`; nada de componente acidental na raiz | PASS | `PluginManifestTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Cada manifesto inválido gera o seu achado | PASS | `ManifestCheckTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | Scan acha as três skills com `name` igual à pasta | PASS | `SkillScanTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-05 | Autocontenção por links, `<skill-dir>/..` e scripts; caminhos do projeto alvo permitidos | PASS | `SelfContainmentTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | CLIs rodam a partir da cópia do cache e da pasta copiada sozinha | PASS | `PluginCopyTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| E2E-01 | `validate`, `marketplace add`, `install` e listagem com as três skills, em configuração isolada | PASS | `PluginInstallJourneyTest` (local, Claude Code 2.1.322; pulado na CI sem o CLI) — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #25 em adc8663
+- [x] Review independente sem achados blocker/major (G4) — revisão aprovada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0016
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — N/A — só manifestos; privacidade: `owner` é o login público, sem e-mail (UT-01)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin; o marketplace existe quando o merge chega à `main`
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — rollback por revert; `claude plugin uninstall fermion@fermion-lab`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README (instalação pelo plugin e por cópia); sem CHANGELOG raiz no repositório, a versão do plugin fica no `plugin.json` (SPEC-0056)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0056 (versão do plugin) e SPEC-0057 (hook do leak-check)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — marketplace no próprio repositório; plugin `fermion` 2026.11.1 na branch `sdd/SPEC-0031`, PR #25.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0056 — a versão do plugin precisa subir quando as skills mudam, senão `claude plugin update` não traz as novidades; inclui o `author` no `plugin.json`.
+- SPEC-0057 — o hook do leak-check grava o caminho absoluto da instalação, que some quando o cache do plugin muda de versão.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0053`. -->

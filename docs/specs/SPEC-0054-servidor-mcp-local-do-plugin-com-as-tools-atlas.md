@@ -177,20 +177,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Protocolo e tools**
-- [ ] Red: UT-01 a UT-07 em `mcp/tests/` com a tag `SPEC-0054:<ID>`, falhando pelo motivo certo
-- [ ] Green: `mcp/fermion_mcp.py` (duas eras, cinco tools, executor por subprocess) e regras do ADR-0017
-- [ ] Refactor mantendo tudo verde
+- [x] Red: UT-01 a UT-07 em `mcp/tests/` com a tag `SPEC-0054:<ID>`, falhando pelo motivo certo
+- [x] Green: `mcp/fermion_mcp.py` (duas eras, cinco tools, executor por subprocess) e regras do ADR-0017
+- [x] Refactor mantendo tudo verde
 
 **Fase 2: Processo real**
-- [ ] Red: IT-01 a IT-03 falhando pelo motivo certo
-- [ ] Green: servidor real por stdio contra um atlas de fixture; `mcpServers` no `plugin.json`; `mcp/README.md`; passo `mcp/tests` na CI
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: IT-01 a IT-03 falhando pelo motivo certo
+- [x] Green: servidor real por stdio contra um atlas de fixture; `mcpServers` no `plugin.json`; `mcp/README.md`; passo `mcp/tests` na CI
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4), com `/mcp` mostrando `plugin:fermion:fermion` conectado
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy via pipeline (G6) — N/A: o servidor sobe com o plugin
-- [ ] Relatório de Entrega, README (G7)
+- [x] Review independente (G4), com `/mcp` mostrando `plugin:fermion:fermion` conectado
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy via pipeline (G6) — N/A: o servidor sobe com o plugin
+- [x] Relatório de Entrega, README (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -217,37 +217,50 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+O plugin `fermion` declara o servidor MCP local `fermion` (`mcp/fermion_mcp.py`, stdio, só biblioteca padrão) com cinco tools só de leitura sobre a CLI da `boson-atlas`: `atlas_config`, `atlas_doctor`, `atlas_context`, `atlas_lint` e `atlas_curate_list`, cada uma com `readOnlyHint`. Fala as duas eras do protocolo (legada com `initialize` até `2025-11-25` e moderna `2026-07-28` com `server/discover`) e devolve o mesmo resultado da CLI. No Claude Code, `claude mcp list` mostra `plugin:fermion:fermion ✔ Connected`.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Servidor em 064060d, 2eb2406 e 16b5dca; `mcpServers` no `plugin.json` em d1c6633; testes em 1df8578, f96c305 e cdb17f4 (`mcp/tests/`); regras do ADR-0017 em `mcp/tests/test_architecture.py`.
+- Cada tool monta a linha de comando da CLI (`--` antes do texto livre), roda por `subprocess` sem shell com timeout de 120 s e mapeia o exit (0 e 1 do lint como resultado; 3 com a orientação de onboarding; outros com o código e o stderr).
+- **Emenda v2 (IMP-01, H1 thomas 2026-11-13):** era moderna conforme o schema oficial 2026-07-28 (`DiscoverResult` com `ttlMs` e `cacheScope: "private"`, `resultType`, `serverInfo` em `_meta`).
+- **IMP-02:** conflito com o contrato da SPEC-0053 sobre `mcpServers`, resolvido pela emenda v3 da SPEC-0053.
+- **Revisão G4 (3 rodadas):** a 1ª achou o servidor caindo com JSON muito aninhado e com bytes que não são UTF-8, linha forjada no log, NUL na query, `id: null` aceito e buracos nas regras de arquitetura; a 2ª achou o contador de aninhamento quadrático (linha de 1 MB travaria o servidor) e a query recusando tab e quebra de linha; a 3ª aprovou (varredura linear: 5 MB em 0,074 s; fuzz de 3000 JSON confere a profundidade). Testes de regressão antes de cada correção.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type` não é `fix`.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | As cinco tools com `inputSchema` fechado e `readOnlyHint` | PASS | `test_server.py::ToolsListTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | Argumentos inválidos (inclusive bool, caracteres de controle) recebem -32602 sem abrir processo | PASS | `InvalidArgumentsTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Texto livre depois de `--`, por palavra, sem shell | PASS | `CommandLineTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | Mapeamento de exit 0, 1 no lint, 3, outros, timeout e CLI ausente; log em uma linha | PASS | `OutputMappingTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-05 | Era legada: versão ecoada ou 2025-11-25, notificação sem resposta, ping, sem campos modernos | PASS | `LegacyEraTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-06 | Era moderna: `DiscoverResult`, `resultType`, `ttlMs`/`cacheScope`, -32022 | PASS | `ModernEraTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-07 | Só stdlib, sem import das skills, sem shell, processo só para a CLI do atlas (com alias, getattr e **kwargs) | PASS | `test_architecture.py::ImportRulesTest, ProcessRulesTest, ShellRulesTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Servidor real devolve o mesmo stdout da CLI, em menos de 5 s | PASS | `SameResultAsCliTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-02 | Atlas não configurado: `isError` com a orientação de onboarding | PASS | `NotConfiguredTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-03 | JSON inválido, aninhado demais, não UTF-8, longo sem fechar, método desconhecido, notificação, `id: null` e EOF | PASS | `TransportTest`, `TransportUnitTest`, `NestingCounterTest` — CI do PR #25 em adc8663 (run 43459407968, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5) — CI do PR #25 em adc8663
+- [x] Review independente sem achados blocker/major (G4) — 3ª rodada
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0017
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — resposta em menos de 5 s no IT-01; varredura de aninhamento linear (100 KB em ~4 ms); só leitura, argumentos validados, sem shell e sem vazamento de ambiente (revisão G4)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin; o servidor sobe com o plugin; conexão real conferida no G4 (`plugin:fermion:fermion ✔ Connected`)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — stderr com uma linha por erro, sem argumentos; rollback por revert ou desabilitando em `/mcp`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `mcp/README.md` e README; sem CHANGELOG raiz no repositório
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: `living_docs` não habilitado neste repositório
+- [x] Pendências registradas como novas specs (ou nenhuma) — nenhuma nova; os nits da revisão (versão legada em `_meta`, resposta híbrida no `initialize` moderno, `serverInfo` só no discover, `--only` separado) não exigem mudança
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — servidor dentro do plugin `fermion` 2026.11.1, na branch `sdd/SPEC-0031`, PR #25.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0054`. -->
