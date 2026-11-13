@@ -189,9 +189,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ea6f6d6 | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ea6f6d6 | 2026-11-13 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (ea6f6d6): APPROVED — manifestos conforme o contrato v2, validate exit 0 (avisos author, CLAUDE.md na raiz, LICENSE/ICON do diretório), E2E isolado sem tocar ~/.claude; minors M2/M3/M4b e nits N2/N3/N4 corrigidos exatamente como sugerido em 3af8f52 (testes) e 5a70b3b (README), 18 testes OK; M1 e M4a viraram SPEC-0056 e SPEC-0057; N1 (author) fica para a SPEC-0056 — 5a70b3b | 2026-11-13 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #25 em adc8663 verde (run 43459407968 ci Python 3.9/3.15; run 43459408198 sdd/pr-check) — 79df8b4 | 2026-11-13 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-13 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-13 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
