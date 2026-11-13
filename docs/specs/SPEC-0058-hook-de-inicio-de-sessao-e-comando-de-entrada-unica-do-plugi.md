@@ -11,7 +11,7 @@ depends_on: [SPEC-0053, SPEC-0054]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [hooks/**, commands/**, tests/plugin/test_session_start.py, tests/plugin/test_plugin.py, .claude-plugin/plugin.json, README.md]
+touches: [hooks/**, commands/**, tests/plugin/test_session_start.py, tests/plugin/test_plugin.py, tests/plugin/check_plugin_version.py, tests/plugin/test_plugin_version.py, .claude-plugin/plugin.json, README.md]
 adrs: [ADR-0016, ADR-0017]
 external: []
 size: S
@@ -36,18 +36,20 @@ O comando `/fermion:deliver <tarefa>` (`commands/deliver.md`) encadeia o fluxo: 
 - `hooks/hooks.json` com um hook `SessionStart` (matcher `startup|resume|clear|compact`), forma exec: `python3` com `${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py`.
 - `hooks/session_start.py`: lê o JSON do stdin (`cwd`), roda só comandos de leitura das CLIs do próprio plugin e imprime `hookSpecificOutput.additionalContext`.
 - `commands/deliver.md`: comando `/fermion:deliver` com `argument-hint` e o roteiro de encadeamento.
-- A guarda de componentes na raiz (SPEC-0053:UT-02) passa a aceitar exatamente `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md`.
+- A guarda de componentes na raiz (SPEC-0053:UT-02) passa a aceitar exatamente `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md`, e passa a vigiar também `bin/`.
+- A regra de versão do plugin (SPEC-0056, `tests/plugin/check_plugin_version.py`) passa a valer para mudanças em `hooks/`, `commands/`, `mcp/` e `scripts/`, além de `skills/`: sem isso, `claude plugin update` não entregaria hook, comando nem tools novas.
 
 **Não-objetivos (fora do escopo):**
 - Avisos de instalação antiga no hook (SPEC-0061, que reaproveita este hook).
 - Índice completo do atlas no contexto: pode passar de 10.000 caracteres; o agente busca com a skill ou com `atlas_context`.
 - Hooks em outros eventos (`PreToolUse`, `Stop`) e qualquer hook que bloqueie ou grave.
 - Entrada única em outros agentes (Gemini CLI, Codex): eles usam o bloco `sdd:start` do `AGENTS.md`, como hoje.
+- Projetos em modo privado (specs fora do repositório, sem `docs/specs/sdd-config.yml`): o bloco SDD não aparece; a detecção do modo privado fica para quando houver pedido.
 
 ## 3. Dependências
 - **Implementações necessárias:** SPEC-0053 (o repositório é o plugin; `${CLAUDE_PLUGIN_ROOT}`), SPEC-0054 (padrão de chamada das CLIs por `subprocess`, sem shell, com timeout, que o hook copia).
 - **Contratos consumidos:** N/A — o hook repassa o texto do `status` e só lê o exit code de `config --json` das outras CLIs.
-- **Pré-requisitos externos:** documentação oficial do Claude Code lida em 2026-11-13: code.claude.com/docs/en/plugins-reference (`hooks/hooks.json` com o invólucro `"hooks"`, `commands/` como pasta padrão, `${CLAUDE_PLUGIN_ROOT}` em `command` e `args`) e code.claude.com/docs/en/hooks (`SessionStart` com matchers `startup`, `resume`, `clear`, `compact` e `fork`; `hookSpecificOutput.additionalContext`; limite de 10.000 caracteres por valor; forma exec com `args` sem shell; exit diferente de 0 e de 2 não bloqueia).
+- **Pré-requisitos externos:** documentação oficial do Claude Code lida em 2026-11-13: code.claude.com/docs/en/plugins-reference (`hooks/hooks.json` com o invólucro `"hooks"`, `commands/` como pasta padrão, `${CLAUDE_PLUGIN_ROOT}` em `command` e `args`) e code.claude.com/docs/en/hooks (`SessionStart` com matchers `startup`, `resume`, `clear`, `compact` e `fork`; `hookSpecificOutput.additionalContext`; limite de 10.000 caracteres por valor; seção "Exec form and shell form": com `args` presente, `command` é resolvido no PATH e executado sem shell, cada item de `args` é um argumento e `${CLAUDE_PLUGIN_ROOT}` é substituído; exit diferente de 0 e de 2 não bloqueia).
 
 ## 4. Decisão Arquitetural
 **Contexto:** brownfield. Referências: `mcp/fermion_mcp.py` (`run_cli`: lista de argumentos, sem shell, timeout, `check=False`; raiz do plugin por `Path(__file__)`, nunca pelo cwd) e `mcp/tests/test_architecture.py` (regras do ADR-0017 testadas contra exemplo e contra o código real).
@@ -81,7 +83,7 @@ hooks/hooks.json
 hooks/session_start.py
   stdin: JSON do hook (usa só "cwd"; JSON inválido ou sem "cwd" → usa o cwd do processo)
   raiz do plugin: a pasta acima de hooks/ (Path(__file__)), nunca o cwd
-  projeto: a raiz git que contém o cwd (git rev-parse --show-toplevel); fora de git, o próprio cwd
+  projeto: a primeira pasta, do cwd para cima, que contém .git (arquivo ou pasta), como o find_root da gluon-spec; sem .git, o próprio cwd (nenhum processo além das três CLIs)
   blocos, nesta ordem, cada um só quando a condição vale:
     SDD    projeto tem docs/specs/sdd-config.yml
            → "## SDD (gluon-spec)\n" + stdout de `spec_graph.py status` (cwd = projeto), cortado em 6.000 caracteres com "… (cortado; rode `status`)"
@@ -118,6 +120,7 @@ commands/deliver.md   (/fermion:deliver)
 | Stdin ruim | JSON inválido, sem `cwd`, `cwd` inexistente | usa o cwd do processo ou omite o SDD; exit 0 | UT-06 |
 | Fronteira com as CLIs | código do hook | só stdlib; nenhum import de `skills/`; processos só das três CLIs, sem shell | UT-07 |
 | Contrato do plugin | `hooks/hooks.json`, `commands/deliver.md` e guarda da raiz | forma exec com `${CLAUDE_PLUGIN_ROOT}`; frontmatter e roteiro do comando; só os arquivos do contrato na raiz | UT-08 |
+| Versão do plugin | mudança em `hooks/`, `commands/`, `mcp/` ou `scripts/` sem subir a versão | achado na CI, como para `skills/` | UT-09 |
 | Instalação com hook e comando | plugin instalado numa configuração isolada | cópia instalada traz hook e comando; o hook rodado como o `hooks.json` declara devolve o `status` | E2E-01 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
@@ -131,8 +134,9 @@ commands/deliver.md   (/fermion:deliver)
 - **UT-04** — Dado um `status` com 20.000 caracteres, quando o hook monta o contexto, então o bloco SDD tem no máximo 6.000 caracteres e termina com o aviso de corte, e o `additionalContext` inteiro tem no máximo 8.000.
 - **UT-05** — Dados um executor que levanta `FileNotFoundError`, um que levanta `TimeoutExpired`, `config` saindo com 2 e `status` saindo com 1 e stderr `erro: x`, quando o hook roda, então os blocos das duas primeiras e da `config` somem com uma linha `session_start: … indisponível` no stderr, o bloco SDD traz `status falhou: erro: x`, e o exit é sempre 0.
 - **UT-06** — Dados stdin `{`, stdin `{}` e `{"cwd": "/nao/existe"}`, quando o hook roda, então não levanta exceção, sai com 0 e, no último caso, não tem bloco SDD.
-- **UT-07** — Dados o código de `hooks/session_start.py` e exemplos que violam as regras, quando as regras rodam, então acusam import fora da stdlib ou de `skills/`, `shell=True` e processo que não seja uma das três CLIs; o código real não tem achado.
-- **UT-08** — Dado o repositório, quando o contrato do plugin é conferido, então `hooks/hooks.json` é exatamente o do contrato (invólucro `hooks`, matcher, forma exec, `${CLAUDE_PLUGIN_ROOT}`); `commands/deliver.md` tem `description` e `argument-hint`, cita `$ARGUMENTS`, `boson-atlas`, `gluon-spec` e a parada no H1; e na raiz só existem `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md` entre as pastas de componente (guarda da SPEC-0053:UT-02 com a lista exata).
+- **UT-07** — Dados o código de `hooks/session_start.py` e exemplos que violam as regras, quando as regras rodam, então acusam import fora da stdlib ou de `skills/`, `shell=True` e processo que não seja uma das três CLIs (inclusive `git`); o código real não tem achado. As regras ficam em `tests/plugin/` e o Architect inclui o arquivo no `arch_test` do `sdd-config.yml` no G1, para o G3 rodá-las.
+- **UT-08** — Dado o repositório, quando o contrato do plugin é conferido, então `hooks/hooks.json` é exatamente o do contrato (invólucro `hooks`, matcher, forma exec, `${CLAUDE_PLUGIN_ROOT}`); `commands/deliver.md` tem `description` e `argument-hint`, cita `$ARGUMENTS`, `boson-atlas`, `gluon-spec` e a parada no H1; e na raiz só existem `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md` entre as pastas de componente, agora com `bin/` vigiada (guarda da SPEC-0053:UT-02 com a lista exata).
+- **UT-09** — Dado um repositório temporário com uma mudança só em `hooks/`, outra só em `commands/`, outra só em `mcp/` e outra só em `scripts/`, todas sem subir a versão do `plugin.json`, quando `check_plugin_version.py --base` roda, então cada uma tem o achado de versão; uma mudança só em `docs/` não tem achado.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um projeto temporário criado com a CLI real da `gluon-spec` (`git init` e uma spec criada com `new`) e `ATLAS_CONFIG_HOME` e a configuração do cérebro apontando para pastas vazias, quando `hooks/session_start.py` roda como processo real com o JSON do hook no stdin, então o `additionalContext` contém o stdout do `spec_graph.py status` rodado na mesma pasta, não tem as linhas do atlas e do cérebro, e o processo termina com 0 em menos de 5 s.
@@ -144,7 +148,7 @@ commands/deliver.md   (/fermion:deliver)
 - **E2E-01** — [jornada: início de sessão com o plugin] Dado o Claude Code CLI no PATH e uma configuração isolada (mesmo isolamento do SPEC-0053:E2E-01: `HOME`, `CLAUDE_CONFIG_DIR` e `XDG_CONFIG_HOME` temporários), quando o marketplace é adicionado e o plugin `fermion` instalado, então `claude plugin validate .` passa, a cópia instalada contém `hooks/hooks.json` e `commands/deliver.md`, e o comando declarado no `hooks.json` instalado, com `${CLAUDE_PLUGIN_ROOT}` trocado pelo `installPath`, rodado num projeto de fixture com SDD, devolve o `additionalContext` com o `status`. Sem `claude` no PATH o teste é pulado com o motivo (como o SPEC-0053:E2E-01).
 
 ### 7.6 Outros
-- G4 manual: numa sessão real do Claude Code com o plugin, o contexto inicial traz o bloco SDD e `/fermion:deliver` aparece no menu `/`.
+- G4 manual (obrigatório, porque o E2E-01 roda o comando do hook mas não prova que o Claude Code o executa): numa sessão real do Claude Code com o plugin instalado, `claude --debug` mostra o hook `SessionStart` do `fermion` terminando com 0, o contexto inicial traz o bloco SDD e `/fermion:deliver` aparece no menu `/`. Se o Claude Code instalado não aceitar `args`, o `hooks.json` volta para a forma de texto `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py"` por emenda.
 
 **Dublês e dados de teste:** executor de processo substituível nos UT (como `Server(runner=...)` do `mcp/fermion_mcp.py`); projetos e configurações em pastas temporárias; nunca o `~/.claude`, o `~/.claude.json` nem as configurações reais do atlas e do cérebro.
 

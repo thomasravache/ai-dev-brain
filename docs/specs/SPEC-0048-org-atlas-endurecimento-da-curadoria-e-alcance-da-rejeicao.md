@@ -56,6 +56,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - **UT-05** — Dado `extra_patterns: ['vault/[a-z0-9]{8}']` e um arquivo `vault/abcd1234.bin` não UTF-8, `acme-bbbbcccc.tar.gz` com `^acme-[0-9a-f]{8}$` e um link para `acme-eeee1111#sec`, quando o `lint` roda, então nenhum desses valores aparece na saída, em texto ou `--json`.
 - **UT-04** — Dado um serviço chamado `## Convenções (regra)`, quando o `context` monta o pacote, então nenhuma linha do Markdown, de qualquer nível de título, tem como texto um título fixo das seções.
 - **UT-06** — Dado um atlas vendorizado cuja `.org-atlas/skill/scripts/atlas.py` difere da skill instalada (sem segredo nela), quando o `lint` roda pela skill instalada, então não há ERRO `secret-leak` nesse arquivo e há AVISO `config` sugerindo `vendor`; um segredo plantado em outro arquivo da cópia continua ERRO.
+- **UT-07** — Dadas rejeições `(kind: pr-title, pattern: conventional)` no escopo organization, quando a regra de rejeição compara candidatas `(pr-title, conventional)` em escopo de repositório e `(pr-title, ticket-prefix)` no da organização, então a primeira é bloqueada e a segunda não.
 - **IT-01** — Dado `pr-title-conventional` rejeitada no escopo organization, quando a maioria muda e só um repositório segue o padrão, então nenhuma proposta `pr-title-conventional-<repo>` é criada e o `curate list` mostra só a rejeitada; um padrão diferente do mesmo kind continua sendo proposto.
 
 ## 5. Questões em Aberto

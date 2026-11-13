@@ -7,7 +7,7 @@ user_facing: false
 status: proposed
 created: 2026-11-13
 parent: SPEC-0031
-depends_on: [SPEC-0054]
+depends_on: [SPEC-0054, SPEC-0059]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
@@ -29,6 +29,7 @@ O servidor MCP `fermion` ganha seis tools de leitura do processo SDD (`gluon-spe
 
 **Objetivos (dentro do escopo):**
 - Seis tools `sdd_*` de leitura, com `inputSchema` fechado e `annotations.readOnlyHint: true`.
+- A regra de arquitetura do servidor passa a aceitar também `spec_graph.py` (depois da SPEC-0059, que aceitou `brain.py`).
 - Pasta do projeto: `CLAUDE_PROJECT_DIR` do ambiente do servidor (o Claude Code exporta para servidores stdio de plugin), senão o cwd do servidor; passada como `--root`.
 
 **Não-objetivos (fora do escopo):**
@@ -56,7 +57,7 @@ O servidor MCP `fermion` ganha seis tools de leitura do processo SDD (`gluon-spe
 
 ## 5. Requisitos Não-Funcionais
 - **Desempenho e escala:** um processo por chamada; medido no IT-01 (resposta em menos de 5 s num projeto de fixture).
-- **Segurança:** só leitura; `ids` validados por padrão `^(SPEC|ADR)-[0-9]{4}$` antes de abrir processo; sem shell; `--root` vem do ambiente.
+- **Segurança:** só leitura; ids validados por padrão (o mesmo `\d{4,}` da `gluon-spec`) antes de abrir processo; sem shell; `--root` vem do ambiente.
 - **Privacidade e dados pessoais:** N/A — specs do projeto aberto.
 - **Disponibilidade e resiliência:** timeout de 120 s; erros viram `isError: true` sem derrubar o servidor.
 - **Acessibilidade (UI):** N/A — sem interface.
@@ -67,14 +68,15 @@ O servidor MCP `fermion` ganha seis tools de leitura do processo SDD (`gluon-spe
 
 ```text
 projeto = env CLAUDE_PROJECT_DIR (se não vazio) senão os.getcwd() do servidor; toda linha de comando começa com spec_graph.py --root <projeto>
-id = string ^(SPEC|ADR)-[0-9]{4}$
+spec_id = string ^SPEC-[0-9]{4,}$        any_id = string ^(SPEC|ADR)-[0-9]{4,}$   (o status só aceita specs; o validate aceita os dois)
+arrays com minItems/maxItems: o validador de argumentos do servidor (_check) passa a conferir os dois
 
 tools/list → atlas_*, brain_* (SPEC-0059, se já integrada) e estas, com inputSchema object, additionalProperties: false, annotations {readOnlyHint: true}
-  sdd_status       {ids: array de id, 0..20 itens}   → status [ids...]
-  sdd_validate     {ids: array de id, 0..20 itens}   → validate [ids...]
+  sdd_status       {ids: array de spec_id, 0..20 itens}   → status [ids...]
+  sdd_validate     {ids: array de any_id, 0..20 itens}    → validate [ids...]
   sdd_next         {}                                → next
   sdd_waves        {}                                → waves
-  sdd_report       {id: id (obrigatório)}            → report <id>
+  sdd_report       {id: spec_id (obrigatório)}       → report <id>
   sdd_whats_new    {}                                → whats-new            (nunca --ack)
 
 tools/call
@@ -91,7 +93,8 @@ tools/call
 | Cenário | Condição / Entrada | Resultado esperado | Testes |
 |---|---|---|---|
 | Lista de tools | `tools/list` | as `sdd_*` do contrato com schema fechado e `readOnlyHint` | UT-01 |
-| Argumento inválido | id fora do padrão, mais de 20 ids, `sdd_report` sem `id`, chave extra | -32602 sem abrir processo | UT-02 |
+| Argumento inválido | id fora do padrão, ADR no `sdd_status`, mais de 20 ids, `sdd_report` sem `id`, chave extra | -32602 sem abrir processo | UT-02 |
+| Fronteira com as CLIs | código do servidor | processo só para `atlas.py`, `brain.py` e `spec_graph.py` das skills | UT-05 |
 | Pasta do projeto | `CLAUDE_PROJECT_DIR` definido, vazio ou ausente | `--root` com o valor do ambiente, ou com o cwd do servidor | UT-03 |
 | Mapeamento de saída | exit 0, 1 (validate), 2, timeout | resultado e `isError` do contrato | UT-04 |
 | Mesmo resultado da CLI | servidor real num projeto de fixture | `sdd_status`, `sdd_validate` e `sdd_next` iguais ao stdout da CLI | IT-01 |
@@ -103,12 +106,13 @@ tools/call
 
 ### 7.2 Testes Unitários
 - **UT-01** — Dado o servidor, quando recebe `tools/list` (era legada e moderna), então a lista contém as seis `sdd_*` do contrato, cada uma com `description`, `inputSchema` fechado (padrão de id, limites de itens) e `annotations.readOnlyHint: true`, e as tools das specs anteriores continuam iguais.
-- **UT-02** — Dados `sdd_status` com `ids: ["SPEC-1"]`, com 21 ids, `sdd_report` sem `id`, `sdd_report` com `id: "--ack"` e `sdd_next` com chave extra, quando chegam, então cada um recebe -32602 e nenhum processo é aberto.
+- **UT-02** — Dados `sdd_status` com `ids: ["SPEC-1"]`, com `ids: ["ADR-0001"]`, com 21 ids, `sdd_validate` com `ids: ["ADR-0001", "SPEC-12345"]` (válido: abre processo), `sdd_report` sem `id`, `sdd_report` com `id: "--ack"` e `sdd_next` com chave extra, quando chegam, então cada inválido recebe -32602 sem abrir processo, o válido chega ao executor, e o validador confere `minItems`/`maxItems` de qualquer array do schema.
 - **UT-03** — Dado um executor falso, quando `sdd_status` é chamado com `CLAUDE_PROJECT_DIR=/p`, com `CLAUDE_PROJECT_DIR` vazio e sem a variável, então a linha de comando é `spec_graph.py --root /p status`, e nos outros dois casos `--root` é o cwd do servidor; nenhuma linha de comando de nenhuma `sdd_*` contém `--ack`, `--apply`, `--create` ou `--out`.
-- **UT-04** — Dado um executor falso, quando a CLI sai com 0, com 1 no `sdd_validate`, com 1 no `sdd_status`, com 2 e por timeout, então os resultados seguem o contrato (sem `structuredContent`; `isError` e textos de cada caso).
+- **UT-04** — Dado um executor falso, quando a CLI sai com 0, com 1 no `sdd_validate`, com 1 no `sdd_status`, com 2, por timeout e com `FileNotFoundError`, então os resultados seguem o contrato (sem `structuredContent`; `isError` e textos de cada caso).
+- **UT-05** — Dados o código de `mcp/fermion_mcp.py` e exemplos que violam as regras, quando as regras do ADR-0017 rodam, então acusam processo para um script que não seja `atlas.py`, `brain.py` ou `spec_graph.py` das skills; o código real não tem achado.
 
 ### 7.3 Testes de Integração
-- **IT-01** — Dado um projeto de fixture criado pela própria CLI (`git init`, `new --tier lite` duas vezes), quando o servidor real é aberto por stdio com `CLAUDE_PROJECT_DIR` apontando para ele e recebe `sdd_status`, `sdd_validate` e `sdd_next`, então o texto de cada resultado é igual ao stdout de `spec_graph.py --root <projeto>` com o mesmo comando, e cada resposta chega em menos de 5 s.
+- **IT-01** — Dado um projeto de fixture criado pela própria CLI (`git init` e `new --tier lite --title "Fixture A"` e `new --tier lite --title "Fixture B"`), quando o servidor real é aberto por stdio com `CLAUDE_PROJECT_DIR` apontando para ele e recebe `sdd_status`, `sdd_validate` e `sdd_next`, então o texto de cada resultado é igual ao stdout de `spec_graph.py --root <projeto>` com o mesmo comando, e cada resposta chega em menos de 5 s.
 - **IT-02** — Dado o mesmo projeto de fixture, quando as seis tools são chamadas pelo servidor real, então o conteúdo e a data de modificação de todos os arquivos do projeto são iguais antes e depois.
 
 ### 7.4 Testes de Contrato

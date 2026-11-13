@@ -7,7 +7,7 @@ user_facing: true
 status: proposed
 created: 2026-11-13
 parent: SPEC-0031
-depends_on: [SPEC-0058, SPEC-0054]
+depends_on: [SPEC-0058, SPEC-0060]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
@@ -27,7 +27,7 @@ O plugin `fermion` passa a conferir, sempre que é usado, se há instalação an
 - cópias com o nome novo mais velhas que o plugin;
 - `tools/sdd/` do projeto mais velho que a `gluon-spec` do plugin;
 - bloco `sdd:start` que ainda manda carregar a `sdd-management`;
-- atlas vendorizado (`.org-atlas/skill/`) mais velho que a `boson-atlas`.
+- atlas vendorizado (`.org-atlas/skill/`) mais velho que a `boson-atlas`, quando o projeto aberto é o repositório do atlas.
 
 Cada achado vira um aviso com o comando de atualização, no início da sessão (hook da SPEC-0058) e na tool MCP `fermion_doctor`. Nada é atualizado sozinho.
 
@@ -48,7 +48,7 @@ Cada achado vira um aviso com o comando de atualização, no início da sessão 
 - Pastas de skills de outros agentes (`~/.gemini`, `~/.codex`): cada um tem layout próprio; entram quando houver pedido.
 
 ## 3. Dependências
-- **Implementações necessárias:** SPEC-0058 (o hook onde o bloco entra), SPEC-0054 (servidor MCP), SPEC-0055 (nomes novos e antigos), e as constantes de versão `SDD_TOOL_VERSION`, `BRAIN_VERSION` e `ATLAS_VERSION` nos scripts das skills (formato `AAAA.MM.N`).
+- **Implementações necessárias:** SPEC-0058 (o hook onde o bloco entra), SPEC-0054 e SPEC-0060 (servidor MCP e a pasta do projeto por `CLAUDE_PROJECT_DIR`, que a tool reaproveita), SPEC-0055 (nomes novos e antigos), e as constantes de versão `SDD_TOOL_VERSION`, `BRAIN_VERSION` e `ATLAS_VERSION` nos scripts das skills (formato `AAAA.MM.N`).
 - **Contratos consumidos:** N/A — lê arquivos e constantes de versão por expressão regular, como o `whats-new` faz com o `tools/sdd/`.
 - **Pré-requisitos externos:** code.claude.com/docs/en/skills e plugins-reference, lidas em 2026-11-13: skills do usuário em `~/.claude/skills/<nome>/SKILL.md` (ou `$CLAUDE_CONFIG_DIR/skills`), do projeto em `.claude/skills/<nome>/SKILL.md`.
 
@@ -91,8 +91,8 @@ python3 scripts/fermion_doctor.py [--project PASTA] [--json]
                     → "AVISO stale-sdd-tool tools/sdd/spec_graph.py — <v> < <v plugin> (rode: python3 <plugin>/skills/gluon-spec/scripts/spec_graph.py whats-new, depois vendor)"
     old-sdd-block   <projeto>/{AGENTS.md|CLAUDE.md|GEMINI.md} com bloco sdd:start que cita sdd-management e não cita gluon-spec
                     → "AVISO old-sdd-block <arquivo> — bloco SDD com o nome antigo (rode: … spec_graph.py vendor --agents)"
-    stale-atlas     <projeto>/.org-atlas/skill/scripts/atlas.py com ATLAS_VERSION menor que a do plugin
-                    → "AVISO stale-atlas .org-atlas/skill — <v> < <v plugin> (rode: python3 <plugin>/skills/boson-atlas/scripts/atlas.py vendor)"
+    stale-atlas     <projeto>/.org-atlas/skill/scripts/atlas.py com ATLAS_VERSION menor que a do plugin (só existe quando o projeto aberto é o repositório do atlas, modo repo)
+                    → "AVISO stale-atlas .org-atlas/skill — <v> < <v plugin> (rode no repositório do atlas: python3 <plugin>/skills/boson-atlas/scripts/atlas.py vendor --ci <github|generic>, o mesmo --ci da instalação)"
     versão ilegível numa cópia → "AVISO unreadable-version <caminho> — versão não encontrada" (a checagem segue)
   --json → {"plugin_versions": {"gluon-spec": v, "photon-brain": v, "boson-atlas": v},
             "findings": [{"check": id, "level": "warn", "path": caminho, "detail": texto, "fix": comando ou instrução}]}
@@ -130,9 +130,9 @@ tool MCP fermion_doctor {} (readOnlyHint) → fermion_doctor.py --project <CLAUD
 - **UT-01** — Dado `HOME` e `CLAUDE_CONFIG_DIR` temporários sem pasta de skills e um projeto com `tools/sdd/spec_graph.py` na mesma versão do plugin e bloco `sdd:start` citando `gluon-spec`, quando o doctor roda com `--json`, então `findings` é vazio, `plugin_versions` traz as três versões das skills do repositório e o texto tem só linhas `OK`.
 - **UT-02** — Dado `<config>/skills/sdd-management/SKILL.md` e `<projeto>/.claude/skills/org-atlas/SKILL.md`, quando o doctor roda, então há dois achados `old-name-copy`, com os caminhos e os nomes novos `gluon-spec` e `boson-atlas`.
 - **UT-03** — Dado `<config>/skills/gluon-spec/scripts/spec_graph.py` com `SDD_TOOL_VERSION = "2026.10.1"` e `<config>/skills/photon-brain/scripts/brain.py` com a versão do plugin, quando o doctor roda, então há um `stale-copy` só para a `gluon-spec`, citando `2026.10.1` e a versão do plugin; `2026.10.10` é tratada como maior que `2026.10.9`.
-- **UT-04** — Dado um projeto com `tools/sdd/spec_graph.py` em versão menor, `AGENTS.md` com bloco `sdd:start` citando só `sdd-management` e `.org-atlas/skill/scripts/atlas.py` em versão menor, quando o doctor roda, então há `stale-sdd-tool` (com `whats-new` e `vendor`), `old-sdd-block` (com `vendor --agents`) e `stale-atlas` (com `atlas.py vendor`).
-- **UT-05** — Dados um `spec_graph.py` copiado sem constante de versão, uma pasta de skills sem permissão de leitura e `<config>/skills/gluon-spec` como link simbólico para fora da pasta, quando o doctor roda, então há `unreadable-version` para o primeiro, os outros dois são ignorados sem exceção, e o exit é 0.
-- **UT-06** — Dados o código de `scripts/fermion_doctor.py` e exemplos que violam as regras, quando as regras do ADR-0019 rodam, então acusam import fora da stdlib, `subprocess`, `socket`/`urllib`, e escrita em arquivo (`open` com modo de escrita, `write_text`, `unlink`, `rmtree`, `rename`); o código real não tem achado.
+- **UT-04** — Dado um projeto com `tools/sdd/spec_graph.py` em versão menor, `AGENTS.md` com bloco `sdd:start` citando só `sdd-management` e `.org-atlas/skill/scripts/atlas.py` em versão menor, quando o doctor roda, então há `stale-sdd-tool` (com `whats-new` e `vendor`), `old-sdd-block` (com `vendor --agents`) e `stale-atlas` (com `atlas.py vendor --ci <github|generic>`).
+- **UT-05** — Dados um `spec_graph.py` copiado sem constante de versão, uma pasta de skills sem permissão de leitura e `<config>/skills/gluon-spec` como link simbólico para fora da pasta, quando o doctor roda, então há `unreadable-version` para o primeiro, os outros dois são ignorados sem exceção, e o exit é 0 (o caso sem permissão é pulado com o motivo quando o teste roda como root, `os.geteuid() == 0`, porque root lê tudo).
+- **UT-06** — Dados o código de `scripts/fermion_doctor.py` e exemplos que violam as regras, quando as regras do ADR-0019 rodam, então acusam import fora da stdlib, `subprocess`, `socket`/`urllib`, e escrita em arquivo (`open` com modo de escrita, `write_text`, `unlink`, `rmtree`, `rename`); o código real não tem achado. As regras ficam em `tests/plugin/` e o Architect inclui o arquivo no `arch_test` do `sdd-config.yml` no G1.
 - **UT-07** — Dado um executor falso do doctor com dois achados, com zero e com 40 achados, quando o hook monta o contexto, então há o bloco `## Instalação desatualizada (fermion)` com as duas linhas, nenhum bloco, e um bloco de até 1.500 caracteres terminado em `… e mais N`, respectivamente.
 - **UT-08** — Dado o servidor MCP com executor falso, quando recebe `tools/list` e `tools/call` de `fermion_doctor`, então a tool tem `inputSchema` vazio e fechado e `readOnlyHint: true`, a linha de comando é `fermion_doctor.py --project <projeto> --json` e o resultado traz `structuredContent` com `findings`.
 

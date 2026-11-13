@@ -7,7 +7,7 @@ user_facing: false
 status: proposed
 created: 2026-11-13
 parent: SPEC-0031
-depends_on: [SPEC-0054]
+depends_on: [SPEC-0054, SPEC-0058]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
@@ -30,7 +30,7 @@ O servidor MCP `fermion` (SPEC-0054) ganha oito tools de leitura do segundo cér
 **Objetivos (dentro do escopo):**
 - Oito tools `brain_*` sobre os comandos de leitura do `brain.py`, com `inputSchema` fechado e `annotations.readOnlyHint: true`.
 - Mapeamento de saída igual ao do atlas: exit 0 (e exit 1 no `brain_doctor` e no `brain_lint`, que significa "há ERRO no relatório") é resultado normal; exit 3 = cérebro não configurado.
-- A regra de arquitetura "processo só para a CLI do atlas" (SPEC-0054:UT-07) passa a ser "processo só para as CLIs das skills", como o ADR-0017 já diz.
+- A regra de arquitetura "processo só para a CLI do atlas" (SPEC-0054:UT-07) passa a aceitar também `brain.py` (a SPEC-0060 acrescenta `spec_graph.py` e a SPEC-0061 o `fermion_doctor.py`), como o ADR-0017 já permite.
 
 **Não-objetivos (fora do escopo):**
 - Tools que gravam: `capture`, `ingest`, `new-note`, `relate`, `index`, `inbox done`, `backup`, `restore`, `export-notebooklm`, `init`, `context add`, `process` (executa processadores externos).
@@ -45,7 +45,7 @@ O servidor MCP `fermion` (SPEC-0054) ganha oito tools de leitura do segundo cér
 ## 4. Decisão Arquitetural
 **Contexto:** brownfield. Referência: as tools `atlas_*` em `mcp/fermion_mcp.py` (`TOOLS`, `command_args`, `map_output`) e as suítes `mcp/tests/test_server.py` e `mcp/tests/test_architecture.py`.
 
-**Decisão:** as tools `brain_*` entram na mesma tabela `TOOLS` e no mesmo `command_args`, apontando para `skills/photon-brain/scripts/brain.py`. Texto livre vai sempre depois de `--` (busca e contexto) ou como valor de opção (`--note`, `--text`), sem shell. O ambiente é herdado (`BRAIN_CONFIG_HOME`).
+**Decisão:** as tools `brain_*` entram na mesma tabela `TOOLS` e no mesmo `command_args`, apontando para `skills/photon-brain/scripts/brain.py`. Texto livre vai sempre depois de `--` (busca, contexto e links) ou colado na opção (`--note=<valor>`, `--text=<valor>`, porque o argparse recusa `--note -x`), sem shell. O ambiente é herdado (`BRAIN_CONFIG_HOME`).
 
 **Justificativa:** um servidor só, com prefixo por skill (épico, frente 3); a CLI continua a fonte da verdade (ADR-0001, ADR-0017).
 
@@ -56,6 +56,7 @@ O servidor MCP `fermion` (SPEC-0054) ganha oito tools de leitura do segundo cér
 **ADRs:** ADR-0017 (camada fina), ADR-0014 (confidenciais).
 
 ## 5. Requisitos Não-Funcionais
+- **Ordem:** depois da SPEC-0058, que estende a regra de versão do plugin a `mcp/`.
 - **Desempenho e escala:** mesma sobrecarga da SPEC-0054 (um processo por chamada); medido no IT-01 (cada resposta em menos de 5 s num vault de fixture).
 - **Segurança:** só leitura; argumentos validados contra o `inputSchema` antes de abrir processo; `--include-confidential` nunca é passado; texto livre depois de `--` ou como valor de opção; sem shell; nada do ambiente no resultado.
 - **Privacidade e dados pessoais:** notas confidenciais ficam de fora (a CLI as omite sem a opção); `brain_lint` repassa os achados `secret-in-note` e `personal-data` como a CLI, que nunca mostra o valor.
@@ -72,18 +73,21 @@ tools/list → as tools atlas_* da SPEC-0054 e mais estas, todas com inputSchema
   brain_doctor       {}                                                    → brain.py doctor --json
   brain_search       {query: string 1..500 (obrigatório), context: string 1..100, type: string 1..50, tag: string 1..100, limit: int 1..100}
                                                                            → brain.py search [--context C] [--type T] [--tag G] [--limit L] --json -- <query dividida em palavras>
-  brain_related      {note: string 1..500 | text: string 1..2000 (exatamente um), limit: int 1..100}
-                                                                           → brain.py related (--note N | --text X) [--limit L] --json
+  brain_related      {note: string 1..500, text: string 1..2000, limit: int 1..100}; inputSchema com as duas opcionais e a descrição "exatamente um de note ou text"; o servidor confere depois do schema (nenhum ou os dois → -32602)
+                                                                           → brain.py related (--note=N | --text=X) [--limit L] --json
   brain_links        {note: string 1..500 (obrigatório)}                   → brain.py links --json -- <note>
   brain_context      {query: string 1..500 (obrigatório), context: string 1..100, hops: int 0..2, limit: int 1..50, max_chars: int 500..200000}
                                                                            → brain.py context [--context C] [--hops H] [--limit L] [--max-chars M] --json -- <query dividida em palavras>
   brain_inbox_list   {}                                                    → brain.py inbox list --json
   brain_lint         {only: array de strings [a-z-]+ (opcional)}           → brain.py lint --json [--only a,b]
-  strings: sem caracteres de controle, exceto tab e LF (o mesmo padrão de query da SPEC-0054)
+  strings: o mesmo padrão de query da SPEC-0054 (sem caracteres de controle, exceto tab, LF e CR); query só de espaços → -32602 (sem palavra depois de dividir)
 
 tools/call
   argumento fora do schema (inclusive note e text juntos, ou nenhum dos dois em brain_related) → erro -32602, sem abrir processo
-  exit 0; e exit 1 em brain_doctor e brain_lint → isError: false, content texto = stdout, structuredContent = stdout como JSON se for objeto
+  exit 0 → isError: false, content texto = stdout, structuredContent = stdout como JSON se for objeto
+  exit 1 em brain_doctor e brain_lint com stdout JSON objeto (há ERRO no relatório) → isError: false, como o exit 0
+  exit 1 sem stdout JSON objeto (erro de leitura, vault ausente: OSError ou BrainError da CLI) → isError: true com o stderr
+  exit 2 em brain_links e brain_related (nota não encontrada, nota confidencial recusada) → isError: true com o stderr
   exit 3 → isError: true, "segundo cérebro não configurado nesta máquina — rode a skill photon-brain (onboarding)" + stderr
   exit 2 em brain_lint (regra desconhecida em only) → isError: true com o stderr
   outro exit → isError: true com o exit code e o stderr; timeout → "brain.py não respondeu em 120 s"; CLI ausente → caminho procurado
@@ -98,9 +102,10 @@ nenhuma linha de comando contém --include-confidential
 | Cenário | Condição / Entrada | Resultado esperado | Testes |
 |---|---|---|---|
 | Lista de tools | `tools/list` | as `atlas_*` e as oito `brain_*` com schema fechado e `readOnlyHint` | UT-01 |
-| Argumento inválido | tipo, faixa, chave extra; `note` e `text` juntos ou nenhum | -32602 sem abrir processo | UT-02 |
+| Argumento inválido | tipo, faixa, chave extra; `note` e `text` juntos ou nenhum; query só de espaços | -32602 sem abrir processo | UT-02 |
 | Texto livre seguro | `query` ou `note` começando com `-`, com `;` e aspas | depois de `--` ou como valor de opção; sem shell; nunca `--include-confidential` | UT-03 |
-| Mapeamento de saída | exit 0, 1 (doctor/lint), 2 (lint), 3, outro, timeout | resultado e `isError` do contrato | UT-04 |
+| Mapeamento de saída | exit 0, 1 com e sem relatório JSON, 2 (lint, links, related), 3, outro, timeout, CLI ausente | resultado e `isError` do contrato | UT-04 |
+| Nota inexistente ou confidencial | `brain_links` ou `brain_related` por `note` | `isError: true` com o stderr da CLI, sem o conteúdo da nota | IT-03 |
 | Mesmo resultado da CLI | servidor real num vault de fixture | `brain_search`, `brain_context`, `brain_links` e `brain_lint` iguais ao stdout da CLI | IT-01 |
 | Cérebro não configurado | `BRAIN_CONFIG_HOME` vazio | `brain_doctor` com `isError: true` e a orientação de onboarding | IT-02 |
 | Confidencial fora | vault de fixture com nota `confidential: true` que casa com a busca | nenhum resultado `brain_*` traz o título ou o corpo dela | IT-03 |
@@ -112,15 +117,15 @@ nenhuma linha de comando contém --include-confidential
 
 ### 7.2 Testes Unitários
 - **UT-01** — Dado o servidor, quando recebe `tools/list` (era legada e moderna), então a lista traz as cinco `atlas_*` da SPEC-0054 e as oito `brain_*` do contrato, cada uma com `description`, `inputSchema` fechado com as faixas do contrato e `annotations.readOnlyHint: true`.
-- **UT-02** — Dados `brain_search` sem `query`, `brain_context` com `hops: 3`, `brain_related` com `note` e `text` juntos, `brain_related` sem nenhum dos dois, `brain_lint` com `only: ["Bad"]` e uma chave extra, quando chegam, então cada um recebe -32602 e nenhum processo é aberto.
-- **UT-03** — Dados `brain_search` com `query: "-rf --include-confidential; x"` e `brain_links` com `note: "--json"`, quando as linhas de comando são montadas, então a busca termina em `--json`, `--`, `-rf`, `--include-confidential;`, `x` e a de links em `--json`, `--`, `--json`, executadas sem shell; e nenhuma linha de comando de nenhuma tool `brain_*` contém `--include-confidential` antes do `--`.
-- **UT-04** — Dado um executor falso, quando a CLI sai com 0 (JSON), 1 no `brain_doctor` e no `brain_lint`, 2 no `brain_lint`, 3, 4 e por timeout, então os resultados seguem o contrato (`structuredContent` só com JSON objeto; `isError` e textos de cada caso).
-- **UT-05** — Dados o código de `mcp/fermion_mcp.py` e exemplos que violam as regras, quando as regras do ADR-0017 rodam, então acusam processo para um script que não seja `atlas.py`, `brain.py` ou `spec_graph.py` das skills, import de `skills/` e `shell=True`; o código real não tem achado.
+- **UT-02** — Dados `brain_search` sem `query`, `brain_context` com `hops: 3`, `brain_related` com `note` e `text` juntos, `brain_related` sem nenhum dos dois, `brain_lint` com `only: ["Bad"]`, `brain_search` com `query: "   "` e uma chave extra, quando chegam, então cada um recebe -32602 e nenhum processo é aberto.
+- **UT-03** — Dados `brain_search` com `query: "-rf --include-confidential; x"`, `brain_links` com `note: "--json"`, `brain_related` com `note: "-x"` e `brain_context` com `query: "add x"`, quando as linhas de comando são montadas, então a busca termina em `--json`, `--`, `-rf`, `--include-confidential;`, `x`; a de links em `--json`, `--`, `--json`; a de related tem `--note=-x`; a de context começa com `context` seguido de opção (nunca `context add`, que cria contexto) e termina em `--`, `add`, `x`; todas sem shell; e nenhuma linha de comando de nenhuma tool `brain_*` contém `--include-confidential` antes do `--`.
+- **UT-04** — Dado um executor falso, quando a CLI sai com 0 (JSON), 1 no `brain_doctor` e no `brain_lint` com relatório JSON, 1 sem stdout, 2 no `brain_lint` e no `brain_links`, 3, 4, por timeout, com `FileNotFoundError` e com `OSError`, então os resultados seguem o contrato (`structuredContent` só com JSON objeto; `isError` e textos de cada caso).
+- **UT-05** — Dados o código de `mcp/fermion_mcp.py` e exemplos que violam as regras, quando as regras do ADR-0017 rodam, então acusam processo para um script que não seja `atlas.py` ou `brain.py` das skills, import de `skills/` e `shell=True`; o código real não tem achado.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um vault de fixture criado pela própria CLI (`init` num `BRAIN_CONFIG_HOME` temporário e notas com `new-note`), quando o servidor real é aberto por stdio e recebe `tools/call` de `brain_search`, `brain_context`, `brain_links` e `brain_lint`, então o texto de cada resultado é igual ao stdout da CLI com os mesmos argumentos, e cada resposta chega em menos de 5 s.
 - **IT-02** — Dado `BRAIN_CONFIG_HOME` numa pasta vazia, quando `brain_doctor` é chamado pelo servidor real, então o resultado tem `isError: true` e a orientação de onboarding.
-- **IT-03** — Dado o vault de fixture com uma nota `confidential: true` cujo título e corpo casam com a consulta, quando `brain_search`, `brain_context` e `brain_related` (por texto) são chamados pelo servidor real, então nenhum resultado contém o título nem o corpo dessa nota.
+- **IT-03** — Dado o vault de fixture com uma nota `confidential: true` cujo título e corpo casam com a consulta, quando `brain_search`, `brain_context`, `brain_related` (por texto e por `note` com o nome dela) e `brain_links` (com o nome dela) são chamados pelo servidor real, então nenhum resultado contém o corpo dessa nota, busca e contexto não trazem o título, e `brain_related`/`brain_links` por nome devolvem `isError: true` com a recusa da CLI; `brain_links` com uma nota inexistente também devolve `isError: true`.
 
 ### 7.4 Testes de Contrato
 - N/A — o servidor repassa o JSON da CLI sem interpretar; a igualdade com a CLI é provada no IT-01.
