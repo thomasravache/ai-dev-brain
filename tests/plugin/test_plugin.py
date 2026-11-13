@@ -35,6 +35,8 @@ OLD_SKILL_NAMES = ("sdd-management", "second-brain", "org-atlas")
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VERSION_RE = re.compile(r"^(\d{4})\.(\d{1,2})\.(\d+)$")  # AAAA.MM.N (ex.: 2026.11.1)
 MARKETPLACE_KEYS = {"name", "owner", "plugins", "metadata"}
+# Pastas da raiz que o Claude Code carrega por convenção como componentes do plugin (fora skills/).
+ROOT_COMPONENT_DIRS = ("hooks", "agents", "commands", "output-styles", "monitors")
 # Campos de plugin.json que declaram caminho de componente (manifest-reference); o contrato não declara nenhum.
 COMPONENT_KEYS = ("commands", "agents", "skills", "hooks", "mcpServers", "outputStyles", "lspServers", "monitors",
                   "themes", "channels")
@@ -109,7 +111,8 @@ def manifest_findings(root):
         name = plugin.get("name")
         if not (isinstance(name, str) and KEBAB_RE.match(name)):
             findings.append(f"plugin-name: nome {name!r} fora de kebab-case")
-        elif entry is not None and isinstance(entry.get("name"), str) and entry.get("name") != name:
+        elif (entry is not None and isinstance(entry.get("name"), str) and KEBAB_RE.match(entry["name"])
+              and entry["name"] != name):
             findings.append(f"name-mismatch: plugin.json {name!r} e marketplace {entry.get('name')!r}")
         version = plugin.get("version")
         match = VERSION_RE.match(version) if isinstance(version, str) else None
@@ -172,16 +175,20 @@ def scanned_skills(root):
 # ---------------------------------------------------------------- autocontenção (UT-05, contrato v2)
 #
 # Vale só para o que a skill resolve a partir da própria pasta:
-#   1. link Markdown relativo ([x](caminho)) num .md da skill cujo destino, resolvido a partir do arquivo, sai de
-#      skills/<nome>/ (links em blocos e trechos de código, URLs, âncoras e caminhos absolutos ou com ~ não contam);
+#   1. link Markdown relativo num .md da skill ([x](caminho), definição de referência "[r]: caminho", href="..." ou
+#      src="...") cujo destino, resolvido a partir do arquivo, sai de skills/<nome>/ (links em blocos e trechos de
+#      código, URLs, âncoras e caminhos absolutos ou com ~ não contam);
 #   2. "<skill-dir>/.." em qualquer texto da skill;
-#   3. nos scripts .py: Path(__file__) (ou os.path.dirname(__file__)) subindo além da pasta da skill, sys.path com
+#   3. nos scripts .py: Path(__file__) (com .parent, .parents[n], / "..", joinpath) ou os.path.dirname(__file__)
+#      (com os.path.join(..., "..")) subindo além da pasta da skill em algum ponto do caminho, sys.path com
 #      "..", "tools" ou o nome de outra skill, e string com "../<outra skill>".
 # Caminhos do projeto, vault ou atlas de quem usa (docs/specs/, tools/sdd/, ../{repo}.worktrees) são permitidos.
 # tests/ da skill fica fora (fixtures e exemplos de violação), assim como __pycache__ e arquivos não UTF-8.
 
 MD_LINK_RE = re.compile(r"!?\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
-FENCE_RE = re.compile(r"^(\s*)(```|~~~)")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")  # cerca de abertura/fechamento (CommonMark)
+REF_DEF_RE = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?")
+HTML_LINK_RE = re.compile(r"(?:href|src)=\"([^\"]+)\"")
 INLINE_CODE_RE = re.compile(r"`+[^`\n]*`+")
 SKILL_DIR_UP_RE = re.compile(r"<skill-dir>/\.\.(?:/|$|[\s`'\")])")
 OTHER_SKILL_RE = re.compile(
@@ -208,20 +215,40 @@ def _escapes(rel_file, target):
     return joined == ".." or joined.startswith("../")
 
 
+def _closes(fence, line):
+    """True quando `line` fecha a cerca aberta `fence`: mesmo caractere, tamanho igual ou maior, sem info string."""
+    match = FENCE_RE.match(line)
+    return bool(match and match.group(1)[0] == fence[0] and len(match.group(1)) >= len(fence)
+                and not match.group(2).strip())
+
+
+def _link_targets(line):
+    code_free = INLINE_CODE_RE.sub("", line)
+    targets = [m.group(1) for m in MD_LINK_RE.finditer(code_free)]
+    targets += [m.group(1) for m in HTML_LINK_RE.finditer(code_free)]
+    ref = REF_DEF_RE.match(code_free)
+    if ref:
+        targets.append(ref.group(1))
+    return targets
+
+
 def markdown_link_findings(text, rel):
-    findings, in_fence = [], False
+    findings, fence = [], None
     for number, line in enumerate(text.splitlines(), start=1):
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
+        if fence is not None:
+            if _closes(fence, line):
+                fence = None
             continue
-        if in_fence:
+        opening = FENCE_RE.match(line)
+        if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
+            fence = opening.group(1)
             continue
-        for match in MD_LINK_RE.finditer(INLINE_CODE_RE.sub("", line)):
-            target = match.group(1).split("#", 1)[0].split("?", 1)[0]
+        for raw in _link_targets(line):
+            target = raw.split("#", 1)[0].split("?", 1)[0]
             if not target or SCHEME_RE.match(target) or target.startswith(("/", "~")):
                 continue
             if _escapes(rel, target):
-                findings.append((rel.as_posix(), number, f"link relativo sai da skill: {match.group(1)}"))
+                findings.append((rel.as_posix(), number, f"link relativo sai da skill: {raw}"))
     return findings
 
 
@@ -234,33 +261,64 @@ def _is_file_name(node):
     return isinstance(node, ast.Name) and node.id == "__file__"
 
 
-def _levels_up(node):
-    """Quantos níveis acima de __file__ a expressão chega (Path(__file__).parent/.parents[n], os.path.dirname)."""
+def _descend(climb, segments):
+    """Aplica segmentos de caminho a (nível atual, pico): ".." sobe um nível, "." e "" ficam, o resto desce um."""
+    current, peak = climb
+    for segment in segments:
+        parts = re.split(r"[\\/]", segment.value) if isinstance(segment, ast.Constant) and isinstance(
+            segment.value, str) else ["<variável>"]
+        for part in parts:
+            if part == "..":
+                current += 1
+                peak = max(peak, current)
+            elif part not in ("", "."):
+                current -= 1
+    return current, peak
+
+
+def _climb(node):
+    """(nível, pico) acima de __file__ que a expressão alcança, ou None quando ela não deriva de __file__.
+
+    Entende Path(__file__) com .parent, .parents[n], .resolve()/.absolute(), / "..", .joinpath(...), e
+    os.path.dirname/abspath/realpath/normpath/join a partir de __file__. O pico é o nível mais alto alcançado em algum
+    ponto do caminho (Path(__file__).parent / ".." / ".." / "tools" chega a 3 e depois desce para tools/).
+    """
+    if _is_file_name(node):
+        return 0, 0
     if isinstance(node, ast.Attribute):
         if node.attr == "parent":
-            inner = _levels_up(node.value)
-            return None if inner is None else inner + 1
+            inner = _climb(node.value)
+            return None if inner is None else (inner[0] + 1, max(inner[1], inner[0] + 1))
         return None
     if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr == "parents":
-        inner = _levels_up(node.value.value)
+        inner = _climb(node.value.value)
         index = node.slice
         if inner is None or not (isinstance(index, ast.Constant) and isinstance(index.value, int)):
             return None
-        return inner + index.value + 1
+        level = inner[0] + index.value + 1
+        return level, max(inner[1], level)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        inner = _climb(node.left)
+        return None if inner is None else _descend(inner, [node.right])
     if isinstance(node, ast.Call):
         func = node.func
         name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
-        if name in ("Path", "PurePath") and node.args and _is_file_name(node.args[0]):
-            return 0
+        if name in ("Path", "PurePath") and node.args:
+            inner = _climb(node.args[0])
+            return None if inner is None else _descend(inner, node.args[1:])
         if name in ("resolve", "absolute") and isinstance(func, ast.Attribute):
-            return _levels_up(func.value)
+            return _climb(func.value)
+        if name == "joinpath" and isinstance(func, ast.Attribute):
+            inner = _climb(func.value)
+            return None if inner is None else _descend(inner, node.args)
         if name in ("abspath", "realpath", "normpath") and node.args:
-            return _levels_up(node.args[0])
+            return _climb(node.args[0])
         if name == "dirname" and node.args:
-            inner = _levels_up(node.args[0])
-            return None if inner is None else inner + 1
-    if _is_file_name(node):
-        return 0
+            inner = _climb(node.args[0])
+            return None if inner is None else (inner[0] + 1, max(inner[1], inner[0] + 1))
+        if name == "join" and node.args:
+            inner = _climb(node.args[0])
+            return None if inner is None else _descend(inner, node.args[1:])
     return None
 
 
@@ -277,8 +335,8 @@ def script_findings(source, rel):
     depth = len(rel.parts)  # a pasta da skill fica depth níveis acima de __file__
     findings = []
     for node in ast.walk(tree):
-        levels = _levels_up(node) if isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)) else None
-        if levels is not None and levels > depth:
+        climb = _climb(node) if isinstance(node, (ast.Attribute, ast.Subscript, ast.Call, ast.BinOp)) else None
+        if climb is not None and climb[1] > depth:
             findings.append((rel.as_posix(), node.lineno, "Path(__file__) sobe além da pasta da skill"))
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                 and node.func.attr in ("insert", "append", "extend")
@@ -348,6 +406,16 @@ class PluginManifestTest(unittest.TestCase):
         self.assertNotIn("license", plugin, "o repositório ainda não tem licença (§2)")
         self.assertEqual([k for k in COMPONENT_KEYS if k in plugin], [], "caminho de componente declarado")
 
+    def test_no_accidental_component_at_repository_root(self):
+        """SPEC-0053:UT-02 (guarda: nenhum componente carregado por convenção na raiz do plugin)
+
+        O repositório é o plugin (ADR-0016): .mcp.json, hooks/, agents/, commands/, output-styles/ ou monitors/ na
+        raiz seriam carregados pelo Claude Code sem estar no contrato. A SPEC-0054 declara o MCP no plugin.json.
+        """
+        found = sorted({p.split("/")[0] for p in git_files()
+                        if p == ".mcp.json" or p.split("/")[0] in ROOT_COMPONENT_DIRS and "/" in p})
+        self.assertEqual(found, [], "componente na raiz do plugin fora do contrato")
+
 
 # ---------------------------------------------------------------- UT-03
 
@@ -384,6 +452,19 @@ class ManifestCheckTest(unittest.TestCase):
                              ["marketplace-plugins"]),
             "versão fora de AAAA.MM.N": ({"plugin": {**VALID_PLUGIN, "version": "1.0.0"}}, ["plugin-version"]),
             "caminho de componente": ({"plugin": {**VALID_PLUGIN, "skills": "./skills"}}, ["plugin-components"]),
+            "plugin.json com nome fora de kebab-case": ({"plugin": {**VALID_PLUGIN, "name": "Fermion_X"}},
+                                                        ["plugin-name"]),
+            "plugins[0].name fora de kebab-case": ({"marketplace": {**VALID_MARKETPLACE,
+                                                                    "plugins": [{**entry, "name": "Fermion"}]}},
+                                                   ["entry-name"]),
+            "owner ausente": ({"marketplace": {k: v for k, v in VALID_MARKETPLACE.items() if k != "owner"}},
+                              ["marketplace-owner"]),
+            "description vazia (plugin.json)": ({"plugin": {**VALID_PLUGIN, "description": " "}},
+                                                ["plugin-description"]),
+            "repository vazio": ({"plugin": {**VALID_PLUGIN, "repository": ""}}, ["plugin-repository"]),
+            "description vazia (marketplace)": ({"marketplace": {**VALID_MARKETPLACE,
+                                                                 "plugins": [{**entry, "description": ""}]}},
+                                                ["entry-description"]),
         }
         with tempfile.TemporaryDirectory() as tmp:
             write_manifests(tmp)
@@ -432,13 +513,23 @@ class SelfContainmentTest(unittest.TestCase):
                              "Worktrees em `../{repo}.worktrees` e [ok](references/r.md).\n"
                              "Links [web](https://example.com/../x), [âncora](#topo), `[c](../x.md)`.\n"
                              "```\n[bloco](../../fora.md)\n```\n"
-                             "Rode `<skill-dir>/scripts/x.py`.\n"),
+                             "Rode `<skill-dir>/scripts/x.py`.\n"
+                             "[ref]: ../../tools/sdd/x.md\n"                                # 15: acusado
+                             '<a href="../shared/b.md">b</a> e <img src="assets/i.png">\n'  # 16: acusado
+                             '<img src="../../docs/i.png">\n'                               # 17: acusado
+                             "[ok-ref]: references/r.md\n"
+                             "````md\n```\n[dentro](../../fora.md)\n````\n"
+                             "~~~\n```\n[dentro](../../fora.md)\n~~~\n"),
                 "references/r.md": "[volta](../SKILL.md) e [projeto](../../outra/x.md)\n",  # 1: acusado
                 "scripts/x.py": ("import sys\nfrom pathlib import Path\n\n"
                                  'sys.path.insert(0, str(Path(__file__).parents[2] / "tools"))\n'  # 4: acusado
                                  "HERE = Path(__file__).resolve().parent.parent\n"
                                  'VENDORED = "tools/sdd/spec_graph.py"\n'
-                                 'WORKTREE = "../{repo}.worktrees"\n'),
+                                 'WORKTREE = "../{repo}.worktrees"\n'
+                                 'UP = Path(__file__).parent / ".." / ".." / "tools"\n'            # 8: acusado
+                                 'J = os.path.join(os.path.dirname(__file__), "..", "..", "tools")\n'  # 9: acusado
+                                 'IN = Path(__file__).parent / ".." / "references"\n'
+                                 'IN2 = os.path.join(os.path.dirname(__file__), "..", "assets")\n'),
                 "tests/test_x.py": 'import sys\nsys.path.insert(0, "../gluon-spec/scripts")\n',
                 "tests/fixtures/a.md": "[fora](../../../x.md)\n",
             }
@@ -447,7 +538,9 @@ class SelfContainmentTest(unittest.TestCase):
                 (skill / rel).write_text(text, encoding="utf-8")
             findings = self_containment_findings(skill)
         self.assertEqual([f.split(" — ")[0] for f in findings],
-                         ["SKILL.md:5", "SKILL.md:6", "references/r.md:1", "scripts/x.py:4"], report(findings))
+                         ["SKILL.md:5", "SKILL.md:6", "SKILL.md:15", "SKILL.md:16", "SKILL.md:17",
+                          "references/r.md:1", "scripts/x.py:4", "scripts/x.py:8", "scripts/x.py:9"],
+                         report(findings))
 
     def test_script_paths_to_other_skill_or_above_skill_are_reported(self):
         """SPEC-0053:UT-05 (exemplo: caminhos de script)"""
@@ -512,21 +605,32 @@ class PluginCopyTest(unittest.TestCase):
 
 # ---------------------------------------------------------------- E2E-01
 
+REDIRECT_ENV_RE = re.compile(r"^(?:CLAUDE_CODE_PLUGIN_|CLAUDE_PLUGIN_|CLAUDE_CONFIG_DIR$|CLAUDE_[A-Z_]*"
+                             r"(?:PLUGIN|MARKETPLACE)|XDG_(?:CONFIG|DATA|CACHE|STATE)_HOME$)")
+
+
 class PluginInstallJourneyTest(unittest.TestCase):
     def test_validate_add_marketplace_install_and_list_with_isolated_config(self):
         """SPEC-0053:E2E-01 [jornada: instalação do plugin]"""
         claude = shutil.which("claude")
         if not claude:
             self.skipTest("Claude Code CLI (claude) não está no PATH; E2E-01 roda localmente no G4 e no G5")
-        real_config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").resolve()
+        real_home = Path(os.environ.get("HOME") or Path.home()).resolve()
+        real_config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or real_home / ".claude").resolve()
         with tempfile.TemporaryDirectory() as tmp:
             home, config, work = Path(tmp) / "home", Path(tmp) / "config", Path(tmp) / "work"
             for folder in (home, config, work):
                 folder.mkdir()
-            env = dict(os.environ)
-            env.update({"HOME": str(home), "CLAUDE_CONFIG_DIR": str(config), "XDG_CONFIG_HOME": str(home / ".config"),
-                        "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1"})
+            # Variáveis herdadas que redirecionam plugins, marketplaces ou a configuração saem do ambiente.
+            env = {k: v for k, v in os.environ.items() if not REDIRECT_ENV_RE.match(k)}
+            isolated = {"HOME": str(home), "CLAUDE_CONFIG_DIR": str(config), "XDG_CONFIG_HOME": str(home / ".config"),
+                        "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1"}
+            env.update(isolated)
             self.assertNotEqual(config.resolve(), real_config)
+            self.assertFalse(config.resolve().is_relative_to(real_home),
+                             f"a configuração temporária {config} não pode ficar dentro do HOME real {real_home}")
+            self.assertNotEqual(Path(env["HOME"]).resolve(), real_home)
+            self.assertEqual([k for k in env if REDIRECT_ENV_RE.match(k) and k not in isolated], [])
 
             def claude_run(*args, cwd=work):
                 return subprocess.run([claude, "plugin", *args], cwd=cwd, env=env, capture_output=True, text=True,
