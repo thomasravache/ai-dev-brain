@@ -200,7 +200,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=86)); nota: vermelho em 1df8578: mcp/tests 57 testes, 86 falhas (subtests), 0 erros — só 'mcp/fermion_mcp.py não existe'; exemplos das regras do UT-07 e fixture passam; 1ª execução falhou por mcp/tests/** ausente de test_paths (config corrigida) — 1df8578 | 2026-11-13 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — d1c6633 | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — d1c6633 | 2026-11-13 |
-| G4 Review | FAIL | Reviewer (d1c6633): CHANGES_REQUESTED — M1 JSON profundamente aninhado (RecursionError) derruba o servidor; M2 bytes não UTF-8 no stdin derrubam o servidor; minors: method com quebra de linha forja linha no stderr, query com NUL vira -32603, id null aceito (o schema não permite), buracos nas regras do UT-07 (alias de import, getattr, **kwargs); conexão real ok (plugin:fermion:fermion Connected) | 2026-11-13 |
+| G4 Review | FAIL | Reviewer (rodada 2, 2eb2406): CHANGES_REQUESTED — M1, M2 e m1 a m4 resolvidos; novo major N1: o contador de aninhamento por regex é quadrático com string sem fechar cheia de escapes (60 KB = 7,7 s; 1 MB ≈ 40 min travado); m5: o pattern da query recusa tab, LF e CR, apertando o contrato sem emenda | 2026-11-13 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
