@@ -4,7 +4,7 @@ title: "gluon-spec: hook do leak-check sem caminho absoluto da instalação"
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-13
 parent:
 depends_on: [SPEC-0053]
@@ -13,8 +13,8 @@ touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, s
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0057 — gluon-spec: hook do leak-check sem caminho absoluto da instalação
@@ -51,6 +51,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 e IT-01 em `skills/gluon-spec/tests/` com a tag `SPEC-0057:<ID>`, falhando pelo motivo certo
+- [ ] Green: hook do leak-check acha a ferramenta quando roda; `SDD_TOOL_VERSION` e CHANGELOG
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->

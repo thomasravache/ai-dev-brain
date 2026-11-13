@@ -4,7 +4,7 @@ title: "fermion: versão do plugin sobe quando as skills mudam"
 tier: lite
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0053]
@@ -13,8 +13,8 @@ touches: [tests/plugin/**, .github/workflows/ci.yml, .claude-plugin/plugin.json,
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0056 — fermion: versão do plugin sobe quando as skills mudam
@@ -52,6 +52,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01, UT-02 e IT-01 em `tests/plugin/` com a tag `SPEC-0056:<ID>`, falhando pelo motivo certo
+- [ ] Green: checagem de versão do plugin, `author` no `plugin.json`, versão 2026.11.2, passo na CI, README e AGENTS.md
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
