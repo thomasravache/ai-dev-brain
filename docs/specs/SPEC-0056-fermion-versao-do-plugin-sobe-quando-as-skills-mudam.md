@@ -68,9 +68,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ea20c65 | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ea20c65 | 2026-11-13 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (a0cfe62): APPROVED — comparação AAAA.MM.N como tupla, diff base...HEAD, sem shell, author sem e-mail, docs fora do bloco sdd; minor (base fixa em origin/main) e nits (JSON inválido com traceback, base fora do formato sem aviso) corrigidos como sugerido em 630400f (testes) e d82164a; regra mantida para testes e CHANGELOG das skills (recomendação do Reviewer) — d82164a | 2026-11-13 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #26 em af7d6ba verde (run 43470182944 ci Python 3.9/3.15, com a checagem de versão do plugin; run 43470205446 sdd/pr-check) — af7d6ba | 2026-11-13 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-13 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-13 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
