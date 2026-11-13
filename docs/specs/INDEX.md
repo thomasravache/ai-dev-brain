@@ -35,9 +35,9 @@ Perfil: **minimo**
 | 3 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0045; saiu da onda 2: arquivos em comum com SPEC-0046 |
 | 4 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0045; saiu da onda 2: arquivos em comum com SPEC-0046; saiu da onda 3: arquivos em comum com SPEC-0047 |
 | 5 | SPEC-0058 | Hook de início de sessão e comando de entrada única do plugin | full/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0045; saiu da onda 2: arquivos em comum com SPEC-0046; saiu da onda 3: arquivos em comum com SPEC-0047; saiu da onda 4: arquivos em comum com SPEC-0048 |
-| 6 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0045; saiu da onda 2: arquivos em comum com SPEC-0046; saiu da onda 3: arquivos em comum com SPEC-0047; saiu da onda 4: arquivos em comum com SPEC-0048; saiu da onda 5: arquivos em comum com SPEC-0058 |
-| 7 | SPEC-0060 | Servidor MCP: tools sdd de leitura do processo | full/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0045; saiu da onda 2: arquivos em comum com SPEC-0046; saiu da onda 3: arquivos em comum com SPEC-0047; saiu da onda 4: arquivos em comum com SPEC-0048; saiu da onda 5: arquivos em comum com SPEC-0058; saiu da onda 6: arquivos em comum com SPEC-0059 |
-| 8 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 6: arquivos em comum com SPEC-0059; saiu da onda 7: arquivos em comum com SPEC-0060 |
+| 6 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | proposed | ⏳ aguardando aprovação (H1) |  |
+| 7 | SPEC-0060 | Servidor MCP: tools sdd de leitura do processo | full/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 8 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | proposed | ⏳ aguardando aprovação (H1) |  |
 
 ## Épicos
 
@@ -97,9 +97,11 @@ flowchart LR
   S0053 --> S0058
   S0054 --> S0058
   S0054 --> S0059
+  S0058 --> S0059
   S0054 --> S0060
+  S0059 --> S0060
   S0058 --> S0061
-  S0054 --> S0061
+  S0060 --> S0061
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -168,9 +170,9 @@ flowchart LR
 | [SPEC-0056](SPEC-0056-fermion-versao-do-plugin-sobe-quando-as-skills-mudam.md) | fermion: versão do plugin sobe quando as skills mudam | lite | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0053 | — |
 | [SPEC-0057](SPEC-0057-gluon-spec-hook-do-leak-check-sem-caminho-absoluto-da-instal.md) | gluon-spec: hook do leak-check sem caminho absoluto da instalação | lite | fix | implemented | 2026-11-13 | — | SPEC-0053 | — |
 | [SPEC-0058](SPEC-0058-hook-de-inicio-de-sessao-e-comando-de-entrada-unica-do-plugi.md) | Hook de início de sessão e comando de entrada única do plugin | full | feature | proposed | 2026-11-13 | SPEC-0031 | SPEC-0053, SPEC-0054 | — |
-| [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | proposed | 2026-11-13 | SPEC-0031 | SPEC-0054 | — |
-| [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | proposed | 2026-11-13 | SPEC-0031 | SPEC-0054 | — |
-| [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | proposed | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0054 | — |
+| [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | proposed | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0058 | — |
+| [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | proposed | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
+| [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | proposed | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
 
 ## ADRs
 
