@@ -1,0 +1,16 @@
+{
+  "name": "fermion-lab",
+  "owner": {
+    "name": "thomasravache"
+  },
+  "metadata": {
+    "description": "Marketplace do Fermion: skills para desenvolver com agentes de IA (SDD, segundo cérebro e atlas da organização)."
+  },
+  "plugins": [
+    {
+      "name": "fermion",
+      "source": "./",
+      "description": "Skills para desenvolver com agentes de IA: Spec-Driven Development (gluon-spec), segundo cérebro no Obsidian (photon-brain) e atlas da organização (boson-atlas)."
+    }
+  ]
+}
