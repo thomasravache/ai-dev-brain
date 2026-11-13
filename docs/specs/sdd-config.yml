@@ -51,6 +51,7 @@ worktree_allow: []
 test_paths:
   - "skills/*/tests/**"
   - "tests/**"
+  - "mcp/tests/**"
   - "**/*.Tests/**"
   - "**/*.test.*"
   - "**/*.spec.*"
