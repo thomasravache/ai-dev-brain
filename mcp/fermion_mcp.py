@@ -48,8 +48,6 @@ MAX_DEPTH = 256  # aninhamento máximo de uma mensagem; além disso vira -32700 
 LOG_METHOD_MAX = 64
 # corta o método no log no primeiro caractere de controle (C0, DEL, C1, separadores de linha e parágrafo)
 LOG_UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
-JSON_STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
-JSON_BRACKET = re.compile(r"[\[\]{}]")
 READ_ONLY = {"readOnlyHint": True}
 
 
@@ -78,8 +76,9 @@ TOOLS = (
         "description": ("Contexto do atlas para uma consulta em texto livre: serviços, times, convenções e vizinhos "
                         "no grafo (atlas.py context --json)."),
         "inputSchema": _object({
-            "query": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
-                      "description": "Termos da consulta, separados por espaço (sem caracteres de controle)."},
+            "query": {"type": "string", "minLength": 1, "maxLength": 500,
+                      "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+                      "description": "Termos da consulta, separados por espaço (tab e quebra de linha contam como espaço)."},
             "hops": {"type": "integer", "minimum": 0, "maximum": 2,
                      "description": "Saltos no grafo a partir dos resultados."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 200,
@@ -140,11 +139,23 @@ def safe_method(method):
 
 def too_deep(text):
     """True se a mensagem aninha arrays/objetos além de MAX_DEPTH (fora de strings)."""
-    depth = 0
-    for match in JSON_BRACKET.finditer(JSON_STRING.sub("", text)):
-        depth += 1 if match.group() in "[{" else -1
-        if depth > MAX_DEPTH:
-            return True
+    depth, in_string, escaped = 0, False, False
+    for char in text:  # uma varredura, O(N), sem regex (sem retrocesso em string sem fechar)
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_DEPTH:
+                return True
+        elif char in "]}":
+            depth -= 1
     return False
 
 

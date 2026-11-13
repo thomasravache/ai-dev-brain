@@ -28,7 +28,7 @@ Argumento fora do schema ou tool desconhecida recebem o erro JSON-RPC `-32602`, 
 ## Segurança
 
 - A CLI roda por `subprocess.run` com argv em lista, sem shell, com timeout e o ambiente herdado (`ATLAS_CONFIG_HOME` e afins).
-- O texto livre da `query` vai depois de `--`, uma palavra por argumento. Uma `query` como `-rf --hops 9; rm` vira só termos de busca. Uma `query` com caractere de controle (abaixo de 0x20, inclusive tab e quebra de linha, ou DEL) recebe `-32602`.
+- O texto livre da `query` vai depois de `--`, uma palavra por argumento. Uma `query` como `-rf --hops 9; rm` vira só termos de busca. Uma `query` com caractere de controle (abaixo de 0x20 ou DEL) recebe `-32602`. A exceção são tab, `\n` e `\r`, que a CLI separa como espaço.
 - O processo externo só é aberto na função `run_cli`. O servidor não importa código das skills. Os testes de arquitetura do ADR-0017 (`mcp/tests/test_architecture.py`) garantem as duas coisas.
 - O stdout é só do protocolo. O stderr recebe uma linha por erro, sem argumentos nem saída da CLI. O nome do método aparece cortado no primeiro caractere de controle e truncado em 64 caracteres, para que ninguém forje linhas no log.
 
