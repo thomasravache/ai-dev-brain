@@ -9,7 +9,7 @@ created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0055]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [mcp/**, .claude-plugin/plugin.json, .github/workflows/ci.yml]
 adrs: [ADR-0017]
@@ -41,7 +41,7 @@ O plugin `fermion` ganha um servidor MCP local (`mcp/fermion_mcp.py`, stdio, só
 ## 3. Dependências
 - **Implementações necessárias:** SPEC-0053 — o `plugin.json` onde o servidor é declarado; SPEC-0038, SPEC-0039, SPEC-0037 e SPEC-0032 (via SPEC-0029) — os comandos `context`, `lint`, `curate list`, `config` e `doctor` com `--json`.
 - **Contratos consumidos:** N/A — o servidor repassa a saída da CLI sem interpretar o conteúdo.
-- **Pré-requisitos externos:** especificação do MCP (modelcontextprotocol.io/specification/versioning e 2026-07-28/basic/versioning, lidas em 2026-11-12: revisão atual `2026-07-28`; legadas com `initialize` até `2025-11-25`; servidor das duas eras é permitido); `python3` 3.9+ no PATH de quem usa o plugin.
+- **Pré-requisitos externos:** especificação do MCP (modelcontextprotocol.io/specification/versioning, 2026-07-28/basic/versioning, 2026-07-28/schema e 2026-07-28/server/discover, lidas em 2026-11-12 e 2026-11-13: revisão atual `2026-07-28`; legadas com `initialize` até `2025-11-25`; servidor das duas eras é permitido); `python3` 3.9+ no PATH de quem usa o plugin.
 
 ## 4. Decisão Arquitetural
 **Contexto:** brownfield. Referência: `skills/boson-atlas/assets/collectors/github.py`, que chama uma CLI por `subprocess` com lista de argumentos, sem shell, com timeout, e devolve o exit code; `skills/*/tests/test_architecture.py` para as regras de arquitetura (regra testada contra exemplo e contra o código real).
@@ -82,13 +82,17 @@ era legada (versões suportadas: "2025-11-25", "2025-06-18", "2025-03-26", "2024
   notifications/initialized → nada; ping → {}
   tools/list e tools/call antes do initialize → também atendidos (cliente legado tolerante)
 
-era moderna (versão suportada: "2026-07-28")
-  todo request moderno traz _meta["io.modelcontextprotocol/protocolVersion"]
+era moderna (versão suportada: "2026-07-28"; schema oficial conferido em 2026-11-13)   (v2)
+  request moderno = traz _meta["io.modelcontextprotocol/protocolVersion"]; sem _meta de versão e sem initialize → atendido como legado (tolerante)
+  _meta["io.modelcontextprotocol/clientCapabilities"] ausente → tolerado (não é erro)
   versão não suportada → erro -32022, message "Unsupported protocol version", data {supported: ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"], requested: V}
-  server/discover → {supportedVersions: [...as mesmas...], capabilities: {tools: {}}, serverInfo: {name: "fermion", version: ...}}
-  (forma exata dos campos de server/discover e de tools/call conferida no schema oficial 2026-07-28 na fase Red; divergência = SPEC_DEFECT)
+  todo resultado moderno leva resultType: "complete"
+  server/discover → {resultType: "complete", supportedVersions: [...as mesmas...], capabilities: {tools: {}}, ttlMs: 3600000, cacheScope: "private",
+                     _meta: {"io.modelcontextprotocol/serverInfo": {name: "fermion", version: <versão do plugin.json>}}}
+  tools/list moderno → também ttlMs: 3600000 e cacheScope: "private" (o atlas é dado da organização)
+  respostas legadas seguem o schema legado: sem resultType, ttlMs nem cacheScope
 
-tools/list → as cinco tools, cada uma com name, description e inputSchema (JSON Schema, additionalProperties: false)
+tools/list → as cinco tools, cada uma com name, description, inputSchema (JSON Schema com type "object" na raiz, additionalProperties: false) e annotations {readOnlyHint: true}   (v2: readOnlyHint)
   atlas_config        {}                                                         → atlas.py config --json
   atlas_doctor        {}                                                         → atlas.py doctor --json
   atlas_context       {query: string 1..500 (obrigatório), hops: int 0..2, limit: int 1..200, max_chars: int 500..200000}
@@ -118,7 +122,7 @@ tools/call {name, arguments}
 | Texto livre seguro | `query` começando com `-` ou com aspas e `;` | vai depois de `--`, como argumento único por palavra, sem shell | UT-03 |
 | Mapeamento de saída | exit 0, exit 1 no lint, exit 3, outro exit, timeout | resultado e `isError` do contrato | UT-04 |
 | Era legada | `initialize` com versão suportada, não suportada; `notifications/initialized`; `ping` | versão ecoada ou `2025-11-25`; sem resposta a notificação | UT-05 |
-| Era moderna | `server/discover`; request com versão em `_meta` não suportada | versões suportadas; erro -32022 com `supported` e `requested` | UT-06 |
+| Era moderna | `server/discover`; `tools/list` e `tools/call` modernos; request com versão em `_meta` não suportada; sem `clientCapabilities` | `DiscoverResult` do schema 2026-07-28; `resultType`, `ttlMs` e `cacheScope` nos resultados modernos; erro -32022 com `supported` e `requested`; tolerado | UT-06 |
 | Mesmo resultado da CLI | servidor real por stdio num atlas de fixture | `atlas_context`, `atlas_lint` e `atlas_curate_list` devolvem o stdout igual ao da CLI | IT-01 |
 | Atlas não configurado | `ATLAS_CONFIG_HOME` vazio | `atlas_doctor` com `isError: true` e a orientação de onboarding | IT-02 |
 | Robustez do transporte | JSON inválido, método desconhecido, notificação, stdin fechado | -32700, -32601, nada, exit 0; o servidor segue respondendo depois dos erros | IT-03 |
@@ -129,12 +133,12 @@ tools/call {name, arguments}
 - N/A — código novo; a CLI do atlas já tem suíte própria.
 
 ### 7.2 Testes Unitários
-- **UT-01** — Dado o servidor, quando recebe `tools/list`, então devolve exatamente as cinco tools do contrato, cada uma com `description` e `inputSchema` (JSON Schema `object`, `additionalProperties: false`, faixas e enums do contrato).
+- **UT-01** — Dado o servidor, quando recebe `tools/list`, então devolve exatamente as cinco tools do contrato, cada uma com `description`, `inputSchema` (JSON Schema `object`, `additionalProperties: false`, faixas e enums do contrato) e `annotations.readOnlyHint: true` (v2).
 - **UT-02** — Dados `tools/call` com tool desconhecida, `query` vazia ou com mais de 500 caracteres, `hops: 3`, `status: "pending"`, `only: ["Bad Rule"]` e chave extra, quando chegam, então cada um recebe erro -32602 e nenhum processo é aberto (executor substituído no teste).
 - **UT-03** — Dado `atlas_context` com `query: "-rf --hops 9; rm"`, quando a linha de comando é montada, então é uma lista que termina em `--json`, `--`, `-rf`, `--hops`, `9;`, `rm` e é executada sem shell.
 - **UT-04** — Dado um executor falso, quando a CLI sai com 0 (stdout JSON), 1 no `atlas_lint`, 3, 2 e por timeout, então os resultados seguem o contrato (`structuredContent` só com JSON objeto; `isError` e textos de cada caso).
 - **UT-05** — Dado `initialize` com `2025-06-18`, com `1999-01-01`, e depois `notifications/initialized` e `ping`, quando chegam, então a resposta traz `2025-06-18`, depois `2025-11-25`, nada para a notificação e `{}` para o ping, com `serverInfo.version` igual à do `plugin.json`.
-- **UT-06** — Dado `server/discover` e um `tools/list` com `_meta` de versão `1900-01-01`, quando chegam, então o primeiro lista as versões suportadas e o segundo recebe -32022 com `data.supported` e `data.requested`.
+- **UT-06** — Dados `server/discover`, `tools/list` e `tools/call` com `_meta` de versão `2026-07-28` (um deles sem `clientCapabilities`) e um `tools/list` com versão `1900-01-01`, quando chegam, então o discover devolve `resultType: "complete"`, as versões suportadas, `capabilities.tools`, `ttlMs: 3600000`, `cacheScope: "private"` e `_meta["io.modelcontextprotocol/serverInfo"]`; o `tools/list` moderno traz `resultType`, `ttlMs` e `cacheScope`; o `tools/call` moderno traz `resultType`; a falta de `clientCapabilities` é tolerada; a versão `1900-01-01` recebe -32022 com `data.supported` e `data.requested`; as respostas legadas do UT-05 não têm esses campos (v2).
 - **UT-07** — Dado o código de `mcp/fermion_mcp.py` e exemplos que violam as regras, quando as regras do ADR-0017 rodam, então acusam import fora da stdlib ou de `skills/`, `shell=True` e processo que não seja a CLI do atlas; o código real não tem achado.
 
 ### 7.3 Testes de Integração
@@ -206,6 +210,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-13 | G1 | spec | SPEC_DEFECT do Test-writer: o schema oficial 2026-07-28 diverge do contrato na era moderna — DiscoverResult exige resultType, ttlMs e cacheScope e põe a identidade em _meta['io.modelcontextprotocol/serverInfo'] (sem serverInfo no topo); todo resultado moderno exige resultType; ListToolsResult exige ttlMs e cacheScope; requests modernos trazem clientCapabilities em _meta | Test-writer conferiu /specification/2026-07-28/schema, /server/discover e /basic/versioning.md em 2026-11-13; nenhum teste escrito | thomas |  |  |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -247,3 +252,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0054`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-13 | Era moderna conforme o schema oficial 2026-07-28: `DiscoverResult` com `resultType`, `ttlMs: 3600000`, `cacheScope: "private"` e identidade em `_meta["io.modelcontextprotocol/serverInfo"]`; `resultType: "complete"` em todo resultado moderno; `ttlMs`/`cacheScope` no `tools/list` moderno; `clientCapabilities` ausente tolerado; request sem `_meta` e sem `initialize` atendido como legado; respostas legadas sem os campos modernos; `annotations.readOnlyHint: true` nas cinco tools | IMP-01: o contrato v1 tinha `serverInfo` no topo do discover e não tinha os campos obrigatórios do schema | nenhuma (sem consumidores) | pendente (H1) |
