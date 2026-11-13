@@ -38,8 +38,10 @@ MARKETPLACE_KEYS = {"name", "owner", "plugins", "metadata"}
 # Pastas da raiz que o Claude Code carrega por convenção como componentes do plugin (fora skills/).
 ROOT_COMPONENT_DIRS = ("hooks", "agents", "commands", "output-styles", "monitors")
 # Campos de plugin.json que declaram caminho de componente (manifest-reference); o contrato não declara nenhum.
-COMPONENT_KEYS = ("commands", "agents", "skills", "hooks", "mcpServers", "outputStyles", "lspServers", "monitors",
+# A exceção é "mcpServers" (emenda v3): só o servidor fermion da SPEC-0054, inline, exatamente como FERMION_MCP.
+COMPONENT_KEYS = ("commands", "agents", "skills", "hooks", "outputStyles", "lspServers", "monitors",
                   "themes", "channels")
+FERMION_MCP = {"fermion": {"command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/fermion_mcp.py"]}}
 
 
 def git_files(*args, cwd=REPO):
@@ -125,6 +127,8 @@ def manifest_findings(root):
         declared = [key for key in COMPONENT_KEYS if key in plugin]
         if declared:
             findings.append(f"plugin-components: caminho de componente declarado: {declared}")
+        if "mcpServers" in plugin and plugin["mcpServers"] != FERMION_MCP:
+            findings.append(f"plugin-mcp: mcpServers {plugin['mcpServers']!r} diferente do servidor fermion")
     return findings
 
 
@@ -392,8 +396,8 @@ class MarketplaceManifestTest(unittest.TestCase):
 # ---------------------------------------------------------------- UT-02
 
 class PluginManifestTest(unittest.TestCase):
-    def test_plugin_json_matches_marketplace_and_declares_no_component_path(self):
-        """SPEC-0053:UT-02"""
+    def test_plugin_json_matches_marketplace_and_declares_only_the_fermion_mcp_server(self):
+        """SPEC-0053:UT-02 (v3: nenhum caminho de componente; mcpServers só com o servidor fermion)"""
         plugin = read_manifest("plugin.json")
         market = read_manifest("marketplace.json")
         self.assertEqual(plugin.get("name"), "fermion")
@@ -405,6 +409,8 @@ class PluginManifestTest(unittest.TestCase):
         self.assertEqual(plugin.get("repository"), "https://github.com/thomasravache/ai-dev-brain")
         self.assertNotIn("license", plugin, "o repositório ainda não tem licença (§2)")
         self.assertEqual([k for k in COMPONENT_KEYS if k in plugin], [], "caminho de componente declarado")
+        self.assertIn("mcpServers", plugin, "plugin.json não declara o servidor MCP fermion (SPEC-0054)")
+        self.assertEqual(plugin["mcpServers"], FERMION_MCP)
 
     def test_no_accidental_component_at_repository_root(self):
         """SPEC-0053:UT-02 (guarda: nenhum componente carregado por convenção na raiz do plugin)
@@ -452,6 +458,12 @@ class ManifestCheckTest(unittest.TestCase):
                              ["marketplace-plugins"]),
             "versão fora de AAAA.MM.N": ({"plugin": {**VALID_PLUGIN, "version": "1.0.0"}}, ["plugin-version"]),
             "caminho de componente": ({"plugin": {**VALID_PLUGIN, "skills": "./skills"}}, ["plugin-components"]),
+            "mcpServers com outro servidor": ({"plugin": {**VALID_PLUGIN, "mcpServers": {
+                **FERMION_MCP, "outro": {"command": "node", "args": ["x.js"]}}}}, ["plugin-mcp"]),
+            "mcpServers fermion com args diferentes": ({"plugin": {**VALID_PLUGIN, "mcpServers": {
+                "fermion": {"command": "python3", "args": ["../fora/mcp.py"]}}}}, ["plugin-mcp"]),
+            "mcpServers como caminho de arquivo": ({"plugin": {**VALID_PLUGIN, "mcpServers": "./.mcp.json"}},
+                                                   ["plugin-mcp"]),
             "plugin.json com nome fora de kebab-case": ({"plugin": {**VALID_PLUGIN, "name": "Fermion_X"}},
                                                         ["plugin-name"]),
             "plugins[0].name fora de kebab-case": ({"marketplace": {**VALID_MARKETPLACE,
@@ -469,6 +481,9 @@ class ManifestCheckTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             write_manifests(tmp)
             self.assertEqual(manifest_findings(tmp), [], "a base dos exemplos deve ser válida")
+        with tempfile.TemporaryDirectory() as tmp:
+            write_manifests(tmp, plugin={**VALID_PLUGIN, "mcpServers": FERMION_MCP})
+            self.assertEqual(manifest_findings(tmp), [], "mcpServers com o servidor fermion é válido (v3)")
         for label, (override, expected) in cases.items():
             with self.subTest(case=label), tempfile.TemporaryDirectory() as tmp:
                 write_manifests(tmp, override.get("marketplace", VALID_MARKETPLACE),

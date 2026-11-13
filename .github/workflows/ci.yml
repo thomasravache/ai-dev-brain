@@ -51,6 +51,10 @@ jobs:
       - name: Testes da boson-atlas
         run: python -m unittest discover -s skills/boson-atlas/tests -v
 
+      # Servidor MCP fermion com as tools atlas e testes de arquitetura do ADR-0017 (SPEC-0054).
+      - name: Testes do servidor MCP
+        run: python -m unittest discover -s mcp/tests -v
+
       # Plugin fermion e marketplace fermion-lab (ADR-0016, SPEC-0053) e nomes das skills (ADR-0018, SPEC-0055).
       # O E2E-01 é pulado aqui (sem o Claude Code no runner) e roda local no G4 e no G5.
       - name: Testes do plugin e dos nomes das skills
