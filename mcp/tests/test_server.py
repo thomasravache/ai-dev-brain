@@ -38,6 +38,8 @@ Interface que estes testes exigem de mcp/fermion_mcp.py (o Implementer segue est
 Contrato conferido: seção 6 (v2) da SPEC-0054 e o schema oficial MCP 2026-07-28 (DiscoverResult, resultType,
 ttlMs/cacheScope em ListToolsResult, UnsupportedProtocolVersionError -32022).
 """
+import contextlib
+import io
 import json
 import re
 import shutil
@@ -216,6 +218,13 @@ INVALID_CALLS = [
     ("chave extra no config", "atlas_config", {"verbose": True}),
     ("chave extra no doctor", "atlas_doctor", {"fix": True}),
     ("arguments não é objeto", "atlas_config", ["x"]),
+    ("query com NUL", "atlas_context", {"query": "api\x00rm"}),
+    ("query com 0x01", "atlas_context", {"query": "api\x01"}),
+    ("query com ESC", "atlas_context", {"query": "api \x1b[31m"}),
+    ("query com 0x1f", "atlas_context", {"query": "\x1fapi"}),
+    ("query com tab", "atlas_context", {"query": "api\tpay"}),
+    ("query com quebra de linha", "atlas_context", {"query": "api\npay"}),
+    ("query com retorno de carro", "atlas_context", {"query": "api\rpay"}),
 ]
 
 
@@ -391,7 +400,22 @@ class OutputMappingTest(unittest.TestCase):
         runner = FakeRunner(raises=FileNotFoundError(2, "No such file or directory", "python3"))
         result = self.result("atlas_doctor", runner)
         self.assertIs(result.get("isError"), True)
-        self.assertTrue(text_of(result).strip())
+        searched = runner.calls[0][0][0]
+        self.assertIn(searched, text_of(result), "o texto precisa citar o caminho procurado")
+
+    def test_unknown_method_with_control_characters_logs_a_single_clean_line(self):
+        """SPEC-0054:UT-04 (observabilidade: uma linha no stderr por erro, sem texto injetado)"""
+        method = "x\nINJETADO linha falsa\r\x1b[31mvermelho\x00fim\u2028sep"
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            response = new_server().handle(request(method, id=4))
+        error_of(self, response, -32601, id=4)
+        log = captured.getvalue()
+        self.assertLessEqual(log.count("\n"), 1, f"mais de uma linha no stderr: {log!r}")
+        self.assertTrue(log == "" or log.endswith("\n"), repr(log))
+        self.assertNotIn("INJETADO", log)
+        for char in ("\r", "\x1b", "\x00", "\u2028"):
+            self.assertNotIn(char, log, f"caractere de controle {char!r} no stderr")
 
     def test_missing_cli_names_the_path_searched(self):
         """SPEC-0054:UT-04"""
@@ -548,6 +572,18 @@ class TransportUnitTest(unittest.TestCase):
                 self.assertIsNotNone(response)
                 self.assertEqual(response.get("error", {}).get("code"), -32600, response)
 
+    def test_null_id_is_an_invalid_request(self):
+        """SPEC-0054:IT-03 (unidade: RequestId do schema 2026-07-28 é string ou inteiro, nunca null)"""
+        server = new_server()
+        for method in ("ping", "tools/list", "nao/existe"):
+            with self.subTest(method=method):
+                response = server.handle({"jsonrpc": "2.0", "id": None, "method": method})
+                self.assertIsNotNone(response, "id null não é notificação")
+                self.assertIn("id", response)
+                self.assertIsNone(response["id"])
+                self.assertNotIn("result", response, response)
+                self.assertEqual(response.get("error", {}).get("code"), -32600, response)
+
     def test_unknown_method_gets_32601_and_the_server_keeps_answering(self):
         """SPEC-0054:IT-03 (unidade)"""
         server = new_server()
@@ -675,6 +711,58 @@ class TransportTest(ServerCase):
         server.close_stdin()
         self.assertEqual(server.rest_of_stdout(), [])
         self.assertEqual(server.proc.wait(timeout=10), 0, server.stderr())
+
+
+    def assert_parse_error_then_ping(self, server, ping_id):
+        response, _ = server.receive()
+        self.assertEqual(response.get("jsonrpc"), "2.0", response)
+        self.assertIn("id", response)
+        self.assertIsNone(response["id"], response)
+        self.assertEqual(response.get("error", {}).get("code"), -32700, response)
+        server.send(request("ping", id=ping_id))
+        response, _ = server.receive()
+        self.assertEqual(result_of(self, response, id=ping_id), {}, "o servidor parou de responder")
+
+    def finish(self, server):
+        server.close_stdin()
+        self.assertEqual(server.rest_of_stdout(), [], "o servidor escreveu algo além das respostas")
+        code = server.proc.wait(timeout=10)
+        stderr = server.stderr()
+        self.assertEqual(code, 0, stderr)
+        self.assertNotIn("Traceback", stderr)
+
+    def test_deeply_nested_json_is_a_parse_error(self):
+        """SPEC-0054:IT-03 (JSON aninhado demais não derruba o servidor)"""
+        server = self.open_server()
+        server.send_line("[" * 100000)
+        self.assert_parse_error_then_ping(server, 1)
+        depth = 3000
+        params = '{"a": ' + "[" * depth + "]" * depth + "}"
+        server.send_line('{"jsonrpc": "2.0", "id": 2, "method": "ping", "params": ' + params + "}")
+        self.assert_parse_error_then_ping(server, 3)
+        self.finish(server)
+
+    def test_line_that_is_not_utf8_is_a_parse_error(self):
+        """SPEC-0054:IT-03 (bytes que não são UTF-8 não derrubam o servidor)"""
+        server = self.open_server()
+        server.send_bytes(b"\xff\xfe{}\n")
+        self.assert_parse_error_then_ping(server, 1)
+        server.send_bytes(b'{"jsonrpc": "2.0", "id": 2, "method": "\xc3\x28"}\n')
+        self.assert_parse_error_then_ping(server, 3)
+        self.finish(server)
+
+    def test_control_characters_in_a_method_do_not_forge_log_lines(self):
+        """SPEC-0054:IT-03 (stderr: uma linha por erro, sem o texto injetado)"""
+        server = self.open_server()
+        before = server.stderr()
+        response, _ = server.ask(request("x\nINJETADO linha falsa\r\x1b[31m", id=1))
+        error_of(self, response, -32601, id=1)
+        self.finish(server)
+        log = server.stderr()[len(before):]
+        self.assertLessEqual(log.count("\n"), 1, f"mais de uma linha no stderr: {log!r}")
+        self.assertNotIn("INJETADO", log)
+        self.assertNotIn("\x1b", log)
+        self.assertNotIn("\r", log)
 
 
 if __name__ == "__main__":

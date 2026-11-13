@@ -184,6 +184,12 @@ class ServerProcess:
         self.proc.stdin.write(line + "\n")
         self.proc.stdin.flush()
 
+    def send_bytes(self, data):
+        """Bytes crus no stdin (ex.: linha que não é UTF-8), sem passar pela codificação do pipe de texto."""
+        self.proc.stdin.flush()
+        self.proc.stdin.buffer.write(data)
+        self.proc.stdin.buffer.flush()
+
     def send(self, message):
         self.send_line(json.dumps(message))
 

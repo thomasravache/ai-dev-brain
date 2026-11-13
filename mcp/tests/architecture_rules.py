@@ -7,9 +7,11 @@ Regras:
 - só biblioteca padrão;
 - nenhum import de código das skills (nem de tools/), nem carregamento dinâmico de código (importlib,
   __import__, runpy, exec, sys.path): o servidor só fala com as skills pela CLI;
-- nenhum shell (shell= diferente de False, os.system, os.popen, create_subprocess_shell, getoutput);
-- processo externo só dentro da função executora (run_cli) e só para a CLI do atlas: nenhum texto aponta para
-  a CLI de outra skill.
+- nenhum shell (shell= diferente de False, os.system, os.popen, create_subprocess_shell, getoutput, também por
+  alias ou getattr, e nenhum ** numa chamada de processo);
+- processo externo só dentro da função executora (run_cli), pelo nome literal do módulo (sem alias, sem
+  `from subprocess import run`, sem getattr), e só para a CLI do atlas: nenhum texto aponta para a CLI de
+  outra skill.
 """
 import ast
 import importlib.util
@@ -137,49 +139,119 @@ def dynamic_code_findings(source, filename):
     return _sorted(findings)
 
 
-def _process_call(node):
-    name = _dotted(node.func)
-    if name is None:
-        return None
-    module, _, func = name.rpartition(".")
-    return name if func in PROCESS_CALLS.get(module, ()) else None
+class _Names:
+    """Nomes locais que apontam para módulos e funções de processo (import X as Y, from X import f as g)."""
+
+    def __init__(self, tree):
+        self.modules = {name: name for name in PROCESS_CALLS}
+        self.functions = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in PROCESS_CALLS:
+                        self.modules[alias.asname or alias.name] = alias.name
+            elif isinstance(node, ast.ImportFrom) and node.module in PROCESS_CALLS:
+                for alias in node.names:
+                    if alias.name in PROCESS_CALLS[node.module]:
+                        self.functions[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+
+    def module_of(self, node):
+        name = _dotted(node)
+        return self.modules.get(name) if name else None
+
+    def getattr_target(self, node):
+        """'mod.func' (ou 'mod.<dinâmico>') de getattr(<módulo de processo>, ...); None para o resto."""
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr"
+                and node.args):
+            return None
+        module = self.module_of(node.args[0])
+        if module is None:
+            return None
+        attr = node.args[1] if len(node.args) > 1 else None
+        if isinstance(attr, ast.Constant) and isinstance(attr.value, str):
+            return f"{module}.{attr.value}"
+        return f"{module}.<dinâmico>"
+
+    def process_call(self, node):
+        """'mod.func' de uma chamada de processo, resolvendo alias de módulo, alias de função e getattr."""
+        func = node.func
+        if isinstance(func, ast.Call):
+            target = self.getattr_target(func)
+            return target if target and self._is_process(target) else None
+        name = _dotted(func)
+        if name is None:
+            return None
+        if name in self.functions:
+            return self.functions[name]
+        head, _, rest = name.partition(".")
+        if head in self.modules and rest:
+            name = f"{self.modules[head]}.{rest}"
+        return name if self._is_process(name) else None
+
+    @staticmethod
+    def _is_process(name):
+        module, _, func = name.rpartition(".")
+        return func == "<dinâmico>" and module in PROCESS_CALLS or func in PROCESS_CALLS.get(module, ())
 
 
 def shell_findings(source, filename):
-    """shell= diferente de False em qualquer chamada, e as funções que sempre usam shell."""
+    """shell= diferente de False em qualquer chamada, as funções que sempre usam shell (também por alias ou
+    getattr) e qualquer ** numa chamada de processo (pode trazer shell=True escondido)."""
+    tree = ast.parse(source)
+    names = _Names(tree)
     findings = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(tree):
         if (isinstance(node, ast.keyword) and node.arg == "shell"
                 and not (isinstance(node.value, ast.Constant) and node.value.value is False)):
             line = node.value.lineno
             findings.append((line, f"{filename}:{line} — {RULE_SHELL} — shell="))
-        elif isinstance(node, ast.Call) and _process_call(node) in SHELL_CALLS:
-            findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_SHELL} — {_process_call(node)}"))
+        if not isinstance(node, ast.Call):
+            continue
+        target = names.getattr_target(node)
+        call = names.process_call(node)
+        if target in SHELL_CALLS:
+            findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_SHELL} — getattr {target}"))
+        elif call in SHELL_CALLS and not isinstance(node.func, ast.Call):  # getattr(...)() já contou acima
+            findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_SHELL} — {call}"))
+        elif call and any(keyword.arg is None for keyword in node.keywords):
+            findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_SHELL} — ** em {call}"))
     return _sorted(findings)
 
 
 def process_findings(source, filename, allowed=("run_cli",)):
-    """Processo externo fora das funções permitidas, ou importado como nome solto (from subprocess import run)."""
+    """Processo externo fora das funções permitidas; módulo de processo com alias, função importada solta
+    (from subprocess import run) ou acessada por getattr, em qualquer lugar."""
     allowed = set(allowed)
+    tree = ast.parse(source)
+    names = _Names(tree)
     findings = []
+
+    def add(node, detail):
+        findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_PROCESS} — {detail}"))
 
     def visit(node, function):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             function = node.name
-        if isinstance(node, ast.ImportFrom) and node.module in PROCESS_CALLS:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in PROCESS_CALLS and alias.asname and alias.asname != alias.name:
+                    add(node, f"import {alias.name} as {alias.asname}")
+        elif isinstance(node, ast.ImportFrom) and node.module in PROCESS_CALLS:
             for alias in node.names:
                 if alias.name in PROCESS_CALLS[node.module]:
-                    message = f"{filename}:{node.lineno} — {RULE_PROCESS} — from {node.module} import {alias.name}"
-                    findings.append((node.lineno, message))
-        if isinstance(node, ast.Call):
-            call = _process_call(node)
-            if call and function not in allowed:
+                    add(node, f"from {node.module} import {alias.name}")
+        elif isinstance(node, ast.Call):
+            target = names.getattr_target(node)
+            call = names.process_call(node)
+            if target:
+                add(node, f"getattr {target}")
+            elif call and function not in allowed and not isinstance(node.func, ast.Call):
                 where = f"{function}()" if function else "nível de módulo"
-                findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_PROCESS} — {call} em {where}"))
+                add(node, f"{call} em {where}")
         for child in ast.iter_child_nodes(node):
             visit(child, function)
 
-    visit(ast.parse(source), None)
+    visit(tree, None)
     return _sorted(findings)
 
 

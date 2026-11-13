@@ -114,6 +114,27 @@ class ShellRulesTest(unittest.TestCase):
         self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (4, 5, 6, 8)],
                          report(findings))
 
+    def test_shell_through_aliases_getattr_and_kwargs_unpacking_is_reported(self):
+        """SPEC-0054:UT-07 (alias, getattr e ** numa chamada de processo)"""
+        source = (
+            "import os\n"
+            "import subprocess\n"
+            "import subprocess as sp\n"
+            "from os import system as s\n"
+            "def run_cli(argv, timeout):\n"
+            "    subprocess.run(argv, check=False, **{'shell': True})\n"
+            "    opts = {}\n"
+            "    subprocess.run(argv, check=False, **opts)\n"
+            "    sp.getoutput('ls')\n"
+            "    s('ls')\n"
+            "    getattr(os, 'system')('ls')\n"
+            "    sp.run(argv, shell=True, check=False)\n"
+            "    dict(**opts)\n"
+        )
+        findings = shell_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (6, 8, 9, 10, 11, 12)],
+                         report(findings))
+
     def test_server_never_uses_a_shell(self):
         """SPEC-0054:UT-07"""
         findings = shell_findings(server_source(), NAME)
@@ -137,6 +158,39 @@ class ProcessRulesTest(unittest.TestCase):
         self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (3, 7, 8)],
                          report(findings))
         self.assertIn("tools_call", findings[1])
+
+    def test_process_through_aliases_and_getattr_is_reported(self):
+        """SPEC-0054:UT-07 (alias de módulo, alias de função e getattr)"""
+        source = (
+            "import os\n"
+            "import subprocess\n"
+            "import subprocess as sp\n"
+            "from os import system as s\n"
+            "def run_cli(argv, timeout):\n"
+            "    return subprocess.run(argv, timeout=timeout, check=False)\n"
+            "def tools_call(name):\n"
+            "    sp.run(['ls'], check=False)\n"
+            "    s('ls')\n"
+            "    getattr(subprocess, 'run')(['ls'])\n"
+            "    getattr(os, 'system')('ls')\n"
+            "    getattr(sp, name)(['ls'])\n"
+            "    getattr(name, 'run')\n"
+            "import asyncio as aio\n"
+        )
+        findings = process_findings(source, NAME, ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual([f.split(" — ")[0] for f in findings],
+                         [f"{NAME}:{n}" for n in (3, 4, 8, 9, 10, 11, 12, 14)], report(findings))
+        self.assertIn("tools_call", findings[2])
+
+    def test_aliases_inside_run_cli_are_still_reported(self):
+        """SPEC-0054:UT-07 (dentro da executora o alias também é acusado: o chamado tem de ser legível)"""
+        source = (
+            "import subprocess as sp\n"
+            "def run_cli(argv, timeout):\n"
+            "    return getattr(sp, 'run')(argv, timeout=timeout, check=False)\n"
+        )
+        findings = process_findings(source, NAME, ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (1, 3)], report(findings))
 
     def test_other_skill_clis_are_reported(self):
         """SPEC-0054:UT-07"""
