@@ -52,12 +52,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01, UT-02 e IT-01 em `tests/plugin/` com a tag `SPEC-0056:<ID>`, falhando pelo motivo certo
-- [ ] Green: checagem de versão do plugin, `author` no `plugin.json`, versão 2026.11.2, passo na CI, README e AGENTS.md
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01, UT-02 e IT-01 em `tests/plugin/` com a tag `SPEC-0056:<ID>`, falhando pelo motivo certo
+- [x] Green: checagem de versão do plugin, `author` no `plugin.json`, versão 2026.11.2, passo na CI, README e AGENTS.md
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -82,28 +82,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+Um PR que muda `skills/**` sem subir a `version` do `.claude-plugin/plugin.json` (`AAAA.MM.N`, comparada como tupla) é reprovado pela CI, com a versão da base e da HEAD na mensagem; assim `claude plugin update` sempre traz as mudanças. O `plugin.json` ganhou `author: {"name": "thomasravache"}` (sem e-mail, o aviso do `claude plugin validate` sumiu) e foi para a versão 2026.11.2. README e `AGENTS.md` explicam a regra.
 
 ### Como foi feito
+- `tests/plugin/check_plugin_version.py` (stdlib): `version_findings` e a CLI `--base <ref>` (diff `base...HEAD`, versão da base por `git show`); `plugin.json` inválido vira achado legível e versão da base fora do formato vira aviso. Passo na CI só em `pull_request`, com `--base "origin/$BASE_REF"` e `fetch-depth: 0`.
+- Testes em ab0933c e 630400f; implementação em a0cfe62 e d82164a.
+- **Revisão G4:** APPROVED; o minor (base fixa em `origin/main`) e os nits (traceback com JSON inválido, base fora do formato sem aviso) foram corrigidos. A regra continua valendo para testes e CHANGELOG das skills, que também vão para o cache do plugin (recomendação do Reviewer).
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Mudança em `skills/**` exige versão maior; fora de `skills/**` nada é exigido | PASS | `test_plugin_version.py::VersionFindingsTest` — CI do PR #26 em af7d6ba (run 43470182944, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | `author.name` igual ao `owner.name` do marketplace, sem e-mail | PASS | `PluginAuthorTest` — CI do PR #26 em af7d6ba (run 43470182944, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Repositório git com dois commits: exit 1 sem subir a versão, 0 com versão maior ou sem mudar skills; JSON inválido e base fora do formato | PASS | `CheckAgainstBaseTest` — CI do PR #26 em af7d6ba (run 43470182944, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — N/A para feature; testes vermelhos em ab0933c e 630400f, verdes em a0cfe62 e d82164a
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido — testes em `tests/plugin/` como na SPEC-0053
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — README e `AGENTS.md`; sem CHANGELOG raiz no repositório
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — nenhuma
 
 ### Deploy
+N/A — plugin `fermion` 2026.11.2 na branch `sdd/SPEC-0056`, PR #26.
 
 ### Pendências
+Nenhuma.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

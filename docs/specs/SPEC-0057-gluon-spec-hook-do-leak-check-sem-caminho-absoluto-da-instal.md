@@ -51,12 +51,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01 e IT-01 em `skills/gluon-spec/tests/` com a tag `SPEC-0057:<ID>`, falhando pelo motivo certo
-- [ ] Green: hook do leak-check acha a ferramenta quando roda; `SDD_TOOL_VERSION` e CHANGELOG
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01 e IT-01 em `skills/gluon-spec/tests/` com a tag `SPEC-0057:<ID>`, falhando pelo motivo certo
+- [x] Green: hook do leak-check acha a ferramenta quando roda; `SDD_TOOL_VERSION` e CHANGELOG
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -81,28 +81,38 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+O hook `pre-push` do leak-check (modo privado) acha a ferramenta quando roda: primeiro o caminho gravado no `private init`; se ele sumiu (por exemplo, cache do plugin limpo depois de um update), o `tools/sdd/spec_graph.py` do projeto, mas só se não estiver versionado no git, avisando qual ferramenta rodou. Sem nenhuma, recusa com "ferramenta do leak-check não encontrada — rode `private init` de novo" e nunca mais acusa "marcas do SDD" por falta da ferramenta. Um push que só apaga branches passa sem ferramenta. `SDD_TOOL_VERSION` 2026.11.3.
 
 ### Como foi feito
+- Modelo `skills/gluon-spec/assets/hooks/pre-push-leak` (sh POSIX, seguro com espaços): função `find_tool`, chamada só na primeira ref com commit a checar; `git ls-files --error-unmatch` recusa o `tools/sdd` rastreado. `install_leak_hook` continua gravando o caminho absoluto como primeira opção.
+- Testes em e5046e3 e f841516 (`test_private_mode.py::LeakHookToolPathTest`, simulando o cache do plugin apagado); correção em 4290f86 e 483e2f1; `references/private-mode.md` e CHANGELOG `[2026.11.3]`.
+- O Architect ampliou o `touches` para o modelo do hook e o guia do modo privado, que a spec citava e não listava.
+- **Revisão G4:** APPROVED; os minors (fallback executaria um `tools/sdd` versionado pelo time e anularia o leak-check; push de remoção recusado sem ferramenta) foram corrigidos com teste antes.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes (e5046e3, hook de 4290f86^):** `AssertionError: 'ferramenta do leak-check não encontrada' not found in "...can't open file '.../plugins/cache/fermion-lab/fermion/1.0.0/skills/gluon-spec/scripts/spec_graph.py' ... pre-push: marcas do SDD encontradas"` — o hook acusava marcas do SDD por falta da ferramenta.
+- **Depois (483e2f1):** `LeakHookToolPathTest` verde (4 testes) e a suíte da `gluon-spec` com 168 testes OK; CI do PR #26 verde.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Hook com caminho gravado inexistente recusa com a mensagem certa, sem 'marcas do SDD' | PASS | `test_private_mode.py::LeakHookToolPathTest` — CI do PR #26 em af7d6ba (run 43470182944, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Por `git push`: sem ferramenta recusa; `tools/sdd` local e ignorado é usado e acha marcas; `tools/sdd` rastreado nunca roda; push de remoção passa | PASS | `LeakHookToolPathTest` — CI do PR #26 em af7d6ba (run 43470182944, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — e5046e3/f841516 vermelhos, 4290f86/483e2f1 verdes
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido — o hook continua gerado por `install_leak_hook` a partir do modelo em `assets/hooks/`
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — `references/private-mode.md` e CHANGELOG da `gluon-spec` `[2026.11.3]`
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — os hooks do `vendor --hooks` usam `tools/sdd/` e não o caminho absoluto; nenhuma
 
 ### Deploy
+N/A — `SDD_TOOL_VERSION` 2026.11.3 na branch `sdd/SPEC-0056`, PR #26.
 
 ### Pendências
+Nenhuma nova. Nits registrados na revisão, sem spec: o caminho gravado entra no hook sem escape de aspas (já era assim); um fallback para a versão mais nova do cache do plugin pode vir na frente de auto-melhoria (SPEC-0031).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
