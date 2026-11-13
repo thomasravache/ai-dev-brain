@@ -75,6 +75,7 @@ Desenho:
 | SPEC-0055 | Renomear as skills para `gluon-spec`, `photon-brain` e `boson-atlas` | full | migration | M | SPEC-0029 | — |
 | SPEC-0053 | Plugin `fermion` e marketplace `fermion-lab` com as skills | full | feature | S | SPEC-0055 | — |
 | SPEC-0054 | Servidor MCP local do plugin com as tools `atlas_*` | full | feature | M | SPEC-0053 | — |
+| SPEC-0056 | Versão do plugin sobe quando as skills mudam (pendência do G4 da SPEC-0053) | lite | feature | S | SPEC-0053 | — |
 | a criar | Hook `SessionStart` e comando de entrada única | full | feature | S | SPEC-0053 | — |
 | a criar | Servidor MCP: tools `brain_*` | full | feature | M | MCP atlas | — |
 | a criar | Servidor MCP: tools `sdd_*` | full | feature | S | MCP atlas | — |
