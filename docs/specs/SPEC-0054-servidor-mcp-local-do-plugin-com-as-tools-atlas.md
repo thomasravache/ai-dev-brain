@@ -197,7 +197,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
-| G1 Red | FAIL | verify G1: FAIL — commits test(...) alteram arquivos fora de test_paths: mcp/tests/archi; nota: vermelho em 1df8578: mcp/tests 57 testes, 86 falhas (subtests), 0 erros — só 'mcp/fermion_mcp.py não existe'; exemplos das regras do UT-07 e fixture passam — 1df8578 | 2026-11-13 |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=86)); nota: vermelho em 1df8578: mcp/tests 57 testes, 86 falhas (subtests), 0 erros — só 'mcp/fermion_mcp.py não existe'; exemplos das regras do UT-07 e fixture passam; 1ª execução falhou por mcp/tests/** ausente de test_paths (config corrigida) — 1df8578 | 2026-11-13 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
@@ -211,6 +211,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
 | IMP-01 | 2026-11-13 | G1 | spec | SPEC_DEFECT do Test-writer: o schema oficial 2026-07-28 diverge do contrato na era moderna — DiscoverResult exige resultType, ttlMs e cacheScope e põe a identidade em _meta['io.modelcontextprotocol/serverInfo'] (sem serverInfo no topo); todo resultado moderno exige resultType; ListToolsResult exige ttlMs e cacheScope; requests modernos trazem clientCapabilities em _meta | Test-writer conferiu /specification/2026-07-28/schema, /server/discover e /basic/versioning.md em 2026-11-13; nenhum teste escrito | thomas | Emenda v2 — era moderna conforme o schema oficial 2026-07-28 (DiscoverResult, resultType, ttlMs/cacheScope, serverInfo em _meta, clientCapabilities tolerado, readOnlyHint) (H1 thomas, 2026-11-13) | 2026-11-13 |
+| IMP-02 | 2026-11-13 | G2 | spec | Contratos em conflito: a SPEC-0054 declara mcpServers.fermion no plugin.json, mas o contrato da SPEC-0053 (e o UT-02 dela) proíbe qualquer chave de componente no plugin.json; com a declaração, test_plugin.py falha em 2 testes | Implementer mediu com mcpServers (validate exit 0, 2 testes da SPEC-0053 vermelhos) e reverteu; servidor pronto e verde em 064060d | thomas | Emenda v3 da SPEC-0053 — plugin.json pode declarar mcpServers com o servidor fermion (H1 thomas, 2026-11-13) | 2026-11-13 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
