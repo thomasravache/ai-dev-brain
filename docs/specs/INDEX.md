@@ -1,18 +1,12 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-11-12 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-13 — não edite manualmente.
 
 ## Saúde
 
 - Validação (G0): **5 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 5, approved 1, in-progress 2, implemented 41
-- Impedimentos: **1 aberto(s)**, 21 resolvido(s)
-
-## Impedimentos Abertos
-
-| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
-|---|---|---|---|---|---|---|---|
-| SPEC-0053 | IMP-01 | spec | G1 | thomas | 2026-11-12 | 0d | SPEC_DEFECT do Test-writer: UT-05 manda acusar '../', 'tools/' e 'docs/' por texto, mas as três skills citam esses caminhos como caminhos do projeto, vault ou atlas de quem usa (gluon-spec: docs/specs, tools/sdd, ../{repo}.worktrees; photon-brain e boson-atlas: ../ de vault e páginas), e o UT-04 da SPEC-0055 exige tools/sdd/spec_graph.py |
+- Impedimentos: **0 aberto(s)**, 22 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -29,14 +23,14 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0055  
-**Paradas por impedimento:** SPEC-0053  
+**Em andamento:** SPEC-0053, SPEC-0055  
+**Paradas por impedimento:** —  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0055 | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full/M | in-progress | 🔄 em andamento |  |
-| 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | in-progress | 🚧 parada por impedimento: IMP-01 (spec → thomas, 0d) |  |
+| 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | in-progress | 🔄 em andamento |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
 | 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
 | 3 | SPEC-0054 | Servidor MCP local do plugin com as tools atlas | full/M | approved | ⛔ aguarda implementação de SPEC-0053; aguarda implementação de SPEC-0055 |  |
