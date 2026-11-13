@@ -9,7 +9,7 @@ created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0055]
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [mcp/**, .claude-plugin/plugin.json, .github/workflows/ci.yml]
 adrs: [ADR-0017]
@@ -92,7 +92,7 @@ era moderna (versão suportada: "2026-07-28"; schema oficial conferido em 2026-1
   tools/list moderno → também ttlMs: 3600000 e cacheScope: "private" (o atlas é dado da organização)
   respostas legadas seguem o schema legado: sem resultType, ttlMs nem cacheScope
 
-tools/list → as cinco tools, cada uma com name, description, inputSchema (JSON Schema com type "object" na raiz, additionalProperties: false) e annotations {readOnlyHint: true}   (v2: readOnlyHint)
+tools/list → as cinco tools atlas_* (v3: mais as tools das SPEC-0059, SPEC-0060 e SPEC-0061, cada uma no próprio contrato), cada uma com name, description, inputSchema (JSON Schema com type "object" na raiz, additionalProperties: false) e annotations {readOnlyHint: true}   (v2: readOnlyHint)
   atlas_config        {}                                                         → atlas.py config --json
   atlas_doctor        {}                                                         → atlas.py doctor --json
   atlas_context       {query: string 1..500 (obrigatório), hops: int 0..2, limit: int 1..200, max_chars: int 500..200000}
@@ -133,7 +133,7 @@ tools/call {name, arguments}
 - N/A — código novo; a CLI do atlas já tem suíte própria.
 
 ### 7.2 Testes Unitários
-- **UT-01** — Dado o servidor, quando recebe `tools/list`, então devolve exatamente as cinco tools do contrato, cada uma com `description`, `inputSchema` (JSON Schema `object`, `additionalProperties: false`, faixas e enums do contrato) e `annotations.readOnlyHint: true` (v2).
+- **UT-01** — Dado o servidor, quando recebe `tools/list`, então devolve as cinco tools `atlas_*` do contrato (v3: conferidas por prefixo; as outras tools pertencem às SPEC-0059, SPEC-0060 e SPEC-0061), cada uma com `description`, `inputSchema` (JSON Schema `object`, `additionalProperties: false`, faixas e enums do contrato) e `annotations.readOnlyHint: true` (v2).
 - **UT-02** — Dados `tools/call` com tool desconhecida, `query` vazia ou com mais de 500 caracteres, `hops: 3`, `status: "pending"`, `only: ["Bad Rule"]` e chave extra, quando chegam, então cada um recebe erro -32602 e nenhum processo é aberto (executor substituído no teste).
 - **UT-03** — Dado `atlas_context` com `query: "-rf --hops 9; rm"`, quando a linha de comando é montada, então é uma lista que termina em `--json`, `--`, `-rf`, `--hops`, `9;`, `rm` e é executada sem shell.
 - **UT-04** — Dado um executor falso, quando a CLI sai com 0 (stdout JSON), 1 no `atlas_lint`, 3, 2 e por timeout, então os resultados seguem o contrato (`structuredContent` só com JSON objeto; `isError` e textos de cada caso).
@@ -267,3 +267,4 @@ Nenhuma.
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-11-13 | Era moderna conforme o schema oficial 2026-07-28: `DiscoverResult` com `resultType`, `ttlMs: 3600000`, `cacheScope: "private"` e identidade em `_meta["io.modelcontextprotocol/serverInfo"]`; `resultType: "complete"` em todo resultado moderno; `ttlMs`/`cacheScope` no `tools/list` moderno; `clientCapabilities` ausente tolerado; request sem `_meta` e sem `initialize` atendido como legado; respostas legadas sem os campos modernos; `annotations.readOnlyHint: true` nas cinco tools | IMP-01: o contrato v1 tinha `serverInfo` no topo do discover e não tinha os campos obrigatórios do schema | nenhuma (sem consumidores) | thomas, 2026-11-13 |
+| 3 | 2026-11-13 | `tools/list` deixa de ser exatamente cinco tools: as `atlas_*` não mudam e o servidor ganha `brain_*`, `sdd_*` e `fermion_doctor`; UT-01 confere as `atlas_*` por prefixo; a regra de arquitetura passa a aceitar processo para as três CLIs das skills e para `scripts/fermion_doctor.py` (ADR-0017, ADR-0019) | SPEC-0059, SPEC-0060 e SPEC-0061 acrescentam tools ao mesmo servidor | SPEC-0059, SPEC-0060, SPEC-0061 | thomas, 2026-11-13 |

@@ -9,7 +9,7 @@ created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0055]
 consumes_contract: []
-contract_version: 3
+contract_version: 4
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [.claude-plugin/**, tests/plugin/**, README.md, .github/workflows/ci.yml]
 adrs: [ADR-0016]
@@ -83,6 +83,7 @@ O repositório passa a ser um marketplace do Claude Code chamado `fermion-lab`, 
   {"name": "fermion", "version": "<AAAA.MM.N>", "description": "...", "repository": "https://github.com/thomasravache/ai-dev-brain"}
   name em kebab-case e igual ao plugins[0].name do marketplace; version no formato AAAA.MM.N, a primeira 2026.11.1
   nenhum caminho de componente declarado: as skills vêm do scan padrão de skills/; a única chave de componente permitida é "mcpServers", com o servidor "fermion" da SPEC-0054 declarado inline   (v3)
+  componentes por pasta padrão na raiz: só hooks/hooks.json, hooks/session_start.py (SPEC-0058) e commands/deliver.md (SPEC-0058); nenhum outro arquivo em hooks/, agents/, commands/, output-styles/, monitors/ nem .mcp.json   (v4)
 
 skills/<pasta>/SKILL.md (as três)
   frontmatter com name igual ao nome da pasta e description não vazia
@@ -125,7 +126,7 @@ erros
 
 ### 7.2 Testes Unitários
 - **UT-01** — Dado o `.claude-plugin/marketplace.json` do repositório, quando é lido, então tem `name: fermion-lab`, `owner.name` não vazio, um único plugin `fermion` com `source: "./"` e descrição, e nenhuma chave de topo fora de `name`, `owner`, `plugins`, `metadata`.
-- **UT-02** — Dado o `.claude-plugin/plugin.json`, quando é lido, então `name` é `fermion` (igual ao do marketplace), `version` segue `AAAA.MM.N`, há `description` e `repository`, e nenhum caminho de componente é declarado; `mcpServers` só é aceito com o servidor `fermion` da SPEC-0054 (v3).
+- **UT-02** — Dado o `.claude-plugin/plugin.json`, quando é lido, então `name` é `fermion` (igual ao do marketplace), `version` segue `AAAA.MM.N`, há `description` e `repository`, e nenhum caminho de componente é declarado; `mcpServers` só é aceito com o servidor `fermion` da SPEC-0054 (v3); nas pastas de componente da raiz só existem `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md` (v4).
 - **UT-03** — Dados manifestos inválidos montados no teste (JSON quebrado, nome `Fermion_Lab`, plugin.json com `name` diferente, `source: "./plugins/x"`), quando a checagem roda, então cada um gera um achado próprio.
 - **UT-04** — Dado `skills/`, quando o scan é simulado como o do Claude Code (`skills/<pasta>/SKILL.md`), então acha exatamente `gluon-spec`, `photon-brain` e `boson-atlas`, cada uma com `name` igual à pasta e `description` não vazia.
 - **UT-05** — Dada uma skill de exemplo com `[x](../shared/a.md)`, `<skill-dir>/../tools/sdd/x` e um script com `sys.path.insert(0, str(Path(__file__).parents[2] / "tools"))`, e com o texto "rode `docs/specs/INDEX.md`" e "`tools/sdd/spec_graph.py` do projeto", quando a checagem de autocontenção roda, então acusa os três primeiros e não os dois textos do projeto alvo; nas três skills reais (fora de `tests/`) não há achado (v2).
@@ -254,3 +255,4 @@ N/A — marketplace no próprio repositório; plugin `fermion` 2026.11.1 na bran
 |---|---|---|---|---|---|
 | 2 | 2026-11-12 | Autocontenção (UT-05) passa a valer só para o que a skill resolve a partir da própria pasta: links Markdown relativos, `<skill-dir>/..` e caminhos de script (`Path(__file__)`, `sys.path`) que saem de `skills/<nome>/`; caminhos do projeto, vault ou atlas de quem usa (`docs/specs/`, `tools/sdd/`, `../` do vault) são permitidos; `tests/` fica fora | IMP-01: a regra por texto acusaria as três skills, que citam esses caminhos como do projeto alvo, e contradiria a SPEC-0055:UT-04 | nenhuma (sem consumidores) | thomas, 2026-11-13 |
 | 3 | 2026-11-13 | `plugin.json` pode declarar `mcpServers` com o servidor `fermion` (inline, `${CLAUDE_PLUGIN_ROOT}/mcp/fermion_mcp.py`); as outras chaves de componente continuam proibidas; UT-02 ajustado | IMP-01 da SPEC-0054: o contrato v2 proibia toda chave de componente, inclusive a declaração do servidor MCP que a SPEC-0054 precisa | SPEC-0054 (consome a permissão) | thomas, 2026-11-13 |
+| 4 | 2026-11-13 | Guarda da raiz: `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md` entram no contrato (lista exata); o resto das pastas de componente continua proibido; UT-02 ajustado | SPEC-0058 precisa do hook `SessionStart` e do comando `/fermion:deliver` por pasta padrão | SPEC-0058 (consome a permissão) | thomas, 2026-11-13 |

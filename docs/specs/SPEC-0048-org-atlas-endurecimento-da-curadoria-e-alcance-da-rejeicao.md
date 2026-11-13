@@ -4,17 +4,17 @@ title: "org-atlas: endurecimento da curadoria, do context e do lint, e alcance d
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040]
 consumes_contract: []
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/test_curate.py, skills/boson-atlas/tests/test_context.py, skills/boson-atlas/tests/test_lint.py, skills/boson-atlas/tests/test_vendor.py, skills/boson-atlas/references/modes.md, skills/boson-atlas/references/maintenance.md, skills/boson-atlas/references/context.md, skills/boson-atlas/references/curation.md, skills/boson-atlas/CHANGELOG.md]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/test_curate.py, skills/boson-atlas/tests/test_context.py, skills/boson-atlas/tests/test_lint.py, skills/boson-atlas/tests/test_vendor.py, skills/boson-atlas/references/modes.md, skills/boson-atlas/references/maintenance.md, skills/boson-atlas/references/context.md, skills/boson-atlas/references/curation.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0012]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0048 — org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição
@@ -39,7 +39,7 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - No `lint`, depois da máscara por componente, o caminho inteiro também passa por `_mask_all`; o radical é testado também até o primeiro ponto; destinos de link são mascarados sem `#`/`?` e o sufixo volta depois.
 - No `context`, o nome do serviço no título vai entre crases (ou com `#` inicial escapado) e crases dentro de valores são neutralizadas.
 - No `lint`, a cópia da ferramenta em `.org-atlas/skill/scripts/atlas.py` que difere da skill instalada vira AVISO `config` ("cópia da skill desatualizada — rode `vendor`") em vez de `secret-leak`.
-- Alcance da rejeição conforme a resposta da questão abaixo.
+- Uma rejeição vale para o mesmo kind e padrão em qualquer escopo: rejeitada a convenção da organização, o `propose` não propõe a mesma regra para um repositório (nem o contrário). A linha da rejeição passa a ser comparada por `(kind, pattern)` além do id.
 - **Não muda:** o formato do arquivo de convenção nem quem pode confirmar ou rejeitar.
 
 **Padrão seguido:** `slug` com hash da SPEC-0036 (nomes de página longos ou colidentes).
@@ -56,10 +56,11 @@ Pendências da revisão G4 da SPEC-0037 (todas menores, nenhuma quebra a garanti
 - **UT-05** — Dado `extra_patterns: ['vault/[a-z0-9]{8}']` e um arquivo `vault/abcd1234.bin` não UTF-8, `acme-bbbbcccc.tar.gz` com `^acme-[0-9a-f]{8}$` e um link para `acme-eeee1111#sec`, quando o `lint` roda, então nenhum desses valores aparece na saída, em texto ou `--json`.
 - **UT-04** — Dado um serviço chamado `## Convenções (regra)`, quando o `context` monta o pacote, então nenhuma linha do Markdown, de qualquer nível de título, tem como texto um título fixo das seções.
 - **UT-06** — Dado um atlas vendorizado cuja `.org-atlas/skill/scripts/atlas.py` difere da skill instalada (sem segredo nela), quando o `lint` roda pela skill instalada, então não há ERRO `secret-leak` nesse arquivo e há AVISO `config` sugerindo `vendor`; um segredo plantado em outro arquivo da cópia continua ERRO.
-- **IT-01** — Dado `pr-title-conventional` rejeitada no escopo organization, quando a maioria muda e só um repositório segue o padrão, então o resultado segue a decisão da questão abaixo.
+- **UT-07** — Dadas rejeições `(kind: pr-title, pattern: conventional)` no escopo organization, quando a regra de rejeição compara candidatas `(pr-title, conventional)` em escopo de repositório e `(pr-title, ticket-prefix)` no da organização, então a primeira é bloqueada e a segunda não.
+- **IT-01** — Dado `pr-title-conventional` rejeitada no escopo organization, quando a maioria muda e só um repositório segue o padrão, então nenhuma proposta `pr-title-conventional-<repo>` é criada e o `curate list` mostra só a rejeitada; um padrão diferente do mesmo kind continua sendo proposto.
 
 ## 5. Questões em Aberto
-- [ ] Uma rejeição vale para o kind+padrão em qualquer escopo (não propõe `pr-title-conventional-<repo>` depois de rejeitar a da organização) ou só para o mesmo id, como hoje? (thomas)
+- [x] Uma rejeição vale para o kind+padrão em qualquer escopo (não propõe `pr-title-conventional-<repo>` depois de rejeitar a da organização) ou só para o mesmo id, como hoje? — Para o kind+padrão em qualquer escopo: quem rejeita a regra rejeita a regra, não o escopo; é a leitura de "rejeitada nunca volta" do ADR-0012 (recomendação do arquiteto, aceita no piloto automático autorizado por thomas em 2026-11-13: "pode seguir no piloto automático com o recomendado"; revisável no H1)
 
 ## 6. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
@@ -71,7 +72,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PENDING | | |
+| G0 Spec | PASS | validate: 0 erro(s) — c5417ad (árvore suja) | 2026-11-13 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |

@@ -4,17 +4,17 @@ title: "org-atlas: testes do endurecimento do init e do doctor e regra de proces
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent:
 depends_on: [SPEC-0033]
 consumes_contract: []
-touches: [skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/test_hardening.py, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/redaction.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/CHANGELOG.md]
+touches: [skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/test_hardening.py, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/redaction.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0002]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0046 — org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias
@@ -64,7 +64,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PENDING | | |
+| G0 Spec | PASS | validate: 0 erro(s) — c5417ad (árvore suja) | 2026-11-13 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
