@@ -28,7 +28,31 @@ Alternativas descartadas e a checagem de disponibilidade que falta: SPEC-0031, s
 
 ## Instalação
 
-Copie a pasta da skill para o diretório de skills da sua ferramenta, por exemplo:
+### Pelo plugin do Claude Code (recomendado)
+
+O repositório é o marketplace `fermion-lab`, com um plugin `fermion` que traz as três skills (SPEC-0053, ADR-0016). No terminal:
+
+```bash
+claude plugin marketplace add thomasravache/ai-dev-brain
+claude plugin install fermion@fermion-lab
+```
+
+Ou, dentro do Claude Code:
+
+```text
+/plugin marketplace add thomasravache/ai-dev-brain
+/plugin install fermion@fermion-lab
+```
+
+No Claude Code 2.1.275 ou mais novo, um comando só faz os dois passos: `/plugin install fermion --marketplace thomasravache/ai-dev-brain`.
+
+As skills aparecem como `/fermion:gluon-spec`, `/fermion:photon-brain` e `/fermion:boson-atlas`, e o agente também as usa sozinho quando o pedido combina com a `description` de cada uma.
+
+Para atualizar, rode `claude plugin marketplace update fermion-lab` e depois `claude plugin update fermion@fermion-lab` (ou use `/plugin` dentro do Claude Code); a versão do plugin segue o formato `AAAA.MM.N`. Para desinstalar, `claude plugin uninstall fermion@fermion-lab` e, se quiser tirar também o marketplace, `claude plugin marketplace remove fermion-lab`.
+
+### Copiando a pasta da skill (alternativa)
+
+Para outras ferramentas que leem `SKILL.md` (Gemini CLI, Antigravity e outras), ou sem o plugin, copie a pasta da skill para o diretório de skills da ferramenta, por exemplo:
 
 ```bash
 cp -R skills/gluon-spec ~/.claude/skills/
@@ -36,7 +60,7 @@ cp -R skills/photon-brain ~/.claude/skills/
 cp -R skills/boson-atlas ~/.claude/skills/
 ```
 
-**Já copiou as pastas com os nomes antigos?** As cópias em `~/.claude/skills/sdd-management`, `~/.claude/skills/second-brain` e `~/.claude/skills/org-atlas` continuam funcionando, mas não recebem mais atualizações: apague essas cópias e instale as pastas novas com os comandos acima (ou, quando sair, o plugin `fermion`, SPEC-0053). Nada mais muda: a configuração da máquina, os vaults, os atlas e os projetos continuam como estão.
+**Já copiou as pastas com os nomes antigos?** As cópias em `~/.claude/skills/sdd-management`, `~/.claude/skills/second-brain` e `~/.claude/skills/org-atlas` continuam funcionando, mas não recebem mais atualizações: apague essas cópias e instale o plugin `fermion` ou as pastas novas com os comandos acima. Nada mais muda: a configuração da máquina, os vaults, os atlas e os projetos continuam como estão.
 
 A ferramenta da `gluon-spec` (`scripts/spec_graph.py`) só precisa de Python 3.9+ e git; a da `photon-brain` (`scripts/brain.py`) e a da `boson-atlas` (`scripts/atlas.py`), só de Python 3.9+. O CHANGELOG da `photon-brain` fica em [`skills/photon-brain/CHANGELOG.md`](skills/photon-brain/CHANGELOG.md) e o da `boson-atlas` em [`skills/boson-atlas/CHANGELOG.md`](skills/boson-atlas/CHANGELOG.md).
 
@@ -54,7 +78,7 @@ O CHANGELOG da `gluon-spec` fica em [`skills/gluon-spec/CHANGELOG.md`](skills/gl
 python3 -m unittest discover -s skills/gluon-spec/tests       # suíte da gluon-spec, inclui os testes de arquitetura
 python3 -m unittest discover -s skills/photon-brain/tests     # suíte da photon-brain, inclui os testes de arquitetura
 python3 -m unittest discover -s skills/boson-atlas/tests      # suíte da boson-atlas, inclui os testes de arquitetura
-python3 -m unittest discover -s tests/plugin                  # nomes das skills e identificadores mantidos (SPEC-0055)
+python3 -m unittest discover -s tests/plugin                  # plugin e marketplace (SPEC-0053) e nomes das skills (SPEC-0055)
 uvx ruff check                                                 # lint (Ruff 0.17, configurado em ruff.toml)
 ```
 
