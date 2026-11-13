@@ -12,3 +12,7 @@ Este projeto usa Spec-Driven Development. Vale para qualquer mudança de comport
 7. **PRs:** corpo gerado por `spec_graph.py pr SPEC-NNNN`; o CI roda `pr-check` e bloqueia o merge se algo faltar.
 8. **Board:** definido em `tracker` no `docs/specs/sdd-config.yml` (`none` = só o repositório).
 <!-- sdd:end -->
+
+## Versão do plugin
+
+Um PR que muda `skills/**` precisa subir a `version` do `.claude-plugin/plugin.json` (`AAAA.MM.N` maior que a da `main`), para que `claude plugin update` traga a mudança; a CI confere isso com `python3 tests/plugin/check_plugin_version.py --base origin/main` (SPEC-0056).

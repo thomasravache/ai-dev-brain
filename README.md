@@ -50,6 +50,8 @@ As skills aparecem como `/fermion:gluon-spec`, `/fermion:photon-brain` e `/fermi
 
 Para atualizar, rode `claude plugin marketplace update fermion-lab` e depois `claude plugin update fermion@fermion-lab` (ou use `/plugin` dentro do Claude Code); a versão do plugin segue o formato `AAAA.MM.N`. Para desinstalar, `claude plugin uninstall fermion@fermion-lab` e, se quiser tirar também o marketplace, `claude plugin marketplace remove fermion-lab`.
 
+Ao mudar `skills/**`, o PR precisa subir a `version` do `.claude-plugin/plugin.json` (`AAAA.MM.N` maior que a da `main`): o Claude Code usa a versão para decidir se há atualização, e sem isso `claude plugin update` não traz a mudança. A CI confere isso em todo PR (`tests/plugin/check_plugin_version.py`, SPEC-0056).
+
 ### Copiando a pasta da skill (alternativa)
 
 Para outras ferramentas que leem `SKILL.md` (Gemini CLI, Antigravity e outras), ou sem o plugin, copie a pasta da skill para o diretório de skills da ferramenta, por exemplo:
