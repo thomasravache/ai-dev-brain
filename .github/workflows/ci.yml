@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Histórico completo: a checagem da versão do plugin compara com a base do PR, origin/<base_ref> (SPEC-0056).
+          fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -59,3 +61,10 @@ jobs:
       # O E2E-01 é pulado aqui (sem o Claude Code no runner) e roda local no G4 e no G5.
       - name: Testes do plugin e dos nomes das skills
         run: python -m unittest discover -s tests/plugin -v
+
+      # Um PR que muda skills/** sobe a versão do plugin.json, senão `claude plugin update` não traz a mudança (SPEC-0056).
+      - name: Versão do plugin sobe com as skills
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 tests/plugin/check_plugin_version.py --base "origin/$BASE_REF"
