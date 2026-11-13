@@ -31,6 +31,10 @@ Interface que estes testes exigem de mcp/fermion_mcp.py (o Implementer segue est
             Recebe UMA mensagem JSON-RPC já decodificada (qualquer valor JSON) e devolve a resposta como dict,
             ou None para notificação (mensagem sem "id"). Guarda o estado da era legada (initialize).
 
+    too_deep(text: str) -> bool
+        Contador de aninhamento usado antes do json.loads (linha além do limite = -32700). Custo linear no
+        tamanho da linha: ~100 KB de \\" numa string sem fim termina em menos de 1 s.
+
     main() -> None (ou int 0)
         Lê o stdin linha a linha, decodifica (falha = -32700 com id null), chama Server().handle e escreve cada
         resposta numa linha do stdout; diagnóstico só no stderr; sai com 0 quando o stdin fecha.
@@ -44,6 +48,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import time
 import unittest
 from pathlib import Path
@@ -60,6 +65,7 @@ from helpers import (
     PLUGIN_JSON,
     REPO,
     RESPONSE_TIMEOUT,
+    SERVER,
     SERVER_INFO_KEY,
     SUPPORTED_VERSIONS,
     TIMEOUT_TEXT,
@@ -77,6 +83,19 @@ from helpers import (
 )
 
 MODERN_ONLY_FIELDS = ("resultType", "ttlMs", "cacheScope")
+# ~100 KB: string aberta e nunca fechada, feita só de \" (o pior caso de um contador de aninhamento por regex)
+LONG_UNTERMINATED = '{"jsonrpc":"2.0","id":1,"method":"ping","params":{"q":"' + '\\"' * 50000
+NESTING_BUDGET = 1.0  # segundos para o contador de aninhamento na linha acima
+TIMING_CHILD = """
+import importlib.util, sys, time
+spec = importlib.util.spec_from_file_location("fermion_mcp", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+text = sys.stdin.read()
+start = time.monotonic()
+module.too_deep(text)
+print(time.monotonic() - start)
+"""
 
 
 class FakeRunner:
@@ -222,9 +241,7 @@ INVALID_CALLS = [
     ("query com 0x01", "atlas_context", {"query": "api\x01"}),
     ("query com ESC", "atlas_context", {"query": "api \x1b[31m"}),
     ("query com 0x1f", "atlas_context", {"query": "\x1fapi"}),
-    ("query com tab", "atlas_context", {"query": "api\tpay"}),
-    ("query com quebra de linha", "atlas_context", {"query": "api\npay"}),
-    ("query com retorno de carro", "atlas_context", {"query": "api\rpay"}),
+    ("query com DEL", "atlas_context", {"query": "api\x7f"}),
 ]
 
 
@@ -251,6 +268,13 @@ class InvalidArgumentsTest(unittest.TestCase):
             runner = FakeRunner()
             result_of(self, new_server(runner).handle(call("atlas_context", arguments)))
             self.assertEqual(len(runner.calls), 1)
+
+    def test_tab_and_line_breaks_in_the_query_are_whitespace(self):
+        """SPEC-0054:UT-02 (descrição em várias linhas é válida; tab, \\n e \\r viram separador de palavra)"""
+        runner = FakeRunner()
+        result_of(self, new_server(runner).handle(call("atlas_context", {"query": "a\tb\nc\rd"})))
+        self.assertEqual(len(runner.calls), 1, "a query com tab e quebra de linha foi recusada")
+        self.assertEqual(runner.calls[0][0][2:], ["context", "--json", "--", "a", "b", "c", "d"])
 
 
 # --------------------------------------------------------------------------- UT-03
@@ -562,6 +586,22 @@ class ModernEraTest(unittest.TestCase):
 
 # --------------------------------------------------------------------------- transporte (unidade)
 
+class NestingCounterTest(unittest.TestCase):
+    def test_nesting_counter_is_linear_on_a_long_unterminated_string(self):
+        """SPEC-0054:IT-03 (unidade: too_deep em ~100 KB de \\" sem fechar termina em menos de 1 s)"""
+        self.assertTrue(callable(attr("too_deep")))
+        self.assertGreaterEqual(len(LONG_UNTERMINATED), 100000)
+        # roda num processo filho: um regex com retrocesso segura o GIL e travaria a suíte
+        try:
+            out = subprocess.run([sys.executable, "-c", TIMING_CHILD, str(SERVER)], input=LONG_UNTERMINATED,
+                                 capture_output=True, text=True, check=False, timeout=NESTING_BUDGET * 10)
+        except subprocess.TimeoutExpired:
+            self.fail(f"too_deep não terminou em {NESTING_BUDGET * 10:.0f} s (custo não linear)")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        elapsed = float(out.stdout.strip())
+        self.assertLess(elapsed, NESTING_BUDGET, f"too_deep levou {elapsed:.2f} s")
+
+
 class TransportUnitTest(unittest.TestCase):
     def test_non_request_objects_get_32600(self):
         """SPEC-0054:IT-03 (unidade: objeto que não é request)"""
@@ -730,6 +770,13 @@ class TransportTest(ServerCase):
         stderr = server.stderr()
         self.assertEqual(code, 0, stderr)
         self.assertNotIn("Traceback", stderr)
+
+    def test_long_unterminated_string_is_a_parse_error_in_linear_time(self):
+        """SPEC-0054:IT-03 (linha de ~100 KB com string sem fim: -32700 e ping dentro do limite curto)"""
+        server = self.open_server()
+        server.send_line(LONG_UNTERMINATED)
+        self.assert_parse_error_then_ping(server, 2)
+        self.finish(server)
 
     def test_deeply_nested_json_is_a_parse_error(self):
         """SPEC-0054:IT-03 (JSON aninhado demais não derruba o servidor)"""
