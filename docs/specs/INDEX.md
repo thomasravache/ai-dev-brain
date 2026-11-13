@@ -6,7 +6,13 @@
 
 - Validação (G0): **6 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 7, in-progress 3, implemented 41
-- Impedimentos: **0 aberto(s)**, 23 resolvido(s)
+- Impedimentos: **1 aberto(s)**, 23 resolvido(s)
+
+## Impedimentos Abertos
+
+| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
+|---|---|---|---|---|---|---|---|
+| SPEC-0054 | IMP-02 | spec | G2 | thomas | 2026-11-13 | 0d | Contratos em conflito: a SPEC-0054 declara mcpServers.fermion no plugin.json, mas o contrato da SPEC-0053 (e o UT-02 dela) proíbe qualquer chave de componente no plugin.json; com a declaração, test_plugin.py falha em 2 testes |
 
 ## Cobertura de Pilares
 
@@ -23,8 +29,8 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0053, SPEC-0054, SPEC-0055  
-**Paradas por impedimento:** —  
+**Em andamento:** SPEC-0053, SPEC-0055  
+**Paradas por impedimento:** SPEC-0054  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
@@ -33,7 +39,7 @@ Perfil: **minimo**
 | 2 | SPEC-0053 | Plugin fermion e marketplace fermion-lab com as skills | full/S | in-progress | 🔄 em andamento |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
 | 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055 |
-| 3 | SPEC-0054 | Servidor MCP local do plugin com as tools atlas | full/M | in-progress | 🔄 em andamento |  |
+| 3 | SPEC-0054 | Servidor MCP local do plugin com as tools atlas | full/M | in-progress | 🚧 parada por impedimento: IMP-02 (spec → thomas, 0d) |  |
 | 3 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055; saiu da onda 2: max_parallel=3 |
 | 3 | SPEC-0057 | gluon-spec: hook do leak-check sem caminho absoluto da instalação | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 4 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0055; saiu da onda 2: max_parallel=3; saiu da onda 3: arquivos em comum com SPEC-0046 |
