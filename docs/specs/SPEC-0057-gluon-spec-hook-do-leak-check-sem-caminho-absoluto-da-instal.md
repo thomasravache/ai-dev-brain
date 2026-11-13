@@ -9,7 +9,7 @@ created: 2026-11-13
 parent:
 depends_on: [SPEC-0053]
 consumes_contract: []
-touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md]
+touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/assets/hooks/pre-push-leak, skills/gluon-spec/references/private-mode.md, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md]
 adrs: []
 external: []
 size: S
