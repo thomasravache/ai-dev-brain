@@ -179,6 +179,31 @@ class CheckAgainstBaseTest(unittest.TestCase):
                 if expected:
                     self.assertIn("2026.11.1", result.stdout + result.stderr)
 
+    def test_invalid_head_plugin_json(self):
+        """SPEC-0056:IT-01 (plugin.json da HEAD com JSON inválido: achado, sem Traceback)"""
+        self.write("skills/gluon-spec/SKILL.md", "v2\n")
+        self.write(".claude-plugin/plugin.json", '{"name": "fermion", "version": \n')
+        self.commit("plugin.json inválido")
+        result = self.run_check()
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertNotIn("Traceback", output)
+        self.assertIn("plugin.json", output)
+
+    def test_base_version_out_of_format_warns(self):
+        """SPEC-0056:IT-01 (versão da base fora de AAAA.MM.N: aviso, não bloqueia)"""
+        self.write_plugin("2026.11")
+        self.base = self.commit("base com versão fora do formato")
+        self.write("skills/gluon-spec/SKILL.md", "v2\n")
+        self.write_plugin("2026.11.2")
+        self.commit("skills com versão válida")
+        result = self.run_check()
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        warnings = [line for line in output.splitlines() if "aviso" in line.lower()]
+        self.assertTrue(warnings, f"sem linha de aviso na saída:\n{output}")
+        self.assertTrue(any("2026.11" in line for line in warnings), output)
+
 
 if __name__ == "__main__":
     unittest.main()
