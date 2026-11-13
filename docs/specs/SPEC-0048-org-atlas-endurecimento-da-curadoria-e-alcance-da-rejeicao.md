@@ -4,7 +4,7 @@ title: "org-atlas: endurecimento da curadoria, do context e do lint, e alcance d
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040]
@@ -13,8 +13,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/test_cur
 adrs: [ADR-0012]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0048 — org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição

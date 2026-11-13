@@ -1,7 +1,7 @@
 ---
 id: ADR-0019
 title: Auto-melhoria do plugin só lê e avisa, nunca atualiza sozinha
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-13
 pillars: []

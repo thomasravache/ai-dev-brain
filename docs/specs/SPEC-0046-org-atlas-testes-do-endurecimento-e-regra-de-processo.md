@@ -4,7 +4,7 @@ title: "org-atlas: testes do endurecimento do init e do doctor e regra de proces
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-10-30
 parent:
 depends_on: [SPEC-0033]
@@ -13,8 +13,8 @@ touches: [skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tes
 adrs: [ADR-0010, ADR-0002]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0046 — org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias

@@ -4,7 +4,7 @@ title: "sdd-management: teste de tempo do leak-check tolerante à carga"
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-02
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/gluon-spec/tests/test_private_mode.py, .claude-plugin/plugin.js
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0045 — sdd-management: teste de tempo do leak-check tolerante à carga

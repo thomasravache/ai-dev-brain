@@ -4,7 +4,7 @@ title: "org-atlas: ids de repositório sem diferença de caixa entre coletores"
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0034, SPEC-0035]
@@ -13,8 +13,8 @@ touches: [skills/boson-atlas/assets/collectors/github.py, skills/boson-atlas/ass
 adrs: [ADR-0011]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0047 — org-atlas: ids de repositório sem diferença de caixa entre coletores

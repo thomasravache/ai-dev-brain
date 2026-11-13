@@ -4,7 +4,7 @@ title: Hook de início de sessão e comando de entrada única do plugin
 tier: full
 type: feature
 user_facing: true
-status: proposed
+status: approved
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0054]
@@ -15,8 +15,8 @@ touches: [hooks/**, commands/**, tests/plugin/test_session_start.py, tests/plugi
 adrs: [ADR-0016, ADR-0017]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0058 — Hook de início de sessão e comando de entrada única do plugin

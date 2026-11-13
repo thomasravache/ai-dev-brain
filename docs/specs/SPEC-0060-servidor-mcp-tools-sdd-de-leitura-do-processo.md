@@ -4,7 +4,7 @@ title: "Servidor MCP: tools sdd de leitura do processo"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0054, SPEC-0059]
@@ -15,8 +15,8 @@ touches: [mcp/**, .claude-plugin/plugin.json]
 adrs: [ADR-0017]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0060 — Servidor MCP: tools sdd de leitura do processo

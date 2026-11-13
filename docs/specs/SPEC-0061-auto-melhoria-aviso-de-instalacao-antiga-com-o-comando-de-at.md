@@ -4,7 +4,7 @@ title: "Auto-melhoria: aviso de instalação antiga com o comando de atualizaç�
 tier: full
 type: feature
 user_facing: true
-status: proposed
+status: approved
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0058, SPEC-0060]
@@ -15,8 +15,8 @@ touches: [scripts/fermion_doctor.py, hooks/session_start.py, mcp/**, tests/plugi
 adrs: [ADR-0017, ADR-0019]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-13
 ---
 
 # SPEC-0061 — Auto-melhoria: aviso de instalação antiga com o comando de atualização
