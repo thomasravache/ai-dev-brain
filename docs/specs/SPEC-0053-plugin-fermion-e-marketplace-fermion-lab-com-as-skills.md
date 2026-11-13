@@ -188,7 +188,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin` exit 1 (red: FAILED (failures=5)); nota: vermelho em 1962030: test_plugin.py 10 testes, 5 falhas (UT-01, UT-02, guarda do UT-03, IT-01 e E2E-01: manifestos inexistentes; E2E-01 rodou com CLAUDE_CONFIG_DIR/HOME temporários e falhou em marketplace add com manifest_missing); UT-04 e UT-05 já passam (skills reais autocontidas) — 1962030 | 2026-11-13 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ea6f6d6 | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ea6f6d6 | 2026-11-13 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (ea6f6d6): APPROVED — manifestos conforme o contrato v2, validate exit 0 (avisos author, CLAUDE.md na raiz, LICENSE/ICON do diretório), E2E isolado sem tocar ~/.claude; minors M2/M3/M4b e nits N2/N3/N4 corrigidos exatamente como sugerido em 3af8f52 (testes) e 5a70b3b (README), 18 testes OK; M1 e M4a viraram SPEC-0056 e SPEC-0057; N1 (author) fica para a SPEC-0056 — 5a70b3b | 2026-11-13 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
