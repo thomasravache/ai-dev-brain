@@ -43,12 +43,25 @@ def git(*args):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
-def base_plugin_version(base):
-    """Versão do plugin.json na base, ou None se o arquivo não existe lá."""
+class PluginJsonError(Exception):
+    """plugin.json ilegível: vira achado, não traceback."""
+
+
+def read_version(text, where):
+    """`version` de um plugin.json; PluginJsonError se o JSON é inválido ou não é um objeto."""
+    try:
+        data = json.loads(text)
+    except ValueError as error:
+        raise PluginJsonError(f"plugin-json: {PLUGIN_JSON} {where} não é JSON válido: {error}") from None
+    if not isinstance(data, dict):
+        raise PluginJsonError(f"plugin-json: {PLUGIN_JSON} {where} não é um objeto JSON")
+    return data.get("version")
+
+
+def base_plugin_text(base):
+    """Conteúdo do plugin.json na base, ou None se o arquivo não existe lá."""
     result = subprocess.run(["git", "show", f"{base}:{PLUGIN_JSON}"], check=False, capture_output=True, text=True)
-    if result.returncode != 0:
-        return None
-    return json.loads(result.stdout).get("version")
+    return result.stdout if result.returncode == 0 else None
 
 
 def main(argv=None):
@@ -56,13 +69,21 @@ def main(argv=None):
     parser.add_argument("--base", required=True, help="ref da base do PR (ex.: origin/main)")
     args = parser.parse_args(argv)
 
-    base_version = base_plugin_version(args.base)
-    if base_version is None:
+    base_text = base_plugin_text(args.base)
+    if base_text is None:
         print(f"ok: {PLUGIN_JSON} não existe em {args.base}; nada a exigir")
         return 0
     changed = git("diff", "--name-only", f"{args.base}...HEAD").splitlines()
-    head_version = json.loads(Path(PLUGIN_JSON).read_text(encoding="utf-8")).get("version")
+    try:
+        base_version = read_version(base_text, f"na base ({args.base})")
+        head_version = read_version(Path(PLUGIN_JSON).read_text(encoding="utf-8"), "na HEAD")
+    except PluginJsonError as error:
+        print(error)
+        return 1
 
+    if parse_version(base_version) is None:
+        print(f"aviso: versão da base {base_version!r} em {PLUGIN_JSON} fora de AAAA.MM.N; "
+              f"só a versão da HEAD é conferida")
     findings = version_findings(changed, base_version, head_version)
     for finding in findings:
         print(finding)
