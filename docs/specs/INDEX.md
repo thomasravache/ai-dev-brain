@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 5, in-progress 2, implemented 44
+- Validação (G0): **5 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 5, in-progress 1, implemented 45
 - Impedimentos: **0 aberto(s)**, 24 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,19 +23,18 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0056, SPEC-0057  
+**Em andamento:** SPEC-0057  
 **Paradas por impedimento:** —  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0056 | fermion: versão do plugin sobe quando as skills mudam | lite/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0057 | gluon-spec: hook do leak-check sem caminho absoluto da instalação | lite/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 1 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0057 |
-| 2 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: max_parallel=3 |
-| 3 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: max_parallel=3; saiu da onda 2: arquivos em comum com SPEC-0046 |
-| 4 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: max_parallel=3; saiu da onda 2: arquivos em comum com SPEC-0046; saiu da onda 3: arquivos em comum com SPEC-0047 |
+| 2 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0046 |
+| 3 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0046; saiu da onda 2: arquivos em comum com SPEC-0047 |
 
 ## Épicos
 
@@ -45,7 +44,7 @@ Perfil: **minimo**
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
 | SPEC-0029 | org-atlas: mapa da organização para agentes | implemented | 10/10 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
-| SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | approved | 3/4 implementadas |
+| SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | approved | 4/4 implementadas |
 
 ## Grafo de Dependências
 
@@ -73,7 +72,6 @@ flowchart LR
   end
   subgraph E0031["SPEC-0031 · Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"]
     S0053["SPEC-0053<br/>Plugin fermion e marketplace fermion-la…"]:::implemented
-    S0056["SPEC-0056<br/>fermion: versão do plugin sobe quando a…"]:::inprogress
   end
   S0023 --> S0028
   S0033 -. contrato v1 .-> S0034
@@ -88,7 +86,6 @@ flowchart LR
   S0038 --> S0048
   S0039 --> S0048
   S0040 --> S0048
-  S0053 --> S0056
   S0053 --> S0057
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
@@ -155,7 +152,7 @@ flowchart LR
 | [SPEC-0053](SPEC-0053-plugin-fermion-e-marketplace-fermion-lab-com-as-skills.md) | Plugin fermion e marketplace fermion-lab com as skills | full | feature | implemented | 2026-11-12 | SPEC-0031 | SPEC-0055 | — |
 | [SPEC-0054](SPEC-0054-servidor-mcp-local-do-plugin-com-as-tools-atlas.md) | Servidor MCP local do plugin com as tools atlas | full | feature | implemented | 2026-11-12 | SPEC-0031 | SPEC-0053, SPEC-0055 | — |
 | [SPEC-0055](SPEC-0055-renomear-as-skills-para-gluon-spec-photon-brain-e-boson-atla.md) | Renomear as skills para gluon-spec, photon-brain e boson-atlas | full | migration | implemented | 2026-11-12 | SPEC-0031 | SPEC-0029 | — |
-| [SPEC-0056](SPEC-0056-fermion-versao-do-plugin-sobe-quando-as-skills-mudam.md) | fermion: versão do plugin sobe quando as skills mudam | lite | feature | in-progress | 2026-11-13 | SPEC-0031 | SPEC-0053 | — |
+| [SPEC-0056](SPEC-0056-fermion-versao-do-plugin-sobe-quando-as-skills-mudam.md) | fermion: versão do plugin sobe quando as skills mudam | lite | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0053 | — |
 | [SPEC-0057](SPEC-0057-gluon-spec-hook-do-leak-check-sem-caminho-absoluto-da-instal.md) | gluon-spec: hook do leak-check sem caminho absoluto da instalação | lite | fix | in-progress | 2026-11-13 | — | SPEC-0053 | — |
 
 ## ADRs
