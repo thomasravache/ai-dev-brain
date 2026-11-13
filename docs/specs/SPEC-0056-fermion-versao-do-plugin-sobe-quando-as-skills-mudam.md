@@ -67,7 +67,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=3)); nota: vermelho em ab0933c: test_plugin_version.py 3 testes, 3 falhas (check_plugin_version.py inexistente; plugin.json sem author) — ab0933c | 2026-11-13 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ea20c65 | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ea20c65 | 2026-11-13 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (a0cfe62): APPROVED — comparação AAAA.MM.N como tupla, diff base...HEAD, sem shell, author sem e-mail, docs fora do bloco sdd; minor (base fixa em origin/main) e nits (JSON inválido com traceback, base fora do formato sem aviso) corrigidos como sugerido em 630400f (testes) e d82164a; regra mantida para testes e CHANGELOG das skills (recomendação do Reviewer) — d82164a | 2026-11-13 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
