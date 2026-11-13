@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: [SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040]
 consumes_contract: []
-touches: [skills/org-atlas/scripts/atlas.py, skills/org-atlas/tests/test_curate.py, skills/org-atlas/tests/test_context.py, skills/org-atlas/tests/test_lint.py, skills/org-atlas/tests/test_vendor.py, skills/org-atlas/references/modes.md, skills/org-atlas/references/maintenance.md, skills/org-atlas/references/context.md, skills/org-atlas/references/curation.md, skills/org-atlas/CHANGELOG.md]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/test_curate.py, skills/boson-atlas/tests/test_context.py, skills/boson-atlas/tests/test_lint.py, skills/boson-atlas/tests/test_vendor.py, skills/boson-atlas/references/modes.md, skills/boson-atlas/references/maintenance.md, skills/boson-atlas/references/context.md, skills/boson-atlas/references/curation.md, skills/boson-atlas/CHANGELOG.md]
 adrs: [ADR-0012]
 external: []
 size: S

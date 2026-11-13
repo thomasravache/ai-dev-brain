@@ -41,12 +41,21 @@ jobs:
           ruff check
 
       - name: Testes de arquitetura e suíte completa
-        run: python -m unittest discover -s skills/sdd-management/tests -v
+        run: python -m unittest discover -s skills/gluon-spec/tests -v
 
-      # Suíte da second-brain, com os testes de arquitetura do ADR-0007 (SPEC-0017).
-      - name: Testes da second-brain
-        run: python -m unittest discover -s skills/second-brain/tests -v
+      # Suíte da photon-brain, com os testes de arquitetura do ADR-0007 (SPEC-0017).
+      - name: Testes da photon-brain
+        run: python -m unittest discover -s skills/photon-brain/tests -v
 
-      # Suíte da org-atlas, com os testes de arquitetura do ADR-0010 (SPEC-0032).
-      - name: Testes da org-atlas
-        run: python -m unittest discover -s skills/org-atlas/tests -v
+      # Suíte da boson-atlas, com os testes de arquitetura do ADR-0010 (SPEC-0032).
+      - name: Testes da boson-atlas
+        run: python -m unittest discover -s skills/boson-atlas/tests -v
+
+      # Servidor MCP fermion com as tools atlas e testes de arquitetura do ADR-0017 (SPEC-0054).
+      - name: Testes do servidor MCP
+        run: python -m unittest discover -s mcp/tests -v
+
+      # Plugin fermion e marketplace fermion-lab (ADR-0016, SPEC-0053) e nomes das skills (ADR-0018, SPEC-0055).
+      # O E2E-01 é pulado aqui (sem o Claude Code no runner) e roda local no G4 e no G5.
+      - name: Testes do plugin e dos nomes das skills
+        run: python -m unittest discover -s tests/plugin -v

@@ -1,0 +1,14 @@
+{
+  "name": "fermion",
+  "version": "2026.11.1",
+  "description": "Spec-Driven Development (gluon-spec), segundo cérebro no Obsidian (photon-brain) e atlas da organização (boson-atlas) como skills do Claude Code.",
+  "repository": "https://github.com/thomasravache/ai-dev-brain",
+  "mcpServers": {
+    "fermion": {
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/mcp/fermion_mcp.py"
+      ]
+    }
+  }
+}
