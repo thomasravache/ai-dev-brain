@@ -201,9 +201,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — d1c6633 | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — d1c6633 | 2026-11-13 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (rodada 3, 16b5dca): APPROVED — N1 (varredura linear: 5 MB em 0,074 s) e m5 (query aceita tab/LF/CR) resolvidos; fuzz de 3000 JSON confere a profundidade; servidor real resiste a aninhamento, bytes inválidos, 1 e 5 MB e injeção no log (3.9.6 e 3.14); rodadas 1 (M1, M2, m1–m4) e 2 (N1, m5) corrigidas com testes antes (f96c305/2eb2406, cdb17f4/16b5dca); conexão real: plugin:fermion:fermion Connected; nits abertos sem bloqueio — 16b5dca | 2026-11-13 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #25 em adc8663 verde (run 43459407968 ci Python 3.9/3.15; run 43459408198 sdd/pr-check) — 65c45bf | 2026-11-13 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-13 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-13 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
