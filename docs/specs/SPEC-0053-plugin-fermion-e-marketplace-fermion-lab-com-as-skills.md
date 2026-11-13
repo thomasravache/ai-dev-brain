@@ -185,7 +185,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
-| G1 Red | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin` exit 1 (red: FAILED (failures=5)); nota: vermelho em 1962030: test_plugin.py 10 testes, 5 falhas (UT-01, UT-02, guarda do UT-03, IT-01 e E2E-01: manifestos inexistentes; E2E-01 rodou com CLAUDE_CONFIG_DIR/HOME temporários e falhou em marketplace add com manifest_missing); UT-04 e UT-05 já passam (skills reais autocontidas) — 1962030 | 2026-11-13 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
