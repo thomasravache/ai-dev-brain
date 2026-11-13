@@ -993,6 +993,32 @@ class LeakHookToolPathTest(PrivateTestCase):
         self.assertIn("SPEC-0003", bad.stdout + bad.stderr)
         self.assertNotIn("suja", git(self.bare, "branch", env=self.e.env))
 
+    def test_tracked_project_tool_is_never_run_as_fallback(self):
+        """SPEC-0057:IT-01 (segurança: tools/sdd rastreado pelo git não é executado pelo hook)"""
+        marker = self.tmp / "ferramenta-falsa-rodou"
+        commit_file(self.e, "tools/sdd/spec_graph.py",
+                    f"from pathlib import Path\nPath({str(marker)!r}).write_text('rodou')\nraise SystemExit(0)\n",
+                    "ferramenta")
+        out = self.push("rastreada")
+        self.assertFalse(marker.exists(), "o hook executou o tools/sdd/spec_graph.py rastreado")
+        self.assertNotEqual(out.returncode, 0, out.stderr)
+        self.assertIn(self.MISSING, out.stderr)
+        self.assertNotIn(self.MARKS, out.stderr)
+        self.assertNotIn("rastreada", git(self.bare, "branch", env=self.e.env))
+
+    def test_branch_deletion_push_passes_without_the_tool(self):
+        """SPEC-0057:IT-01 (regressão: push que só apaga branch não exige a ferramenta)"""
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        created = subprocess.run(["git", "push", "-q", "--no-verify", "team", "HEAD:refs/heads/velha"],
+                                 cwd=self.e.repo, capture_output=True, text=True, env=self.e.env, check=False)
+        self.assertEqual(created.returncode, 0, created.stderr)
+        self.assertIn("velha", git(self.bare, "branch", env=self.e.env))
+        out = subprocess.run(["git", "push", "-q", "team", "--delete", "velha"], cwd=self.e.repo,
+                             capture_output=True, text=True, env=self.e.env, check=False)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertNotIn(self.MISSING, out.stderr)
+        self.assertNotIn("velha", git(self.bare, "branch", env=self.e.env))
+
 
 if __name__ == "__main__":
     unittest.main()
