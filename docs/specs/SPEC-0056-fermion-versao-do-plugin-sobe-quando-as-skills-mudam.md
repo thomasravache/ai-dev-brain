@@ -65,8 +65,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — dcc2a23 (árvore suja) | 2026-11-13 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=3)); nota: vermelho em ab0933c: test_plugin_version.py 3 testes, 3 falhas (check_plugin_version.py inexistente; plugin.json sem author) — ab0933c | 2026-11-13 |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ea20c65 | 2026-11-13 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — ea20c65 | 2026-11-13 |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
