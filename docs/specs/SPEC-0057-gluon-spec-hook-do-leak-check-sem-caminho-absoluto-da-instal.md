@@ -67,9 +67,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 38e70ce | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 38e70ce | 2026-11-13 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (4290f86): APPROVED — hook POSIX, fallback na ordem certa, mensagem sem 'marcas do SDD', espaços e push de remoção conferidos; minors corrigidos como sugerido em f841516 (testes) e 483e2f1: fallback só para tools/sdd não rastreado (o push nunca executa ferramenta versionada pelo time) e escolha da ferramenta só com commit a checar; nits (escape de aspas no caminho gravado, fallback para o cache do plugin) ficam registrados — 483e2f1 | 2026-11-13 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: CI do PR #26 em af7d6ba verde (run 43470182944 ci Python 3.9/3.15, com a checagem de versão do plugin; run 43470205446 sdd/pr-check) — b126727 | 2026-11-13 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-13 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-13 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
