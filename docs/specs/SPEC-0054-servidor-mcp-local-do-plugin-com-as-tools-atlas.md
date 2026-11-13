@@ -198,8 +198,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 997634e (árvore suja) | 2026-11-12 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=86)); nota: vermelho em 1df8578: mcp/tests 57 testes, 86 falhas (subtests), 0 erros — só 'mcp/fermion_mcp.py não existe'; exemplos das regras do UT-07 e fixture passam; 1ª execução falhou por mcp/tests/** ausente de test_paths (config corrigida) — 1df8578 | 2026-11-13 |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — d1c6633 | 2026-11-13 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — d1c6633 | 2026-11-13 |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
