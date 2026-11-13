@@ -44,7 +44,7 @@ Ou, dentro do Claude Code:
 /plugin install fermion@fermion-lab
 ```
 
-No Claude Code 2.1.275 ou mais novo, um comando só faz os dois passos: `/plugin install fermion --marketplace thomasravache/ai-dev-brain`.
+Um comando só também faz os dois passos no terminal: `claude plugin install fermion --marketplace thomasravache/ai-dev-brain`.
 
 As skills aparecem como `/fermion:gluon-spec`, `/fermion:photon-brain` e `/fermion:boson-atlas`, e o agente também as usa sozinho quando o pedido combina com a `description` de cada uma.
 
