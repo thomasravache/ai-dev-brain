@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: [SPEC-0034, SPEC-0035]
 consumes_contract: []
-touches: [skills/boson-atlas/assets/collectors/github.py, skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_github.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/github/**, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/github.md, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md]
+touches: [skills/boson-atlas/assets/collectors/github.py, skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_github.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/github/**, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/github.md, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0011]
 external: []
 size: S
@@ -42,7 +42,7 @@ Os nomes de organização e repositório do GitHub não diferenciam caixa, mas o
 - **IT-01** — O `scan` de um atlas com os dois coletores declarados sobre fixtures com caixas diferentes termina sem relação `sourced_from` para id inexistente.
 
 ## 5. Questões em Aberto
-- [ ] Minúsculas nos dois coletores (esta proposta) ou comparação sem diferença de caixa no cruzamento e no `lint` (SPEC-0036/0039), mantendo a grafia da fonte? (thomas)
+- [x] Minúsculas nos dois coletores (esta proposta) ou comparação sem diferença de caixa no cruzamento e no `lint` (SPEC-0036/0039), mantendo a grafia da fonte? — Minúsculas nos dois coletores: o id fica canônico na origem (como os ids de time), e o cruzamento e o `lint` continuam comparando texto exato; a grafia da API fica no `name` (recomendação do arquiteto, aceita no piloto automático autorizado por thomas em 2026-11-13: "pode seguir no piloto automático com o recomendado"; revisável no H1)
 
 ## 6. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".

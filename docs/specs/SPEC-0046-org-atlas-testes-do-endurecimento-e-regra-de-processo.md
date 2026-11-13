@@ -9,7 +9,7 @@ created: 2026-10-30
 parent:
 depends_on: [SPEC-0033]
 consumes_contract: []
-touches: [skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/test_hardening.py, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/redaction.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/CHANGELOG.md]
+touches: [skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/test_hardening.py, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/redaction.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0002]
 external: []
 size: S

@@ -9,7 +9,7 @@ created: 2026-11-02
 parent:
 depends_on: []
 consumes_contract: []
-touches: [skills/gluon-spec/tests/test_private_mode.py]
+touches: [skills/gluon-spec/tests/test_private_mode.py, .claude-plugin/plugin.json]
 adrs: []
 external: []
 size: S
@@ -26,7 +26,8 @@ approved_at:
 O teste mede tempo de relógio do processo inteiro (Python + git em subprocesso), que depende da carga da máquina, contra um limite fixo pensado para máquina ociosa.
 
 ## 3. Mudança Proposta
-- O teste passa a medir o tempo do `leak-check` em relação a uma linha de base medida na mesma execução (por exemplo, `git log` do mesmo intervalo) e exige que fique abaixo de um múltiplo dela, ou aceita uma variável de ambiente (`SDD_PERF_FACTOR`) que multiplica o limite; a meta de 2 s da SPEC-0004 continua documentada.
+- O teste mede, na mesma execução e logo antes, uma linha de base: o tempo de `python3 -c pass` mais `git log --oneline` do mesmo intervalo de 50 commits (custo de abrir processos, que cresce com a carga como o do `leak-check`). O limite passa a ser `max(2 s, 10 × linha de base)`: em máquina ociosa continua 2 s (meta da SPEC-0004); sob carga cresce junto com a linha de base. A decisão fica numa função pequena do teste (`limite(linha_de_base)`), testada à parte.
+- Sem variável de ambiente: o teste se ajusta sozinho, sem configuração na CI.
 - **Não muda:** o `leak-check`, a meta de desempenho da SPEC-0004.
 
 **Padrão seguido:** os demais testes de `test_private_mode.py`.
@@ -37,11 +38,11 @@ O teste mede tempo de relógio do processo inteiro (Python + git em subprocesso)
 
 ## 4. Plano de Testes (TDD)
 - Caracterização: N/A — o teste existente é o próprio objeto.
-- **UT-01** — Dado uma execução lenta simulada (linha de base também lenta, ou `SDD_PERF_FACTOR=3`), quando o teste de desempenho roda, então não falha por carga; dado um `leak-check` artificialmente 10× mais lento que a linha de base, então falha.
+- **UT-01** — Dados linha de base de 0,05 s e `leak-check` de 1,5 s, linha de base de 0,4 s (carga) e `leak-check` de 3,8 s, e linha de base de 0,05 s e `leak-check` de 2,5 s, quando a regra `limite(linha_de_base)` é aplicada, então os dois primeiros passam (limites 2 s e 4 s) e o terceiro falha; e o teste real de 50 commits usa essa regra com a linha de base medida na mesma execução.
 - Integração/E2E: N/A — mudança só no teste.
 
 ## 5. Questões em Aberto
-- [ ] Linha de base relativa ou fator por variável de ambiente? (thomas)
+- [x] Linha de base relativa ou fator por variável de ambiente? — Linha de base relativa medida na mesma execução, com piso de 2 s: não exige configuração e continua pegando regressão real (recomendação do arquiteto, aceita no piloto automático autorizado por thomas em 2026-11-13: "pode seguir no piloto automático com o recomendado"; revisável no H1)
 
 ## 6. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
