@@ -28,9 +28,9 @@ Argumento fora do schema ou tool desconhecida recebem o erro JSON-RPC `-32602`, 
 ## Segurança
 
 - A CLI roda por `subprocess.run` com argv em lista, sem shell, com timeout e o ambiente herdado (`ATLAS_CONFIG_HOME` e afins).
-- O texto livre da `query` vai depois de `--`, uma palavra por argumento. Uma `query` como `-rf --hops 9; rm` vira só termos de busca.
+- O texto livre da `query` vai depois de `--`, uma palavra por argumento. Uma `query` como `-rf --hops 9; rm` vira só termos de busca. Uma `query` com caractere de controle (abaixo de 0x20, inclusive tab e quebra de linha, ou DEL) recebe `-32602`.
 - O processo externo só é aberto na função `run_cli`. O servidor não importa código das skills. Os testes de arquitetura do ADR-0017 (`mcp/tests/test_architecture.py`) garantem as duas coisas.
-- O stdout é só do protocolo. O stderr recebe uma linha por erro de transporte, sem argumentos nem saída da CLI.
+- O stdout é só do protocolo. O stderr recebe uma linha por erro, sem argumentos nem saída da CLI. O nome do método aparece cortado no primeiro caractere de controle e truncado em 64 caracteres, para que ninguém forje linhas no log.
 
 ## Por que não há tools que gravam
 
@@ -51,7 +51,7 @@ O servidor atende clientes das duas eras do MCP.
 
 Um request sem a versão em `_meta` é atendido como legado.
 
-Erros de transporte: JSON inválido recebe `-32700` com `id: null`, um objeto que não é request recebe `-32600` e um método desconhecido recebe `-32601`. Notificações nunca recebem resposta. Nenhum desses erros derruba o servidor, e ele sai com 0 quando o stdin fecha.
+Erros de transporte: JSON inválido recebe `-32700` com `id: null`. Isso inclui linha que não é UTF-8 e JSON aninhado além de 256 níveis. Um objeto que não é request recebe `-32600`, inclusive request com `"id": null`, e um método desconhecido recebe `-32601`. Notificações nunca recebem resposta. Nenhum desses erros derruba o servidor, e ele sai com 0 quando o stdin fecha.
 
 ## Como depurar
 

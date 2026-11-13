@@ -44,7 +44,12 @@ TIMEOUT_TEXT = f"atlas.py não respondeu em {CLI_TIMEOUT} s"
 NOT_CONFIGURED_EXIT = 3
 LINT_REPORT_EXIT = 1  # no lint, exit 1 = "há ERRO no relatório", não falha da CLI
 
-RULE_NAME = re.compile(r"[a-z-]+")
+MAX_DEPTH = 256  # aninhamento máximo de uma mensagem; além disso vira -32700 (o parser do json é recursivo)
+LOG_METHOD_MAX = 64
+# corta o método no log no primeiro caractere de controle (C0, DEL, C1, separadores de linha e parágrafo)
+LOG_UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+JSON_STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
+JSON_BRACKET = re.compile(r"[\[\]{}]")
 READ_ONLY = {"readOnlyHint": True}
 
 
@@ -73,8 +78,8 @@ TOOLS = (
         "description": ("Contexto do atlas para uma consulta em texto livre: serviços, times, convenções e vizinhos "
                         "no grafo (atlas.py context --json)."),
         "inputSchema": _object({
-            "query": {"type": "string", "minLength": 1, "maxLength": 500,
-                      "description": "Termos da consulta, separados por espaço."},
+            "query": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
+                      "description": "Termos da consulta, separados por espaço (sem caracteres de controle)."},
             "hops": {"type": "integer", "minimum": 0, "maximum": 2,
                      "description": "Saltos no grafo a partir dos resultados."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 200,
@@ -126,6 +131,34 @@ def log(message):
     print(f"fermion-mcp: {message}", file=sys.stderr, flush=True)
 
 
+def safe_method(method):
+    """Método para o log: até o primeiro caractere de controle, truncado; nunca quebra a linha do stderr."""
+    text = LOG_UNSAFE.split(method, 1)[0]
+    cut = len(text) < len(method) or len(text) > LOG_METHOD_MAX
+    return repr(text[:LOG_METHOD_MAX] + ("..." if cut else ""))
+
+
+def too_deep(text):
+    """True se a mensagem aninha arrays/objetos além de MAX_DEPTH (fora de strings)."""
+    depth = 0
+    for match in JSON_BRACKET.finditer(JSON_STRING.sub("", text)):
+        depth += 1 if match.group() in "[{" else -1
+        if depth > MAX_DEPTH:
+            return True
+    return False
+
+
+def decode_line(raw):
+    """Bytes de uma linha do stdin para a mensagem JSON; ValueError se não for UTF-8 nem JSON válido."""
+    text = raw.decode("utf-8")
+    if too_deep(text):
+        raise ValueError("JSON aninhado demais")
+    try:
+        return json.loads(text)
+    except RecursionError:
+        raise ValueError("JSON aninhado demais") from None
+
+
 def python_executable():
     name = Path(sys.executable).name if sys.executable else ""
     return sys.executable if name.startswith("python") else "python3"
@@ -168,7 +201,7 @@ def _check(value, schema, path):
             raise ProtocolError(INVALID_PARAMS, f"{path}: tamanho fora da faixa")
         if "enum" in schema and value not in schema["enum"]:
             raise ProtocolError(INVALID_PARAMS, f"{path}: valor fora de {schema['enum']}")
-        if "pattern" in schema and not RULE_NAME.fullmatch(value):
+        if "pattern" in schema and not re.fullmatch(schema["pattern"], value):
             raise ProtocolError(INVALID_PARAMS, f"{path}: formato inválido")
     elif kind == "integer":
         if not _is_int(value):
@@ -256,9 +289,10 @@ class Server:
             return self._error(None, INVALID_REQUEST, "Invalid Request")
         has_id = "id" in message
         msg_id = message.get("id")
-        valid_id = msg_id is None or isinstance(msg_id, str) or _is_int(msg_id)
+        valid_id = isinstance(msg_id, str) or _is_int(msg_id)  # RequestId: string ou inteiro, nunca null
         method = message.get("method")
-        if message.get("jsonrpc") != "2.0" or not isinstance(method, str) or not valid_id:
+        if message.get("jsonrpc") != "2.0" or not isinstance(method, str) or (has_id and not valid_id):
+            log("request inválido")
             return self._error(msg_id if valid_id else None, INVALID_REQUEST, "Invalid Request")
         params = message.get("params", {})
         if not has_id:
@@ -270,7 +304,7 @@ class Server:
             result = self._dispatch(method, params, modern)
         except ProtocolError as exc:
             if exc.code != UNSUPPORTED_VERSION:
-                log(f"erro {exc.code} em {method}")
+                log(f"erro {exc.code} em {safe_method(method)}")
             return self._error(msg_id, exc.code, exc.message, exc.data)
         if modern:
             result["resultType"] = "complete"
@@ -356,21 +390,21 @@ def _write(stream, response):
 
 def main():
     """Lê uma mensagem por linha do stdin e escreve cada resposta numa linha do stdout; sai com 0 no EOF."""
-    for stream in (sys.stdin, sys.stdout):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, ValueError):
-            pass
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
     server = Server()
+    stdin = sys.stdin.buffer
     while True:
-        line = sys.stdin.readline()
-        if not line:
+        raw = stdin.readline()
+        if not raw:
             return 0
-        if not line.strip():
+        if not raw.strip():
             continue
         try:
-            message = json.loads(line)
-        except ValueError:
+            message = decode_line(raw)
+        except ValueError:  # inclui UnicodeDecodeError
             log("linha com JSON inválido")
             _write(sys.stdout, Server._error(None, PARSE_ERROR, "Parse error"))
             continue
