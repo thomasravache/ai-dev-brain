@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.3] - 2026-11-13
+
+### Fixed
+- O hook pre-push do leak-check acha a ferramenta quando roda (caminho gravado, senão `tools/sdd/spec_graph.py` só se não for rastreado pelo git, avisando qual rodou) e, sem nenhuma, recusa com 'ferramenta do leak-check não encontrada' em vez de acusar marcas do SDD; um push que só apaga branches passa sem ferramenta (SPEC-0057).
+
 ## [2026.11.2] - 2026-11-12
 
 ### Changed

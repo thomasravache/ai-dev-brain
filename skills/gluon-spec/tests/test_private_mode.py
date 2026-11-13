@@ -922,5 +922,103 @@ class PrivateJourneyTest(PrivateTestCase):
         self.assertIn("squash", gate_row(spec, "G7"))
 
 
+class LeakHookToolPathTest(PrivateTestCase):
+    """SPEC-0057: o pre-push do leak-check acha a ferramenta quando roda, sem depender do caminho da instalação.
+
+    A skill é copiada para um "cache de plugin" temporário; o `private init` roda dessa cópia, que depois é apagada,
+    como acontece quando o update do plugin limpa a versão antiga do cache.
+    """
+
+    MISSING = "ferramenta do leak-check não encontrada"
+    MARKS = "marcas do SDD"
+
+    def setUp(self):
+        super().setUp()
+        self.cache = self.tmp / "plugins" / "cache" / "fermion-lab" / "fermion" / "1.0.0"
+        shutil.copytree(SKILL, self.cache / "skills" / "gluon-spec",
+                        ignore=shutil.ignore_patterns("tests", "__pycache__", "*.pyc"))
+        tool = self.cache / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+        out = subprocess.run([sys.executable, str(tool), "private", "init", "--spec-root", str(self.e.spec_root)],
+                             cwd=self.e.repo, capture_output=True, text=True, env=self.e.env, check=False)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.hook = self.e.repo / ".git" / "hooks" / "pre-push"
+        self.assertTrue(self.hook.exists(), out.stdout)
+        self.assertIn(str(tool.resolve()), self.hook.read_text(encoding="utf-8"))
+        shutil.rmtree(self.cache.parent)
+        self.assertFalse(tool.exists())
+        self.bare = self.tmp / "team.git"
+        git(self.tmp, "init", "-q", "--bare", str(self.bare), env=self.e.env)
+        git(self.e.repo, "remote", "add", "team", str(self.bare), env=self.e.env)
+
+    def push(self, branch):
+        return subprocess.run(["git", "push", "-q", "team", f"HEAD:refs/heads/{branch}"], cwd=self.e.repo,
+                              capture_output=True, text=True, env=self.e.env, check=False)
+
+    def test_hook_with_a_missing_tool_says_so_and_never_reports_marks(self):
+        """SPEC-0057:UT-01"""
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        sha = git(self.e.repo, "rev-parse", "HEAD", env=self.e.env).strip()
+        zero = "0" * len(sha)
+        out = subprocess.run(["sh", str(self.hook), "team", str(self.bare)], cwd=self.e.repo,
+                             input=f"refs/heads/main {sha} refs/heads/limpa {zero}\n", capture_output=True,
+                             text=True, env=self.e.env, check=False)
+        self.assertNotEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn(self.MISSING, out.stderr)
+        self.assertIn("private init", out.stderr)
+        self.assertNotIn(self.MARKS, out.stdout + out.stderr)
+
+    def test_moved_tool_falls_back_to_the_project_tool_or_refuses_clearly(self):
+        """SPEC-0057:IT-01"""
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        missing = self.push("sem-ferramenta")
+        self.assertNotEqual(missing.returncode, 0, missing.stderr)
+        self.assertIn(self.MISSING, missing.stderr)
+        self.assertNotIn(self.MARKS, missing.stderr)
+        self.assertNotIn("sem-ferramenta", git(self.bare, "branch", env=self.e.env))
+
+        vendored = self.e.repo / "tools" / "sdd" / "spec_graph.py"
+        vendored.parent.mkdir(parents=True)
+        shutil.copy2(SCRIPT, vendored)
+        with (self.e.repo / ".git" / "info" / "exclude").open("a", encoding="utf-8") as f:
+            f.write("tools/\n")
+        ok = self.push("limpa")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertNotIn(self.MISSING, ok.stderr)
+        self.assertIn("limpa", git(self.bare, "branch", env=self.e.env))
+
+        commit_file(self.e, "src/a.py", "x = 2\n", "corrige\n\nRefs: SPEC-0003")
+        bad = self.push("suja")
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn(self.MARKS, bad.stderr)
+        self.assertIn("SPEC-0003", bad.stdout + bad.stderr)
+        self.assertNotIn("suja", git(self.bare, "branch", env=self.e.env))
+
+    def test_tracked_project_tool_is_never_run_as_fallback(self):
+        """SPEC-0057:IT-01 (segurança: tools/sdd rastreado pelo git não é executado pelo hook)"""
+        marker = self.tmp / "ferramenta-falsa-rodou"
+        commit_file(self.e, "tools/sdd/spec_graph.py",
+                    f"from pathlib import Path\nPath({str(marker)!r}).write_text('rodou')\nraise SystemExit(0)\n",
+                    "ferramenta")
+        out = self.push("rastreada")
+        self.assertFalse(marker.exists(), "o hook executou o tools/sdd/spec_graph.py rastreado")
+        self.assertNotEqual(out.returncode, 0, out.stderr)
+        self.assertIn(self.MISSING, out.stderr)
+        self.assertNotIn(self.MARKS, out.stderr)
+        self.assertNotIn("rastreada", git(self.bare, "branch", env=self.e.env))
+
+    def test_branch_deletion_push_passes_without_the_tool(self):
+        """SPEC-0057:IT-01 (regressão: push que só apaga branch não exige a ferramenta)"""
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        created = subprocess.run(["git", "push", "-q", "--no-verify", "team", "HEAD:refs/heads/velha"],
+                                 cwd=self.e.repo, capture_output=True, text=True, env=self.e.env, check=False)
+        self.assertEqual(created.returncode, 0, created.stderr)
+        self.assertIn("velha", git(self.bare, "branch", env=self.e.env))
+        out = subprocess.run(["git", "push", "-q", "team", "--delete", "velha"], cwd=self.e.repo,
+                             capture_output=True, text=True, env=self.e.env, check=False)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertNotIn(self.MISSING, out.stderr)
+        self.assertNotIn("velha", git(self.bare, "branch", env=self.e.env))
+
+
 if __name__ == "__main__":
     unittest.main()
