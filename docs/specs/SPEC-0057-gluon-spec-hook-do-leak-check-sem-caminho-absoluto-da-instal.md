@@ -66,7 +66,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=2, skipped=1)); nota: vermelho em e5046e3: LeakHookToolPathTest 2 testes, 2 falhas (o hook chama o spec_graph.py apagado e acusa marcas do SDD); suíte da gluon-spec verde fora deles — e5046e3 | 2026-11-13 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 38e70ce | 2026-11-13 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 38e70ce | 2026-11-13 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer (4290f86): APPROVED — hook POSIX, fallback na ordem certa, mensagem sem 'marcas do SDD', espaços e push de remoção conferidos; minors corrigidos como sugerido em f841516 (testes) e 483e2f1: fallback só para tools/sdd não rastreado (o push nunca executa ferramenta versionada pelo time) e escolha da ferramenta só com commit a checar; nits (escape de aspas no caminho gravado, fallback para o cache do plugin) ficam registrados — 483e2f1 | 2026-11-13 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
