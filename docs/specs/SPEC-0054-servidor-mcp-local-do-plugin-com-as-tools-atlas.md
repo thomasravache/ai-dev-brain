@@ -4,7 +4,7 @@ title: Servidor MCP local do plugin com as tools atlas
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0055]

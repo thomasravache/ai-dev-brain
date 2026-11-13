@@ -4,7 +4,7 @@ title: Plugin fermion e marketplace fermion-lab com as skills
 tier: full
 type: feature
 user_facing: true
-status: in-progress
+status: implemented
 created: 2026-11-12
 parent: SPEC-0031
 depends_on: [SPEC-0055]
