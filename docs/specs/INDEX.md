@@ -5,8 +5,8 @@
 ## Saúde
 
 - Validação (G0): **2 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 6, in-progress 1, implemented 47
-- Impedimentos: **0 aberto(s)**, 25 resolvido(s)
+- Specs: proposed 2, approved 6, in-progress 1, implemented 47
+- Impedimentos: **0 aberto(s)**, 26 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -37,6 +37,7 @@ Perfil: **minimo**
 | 5 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | approved | ⛔ aguarda implementação de SPEC-0058 |  |
 | 6 | SPEC-0060 | Servidor MCP: tools sdd de leitura do processo | full/S | approved | ⛔ aguarda implementação de SPEC-0059 |  |
 | 7 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | approved | ⛔ aguarda implementação de SPEC-0058; aguarda implementação de SPEC-0060 |  |
+| 8 | SPEC-0062 | photon-brain: regra de processo com alias e imports de nomes | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 2: arquivos em comum com SPEC-0047; saiu da onda 3: arquivos em comum com SPEC-0048; saiu da onda 4: arquivos em comum com SPEC-0058; saiu da onda 5: arquivos em comum com SPEC-0059; saiu da onda 6: arquivos em comum com SPEC-0060; saiu da onda 7: arquivos em comum com SPEC-0061 |
 
 ## Épicos
 
@@ -58,6 +59,7 @@ flowchart LR
   S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::inprogress
   S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::approved
   S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::approved
+  S0062["SPEC-0062<br/>photon-brain: regra de processo com ali…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
@@ -100,6 +102,7 @@ flowchart LR
   S0059 --> S0060
   S0058 --> S0061
   S0060 --> S0061
+  S0046 --> S0062
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -171,6 +174,7 @@ flowchart LR
 | [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0058 | — |
 | [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
 | [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
+| [SPEC-0062](SPEC-0062-photon-brain-regra-de-processo-com-alias-e-imports-de-nomes.md) | photon-brain: regra de processo com alias e imports de nomes | lite | fix | proposed | 2026-11-15 | — | SPEC-0046 | — |
 
 ## ADRs
 
