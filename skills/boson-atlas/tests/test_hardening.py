@@ -8,9 +8,10 @@ Contrato esperado de scripts/atlas.py (o Implementer segue estes testes):
         Afinada (UT-02): monkey, primary_key, sort_keys, tokenizer e public_key não são chave proibida; auth é.
         validate_collector_output descarta de attrs só as proibidas (dropped cita o nome, nunca o valor).
 
-    scan (UT-03): a saída de um coletor com `collector` diferente do id declarado no atlas-config.yml, ou com
-        `category` diferente da categoria declarada, é violação: "FALHA <id>", exit 1, o motivo cita o campo
-        (collector ou category) e snapshots/<id>.json não é gravado.
+    scan (UT-03, Emenda v2): a saída de um coletor com `category` diferente da categoria declarada no
+        atlas-config.yml é violação: "FALHA <id>", exit 1, o motivo cita category e snapshots/<id>.json não é
+        gravado. Já `collector` diferente do id declarado (com a category igual, como o generic declarado como
+        db-facts) é aceito: exit 0 e o snapshot vai para snapshots/<id-declarado>.json.
 
 IT-01 e IT-02 são guardas (passam antes da mudança): erro de sistema de arquivos sem traceback e com exit 1,
 backups .bak e .bak.1, init --join recusando --org/--mode/--force, ERRO para atlas relativo e mensagem própria para
@@ -24,6 +25,7 @@ from helpers import Sandbox, doctor_lines, fn, output, snapshot
 
 SPEC = "SPEC-0046"
 FAKES = "{skill}/tests/fixtures/fake-collectors"
+BUILD_FIXTURES = "{skill}/tests/fixtures/build"
 IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
 NO_PERMISSIONS = "chmod não impede a escrita/leitura (root ou sem POSIX)"
 ALLOWED_KEYS = ("monkey", "primary_key", "sort_keys", "tokenizer", "public_key")
@@ -126,14 +128,30 @@ class ScanIdentityTest(CliCase):
         self.assertExit(out, 0)
         self.assertTrue((self.atlas / "snapshots" / "fake-ok.json").is_file())
 
-    def test_collector_different_from_the_declared_id_is_a_violation(self):
+    def test_collector_different_from_the_declared_id_is_accepted(self):
         """SPEC-0046:UT-03"""
         out = self.scan_with("fake-a", "code", "fake-b")
-        self.assertExit(out, 1)
-        self.assertRegex(output(out), r"(?m)^FALHA fake-a — ")
-        self.assertIn("collector", output(out).split("FALHA fake-a", 1)[1])
-        self.assertFalse((self.atlas / "snapshots" / "fake-a.json").exists(), "snapshot gravado com violação")
-        self.assertFalse((self.atlas / "snapshots" / "fake-b.json").exists(), "snapshot gravado com violação")
+        self.assertExit(out, 0)
+        self.assertNotRegex(output(out), r"(?m)^FALHA fake-a")
+        self.assertTrue((self.atlas / "snapshots" / "fake-a.json").is_file(), "snapshot não gravado pelo id declarado")
+        self.assertFalse((self.atlas / "snapshots" / "fake-b.json").exists(), "snapshot gravado pelo collector da saída")
+
+    def test_generic_declared_as_db_facts_writes_the_snapshot_by_the_declared_id(self):
+        """SPEC-0046:UT-03"""
+        command = ["python3", "{skill}/assets/collectors/generic.py", "--facts", f"{BUILD_FIXTURES}/db-facts.json",
+                   "--category", "data", "--source", "db-facts"]
+        block = ("collectors:\n"
+                 "  - id: db-facts\n"
+                 "    category: data\n"
+                 "    command: [" + ", ".join(json.dumps(a) for a in command) + "]\n"
+                 "    timeout: 60")
+        (self.atlas / "atlas-config.yml").write_text(atlas_config_text(block), encoding="utf-8")
+        out = self.box.run("scan")
+        self.assertNoTraceback(out)
+        self.assertExit(out, 0)
+        self.assertNotRegex(output(out), r"(?m)^FALHA db-facts")
+        self.assertTrue((self.atlas / "snapshots" / "db-facts.json").is_file(), "snapshot não gravado como db-facts")
+        self.assertFalse((self.atlas / "snapshots" / "generic.json").exists(), "snapshot gravado como generic")
 
     def test_category_different_from_the_declared_one_is_a_violation(self):
         """SPEC-0046:UT-03"""
