@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 5, implemented 49
+- Validação (G0): **2 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, approved 4, in-progress 1, implemented 49
 - Impedimentos: **0 aberto(s)**, 26 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0048  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0048
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | approved | ✅ pronta |  |
+| 1 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0058 | Hook de início de sessão e comando de entrada única do plugin | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0048 |
 | 3 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | approved | ⛔ aguarda implementação de SPEC-0058 |  |
@@ -55,7 +55,7 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
   S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::implemented
-  S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::approved
+  S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::inprogress
   S0062["SPEC-0062<br/>photon-brain: regra de processo com ali…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
@@ -150,7 +150,7 @@ flowchart LR
 | [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | implemented | 2026-10-30 | — | SPEC-0033 | — |
 | [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | implemented | 2026-11-02 | — | SPEC-0034, SPEC-0035 | — |
-| [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | approved | 2026-11-02 | — | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |
+| [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | in-progress | 2026-11-02 | — | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | implemented | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
 | [SPEC-0051](SPEC-0051-second-brain-versionamento-e-backup-do-vault.md) | second-brain: versionamento e backup do vault | full | feature | implemented | 2026-11-02 | — | SPEC-0017 | — |
 | [SPEC-0052](SPEC-0052-second-brain-localizar-o-vault-pelo-conector-em-sessao-sem-c.md) | second-brain: localizar o vault pelo conector em sessão sem configuração | lite | fix | implemented | 2026-11-02 | — | SPEC-0044 | — |

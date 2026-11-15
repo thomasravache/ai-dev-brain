@@ -4,7 +4,7 @@ title: "org-atlas: endurecimento da curadoria, do context e do lint, e alcance d
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040]
@@ -67,6 +67,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 a UT-07 e IT-01 com a tag `SPEC-0048:<ID>`, falhando pelo motivo certo
+- [ ] Green: evidência com `_clean_line`, ids sem colisão, `--via` ASCII, máscara do `lint` (caminho, radical, links), títulos do `context`, cópia vendorizada como AVISO `config`, rejeição por `(kind, pattern)`; docs em `references/`, CHANGELOG da boson-atlas, `ATLAS_VERSION` e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
