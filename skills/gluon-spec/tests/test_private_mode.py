@@ -23,8 +23,11 @@ BANNER = "MODO PRIVADO"
 
 
 def limite(linha_de_base):
-    """Limite de tempo (s) do leak-check: 2 s ou 10x a linha de base medida na mesma execução."""
-    return max(2.0, 10 * linha_de_base)
+    """Limite de tempo (s) do leak-check: 2 s ou 3x a linha de base medida na mesma execução.
+
+    A linha de base roda um `git show` por commit do intervalo, o mesmo perfil de processos do leak-check.
+    """
+    return max(2.0, 3 * linha_de_base)
 
 
 def git(cwd, *args, env=None):
@@ -439,9 +442,10 @@ class LeakCheckCommandTest(PrivateTestCase):
         """SPEC-0004:IT-10"""
         for i in range(50):
             commit_file(self.e, f"src/m{i}.py", f"x = {i}\n", f"passo {i}")
+        shas = git(self.e.repo, "rev-list", "HEAD~50..HEAD", env=self.e.env).split()
         inicio = time.monotonic()
-        subprocess.run([sys.executable, "-c", "pass"], check=True, env=self.e.env)
-        git(self.e.repo, "log", "--oneline", "HEAD~50..HEAD", env=self.e.env)
+        for sha in shas:
+            git(self.e.repo, "show", "-U0", "--format=", "--no-color", sha, env=self.e.env)
         base = time.monotonic() - inicio
         start = time.monotonic()
         out = self.e.run("leak-check", "--range", "HEAD~50..HEAD")
