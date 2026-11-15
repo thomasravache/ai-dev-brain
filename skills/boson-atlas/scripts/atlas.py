@@ -467,14 +467,15 @@ SIGNAL_ALLOWED = ("type", "repository", "total", "pattern_counts", "sample", "co
 # get the same treatment (G4 review): only the contract's fields reach the snapshot
 # (SPEC-0046) words anywhere in the name; whole parts of the name (api_token, db_pwd, basic_auth); ...token at
 # the end (accesstoken, not tokenizer); key/keys as a part unless it names a data key (primary_key, sort_keys,
-# public_key); and secret keys glued together (apikey). monkey, author and tokenizer are not forbidden.
+# public_key); and any name glued to key/keys at the end (privkey, hmackey, apikey), except a few common words
+# (monkey) and a data-key qualifier glued to it (primarykey). When in doubt, the key is dropped.
 FORBIDDEN_WORDS = ("password", "passwd", "secret", "credential")
 FORBIDDEN_PARTS = ("token", "tokens", "private", "pwd", "auth", "authorization")
-FORBIDDEN_ENDINGS = ("token", "tokens", "apikey", "apikeys", "accesskey", "privatekey", "signingkey", "sshkey",
-                     "authkey", "clientkey", "masterkey", "encryptionkey")
+FORBIDDEN_ENDINGS = ("token", "tokens")
 KEY_PARTS = ("key", "keys")
 DATA_KEY_QUALIFIERS = ("primary", "sort", "public", "foreign", "partition", "range", "hash", "unique", "composite",
                        "natural", "surrogate", "row", "cache", "idempotency", "lookup", "index", "join")
+KEY_WORDS = ("monkey", "donkey", "turkey", "hockey", "jockey", "whiskey")  # common words ending in key
 ENTITY_REF_RE = re.compile(r"^([a-z][a-z-]*):(.+)$")
 COLLECTED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$")
 NAME_PARTS_RE = re.compile(r"[a-z0-9]+")
@@ -493,8 +494,14 @@ def is_forbidden_key(name) -> bool:
         return True
     if "".join(parts).endswith(FORBIDDEN_ENDINGS):
         return True
-    return any(part in KEY_PARTS and (index == 0 or parts[index - 1] not in DATA_KEY_QUALIFIERS)
-               for index, part in enumerate(parts))
+    if any(part in KEY_PARTS and (index == 0 or parts[index - 1] not in DATA_KEY_QUALIFIERS)
+           for index, part in enumerate(parts)):
+        return True
+    last = parts[-1] if parts else ""
+    if last in KEY_PARTS or not last.endswith(KEY_PARTS):
+        return False
+    stem = last[:-4] if last.endswith("keys") else last[:-3]
+    return not (stem in DATA_KEY_QUALIFIERS or last in KEY_WORDS or last[:-1] in KEY_WORDS)
 
 
 def entity_ref_problem(value) -> bool:
@@ -611,9 +618,9 @@ def validate_collector_output(data) -> tuple:
 
     violations empty = valid. A relation to an entity of another collector is valid (only the kind:id format is
     checked; dangling references are a lint warning, SPEC-0039). Only the contract's fields stay in `clean`
-    (output, entity, relation and signal); any other field and every forbidden key (password, passwd, pwd, secret,
-    token, auth, api_key, credential, private — is_forbidden_key; in attrs and in a signal) is dropped and reported in `dropped` by where it
-    was and its name, never its value. Dropping is not a violation."""
+    (output, entity, relation and signal); any other field and every forbidden key (is_forbidden_key: password,
+    secret, token, auth, api_key, privkey, credential, private...; in attrs and in a signal) is dropped and reported
+    in `dropped` by where it was and its name, never its value. Dropping is not a violation."""
     if not isinstance(data, dict):
         return data, ["a saída não é um objeto JSON"], []
     violations, dropped = [], []
@@ -990,7 +997,7 @@ def identity_violations(data, collector: dict) -> list:
     if not isinstance(data, dict):
         return []
     value, declared = data.get("category"), collector.get("category")
-    if isinstance(value, str) and value and value != declared:
+    if value in CATEGORIES and value != declared:  # an unknown category is already its own violation
         return [f"category da saída ({value}) diferente da declarada no atlas-config.yml ({declared})"]
     return []
 

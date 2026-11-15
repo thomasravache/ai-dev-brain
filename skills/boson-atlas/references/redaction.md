@@ -14,9 +14,11 @@ O validador descarta, e reporta pelo nome (nunca pelo valor), a chave de `attrs`
 - `password`, `passwd`, `secret` ou `credential` em qualquer lugar do nome (`db_password`, `clientSecret`);
 - `token`, `tokens`, `private`, `pwd`, `auth` ou `authorization` como parte inteira (`api_token`, `db_pwd`, `auth`, `basic_auth`), ou o nome terminando em `token`/`tokens` (`accesstoken`);
 - `key`/`keys` como parte inteira (`key`, `api_key`, `deploy_keys`), menos depois de um qualificador de chave de dados: `primary`, `sort`, `public`, `foreign`, `partition`, `range`, `hash`, `unique`, `composite`, `natural`, `surrogate`, `row`, `cache`, `idempotency`, `lookup`, `index` ou `join` (`primary_key`, `sort_keys` e `public_key` ficam);
-- chave de segredo colada no fim do nome: `apikey`, `accesskey`, `privatekey`, `signingkey`, `sshkey`, `authkey`, `clientkey`, `masterkey`, `encryptionkey`.
+- qualquer nome terminado em `key`/`keys` colado (`apikey`, `privkey`, `hmackey`, `accountkey`, `sessionkey`, `licensekey`, `hostkey`...), menos as palavras comuns `monkey`, `donkey`, `turkey`, `hockey`, `jockey` e `whiskey` (e os plurais) e um dos qualificadores acima colado no `key` (`primarykey`, `sortkey`, `publickey`).
 
 Não são proibidas: `monkey`, `author`, `tokenizer`, `primary_key`, `sort_keys`, `public_key`. Na dúvida a regra descarta: o valor de uma chave descartada nunca chega ao snapshot.
+
+> **Aviso:** `primary_key` (e `primaryKey`, `primarykey`) fica liberado porque a SPEC-0046 manda assim: na maioria dos sistemas é o nome da chave de uma tabela. Em alguns provedores de nuvem, como o Azure, `primaryKey` é a chave de acesso de uma conta de armazenamento ou de um serviço. Um coletor de nuvem nunca deve expor `primaryKey` (nem `secondaryKey`) de credencial como atributo: o validador não vai descartá-lo.
 
 ## Padrões embutidos
 

@@ -3,6 +3,7 @@
 Escritos aqui, sem importar de outra skill (ADR-0010 proíbe import entre skills).
 Cada checador recebe o código-fonte (ou o texto do arquivo) e devolve uma linha por violação:
 "<arquivo>:<linha> — <regra> — <o que foi encontrado>".
+As regras são por nome: acesso dinâmico (__import__, importlib, getattr) não é pego.
 """
 import ast
 import importlib.util
@@ -134,7 +135,8 @@ def _process_import(node):
         if node.module == "subprocess":
             hidden = [f"from subprocess import {a.name}" for a in node.names]
         else:
-            hidden = [f"from {node.module} import {a.name}" for a in node.names if _is_process_name(node.module, a.name)]
+            hidden = [f"from {node.module} import {a.name}" for a in node.names
+                      if _is_process_name(node.module, a.name)]
     else:
         return None
     return ", ".join(hidden) or None
@@ -202,6 +204,10 @@ def collector_process_findings(source, filename, allowed=()):
         where = f"{filename}:{node.lineno}"
         if not call.startswith("subprocess."):
             findings.add((node.lineno, f"{where} — {RULE_COLLECTOR_PROCESS_ARGS} — {call} proibido em coletor"))
+            continue
+        if any(k.arg is None for k in node.keywords):  # **opts can hide shell=True
+            message = f"{where} — {RULE_COLLECTOR_PROCESS_ARGS} — {call} com **kwargs desempacotados"
+            findings.add((node.lineno, message))
             continue
         argv = node.args[0] if node.args else next((k.value for k in node.keywords if k.arg == "args"), None)
         if not isinstance(argv, (ast.List, ast.Tuple)):
