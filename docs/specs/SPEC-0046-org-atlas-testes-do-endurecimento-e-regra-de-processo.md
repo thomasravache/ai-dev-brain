@@ -33,7 +33,7 @@ Os testes da SPEC-0032 foram congelados no commit red (04e58b5), antes da revis�
 - `architecture_rules.py`: a regra de processo também reporta, fora de `run_collector`, imports de nomes de `subprocess` (`from subprocess import ...`), módulos com alias (`import subprocess as x`) e `from os import system`/`popen`/`exec*`/`spawn*`.
 - `architecture_rules.py`/`test_architecture.py`: em `assets/collectors/*.py`, `subprocess` só dentro da função que chama o executável do provedor (`run_gh` no `github.py`), sempre com lista de argumentos e sem `shell=True`; `os.system`/`popen` proibidos.
 - `tests/test_hardening.py`: testes de regressão para cada comportamento do endurecimento, pela CLI, em diretórios temporários.
-- `atlas.py`: só se algum teste mostrar diferença entre o que foi verificado à mão e o comportamento real; afinar a regra de chave proibida; `collector`/`category` diferentes da configuração viram violação (mudança aditiva no contrato `org-atlas/collector@1`, a confirmar no H1 desta spec).
+- `atlas.py`: só se algum teste mostrar diferença entre o que foi verificado à mão e o comportamento real; afinar a regra de chave proibida; ``category` diferente da declarada na configuração vira violação (mudança aditiva no contrato `org-atlas/collector@1`); `collector` diferente do id declarado continua aceito, porque um coletor reutilizável (o `generic` da SPEC-0034) imprime o próprio nome e é declarado com ids diferentes — o snapshot é sempre gravado pelo id declarado, e o contrato passa a dizer isso (Emenda v2).
 - **Não muda:** o contrato da SPEC-0032.
 
 **Padrão seguido:** `skills/photon-brain/tests/brain_architecture_rules.py` e os testes de CLI da SPEC-0032 (`skills/boson-atlas/tests/test_config.py`).
@@ -48,7 +48,7 @@ Os testes da SPEC-0032 foram congelados no commit red (04e58b5), antes da revis�
 - **UT-04** — Dado um coletor de exemplo em `assets/collectors/` com `subprocess.run` fora da função do provedor, ou com `shell=True`, quando a regra de arquitetura roda, então ele é reportado; o `github.py` real não gera achado.
 - **IT-01** — Pela CLI: `init` em pasta sem permissão de escrita, `init` com `atlas-config.yml` que não é UTF-8 e `doctor` em pasta sem permissão saem com 1, com "erro:" ou ERRO, e sem traceback (guarda: passa antes da mudança).
 - **UT-02** — Dado chaves `monkey`, `primary_key`, `sort_keys`, `tokenizer`, `public_key` e `auth`, quando a regra de chave proibida roda, então só `auth` é descartada.
-- **UT-03** — Dado uma saída com `collector` ou `category` diferentes da declaração no `atlas-config.yml`, quando o `scan` valida, então há violação e o snapshot não é gravado.
+- **UT-03** — Dado uma saída com `category` diferente da declarada no `atlas-config.yml`, quando o `scan` valida, então há violação e o snapshot não é gravado; dada uma saída com `collector` diferente do id declarado (como o `generic` declarado como `db-facts`) e `category` igual, então o `scan` aceita e grava o snapshot pelo id declarado (Emenda v2).
 - **IT-02** — Pela CLI: dois `init --force` seguidos geram `.bak` e `.bak.1` com o conteúdo certo; `init --join --mode x` sai com 2; `atlas` relativo na configuração local gera ERRO no `doctor`; profile com espaço gera a mensagem própria sem ecoar o valor (guarda: passa antes da mudança).
 
 ## 5. Questões em Aberto
@@ -60,7 +60,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
 - [ ] Red: UT-01 a UT-04 com a tag `SPEC-0046:<ID>`, falhando pelo motivo certo; IT-01 e IT-02 (guardas) passando já antes da mudança
-- [ ] Green: regra de processo com alias e imports de nomes; regra dos coletores; chave proibida afinada; `collector`/`category` conferidos no `scan`; `collector-contract.md`, `redaction.md`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Green: regra de processo com alias e imports de nomes; regra dos coletores; chave proibida afinada; `category` conferida no `scan` (Emenda v2); `collector-contract.md`, `redaction.md`, CHANGELOG da boson-atlas e `version` do `plugin.json`
 - [ ] Validar: suíte completa + arquitetura (G2/G3)
 - [ ] Review independente (G4)
 - [ ] Integração + CI verde (G5) e H2
@@ -84,6 +84,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-15 | G2 | spec | SPEC_DEFECT do Implementer: o UT-03 exige collector da saída igual ao id declarado, mas o coletor generic (SPEC-0034) imprime sempre collector: generic por contrato (generic.md, test_collector_generic.py) e é declarado com outros ids (db-facts, facts); a conferência quebra 19 testes de test_build, test_context e test_lint | Implementer ligou identity_violations no scan_one: UT-01 a UT-04, IT-01 e IT-02 verdes, 19 falhas só do generic; trabalho guardado em git stash | thomas | Emenda v2 — scan confere só category; collector diferente do id aceito (generic), snapshot pelo id declarado (thomas, piloto automático, 2026-11-15) | 2026-11-15 |
 
 ## 10. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
@@ -116,3 +117,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-15 | O `scan` confere só a `category` contra a declaração; `collector` diferente do id declarado continua aceito e o contrato documenta que o snapshot vai pelo id declarado; UT-03 ajustado | IMP-01: o coletor `generic` (SPEC-0034) imprime `collector: generic` por contrato e é declarado com outros ids; a conferência estrita quebrava 19 testes | nenhuma (SPEC-0034 inalterada) | thomas, 2026-11-15 (piloto automático com o recomendado) |
