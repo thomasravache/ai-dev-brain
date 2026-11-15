@@ -26,7 +26,7 @@ approved_at: 2026-11-13
 O teste mede tempo de relógio do processo inteiro (Python + git em subprocesso), que depende da carga da máquina, contra um limite fixo pensado para máquina ociosa.
 
 ## 3. Mudança Proposta
-- O teste mede, na mesma execução e logo antes, uma linha de base: o tempo de `python3 -c pass` mais `git log --oneline` do mesmo intervalo de 50 commits (custo de abrir processos, que cresce com a carga como o do `leak-check`). O limite passa a ser `max(2 s, 10 × linha de base)`: em máquina ociosa continua 2 s (meta da SPEC-0004); sob carga cresce junto com a linha de base. A decisão fica numa função pequena do teste (`limite(linha_de_base)`), testada à parte.
+- O teste mede, na mesma execução e logo antes, uma linha de base com o mesmo perfil de processos do `leak-check --range`: o tempo de rodar `git show -U0 --format= <sha>` para cada um dos 50 commits do intervalo (o `leak-check` abre um `git show` por commit, então os dois crescem juntos com a carga). O limite passa a ser `max(2 s, 3 × linha de base)`: em máquina ociosa (linha de base perto de 0,9 s) fica perto de 2,7 s e ainda pega um `leak-check` 3× mais lento; sob carga cresce junto com a linha de base (Emenda v2). A decisão fica numa função pequena do teste (`limite(linha_de_base)`), testada à parte.
 - Sem variável de ambiente: o teste se ajusta sozinho, sem configuração na CI.
 - **Não muda:** o `leak-check`, a meta de desempenho da SPEC-0004.
 
@@ -38,7 +38,7 @@ O teste mede tempo de relógio do processo inteiro (Python + git em subprocesso)
 
 ## 4. Plano de Testes (TDD)
 - Caracterização: N/A — o teste existente é o próprio objeto.
-- **UT-01** — Dados linha de base de 0,05 s e `leak-check` de 1,5 s, linha de base de 0,4 s (carga) e `leak-check` de 3,8 s, e linha de base de 0,05 s e `leak-check` de 2,5 s, quando a regra `limite(linha_de_base)` é aplicada, então os dois primeiros passam (limites 2 s e 4 s) e o terceiro falha; e o teste real de 50 commits usa essa regra com a linha de base medida na mesma execução.
+- **UT-01** — Dados linha de base de 1,0 s e `leak-check` de 1,5 s, linha de base de 2,0 s (carga) e `leak-check` de 3,8 s, e linha de base de 0,5 s e `leak-check` de 2,5 s, quando a regra `limite(linha_de_base)` é aplicada, então os dois primeiros passam (limites 3 s e 6 s) e o terceiro falha (limite 2 s, o piso), com o caso que falha escrito de forma explícita; e o teste real de 50 commits usa essa regra com a linha de base medida na mesma execução.
 - Integração/E2E: N/A — mudança só no teste.
 
 ## 5. Questões em Aberto
@@ -50,7 +50,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
 - [ ] Red: UT-01 em `skills/gluon-spec/tests/test_private_mode.py` com a tag `SPEC-0045:UT-01`, falhando porque `limite` ainda não existe
-- [ ] Green: `limite(linha_de_base) = max(2 s, 10 × linha de base)` e IT-10 medindo a linha de base (`python3 -c pass` + `git log --oneline` dos 50 commits) na mesma execução; `version` do `plugin.json` sobe
+- [ ] Green: `limite(linha_de_base) = max(2 s, 3 × linha de base)` e IT-10 medindo a linha de base (`git show -U0 --format= <sha>` de cada um dos 50 commits) na mesma execução (Emenda v2); `version` do `plugin.json` sobe
 - [ ] Validar: suíte completa + arquitetura (G2/G3)
 - [ ] Review independente (G4)
 - [ ] Integração + CI verde (G5) e H2
@@ -74,7 +74,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
-| IMP-01 | 2026-11-15 | G2 | spec | SPEC_DEFECT do Reviewer (G4): a linha de base (python3 -c pass + git log, 2 processos) não tem o perfil do leak-check --range (um git show por commit, 50+ processos); a razão real é ~30x, então limite = max(2 s, 10x base) fica sempre no piso de 2 s e o IT-10 segue falhando sob carga | Implementer seguiu a spec (b9167b0); G2 --run FAIL (failures=1); Reviewer reproduziu 3 falhas sob carga: elapsed 2,26/2,19/2,22 s com base 0,055-0,063 s | thomas |  |  |
+| IMP-01 | 2026-11-15 | G2 | spec | SPEC_DEFECT do Reviewer (G4): a linha de base (python3 -c pass + git log, 2 processos) não tem o perfil do leak-check --range (um git show por commit, 50+ processos); a razão real é ~30x, então limite = max(2 s, 10x base) fica sempre no piso de 2 s e o IT-10 segue falhando sob carga | Implementer seguiu a spec (b9167b0); G2 --run FAIL (failures=1); Reviewer reproduziu 3 falhas sob carga: elapsed 2,26/2,19/2,22 s com base 0,055-0,063 s | thomas | Emenda v2 — linha de base com 50 git show (mesmo perfil do leak-check) e limite max(2 s, 3x base) (H1 thomas, 2026-11-15) | 2026-11-15 |
 
 ## 10. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
@@ -107,3 +107,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-15 | Linha de base passa a ser `git show -U0 --format= <sha>` de cada um dos 50 commits (mesmo perfil do `leak-check --range`) e o limite vira `max(2 s, 3 × linha de base)`; UT-01 com valores realistas | IMP-01: com `python3 -c pass` + `git log` (2 processos) a razão real era ~30×, o limite ficava sempre no piso de 2 s e o IT-10 seguia falhando sob carga | nenhuma | thomas, 2026-11-15 |
