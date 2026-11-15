@@ -4,12 +4,12 @@ title: "org-atlas: ids de repositório sem diferença de caixa entre coletores"
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: [SPEC-0034, SPEC-0035]
 consumes_contract: []
-touches: [skills/boson-atlas/assets/collectors/github.py, skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_github.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/github/**, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/github.md, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/assets/collectors/github.py, skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_github.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/github/**, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/github.md, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/scripts/atlas.py, .claude-plugin/plugin.json]
 adrs: [ADR-0011]
 external: []
 size: S
@@ -49,6 +49,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01, UT-02 e IT-01 com a tag `SPEC-0047:<ID>`, falhando pelo motivo certo; testes atuais das SPEC-0034/0035 ajustados à caixa nova
+- [ ] Green: `github.py` e `argocd.py` emitem `repository:<owner>/<repo>` em minúsculas (entidades, relações e sinais), `name` com a grafia da API; regra registrada em `collector-contract.md`; `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
