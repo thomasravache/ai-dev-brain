@@ -90,7 +90,7 @@ curation: {min_share: 0.6, min_total: 20, min_repos: 3}
 | `branch-prefix` | `branch-prefixes` | branches da amostra (`total`) | cada chave de `counts` (`feat/`, `fix/`…) | `branch-prefix-<prefixo sem />` (`branch-prefix-feat`) |
 
 - Um padrão **domina num repositório** quando `contagem / total ≥ min_share` e `total ≥ min_total`.
-- **Escopo:** `organization` quando **mais da metade** dos repositórios com o sinal (todos, inclusive os sem padrão dominante ou com poucos itens) tem o mesmo padrão dominante; a evidência soma os itens de todos eles. Senão, uma convenção por repositório em que o padrão domina, com `scope: repository:<org>/<nome>` e id `<kind>-<padrão>-<org>-<nome>` (`pr-title-conventional-acme-api`).
+- **Escopo:** `organization` quando **mais da metade** dos repositórios com o sinal (todos, inclusive os sem padrão dominante ou com poucos itens) tem o mesmo padrão dominante; a evidência soma os itens de todos eles. Senão, uma convenção por repositório em que o padrão domina, com `scope: repository:<org>/<nome>` (o id do repositório em minúsculas, como o coletor GitHub o emite; escopos antigos em outra caixa, como `repository:Acme/API`, continuam valendo, porque o `context` compara o escopo sem diferença de caixa — SPEC-0047) e id `<kind>-<padrão>-<org>-<nome>` (`pr-title-conventional-acme-api`).
 
 **Por repositório — `merge-method` e `pr-template`:**
 

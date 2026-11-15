@@ -117,12 +117,13 @@ def count_branch_prefixes(branches):
 
 def map_repository(org, repo):
     """One repository of the repos response -> entity repository:<org>/<name> with only the contract attrs.
-    The id is the canonical full_name of the API (the case of --org does not matter)."""
+    The id is the canonical full_name of the API in lower case (GitHub names are case-insensitive, SPEC-0047);
+    the name keeps the API's spelling."""
     name = repo["name"]
     full_name = canonical_full_name(org, repo)
     visibility = repo.get("visibility") or ("private" if repo.get("private") else "public")
     topics = [t for t in repo.get("topics") or [] if isinstance(t, str)]
-    return entity("repository", full_name, name, {
+    return entity("repository", full_name.lower(), name, {
         "language": repo.get("language"),
         "default_branch": repo.get("default_branch"),
         "topics": topics,
@@ -143,7 +144,7 @@ def map_workflows(org, repo_name, response):
     """actions/workflows response -> (pipeline entities, builds relations); the pipeline id is the workflow file
     name without the extension. Workflows without a file (path dynamic/..., such as Pages) are skipped."""
     entities, relations, seen = [], [], set()
-    repo_ref = f"repository:{org}/{repo_name}"
+    repo_ref = f"repository:{org}/{repo_name}".lower()  # only the repository id is lower case (SPEC-0047)
     for workflow in (response or {}).get("workflows") or []:
         path = workflow.get("path") or ""
         if not path or path.startswith("dynamic/"):
@@ -181,7 +182,7 @@ def parse_codeowners(org, repo_name, text):
                 continue
             seen.add(tid)
             entities.append(entity("team", tid, match.group(2).lower(), {}))
-            relations.append(relation(f"team:{tid}", f"repository:{org}/{repo_name}", "owns"))
+            relations.append(relation(f"team:{tid}", f"repository:{org}/{repo_name}".lower(), "owns"))
     return entities, relations
 
 
@@ -189,14 +190,15 @@ def map_policy(full_name, repo_response, has_template):
     """GET repos/{org}/{repo} and the template presence -> (merge-methods and pr-template signals, warnings).
     Without the allow_* fields (a token that cannot see them) merge-methods is left out with a warning."""
     signals, warnings = [], []
+    repository = full_name.lower()  # the repository id of the signals (SPEC-0047)
     response = repo_response if isinstance(repo_response, dict) else {}
     if all(isinstance(response.get(field), bool) for _, field in MERGE_FIELDS):
-        signals.append({"type": "merge-methods", "repository": full_name,
+        signals.append({"type": "merge-methods", "repository": repository,
                         "present": {method: response[field] for method, field in MERGE_FIELDS}})
     else:
         warnings.append(f"aviso: {full_name}: a resposta não traz allow_merge_commit, allow_squash_merge e "
                         "allow_rebase_merge (token sem permissão?) — sinal merge-methods omitido")
-    signals.append({"type": "pr-template", "repository": full_name, "present": {"pr_template": bool(has_template)}})
+    signals.append({"type": "pr-template", "repository": repository, "present": {"pr_template": bool(has_template)}})
     return signals, warnings
 
 
@@ -397,7 +399,7 @@ def collect(org: str, source, wanted=None, pr_sample: int = DEFAULT_PR_SAMPLE) -
     entities, relations, signals, warnings = [], [], [], []
     teams = set()
     for repo in selected(source.repos(), wanted, org):
-        # ids follow the API's spelling (full_name), whatever the case of --org and --repos
+        # the repository id is the API's full_name in lower case; the other ids keep the API's spelling
         full_name = canonical_full_name(org, repo)
         owner, name = full_name.split("/")
         entities.append(map_repository(org, repo))
@@ -411,8 +413,8 @@ def collect(org: str, source, wanted=None, pr_sample: int = DEFAULT_PR_SAMPLE) -
         prs = [pr for pr in source.pulls(name, pr_sample) if isinstance(pr, dict)] if pr_sample else []
         titles = count_title_patterns([pr.get("title") for pr in prs])
         branches = count_branch_prefixes([(pr.get("head") or {}).get("ref") for pr in prs])
-        signals.append({"type": "pr-titles", "repository": full_name, **titles})
-        signals.append({"type": "branch-prefixes", "repository": full_name, **branches})
+        signals.append({"type": "pr-titles", "repository": full_name.lower(), **titles})
+        signals.append({"type": "branch-prefixes", "repository": full_name.lower(), **branches})
         policy, policy_warnings = map_policy(full_name, source.repository(name), source.has_template(name))
         signals += policy
         warnings += policy_warnings

@@ -599,6 +599,20 @@ class IncompleteDecisionTest(unittest.TestCase):
         self.assertIn("hand-complete", rules)
 
 
+class RepositoryScopeCaseCliTest(ContextCase):
+    def test_convention_curated_with_another_case_still_comes_in_the_package(self):
+        """SPEC-0047:UT-03"""
+        # curada antes da SPEC-0047, com a caixa da API; o id no grafo agora é repository:acme/backoffice
+        hand_convention(self, "branch-prefix-feat-acme-backoffice-old-case", kind="branch-prefix",
+                        scope="repository:Acme/Backoffice", confirmed_by="ana", confirmed_at="2026-11-01",
+                        confirmed_via="PR #7")
+        data = json.loads(self.context("backoffice", "--json").stdout)
+        self.assertEqual(data["services"][0]["key"], "service:backoffice")
+        self.assertIn("branch-prefix-feat-acme-backoffice-old-case", ids(data["rules"]))
+        out = self.context("backoffice").stdout
+        self.assertIn("branch-prefix-feat-acme-backoffice-old-case", section(out, RULES_H) or "")
+
+
 class NeverScannedTest(unittest.TestCase):
     def test_declared_collector_missing_from_scan_state_is_warned(self):
         """SPEC-0038:UT-04 (revisão G4: coletor declarado que nunca rodou)"""

@@ -9,6 +9,13 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-15
+
+### Fixed
+- Coletores `github` e `argocd`: o id de repositório do GitHub (`repository:<owner>/<repo>`) vai em minúsculas nas entidades, nas relações (`builds`, `owns`, `sourced_from`) e nos sinais; o `name` da entidade guarda a grafia da API. Antes, um repositório `Acme/API` no GitHub e um `repoURL` `github.com/acme/api` no Argo CD geravam ids diferentes e o `sourced_from` apontava para um repositório inexistente. Os ids das demais entidades (pipeline, team...) não mudam. Regra registrada em `references/collector-contract.md`, para coletores futuros que citem repositórios do GitHub (SPEC-0047).
+- `context`: o escopo `repository:` das convenções é comparado sem diferença de caixa, então uma convenção curada antes desta versão com `scope: repository:Acme/API` continua no pacote do repositório `acme/api`; `references/curation.md` diz que o id do escopo vai em minúsculas (SPEC-0047).
+- **Aviso de upgrade:** o primeiro `scan` depois desta versão mostra no `diff`, uma vez, a remoção e a inclusão dos repositórios que tinham maiúsculas no id (`repository:Acme/API` → `repository:acme/api`) e das relações e sinais ligados a eles. As convenções com escopo em outra caixa continuam no `context`, sem precisar reescrever (SPEC-0047).
+
 ## [2026.11.4] - 2026-11-15
 
 ### Added

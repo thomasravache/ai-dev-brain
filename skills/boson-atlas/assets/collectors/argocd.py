@@ -230,9 +230,10 @@ def extract_config_refs(source, suffixes=DEFAULT_REF_SUFFIXES) -> list:
 
 def repository_ref(repo_url):
     """repoURL -> "repository:<owner>/<repo>" when it is a GitHub repository (https with or without .git or
-    credentials, scp-like ssh or ssh://); else None (Helm chart repositories, other hosts)."""
+    credentials, scp-like ssh or ssh://); else None (Helm chart repositories, other hosts). The id is lower case,
+    as GitHub names are case-insensitive and the github collector emits them so (SPEC-0047)."""
     match = GITHUB_RE.match(repo_url.strip()) if isinstance(repo_url, str) else None
-    return f"repository:{match.group(1)}/{match.group(2)}" if match else None
+    return f"repository:{match.group(1)}/{match.group(2)}".lower() if match else None
 
 
 def service_and_environment(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL):

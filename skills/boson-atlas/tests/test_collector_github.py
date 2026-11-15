@@ -571,6 +571,29 @@ class GhFailureTest(GithubCase):
         self.assertNotRegex(output(result), re.compile("limite", re.IGNORECASE))
 
 
+class MixedCaseRepositoryTest(GithubCase):
+    MIXED = FIXTURES / "acme-mixed-case"
+
+    def test_repository_id_is_lower_case_in_entities_relations_and_signals(self):
+        """SPEC-0047:UT-01"""
+        repo = json.loads((self.MIXED / "repos.json").read_text(encoding="utf-8"))[0]
+        self.assertEqual(repo["full_name"], "Acme/API")
+        mapped = function("map_repository")("Acme", repo)
+        self.assertEqual(mapped["id"], "acme/api")
+        self.assertEqual(mapped["name"], "API")
+
+        data, _ = self.collect("--org", "Acme", "--input", self.MIXED)
+        repositories = [e for e in data["entities"] if e["kind"] == "repository"]
+        self.assertEqual([(e["id"], e["name"]) for e in repositories], [("acme/api", "API")])
+        for rtype in ("builds", "owns"):
+            with self.subTest(relation=rtype):
+                targets = {r["to"] for r in data["relations"] if r["type"] == rtype}
+                self.assertEqual(targets, {"repository:acme/api"})
+        kinds = {s["type"] for s in data["signals"]}
+        self.assertEqual(kinds, {"pr-titles", "branch-prefixes", "merge-methods", "pr-template"})
+        self.assertEqual({s["repository"] for s in data["signals"]}, {"acme/api"})
+
+
 # --------------------------------------------------------------------------- contrato
 
 

@@ -26,7 +26,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.4"
+ATLAS_VERSION = "2026.11.5"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -2193,11 +2193,13 @@ def _complete_decision(meta) -> bool:
 
 def _context_conventions(atlas: Path, repositories) -> tuple:
     """(rules, hints): conventions of the organization scope and of `repositories`. Rules = confirmed with a complete
-    decision; hints = inferred, and confirmed with an incomplete decision (`incomplete: true`); rejected never."""
-    scopes = {"organization"} | {f"repository:{r}" for r in repositories}
+    decision; hints = inferred, and confirmed with an incomplete decision (`incomplete: true`); rejected never.
+    The repository scope is compared without case: GitHub names are case-insensitive, and conventions curated before
+    the lower-case ids (`scope: repository:Acme/API`) still apply (SPEC-0047)."""
+    scopes = {"organization"} | {f"repository:{r}".casefold() for r in repositories}
     rules, hints = [], []
     for cid, (meta, _) in _conventions(atlas).items():
-        if meta.get("scope") not in scopes:
+        if str(meta.get("scope") or "").casefold() not in scopes:
             continue
         item = {key: meta.get(key, "") for key in CONVENTION_KEYS if key != "reason"}
         item["id"], item["path"] = cid, f"{CONVENTIONS_DIR}/{cid}.md"
