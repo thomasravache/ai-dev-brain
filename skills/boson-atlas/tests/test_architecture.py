@@ -222,26 +222,26 @@ class CollectorProcessRulesTest(unittest.TestCase):
     def test_collector_process_outside_the_provider_function_or_with_shell_is_reported(self):
         """SPEC-0046:UT-04"""
         cases = {
-            "subprocess.run fora de run_gh": ("import subprocess\n"
-                                              "def collect(gh):\n"
-                                              "    return subprocess.run([gh, 'api'])\n", 3),
-            "subprocess no nível de módulo": ("import subprocess\n"
-                                              "subprocess.check_output(['gh', 'api'])\n", 2),
-            "shell=True em run_gh": ("import subprocess\n"
+            "subprocess.run fora de run_gh": (("import subprocess\n"
+                                               "def collect(gh):\n"
+                                               "    return subprocess.run([gh, 'api'])\n"), 3),
+            "subprocess no nível de módulo": (("import subprocess\n"
+                                               "subprocess.check_output(['gh', 'api'])\n"), 2),
+            "shell=True em run_gh": (("import subprocess\n"
+                                      "def run_gh(gh, args):\n"
+                                      "    return subprocess.run([gh, *args], shell=True)\n"), 3),
+            "texto em vez de lista em run_gh": (("import subprocess\n"
+                                                 "def run_gh(gh, args):\n"
+                                                 "    return subprocess.run(gh + ' api')\n"), 3),
+            "os.system em run_gh": (("import os\n"
                                      "def run_gh(gh, args):\n"
-                                     "    return subprocess.run([gh, *args], shell=True)\n", 3),
-            "texto em vez de lista em run_gh": ("import subprocess\n"
-                                                "def run_gh(gh, args):\n"
-                                                "    return subprocess.run(gh + ' api')\n", 3),
-            "os.system em run_gh": ("import os\n"
+                                     "    return os.system('gh api')\n"), 3),
+            "os.popen em run_gh": (("import os\n"
                                     "def run_gh(gh, args):\n"
-                                    "    return os.system('gh api')\n", 3),
-            "os.popen em run_gh": ("import os\n"
-                                   "def run_gh(gh, args):\n"
-                                   "    return os.popen('gh api').read()\n", 3),
-            "import com alias fora de run_gh": ("import subprocess as sp\n"
-                                                "def run_gh(gh, args):\n"
-                                                "    return [gh, *args]\n", 1),
+                                    "    return os.popen('gh api').read()\n"), 3),
+            "import com alias fora de run_gh": (("import subprocess as sp\n"
+                                                 "def run_gh(gh, args):\n"
+                                                 "    return [gh, *args]\n"), 1),
         }
         for name, (source, line) in cases.items():
             with self.subTest(name):
