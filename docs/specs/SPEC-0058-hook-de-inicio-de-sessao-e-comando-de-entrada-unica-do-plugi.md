@@ -199,7 +199,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — c5417ad (árvore suja) | 2026-11-13 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=29)) — 7aa7419 | 2026-11-15 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — e24dd9a | 2026-11-15 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8e11b91 | 2026-11-15 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — c48043a | 2026-11-15 |
 | G4 Review | FAIL | verify G1+G4: PASS; revisão: Reviewer independente: REPROVADO — major: sem prazo global de 20 s, três CLIs presas levam 30 s e o Claude Code mata o hook — cd2bd30 | 2026-11-15 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
