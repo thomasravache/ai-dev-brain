@@ -22,6 +22,14 @@ import spec_graph as sg
 BANNER = "MODO PRIVADO"
 
 
+def limite(linha_de_base):
+    """Limite de tempo (s) do leak-check: 2 s ou 3x a linha de base medida na mesma execução.
+
+    A linha de base roda um `git show` por commit do intervalo, o mesmo perfil de processos do leak-check.
+    """
+    return max(2.0, 3 * linha_de_base)
+
+
 def git(cwd, *args, env=None):
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env=env).stdout
 
@@ -434,11 +442,33 @@ class LeakCheckCommandTest(PrivateTestCase):
         """SPEC-0004:IT-10"""
         for i in range(50):
             commit_file(self.e, f"src/m{i}.py", f"x = {i}\n", f"passo {i}")
+        shas = git(self.e.repo, "rev-list", "HEAD~50..HEAD", env=self.e.env).split()
+        inicio = time.monotonic()
+        for sha in shas:
+            git(self.e.repo, "show", "-U0", "--format=", "--no-color", sha, env=self.e.env)
+        base = time.monotonic() - inicio
         start = time.monotonic()
         out = self.e.run("leak-check", "--range", "HEAD~50..HEAD")
         elapsed = time.monotonic() - start
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
-        self.assertLess(elapsed, 2.0)
+        self.assertLess(elapsed, limite(base), f"elapsed={elapsed:.3f}s base={base:.3f}s")
+
+
+class LeakCheckLimiteTest(unittest.TestCase):
+    def test_limite_follows_baseline_under_load(self):
+        """SPEC-0045:UT-01"""
+        # base 1,0 s, leak-check 1,5 s: passa (limite 3 s)
+        self.assertAlmostEqual(limite(1.0), 3.0)
+        self.assertTrue(1.5 < limite(1.0), "base 1,0 s e leak-check 1,5 s devem passar")
+        # base 2,0 s (carga), leak-check 3,8 s: passa (limite 6 s)
+        self.assertAlmostEqual(limite(2.0), 6.0)
+        self.assertTrue(3.8 < limite(2.0), "base 2,0 s e leak-check 3,8 s devem passar")
+        # base 0,5 s, leak-check 2,5 s: FALHA (limite 2 s, o piso)
+        self.assertAlmostEqual(limite(0.5), 2.0)
+        self.assertFalse(
+            2.5 < limite(0.5),
+            "caso que deve falhar: base 0,5 s e leak-check 2,5 s estouram o piso de 2 s",
+        )
 
 
 class LeakIntegrationTest(PrivateTestCase):
