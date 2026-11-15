@@ -21,6 +21,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Fixed
 - Regra de chave proibida afinada (`is_forbidden_key`): passa a descartar `auth` e `authorization` e deixa de descartar `monkey`, `primary_key`, `sort_keys`, `tokenizer` e `public_key`; `password`, `api_token`, `client_secret` e `db_pwd` continuam descartadas, e todo nome colado terminado em `key`/`keys` (`privkey`, `hmackey`, `sessionkey`) também, menos palavras comuns (`monkey`, `hockey`...) e qualificadores colados (`primarykey`, `sortkey`, `publickey`). Regra, e o aviso sobre `primaryKey` de credencial em coletor de nuvem, em `references/redaction.md` (SPEC-0046).
 - Uma `category` desconhecida na saída gera só a violação `category desconhecida`, sem também a de diferente da declarada (SPEC-0046).
+- Pasta do atlas que existe mas não pode ser lida nem listada: o `doctor` acusa `ERRO pasta do atlas — sem permissão de leitura: ...` em vez de dizer que `atlas-config.yml` e a estrutura não existem (nos Pythons novos, `Path.exists()`/`is_file()` devolvem False com PermissionError); `init`, `init --join`, `config`, `scan` e `lint` saem com `erro: pasta do atlas sem permissão de leitura` e exit 1 (SPEC-0046).
 
 ## [2026.11.3] - 2026-11-12
 

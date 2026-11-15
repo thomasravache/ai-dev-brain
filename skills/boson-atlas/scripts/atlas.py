@@ -415,6 +415,8 @@ def load_config(config_home=None) -> dict:
     validate_credentials(credentials)
     values["credentials"] = credentials if isinstance(credentials, dict) else {}
     origins["credentials"] = ORIGIN_LOCAL if "credentials" in local else ORIGIN_DEFAULT
+    if values["atlas"]:
+        require_readable_atlas(values["atlas"])
     shared_path = Path(values["atlas"]) / SHARED_FILE if values["atlas"] else None
     shared = read_yaml(shared_path) if shared_path and shared_path.is_file() else {}
     validate_ci(shared.get("ci"))
@@ -1078,6 +1080,7 @@ def scan_config():
     atlas = local.get("atlas")
     if not isinstance(atlas, str) or not atlas:
         raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
+    require_readable_atlas(atlas)
     shared_path = Path(atlas) / SHARED_FILE
     if not shared_path.is_file():
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared_path}", 2)
@@ -2925,6 +2928,7 @@ def _lint_atlas() -> Path:
         raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
     if not os.path.isdir(atlas):
         raise AtlasError(f"pasta do atlas não encontrada: {atlas} — rode init (ou init --join)", 3)
+    require_readable_atlas(atlas)
     return Path(atlas)
 
 
@@ -3095,6 +3099,7 @@ def create_structure(atlas: Path, organization: str, shared_text: str) -> list:
 
 
 def join_atlas(atlas_path: str, local_path: Path) -> int:
+    require_readable_atlas(atlas_path)
     shared = Path(atlas_path) / SHARED_FILE
     if not shared.is_file():
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared}", 2)
@@ -3126,6 +3131,7 @@ def cmd_init(args):
     shared = atlas / SHARED_FILE
     if atlas.exists() and not atlas.is_dir():
         raise AtlasError(f"não é uma pasta: {atlas_path}", 2)
+    require_readable_atlas(atlas)
     local_text = render_local_config(atlas_path, credentials)
 
     if shared.is_file():
@@ -3254,6 +3260,32 @@ def credential_checks(credentials) -> list:
     return rows
 
 
+def unreadable_atlas(atlas) -> str:
+    """Problem of an existing atlas folder that cannot be listed or entered ("" when it can, or when it is not a
+    folder). Newer Pythons answer False in Path.exists()/is_file() on PermissionError, so a folder without
+    permission would look empty; this check runs before them (SPEC-0046)."""
+    atlas = Path(atlas)
+    try:
+        if not atlas.is_dir():
+            return ""
+        if os.access(atlas, os.R_OK | os.X_OK):
+            with os.scandir(atlas) as entries:
+                next(entries, None)
+            return ""
+    except PermissionError:
+        pass
+    except OSError as e:
+        return f"não consegui ler {atlas}: {e.strerror or e}"
+    return f"sem permissão de leitura: {atlas} — dê permissão de leitura e de listagem à pasta"
+
+
+def require_readable_atlas(atlas) -> None:
+    """AtlasError (exit 1) when the atlas folder exists but cannot be read (unreadable_atlas)."""
+    problem = unreadable_atlas(atlas)
+    if problem:
+        raise AtlasError(f"pasta do atlas {problem}", 1)
+
+
 def atlas_checks(atlas: Path) -> tuple:
     """(rows, shared) for atlas-config.yml, the structure and git of an existing atlas folder."""
     rows, shared = [], None
@@ -3311,6 +3343,10 @@ def doctor_rows(config_home=None) -> list:
     try:
         if not Path(atlas).is_dir():
             rows.append(("ERRO", "pasta do atlas", f"não existe: {atlas}"))
+            return rows + credential_checks(credentials)
+        problem = unreadable_atlas(atlas)
+        if problem:
+            rows.append(("ERRO", "pasta do atlas", problem))
             return rows + credential_checks(credentials)
         found, shared = atlas_checks(Path(atlas))
     except OSError as e:
