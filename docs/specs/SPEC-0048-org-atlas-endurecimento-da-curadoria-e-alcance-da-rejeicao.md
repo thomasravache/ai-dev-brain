@@ -82,7 +82,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=19, skipped=1)) — da4c65f | 2026-11-15 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ce53b6c | 2026-11-15 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 1426398 | 2026-11-15 |
-| G4 Review | FAIL | verify G1+G4: PASS; revisão: Reviewer independente: REPROVADO — major: segredo plantado na cópia vendorizada desatualizada passa sem varredura — ec8f19c | 2026-11-15 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2; cópia desatualizada volta a ser varrida) — 49abb02 | 2026-11-15 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
