@@ -29,6 +29,10 @@ BUILD_FIXTURES = "{skill}/tests/fixtures/build"
 IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
 NO_PERMISSIONS = "chmod não impede a escrita/leitura (root ou sem POSIX)"
 ALLOWED_KEYS = ("monkey", "primary_key", "sort_keys", "tokenizer", "public_key")
+GLUED_FORBIDDEN_KEYS = ("privkey", "privkeys", "hmackey", "deploykey", "accountkey", "storagekey", "sessionkey",
+                        "consumerkey", "licensekey", "hostkey", "appkey", "signkey")
+GLUED_ALLOWED_KEYS = ("monkey", "donkey", "turkey", "hockey", "jockey", "whiskey", "primary_key", "sort_keys",
+                      "public_key", "tokenizer", "primarykey", "sortkey", "publickey")
 
 
 def f(name):
@@ -94,6 +98,16 @@ class ForbiddenKeyTest(unittest.TestCase):
         for name in ("password", "api_token", "client_secret", "db_pwd"):
             with self.subTest(name=name):
                 self.assertTrue(forbidden(name), f"{name} continua proibida")
+
+    def test_glued_names_ending_in_key_are_forbidden_and_allowed_words_are_not(self):
+        """SPEC-0046:UT-02"""
+        forbidden = f("is_forbidden_key")
+        for name in GLUED_FORBIDDEN_KEYS:
+            with self.subTest(name=name):
+                self.assertTrue(forbidden(name), f"{name} é chave proibida")
+        for name in GLUED_ALLOWED_KEYS:
+            with self.subTest(name=name):
+                self.assertFalse(forbidden(name), f"{name} não é chave proibida")
 
     def test_validation_drops_only_auth_from_attrs(self):
         """SPEC-0046:UT-02"""

@@ -249,6 +249,16 @@ class CollectorProcessRulesTest(unittest.TestCase):
                 self.assertTrue(findings, f"{name}: nenhum achado")
                 self.assertTrue(any(f"assets/collectors/github.py:{line} " in f for f in findings), report(findings))
 
+    def test_collector_process_with_unpacked_kwargs_in_the_provider_function_is_reported(self):
+        """SPEC-0046:UT-04"""
+        # `**opts` pode esconder shell=True, então a chamada é reportada mesmo dentro de run_gh
+        source = ("import subprocess\n"
+                  "def run_gh(gh, args, opts):\n"
+                  "    return subprocess.run([\"gh\"], **opts)\n")
+        findings = collector_process_findings(source, "assets/collectors/github.py", ("run_gh",))
+        self.assertTrue(findings, "kwargs desempacotados em run_gh: nenhum achado")
+        self.assertTrue(any("assets/collectors/github.py:3 " in f for f in findings), report(findings))
+
     def test_collector_process_only_in_the_provider_function_with_a_list_is_not_reported(self):
         """SPEC-0046:UT-04"""
         findings = collector_process_findings(self.GOOD, "assets/collectors/github.py", ("run_gh",))
