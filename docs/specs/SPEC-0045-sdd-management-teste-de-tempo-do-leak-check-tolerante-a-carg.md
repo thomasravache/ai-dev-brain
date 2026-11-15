@@ -49,6 +49,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 em `skills/gluon-spec/tests/test_private_mode.py` com a tag `SPEC-0045:UT-01`, falhando porque `limite` ainda não existe
+- [ ] Green: `limite(linha_de_base) = max(2 s, 10 × linha de base)` e IT-10 medindo a linha de base (`python3 -c pass` + `git log --oneline` dos 50 commits) na mesma execução; `version` do `plugin.json` sobe
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7), com as outras ocorrências de `assertLess(elapsed, …)` registradas
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
