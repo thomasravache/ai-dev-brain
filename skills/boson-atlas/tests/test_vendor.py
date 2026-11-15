@@ -509,6 +509,39 @@ class OutdatedCopyTest(VendorCase):
         self.assertEqual(codes, (1, 1))
         self.assertNotIn(token, json.dumps(findings))
 
+    def assert_secret_in_the_tool_is_an_error(self, token):
+        tool = COPY_SCRIPT.as_posix()
+        findings, lines, codes = self.lint()
+        leaks = [x for x in findings if x["rule"] == "secret-leak" and x["path"].startswith(f"{tool}:")]
+        self.assertTrue(leaks, f"segredo plantado em {tool} não virou secret-leak: {findings}")
+        self.assertEqual({x["severity"] for x in leaks}, {"error"}, leaks)
+        self.assertTrue([m for m in lines if (m.group(1), m.group(2)) == ("ERRO", "secret-leak")
+                         and m.group(3).startswith(f"{tool}:")], [m.group(0) for m in lines])
+        self.assertEqual(codes, (1, 1))
+        self.assertNotIn(token, json.dumps(findings))
+        self.assertNotIn(token[4:16], json.dumps(findings))
+        for out in (self.box.run("lint"), self.box.run("lint", "--json")):
+            self.assertNotIn(token, output(out), "o lint repete o valor do segredo")
+        return findings, lines
+
+    def test_a_secret_planted_in_the_outdated_tool_is_still_an_error(self):
+        """SPEC-0048:UT-06 (revisão G4: a cópia desatualizada de atlas.py não é ponto cego do lint)"""
+        token = secret_like()
+        copy = self.atlas / COPY_SCRIPT
+        copy.write_text(copy.read_text(encoding="utf-8") + f"# token do time: {token}\n", encoding="utf-8")
+        findings, _ = self.assert_secret_in_the_tool_is_an_error(token)
+        tool = COPY_SCRIPT.as_posix()
+        warnings = [x for x in findings if x["rule"] == "config" and x["path"] == tool]
+        self.assertEqual(len(warnings), 1, findings)
+        self.assertEqual(warnings[0]["severity"], "warn", warnings)
+        self.assertIn("vendor", warnings[0]["detail"] + " " + warnings[0]["suggestion"], warnings)
+
+    def test_tool_replaced_by_arbitrary_content_with_a_secret_is_an_error(self):
+        """SPEC-0048:UT-06 (revisão G4: atlas.py da cópia trocado por conteúdo qualquer com segredo)"""
+        token = secret_like()
+        (self.atlas / COPY_SCRIPT).write_text(f"token={token}\n", encoding="utf-8")
+        self.assert_secret_in_the_tool_is_an_error(token)
+
 
 if __name__ == "__main__":
     unittest.main()
