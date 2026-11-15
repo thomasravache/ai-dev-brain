@@ -48,9 +48,14 @@ Um comando só também faz os dois passos no terminal: `claude plugin install fe
 
 As skills aparecem como `/fermion:gluon-spec`, `/fermion:photon-brain` e `/fermion:boson-atlas`, e o agente também as usa sozinho quando o pedido combina com a `description` de cada uma.
 
+O plugin também traz (SPEC-0058):
+
+- **Hook de início de sessão** (`hooks/hooks.json` → `hooks/session_start.py`): ao abrir, retomar, limpar ou compactar a sessão, põe no contexto o `status` do SDD quando o projeto tem `docs/specs/sdd-config.yml` (cortado em 6.000 caracteres), e uma linha avisando quando o atlas (`boson-atlas`) e o segundo cérebro (`photon-brain`) estão configurados na máquina. Só roda comandos de leitura das CLIs do plugin, sem shell, com timeout de 10 s por CLI, e nunca atrapalha o início da sessão: o que falha some do contexto e vira uma linha no log de debug (`claude --debug`).
+- **Comando `/fermion:deliver <tarefa>`** (`commands/deliver.md`): entrada única para entregar uma tarefa. Monta o contexto com o atlas (quando configurado), escreve a spec com a `gluon-spec`, para no H1 pedindo "Aprovado" e depois segue até o PR. Nunca aprova H1/H2 nem faz merge sem o seu "sim".
+
 Para atualizar, rode `claude plugin marketplace update fermion-lab` e depois `claude plugin update fermion@fermion-lab` (ou use `/plugin` dentro do Claude Code); a versão do plugin segue o formato `AAAA.MM.N`. Para desinstalar, `claude plugin uninstall fermion@fermion-lab` e, se quiser tirar também o marketplace, `claude plugin marketplace remove fermion-lab`.
 
-Ao mudar `skills/**`, o PR precisa subir a `version` do `.claude-plugin/plugin.json` (`AAAA.MM.N` maior que a da `main`): o Claude Code usa a versão para decidir se há atualização, e sem isso `claude plugin update` não traz a mudança. A CI confere isso em todo PR (`tests/plugin/check_plugin_version.py`, SPEC-0056).
+Ao mudar `skills/**`, `hooks/**`, `commands/**`, `mcp/**` ou `scripts/**`, o PR precisa subir a `version` do `.claude-plugin/plugin.json` (`AAAA.MM.N` maior que a da `main`): o Claude Code usa a versão para decidir se há atualização, e sem isso `claude plugin update` não traz a mudança. A CI confere isso em todo PR (`tests/plugin/check_plugin_version.py`, SPEC-0056 e SPEC-0058).
 
 ### Copiando a pasta da skill (alternativa)
 
