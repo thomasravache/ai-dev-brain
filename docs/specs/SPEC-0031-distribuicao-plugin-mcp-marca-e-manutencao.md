@@ -6,7 +6,7 @@ type: feature
 status: approved
 created: 2026-10-30
 depends_on: [SPEC-0029]
-adrs: [ADR-0016, ADR-0017, ADR-0018]
+adrs: [ADR-0016, ADR-0017, ADR-0018, ADR-0019]
 external: []
 approved_by: thomas
 approved_at: 2026-11-12
@@ -76,10 +76,11 @@ Desenho:
 | SPEC-0053 | Plugin `fermion` e marketplace `fermion-lab` com as skills | full | feature | S | SPEC-0055 | — |
 | SPEC-0054 | Servidor MCP local do plugin com as tools `atlas_*` | full | feature | M | SPEC-0053 | — |
 | SPEC-0056 | Versão do plugin sobe quando as skills mudam (pendência do G4 da SPEC-0053) | lite | feature | S | SPEC-0053 | — |
-| a criar | Hook `SessionStart` e comando de entrada única | full | feature | S | SPEC-0053 | — |
-| a criar | Servidor MCP: tools `brain_*` | full | feature | M | MCP atlas | — |
-| a criar | Servidor MCP: tools `sdd_*` | full | feature | S | MCP atlas | — |
-| a criar | Auto-melhoria: `doctor` de ambiente, aviso de instalação antiga (cópias, `tools/sdd/`, bloco SDD, atlas vendorizado) com o comando de atualização, e fluxo do mantenedor | full | feature | M | SPEC-0053 | — |
+| SPEC-0058 | Hook de início de sessão e comando de entrada única (`/fermion:deliver`) | full | feature | S | SPEC-0053, SPEC-0054 | — |
+| SPEC-0059 | Servidor MCP: tools `brain_*` de leitura | full | feature | M | SPEC-0054 | — |
+| SPEC-0060 | Servidor MCP: tools `sdd_*` de leitura | full | feature | S | SPEC-0054 | — |
+| SPEC-0061 | Auto-melhoria: aviso de instalação antiga (cópias, `tools/sdd/`, bloco SDD, atlas vendorizado) com o comando de atualização | full | feature | M | SPEC-0058, SPEC-0054 | — |
+| a criar | Auto-melhoria: versão mínima do Python (`type: migration`) e agente mantenedor que abre a spec de atualização | full | migration | M | SPEC-0061 | — |
 | a criar | Distribuição sem cópia do código e MCP remoto | full | feature | M | MCP | — |
 
 ## 5. Estratégia de Entrega
@@ -98,7 +99,7 @@ Desenho:
 ## 7. Critérios de Aceite do Épico
 <!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
 - [ ] Um comando instala as três skills pelo plugin, e a cópia da pasta continua funcionando — SPEC-0053:E2E-01, SPEC-0053:IT-01
-- [ ] Uma tarefa pedida uma vez passa pelo atlas e pela `sdd-management` sem o usuário chamar cada skill — teste na filha de entrada única (a criar)
+- [ ] Uma tarefa pedida uma vez passa pelo atlas e pela `gluon-spec` sem o usuário chamar cada skill — SPEC-0058:E2E-01, SPEC-0058:UT-08
 - [ ] As tools MCP devolvem o mesmo resultado que a CLI correspondente — SPEC-0054:IT-01
 
 ## 8. Questões em Aberto
