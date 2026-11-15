@@ -42,6 +42,7 @@ O coletor imprime na **saída padrão um único objeto JSON** e sai com 0. O que
 
 - `kind`: `repository`, `service`, `environment`, `deployment`, `cluster`, `datastore`, `queue`, `topic`, `bucket`, `secret-ref`, `pipeline` ou `team`.
 - A **chave** da entidade é `kind:id` (por exemplo `repository:acme/api`): única na saída e estável entre scans — é por ela que o diff compara.
+- **Id de repositório do GitHub em minúsculas:** nomes de owner e de repositório no GitHub não diferenciam caixa, então o id de um repositório do GitHub vai sempre em minúsculas (`repository:acme/api`, mesmo quando a API escreve `Acme/API`), nas entidades, no `to` das relações e no `repository` dos sinais; o `name` da entidade guarda a grafia da API. Assim as relações de outro coletor (o `sourced_from` do Argo CD) acham a entidade do coletor GitHub. Coletores futuros que citem repositórios do GitHub seguem a mesma regra. Os ids das demais entidades não mudam por isso (SPEC-0047).
 - `attrs`: objeto só com valores escalares (texto, número, booleano, `null`) ou listas de escalares. Nada de objeto aninhado.
 - Um `secret-ref` guarda só o nome e onde o segredo vive (`store`, `path`), **nunca o valor**.
 

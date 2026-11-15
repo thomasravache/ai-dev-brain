@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-15
+
+### Fixed
+- Coletores `github` e `argocd`: o id de repositório do GitHub (`repository:<owner>/<repo>`) vai em minúsculas nas entidades, nas relações (`builds`, `owns`, `sourced_from`) e nos sinais; o `name` da entidade guarda a grafia da API. Antes, um repositório `Acme/API` no GitHub e um `repoURL` `github.com/acme/api` no Argo CD geravam ids diferentes e o `sourced_from` apontava para um repositório inexistente. Os ids das demais entidades (pipeline, team...) não mudam. Regra registrada em `references/collector-contract.md`, para coletores futuros que citem repositórios do GitHub (SPEC-0047).
+
 ## [2026.11.4] - 2026-11-15
 
 ### Added

@@ -20,7 +20,7 @@ collectors:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--org ORG` | required | the GitHub organization (any case: ids use the API's `full_name`) |
+| `--org ORG` | required | the GitHub organization (any case: ids use the API's `full_name`; the repository id in lower case) |
 | `--repos a,b` | all | only these repositories, any case (and their pipelines, owner teams and signals); an unknown name is a warning |
 | `--pr-sample N` | 100 | the N most recent PRs (all states) read per repository |
 | `--input FOLDER` | — | read recorded responses instead of calling `gh` (tests, or running without access) |
@@ -44,11 +44,11 @@ A 404 on a per-repository resource means "absent" (no workflows, no CODEOWNERS, 
 
 | Entity | Attributes |
 |---|---|
-| `repository:<org>/<name>` (the API's `full_name`) | `language`, `default_branch`, `topics`, `archived`, `visibility` |
+| `repository:<org>/<name>` (the API's `full_name` in lower case, as GitHub names are case-insensitive; `name` keeps the API's spelling) | `language`, `default_branch`, `topics`, `archived`, `visibility` |
 | `pipeline:<org>/<repo>/<workflow file without .yml/.yaml>` (name = workflow name) | `file` |
 | `team:<org>/<team>` (once, lower case, from `@org/team` in CODEOWNERS, which is case-insensitive; users and e-mails are ignored) | none |
 
-Relations: `pipeline → repository` (`builds`), `team → repository` (`owns`). Workflows without a file (`dynamic/...`, such as Pages) are skipped.
+Relations: `pipeline → repository` (`builds`), `team → repository` (`owns`), both pointing to the lower-case repository id; the signals' `repository` is that id too. The pipeline id keeps the API's spelling. Workflows without a file (`dynamic/...`, such as Pages) are skipped.
 
 Signals, one of each per repository:
 
