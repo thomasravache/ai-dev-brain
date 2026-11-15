@@ -4,7 +4,7 @@ title: "org-atlas: testes do endurecimento do init e do doctor e regra de proces
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-10-30
 parent:
 depends_on: [SPEC-0033]
@@ -59,6 +59,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 a UT-04 com a tag `SPEC-0046:<ID>`, falhando pelo motivo certo; IT-01 e IT-02 (guardas) passando já antes da mudança
+- [ ] Green: regra de processo com alias e imports de nomes; regra dos coletores; chave proibida afinada; `collector`/`category` conferidos no `scan`; `collector-contract.md`, `redaction.md`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7), com a verificação da regra equivalente da photon-brain
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->

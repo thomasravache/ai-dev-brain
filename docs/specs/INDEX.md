@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 7, implemented 47
+- Validação (G0): **2 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 6, in-progress 1, implemented 47
 - Impedimentos: **0 aberto(s)**, 25 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0046  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0046
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | approved | ✅ pronta |  |
+| 1 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0046 |
 | 3 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0046; saiu da onda 2: arquivos em comum com SPEC-0047 |
@@ -55,7 +55,7 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
-  S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::approved
+  S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::inprogress
   S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::approved
   S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::approved
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
@@ -156,7 +156,7 @@ flowchart LR
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
 | [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | implemented | 2026-11-02 | — | — | — |
-| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | approved | 2026-10-30 | — | SPEC-0033 | — |
+| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | in-progress | 2026-10-30 | — | SPEC-0033 | — |
 | [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | approved | 2026-11-02 | — | SPEC-0034, SPEC-0035 | — |
 | [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | approved | 2026-11-02 | — | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | implemented | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
