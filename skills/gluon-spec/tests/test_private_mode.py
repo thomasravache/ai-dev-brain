@@ -441,6 +441,16 @@ class LeakCheckCommandTest(PrivateTestCase):
         self.assertLess(elapsed, 2.0)
 
 
+class LeakCheckLimiteTest(unittest.TestCase):
+    def test_limite_follows_baseline_under_load(self):
+        """SPEC-0045:UT-01"""
+        self.assertAlmostEqual(limite(0.05), 2.0)
+        self.assertLess(1.5, limite(0.05))
+        self.assertAlmostEqual(limite(0.4), 4.0)
+        self.assertLess(3.8, limite(0.4))
+        self.assertGreaterEqual(2.5, limite(0.05))
+
+
 class LeakIntegrationTest(PrivateTestCase):
     def test_team_hook_manager_prevents_installing_the_hook(self):
         """SPEC-0004:IT-05"""
