@@ -26,7 +26,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.3"
+ATLAS_VERSION = "2026.11.4"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -465,8 +465,16 @@ RELATION_ALLOWED = RELATION_FIELDS + ("inferred",)
 SIGNAL_ALLOWED = ("type", "repository", "total", "pattern_counts", "sample", "counts", "present")
 # keys whose name says "secret": dropped and reported, never a violation (ADR-0011); fields outside the contract
 # get the same treatment (G4 review): only the contract's fields reach the snapshot
-FORBIDDEN_WORDS = ("password", "passwd", "secret", "token", "credential")  # anywhere in the name (api_token)
-FORBIDDEN_PARTS = ("key", "keys", "private", "pwd")  # a whole part of the name (api_key, db_pwd), or ...key at the end
+# (SPEC-0046) words anywhere in the name; whole parts of the name (api_token, db_pwd, basic_auth); ...token at
+# the end (accesstoken, not tokenizer); key/keys as a part unless it names a data key (primary_key, sort_keys,
+# public_key); and secret keys glued together (apikey). monkey, author and tokenizer are not forbidden.
+FORBIDDEN_WORDS = ("password", "passwd", "secret", "credential")
+FORBIDDEN_PARTS = ("token", "tokens", "private", "pwd", "auth", "authorization")
+FORBIDDEN_ENDINGS = ("token", "tokens", "apikey", "apikeys", "accesskey", "privatekey", "signingkey", "sshkey",
+                     "authkey", "clientkey", "masterkey", "encryptionkey")
+KEY_PARTS = ("key", "keys")
+DATA_KEY_QUALIFIERS = ("primary", "sort", "public", "foreign", "partition", "range", "hash", "unique", "composite",
+                       "natural", "surrogate", "row", "cache", "idempotency", "lookup", "index", "join")
 ENTITY_REF_RE = re.compile(r"^([a-z][a-z-]*):(.+)$")
 COLLECTED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$")
 NAME_PARTS_RE = re.compile(r"[a-z0-9]+")
@@ -481,8 +489,12 @@ def is_scalar_value(value) -> bool:
 def is_forbidden_key(name) -> bool:
     text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(name)).lower()  # camelCase -> camel_case
     parts = NAME_PARTS_RE.findall(text)
-    return (any(word in text for word in FORBIDDEN_WORDS) or any(part in FORBIDDEN_PARTS for part in parts)
-            or text.endswith(("key", "keys")))
+    if any(word in text for word in FORBIDDEN_WORDS) or any(part in FORBIDDEN_PARTS for part in parts):
+        return True
+    if "".join(parts).endswith(FORBIDDEN_ENDINGS):
+        return True
+    return any(part in KEY_PARTS and (index == 0 or parts[index - 1] not in DATA_KEY_QUALIFIERS)
+               for index, part in enumerate(parts))
 
 
 def entity_ref_problem(value) -> bool:
@@ -600,7 +612,7 @@ def validate_collector_output(data) -> tuple:
     violations empty = valid. A relation to an entity of another collector is valid (only the kind:id format is
     checked; dangling references are a lint warning, SPEC-0039). Only the contract's fields stay in `clean`
     (output, entity, relation and signal); any other field and every forbidden key (password, passwd, pwd, secret,
-    token, key, credential, private — in attrs and in a signal) is dropped and reported in `dropped` by where it
+    token, auth, api_key, credential, private — is_forbidden_key; in attrs and in a signal) is dropped and reported in `dropped` by where it
     was and its name, never its value. Dropping is not a violation."""
     if not isinstance(data, dict):
         return data, ["a saída não é um objeto JSON"], []
@@ -970,6 +982,19 @@ def _without_collected_at(snapshot) -> dict:
     return {k: v for k, v in (snapshot or {}).items() if k != "collected_at"}
 
 
+def identity_violations(data, collector: dict) -> list:
+    """category of the output that differs from the category declared in atlas-config.yml (SPEC-0046, Emenda v2;
+    an addition to org-atlas/collector@1). `collector` is the name of whoever produced the output and may differ
+    from the declared id (generic declared as db-facts): it is not checked, and the snapshot always goes by the
+    declared id. A missing or non-text category is already a violation of validate_collector_output."""
+    if not isinstance(data, dict):
+        return []
+    value, declared = data.get("category"), collector.get("category")
+    if isinstance(value, str) and value and value != declared:
+        return [f"category da saída ({value}) diferente da declarada no atlas-config.yml ({declared})"]
+    return []
+
+
 def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
     """Runs, validates, redacts, normalizes and writes one collector; returns its report (never raises for a
     failure of the collector: the previous snapshot is kept)."""
@@ -989,6 +1014,7 @@ def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
         report["reason"] = f"JSON inválido na saída: {e.msg} (linha {e.lineno}, coluna {e.colno})"
         return report
     clean, violations, dropped = validate_collector_output(data)
+    violations += identity_violations(data, collector)
     if violations:
         report["reason"] = f"saída fora do contrato {CONTRACT} ({len(violations)} violação(ões))"
         report["violations"] = [_redact_text(v, extras)[0] for v in violations]

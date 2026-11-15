@@ -9,6 +9,18 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.4] - 2026-11-15
+
+### Added
+- `scan`: a `category` da saída de um coletor diferente da declarada no `atlas-config.yml` é violação (`category da saída (<valor>) diferente da declarada no atlas-config.yml (<declarada>)`): `FALHA <id>`, exit 1 e o snapshot não é gravado. O `collector` da saída é o nome de quem a gerou e pode ser diferente do id declarado (o `generic` declarado como `db-facts`); o snapshot vai sempre pelo id declarado. Mudança aditiva no `org-atlas/collector@1`, documentada em `references/collector-contract.md` (SPEC-0046).
+- Regra de arquitetura dos coletores (`tests/architecture_rules.py`, `collector_process_findings`): em `assets/collectors/*.py`, processo externo só na função que chama o executável do provedor (`run_gh` no `github.py`, `run_cli` no `argocd.py`), com lista de argumentos e sem shell; `os.system`, `os.popen`, `os.exec*` e `os.spawn*` proibidos (SPEC-0046).
+
+### Changed
+- A regra de processo do ADR-0010 (`subprocess_findings`) passa a pegar também `from subprocess import ...`, `import subprocess as x` e `from os import system|popen|exec*|spawn*` fora de `run_collector`, e as chamadas pelo alias ou pelo nome importado (SPEC-0046).
+
+### Fixed
+- Regra de chave proibida afinada (`is_forbidden_key`): passa a descartar `auth` e `authorization` e deixa de descartar `monkey`, `primary_key`, `sort_keys`, `tokenizer` e `public_key`; `password`, `api_token`, `client_secret` e `db_pwd` continuam descartadas. Regra em `references/redaction.md` (SPEC-0046).
+
 ## [2026.11.3] - 2026-11-12
 
 ### Changed
