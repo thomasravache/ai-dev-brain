@@ -9,7 +9,7 @@ created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0054]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [hooks/**, commands/**, tests/plugin/test_session_start.py, tests/plugin/test_plugin.py, tests/plugin/check_plugin_version.py, tests/plugin/test_plugin_version.py, .claude-plugin/plugin.json, README.md]
 adrs: [ADR-0016, ADR-0017]
@@ -33,7 +33,7 @@ O comando `/fermion:deliver <tarefa>` (`commands/deliver.md`) encadeia o fluxo: 
 **Motivação:** frente 2 do épico SPEC-0031. Hoje o agente só sabe do SDD e do atlas se alguém carregar a skill; depois de um resumo de contexto, o processo depende da memória do modelo. Um hook de início de sessão põe o estado real (o `status`) no contexto todo começo de sessão, que é a regra "rode `status` antes de cada passo" aplicada fora do modelo. O comando de entrada única é atalho: a lógica continua nas skills.
 
 **Objetivos (dentro do escopo):**
-- `hooks/hooks.json` com um hook `SessionStart` (matcher `startup|resume|clear|compact`), forma exec: `python3` com `${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py`.
+- `hooks/hooks.json` com um hook `SessionStart` (matcher `startup|resume|clear|compact|fork`), forma exec: `python3` com `${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py`.
 - `hooks/session_start.py`: lê o JSON do stdin (`cwd`), roda só comandos de leitura das CLIs do próprio plugin e imprime `hookSpecificOutput.additionalContext`.
 - `commands/deliver.md`: comando `/fermion:deliver` com `argument-hint` e o roteiro de encadeamento.
 - A guarda de componentes na raiz (SPEC-0053:UT-02) passa a aceitar exatamente `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md`, e passa a vigiar também `bin/`.
@@ -77,7 +77,7 @@ O comando `/fermion:deliver <tarefa>` (`commands/deliver.md`) encadeia o fluxo: 
 
 ```text
 hooks/hooks.json
-  {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact",
+  {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact|fork",
      "hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py"], "timeout": 30}]}]}}
 
 hooks/session_start.py
@@ -93,6 +93,8 @@ hooks/session_start.py
            → "Segundo cérebro (photon-brain) configurado nesta máquina: para notas e decisões do usuário, use a skill photon-brain."
   stdout: sem bloco → nada (exit 0); com bloco →
     {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "<blocos separados por linha em branco, no máximo 8.000 caracteres>"}}
+  prazo: 10 s por CLI e 20 s no total; cada chamada usa min(10, restante) e, sem tempo, a CLI é pulada com a linha de diagnóstico (Emenda v2)
+  isolamento: falha de uma CLI (inclusive saída que não decodifica) ou do cwd omite só o bloco dela; o rótulo do diagnóstico é o do bloco que falhou (Emenda v2)
   exit: sempre 0. Falha de uma CLI (ausente, timeout de 10 s, exit fora do esperado) → bloco omitido + uma linha "session_start: <bloco> indisponível (<motivo curto>)" no stderr
   `status` com exit diferente de 0 → bloco SDD com a primeira linha do stderr ("status falhou: …"), porque a spec quebrada é informação útil
 
@@ -198,7 +200,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=29)) — 7aa7419 | 2026-11-15 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 0495f9a | 2026-11-15 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8e11b91 | 2026-11-15 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | verify G1+G4: PASS; revisão: Reviewer independente: REPROVADO — major: sem prazo global de 20 s, três CLIs presas levam 30 s e o Claude Code mata o hook — cd2bd30 | 2026-11-15 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -249,3 +251,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0058`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-15 | Matcher ganha `fork`; prazo total de 20 s com `min(10, restante)` por CLI; falha de uma CLI ou do `cwd` (inclusive saída que não decodifica e `PermissionError`) omite só o bloco dela, com o rótulo certo; stdin ausente usa o cwd; a guarda da raiz vigia também `workflows/`, `themes/`, `monitors/`, `output-styles/`, `.lsp.json` e `.mcp.json`; `deliver.md` confere o atlas pela CLI quando o contexto da sessão não diz | G4 (major): sem prazo global, três CLIs presas levam 30 s e o Claude Code mata o hook; minors da mesma revisão | nenhuma | thomas, 2026-11-15 (piloto automático com o recomendado) |
