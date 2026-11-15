@@ -13,6 +13,11 @@ Interface que estes testes exigem de `hooks/session_start.py` (carregado por cam
   por nome) com `argv = [<python>, <PLUGIN_ROOT>/skills/<skill>/scripts/<cli>.py, ...]`; pode levantar
   `FileNotFoundError` / `OSError` (CLI ausente) e `subprocess.TimeoutExpired`.
 - Rodado como script (`python3 hooks/session_start.py`), faz `sys.exit(main())`.
+- Emenda v2: `main(..., clock=time.monotonic)`. `clock()` devolve segundos (monotônico); o prazo total é de 20 s a
+  partir da primeira leitura do relógio, cada chamada recebe `timeout <= min(10, restante)` e, sem tempo restante,
+  a CLI é pulada (o executor não é chamado) com a linha `session_start: <bloco> indisponível (...)`. Falha de uma
+  CLI (inclusive `UnicodeDecodeError` ou stdout que não é texto) ou do cwd (`PermissionError`) omite só o bloco
+  dela. `stdin=None` com `sys.stdin` None (stdin fechado) usa o cwd do processo.
 
 UT-07 testa as regras de arquitetura contra exemplos e contra o código real. As regras genéricas (só stdlib, nenhum
 import de skills/ nem carregamento dinâmico, nenhum shell, processo só em `run_cli`) são as de
@@ -23,6 +28,7 @@ ATLAS_CONFIG_HOME e BRAIN_CONFIG_HOME temporários: nunca toca a configuração 
 """
 import ast
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -111,6 +117,8 @@ class FakeRunner:
             raise AssertionError(f"processo inesperado: {argv}")
         if isinstance(answer, BaseException):
             raise answer
+        if callable(answer):
+            return answer(argv, timeout)
         code, out, err = answer
         return completed(argv, code, out, err)
 
@@ -147,13 +155,20 @@ class HookTestCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name).resolve()
 
+    def call_main(self, **kwargs):
+        """main() que levanta exceção é falha do teste (o hook nunca pode quebrar), não erro."""
+        try:
+            return self.hook.main(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            self.fail(f"main() levantou {type(exc).__name__}: {exc}")
+
     def run_hook(self, runner, stdin_text=None, cwd=None):
         """Roda main() com streams em memória; devolve (exit, stdout, stderr)."""
         if stdin_text is None:
             stdin_text = json.dumps({"session_id": "s1", "hook_event_name": "SessionStart", "source": "startup",
                                      "cwd": str(cwd)})
         out, err = io.StringIO(), io.StringIO()
-        code = self.hook.main(stdin=io.StringIO(stdin_text), stdout=out, stderr=err, runner=runner)
+        code = self.call_main(stdin=io.StringIO(stdin_text), stdout=out, stderr=err, runner=runner)
         return code, out.getvalue(), err.getvalue()
 
     def context(self, stdout):
@@ -378,6 +393,181 @@ class BadStdinTest(HookTestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
                 self.assertNotIn(SDD_HEADER.strip(), result.stdout)
+
+
+# ---------------------------------------------------------------- UT-05 (Emenda v2: prazo total e isolamento)
+
+TOTAL_BUDGET, PER_CLI = 20, 10
+IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+class FakeClock:
+    """Relógio monotônico falso: o executor "gasta" tempo avançando-o, sem sleep real."""
+
+    def __init__(self, start=1000.0):
+        self.start = self.now = start
+
+    def __call__(self):
+        return self.now
+
+    def elapsed(self):
+        return self.now - self.start
+
+
+def spends(clock, seconds=None, result=(0, "", "")):
+    """Resposta do executor que consome `seconds` (ou o timeout inteiro, levantando TimeoutExpired)."""
+    def answer(argv, timeout):
+        if seconds is None:
+            clock.now += timeout
+            raise subprocess.TimeoutExpired(argv, timeout)
+        clock.now += seconds
+        return completed(argv, *result)
+    return answer
+
+
+class DeadlineTest(HookTestCase):
+    def run_with_clock(self, runner, clock, cwd):
+        if "clock" not in inspect.signature(self.hook.main).parameters:
+            self.fail("main() não aceita clock= (relógio injetável da Emenda v2)")
+        out, err = io.StringIO(), io.StringIO()
+        stdin = io.StringIO(json.dumps({"cwd": str(cwd)}))
+        code = self.call_main(stdin=stdin, stdout=out, stderr=err, runner=runner, clock=clock)
+        return code, out.getvalue(), err.getvalue()
+
+    def assert_budget(self, runner, clock_at_calls, all_time_out=False):
+        """Cada timeout <= min(10, restante na hora da chamada); quando todas esgotam o tempo, a soma <= 20."""
+        total = 0
+        for call, at in zip(runner.calls, clock_at_calls):
+            remaining = TOTAL_BUDGET - at
+            self.assertIsNotNone(call["timeout"], call)
+            self.assertGreater(call["timeout"], 0, call)
+            self.assertLessEqual(call["timeout"], min(PER_CLI, remaining) + 1e-6,
+                                 f"timeout {call['timeout']} com {remaining} s restantes: {call['argv'][1:]}")
+            total += call["timeout"]
+        if all_time_out:
+            self.assertLessEqual(total, TOTAL_BUDGET + 1e-6, f"soma dos timeouts {total} s passa de 20 s")
+
+    def recording(self, clock, answer):
+        moments = []
+
+        def wrapped(argv, timeout):
+            moments.append(clock.elapsed())
+            return answer(argv, timeout)
+        return wrapped, moments
+
+    def test_three_stuck_clis_fit_in_20_seconds_and_the_last_is_skipped(self):
+        """SPEC-0058:UT-05 (prazo total: três CLIs que esgotam o tempo)"""
+        project = make_project(self.base / "p")
+        clock = FakeClock()
+        moments = []
+        answers = {}
+        for cli in ("status", "atlas", "brain"):
+            answers[cli], m = self.recording(clock, spends(clock))
+            moments.append(m)
+        runner = FakeRunner(status=answers["status"], atlas=answers["atlas"], brain=answers["brain"])
+        code, out, err = self.run_with_clock(runner, clock, project)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+        at = [m[0] for m in moments if m]
+        self.assert_budget(runner, at, all_time_out=True)
+        self.assertLessEqual(clock.elapsed(), TOTAL_BUDGET + 1e-6, f"o hook gastou {clock.elapsed()} s")
+        self.assertEqual(runner.calls_to("brain.py"), [], "sem tempo restante a CLI do cérebro deveria ser pulada")
+        labels = [UNAVAILABLE_RE.match(line).group(1).lower() for line in err.splitlines()
+                  if UNAVAILABLE_RE.match(line)]
+        self.assertEqual(sorted(labels), ["atlas", "brain", "sdd"], err)
+
+    def test_each_call_gets_at_most_the_remaining_time(self):
+        """SPEC-0058:UT-05 (prazo total: status gasta 7 s, atlas esgota o tempo, cérebro recebe o resto)"""
+        project = make_project(self.base / "p")
+        clock = FakeClock()
+        status, m1 = self.recording(clock, spends(clock, 7, (0, "SPEC-0001 proposed\n", "")))
+        atlas, m2 = self.recording(clock, spends(clock))
+        brain, m3 = self.recording(clock, spends(clock, 1, (0, "{}", "")))
+        runner = FakeRunner(status=status, atlas=atlas, brain=brain)
+        code, out, err = self.run_with_clock(runner, clock, project)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(runner.calls), 3, runner.calls)
+        self.assert_budget(runner, m1 + m2 + m3)
+        self.assertLessEqual(runner.calls_to("brain.py")[0]["timeout"], 3 + 1e-6)
+        context = self.context(out)
+        self.assertIn("SPEC-0001 proposed", context)
+        self.assertNotIn(ATLAS_LINE, context)
+        self.assertIn(BRAIN_LINE, context)
+        self.assertRegex(err, re.compile(r"^session_start: Atlas indisponível", re.IGNORECASE | re.MULTILINE))
+
+
+class UndecodableOutputTest(HookTestCase):
+    def labels(self, err):
+        return [UNAVAILABLE_RE.match(line).group(1).lower() for line in err.splitlines()
+                if UNAVAILABLE_RE.match(line)]
+
+    def test_unicode_decode_error_omits_only_its_block(self):
+        """SPEC-0058:UT-05 (saída que não decodifica: UnicodeDecodeError omite só o bloco da CLI)"""
+        project = make_project(self.base / "p")
+        def decode():
+            return UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+        cases = {
+            "sdd": ({"status": decode(), "atlas": (0, "{}", ""), "brain": (0, "{}", "")},
+                    [ATLAS_LINE, BRAIN_LINE]),
+            "atlas": ({"status": (0, "SPEC-0001 proposed\n", ""), "atlas": decode(), "brain": (0, "{}", "")},
+                      [SDD_HEADER.strip(), BRAIN_LINE]),
+            "brain": ({"status": (0, "SPEC-0001 proposed\n", ""), "atlas": (0, "{}", ""), "brain": decode()},
+                      [SDD_HEADER.strip(), ATLAS_LINE]),
+        }
+        for failing, (answers, kept) in cases.items():
+            with self.subTest(failing=failing):
+                code, out, err = self.run_hook(FakeRunner(**answers), cwd=project)
+                self.assertEqual(code, 0)
+                context = self.context(out)
+                for text in kept:
+                    self.assertIn(text, context)
+                self.assertEqual(self.labels(err), [failing], err)
+
+    def test_bytes_stdout_from_status_omits_only_the_sdd_block(self):
+        """SPEC-0058:UT-05 (executor devolve stdout em bytes inválidos)"""
+        project = make_project(self.base / "p")
+        runner = FakeRunner(status=lambda argv, timeout: completed(argv, 0, b"\xff\xfe\xfa", b""),
+                            atlas=(0, "{}", ""), brain=(0, "{}", ""))
+        code, out, err = self.run_hook(runner, cwd=project)
+        self.assertEqual(code, 0)
+        context = self.context(out)
+        self.assertNotIn(SDD_HEADER.strip(), context)
+        self.assertEqual(context.strip(), ATLAS_LINE + "\n\n" + BRAIN_LINE)
+        self.assertEqual(self.labels(err), ["sdd"], err)
+
+
+# ---------------------------------------------------------------- UT-06 (Emenda v2: cwd ilegível e stdin fechado)
+
+class UnreadableCwdAndClosedStdinTest(HookTestCase):
+    @unittest.skipIf(IS_ROOT, "root lê pastas sem permissão")
+    def test_cwd_under_unreadable_folder_omits_only_sdd(self):
+        """SPEC-0058:UT-06 (cwd sob pasta com chmod 000: Atlas e Brain continuam)"""
+        locked = self.base / "trancada"
+        project = make_project(locked / "p")
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o755)
+        runner = FakeRunner(status=(0, "SPEC-0001 proposed\n", ""), atlas=(0, "{}", ""), brain=(0, "{}", ""))
+        code, out, _ = self.run_hook(runner, cwd=project)
+        self.assertEqual(code, 0)
+        self.assertEqual(runner.calls_to("spec_graph.py"), [])
+        self.assertEqual(self.context(out).strip(), ATLAS_LINE + "\n\n" + BRAIN_LINE)
+
+    def test_closed_stdin_uses_process_cwd(self):
+        """SPEC-0058:UT-06 (stdin None: sai com 0 e usa o cwd do processo)"""
+        project = make_project(self.base / "p")
+        old = os.getcwd()
+        os.chdir(project)
+        self.addCleanup(os.chdir, old)
+        runner = FakeRunner(status=(0, "SPEC-0001 proposed\n", ""))
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(self.hook.sys, "stdin", None):
+            code = self.call_main(stdin=None, stdout=out, stderr=err, runner=runner)
+        self.assertEqual(code, 0)
+        self.assertIn("SPEC-0001 proposed", self.context(out.getvalue()))
+        calls = runner.calls_to("spec_graph.py")
+        self.assertEqual(len(calls), 1, runner.calls)
+        self.assertTrue(same_dir(calls[0]["cwd"], project), calls[0])
 
 
 # ---------------------------------------------------------------- UT-07

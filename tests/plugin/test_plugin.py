@@ -41,9 +41,11 @@ VERSION_RE = re.compile(r"^(\d{4})\.(\d{1,2})\.(\d+)$")  # AAAA.MM.N (ex.: 2026.
 MARKETPLACE_KEYS = {"name", "owner", "plugins", "metadata"}
 # Pastas da raiz que o Claude Code carrega por convenção como componentes do plugin (fora skills/).
 # SPEC-0058 (emenda v4): bin/ também é vigiada; só os arquivos de ROOT_COMPONENT_FILES entram no contrato.
-ROOT_COMPONENT_DIRS = ("hooks", "agents", "commands", "output-styles", "monitors", "bin")
+# SPEC-0058 (Emenda v2): workflows/, themes/ e .lsp.json também são vigiados.
+ROOT_COMPONENT_DIRS = ("hooks", "agents", "commands", "output-styles", "monitors", "bin", "workflows", "themes")
+ROOT_COMPONENT_ROOT_FILES = (".mcp.json", ".lsp.json")
 ROOT_COMPONENT_FILES = ("commands/deliver.md", "hooks/hooks.json", "hooks/session_start.py")
-HOOKS_CONTRACT = {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [
+HOOKS_CONTRACT = {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact|fork", "hooks": [
     {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py"],
      "timeout": 30}]}]}}
 # Campos de plugin.json que declaram caminho de componente (manifest-reference); o contrato não declara nenhum.
@@ -434,6 +436,9 @@ class PluginManifestTest(unittest.TestCase):
             "monitor": ["monitors/m.json"],
             "bin/": ["bin/fermion"],
             ".mcp.json": [".mcp.json"],
+            "workflows/": ["workflows/w.yml"],
+            "themes/": ["themes/t.json"],
+            ".lsp.json": [".lsp.json"],
         }
         for label, extra in cases.items():
             with self.subTest(case=label):
@@ -462,7 +467,8 @@ def root_component_findings(paths):
     """Achados da guarda da raiz: arquivo em pasta de componente fora de ROOT_COMPONENT_FILES, .mcp.json, ou
     arquivo do contrato ausente (paths: caminhos versionados, relativos à raiz)."""
     paths = set(paths)
-    in_component_dirs = {p for p in paths if p == ".mcp.json" or p.split("/")[0] in ROOT_COMPONENT_DIRS and "/" in p}
+    in_component_dirs = {p for p in paths
+                         if p in ROOT_COMPONENT_ROOT_FILES or p.split("/")[0] in ROOT_COMPONENT_DIRS and "/" in p}
     findings = [f"root-component: {p} fora do contrato" for p in sorted(in_component_dirs - set(ROOT_COMPONENT_FILES))]
     findings += [f"root-component-missing: {p} não existe" for p in ROOT_COMPONENT_FILES if p not in paths]
     return findings
@@ -506,6 +512,10 @@ class PluginEntryPointsContractTest(unittest.TestCase):
             with self.subTest(cita=needle):
                 self.assertIn(needle, body)
         self.assertIn("Aprovado", body, "o roteiro tem de parar no H1 pedindo \"Aprovado\"")
+        atlas_lines = [line for line in body.splitlines() if "atlas" in line]
+        self.assertTrue(any(re.search(r"\bconfig\b", line) for line in atlas_lines),
+                        "o roteiro tem de conferir o atlas pela CLI (`atlas.py config --json`) quando o contexto "
+                        "da sessão não diz nada (Emenda v2)")
 
 
 # ---------------------------------------------------------------- UT-03
