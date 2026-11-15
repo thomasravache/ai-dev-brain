@@ -26,7 +26,7 @@ approved_at: 2026-11-13
 O teste mede tempo de relógio do processo inteiro (Python + git em subprocesso), que depende da carga da máquina, contra um limite fixo pensado para máquina ociosa.
 
 ## 3. Mudança Proposta
-- O teste mede, na mesma execução e logo antes, uma linha de base com o mesmo perfil de processos do `leak-check --range`: o tempo de rodar `git show -U0 --format= <sha>` para cada um dos 50 commits do intervalo (o `leak-check` abre um `git show` por commit, então os dois crescem juntos com a carga). O limite passa a ser `max(2 s, 3 × linha de base)`: em máquina ociosa (linha de base perto de 0,9 s) fica perto de 2,7 s e ainda pega um `leak-check` 3× mais lento; sob carga cresce junto com a linha de base (Emenda v2). A decisão fica numa função pequena do teste (`limite(linha_de_base)`), testada à parte.
+- O teste mede, na mesma execução e logo antes, uma linha de base com o mesmo perfil de processos do `leak-check --range`: o tempo de rodar `git show -U0 --format= <sha>` para cada um dos 50 commits do intervalo (o `leak-check` abre um `git log -1` e um `git show` por commit, então os dois crescem juntos com a carga; a razão medida fica entre 1,9 e 2,4). O limite passa a ser `max(2 s, 3 × linha de base)`: em máquina ociosa (linha de base perto de 0,3 s) fica no piso de 2 s e pega um `leak-check` cerca de 2,6× mais lento; sob carga cresce junto com a linha de base (Emenda v2). A decisão fica numa função pequena do teste (`limite(linha_de_base)`), testada à parte.
 - Sem variável de ambiente: o teste se ajusta sozinho, sem configuração na CI.
 - **Não muda:** o `leak-check`, a meta de desempenho da SPEC-0004.
 
