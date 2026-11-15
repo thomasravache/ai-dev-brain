@@ -1,12 +1,12 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-11-13 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-15 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 8, implemented 46
-- Impedimentos: **0 aberto(s)**, 24 resolvido(s)
+- Validação (G0): **2 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 7, in-progress 1, implemented 46
+- Impedimentos: **0 aberto(s)**, 25 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0045  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0045
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | approved | ✅ pronta |  |
+| 1 | SPEC-0045 | sdd-management: teste de tempo do leak-check tolerante à carga | lite/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0045 |
 | 3 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0045; saiu da onda 2: arquivos em comum com SPEC-0046 |
@@ -56,7 +56,7 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
-  S0045["SPEC-0045<br/>sdd-management: teste de tempo do leak-…"]:::approved
+  S0045["SPEC-0045<br/>sdd-management: teste de tempo do leak-…"]:::inprogress
   S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::approved
   S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::approved
   S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::approved
@@ -157,7 +157,7 @@ flowchart LR
 | [SPEC-0042](SPEC-0042-second-brain-pastas-sempre-em-kebab-case.md) | second-brain: pastas sempre em kebab-case | lite | feature | implemented | 2026-10-30 | — | SPEC-0016 | — |
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
-| [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | approved | 2026-11-02 | — | — | — |
+| [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | in-progress | 2026-11-02 | — | — | — |
 | [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | approved | 2026-10-30 | — | SPEC-0033 | — |
 | [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | approved | 2026-11-02 | — | SPEC-0034, SPEC-0035 | — |
 | [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | approved | 2026-11-02 | — | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |

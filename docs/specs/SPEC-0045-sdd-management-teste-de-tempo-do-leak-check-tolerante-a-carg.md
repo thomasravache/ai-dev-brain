@@ -4,7 +4,7 @@ title: "sdd-management: teste de tempo do leak-check tolerante à carga"
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-02
 parent:
 depends_on: []
