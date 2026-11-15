@@ -548,6 +548,19 @@ class RepositoryRefTest(unittest.TestCase):
         self.assertEqual([r for r in ingress if r["type"] == "sourced_from"], [])
 
 
+class MixedCaseRepositoryRefTest(unittest.TestCase):
+    def test_github_repository_ref_is_lower_case(self):
+        """SPEC-0047:UT-02"""
+        ref = function("repository_ref")
+        for url in ("https://github.com/Acme/API.git", "git@github.com:Acme/API.git", "https://github.com/ACME/api"):
+            with self.subTest(url=url):
+                self.assertEqual(ref(url), "repository:acme/api")
+        app = application("api-prod")
+        app["spec"]["source"]["repoURL"] = "https://github.com/Acme/API.git"
+        _, relations = function("map_application")(app)
+        self.assertEqual(targets(relations, "sourced_from"), {"api-prod": "repository:acme/api"})
+
+
 # --------------------------------------------------------------------------- integração
 
 
@@ -803,6 +816,35 @@ class ArgocdContractTest(ArgocdCase):
         self.assertEqual(state["argocd"]["relations"], len(full["relations"]))
         snapshot = (sandbox.atlas / "snapshots" / "argocd.json").read_text(encoding="utf-8")
         self.assert_nothing_secret(snapshot)
+
+
+class MixedCaseScanTest(ArgocdCase):
+    def test_scan_with_github_and_argocd_has_no_sourced_from_to_a_missing_repository(self):
+        """SPEC-0047:IT-01"""
+        sandbox = Sandbox()
+        self.addCleanup(sandbox.cleanup)
+        out = sandbox.init(mode="local")
+        self.assertEqual(out.returncode, 0, output(out))
+        config = atlas_config([
+            ("github", "code", ["python3", "{skill}/assets/collectors/github.py", "--org", "Acme", "--input",
+                                "{skill}/tests/fixtures/github/acme-mixed-case"]),
+            ("argocd", "delivery", ["python3", "{skill}/assets/collectors/argocd.py", "--from", "argocd",
+                                    "--input", "{skill}/tests/fixtures/argocd/acme-mixed-case.json"]),
+        ]).replace("categories: [delivery]", "categories: [code, delivery]")
+        (sandbox.atlas / "atlas-config.yml").write_text(config, encoding="utf-8")
+        result = sandbox.run("scan")
+        text = output(result)
+        self.assertEqual(result.returncode, 0, text)
+        self.assertNotIn("Traceback", text)
+        self.assertRegex(text, re.compile(r"^OK github — ", re.MULTILINE))
+        self.assertRegex(text, re.compile(r"^OK argocd — ", re.MULTILINE))
+        snapshots = {cid: json.loads((sandbox.atlas / "snapshots" / f"{cid}.json").read_text(encoding="utf-8"))
+                     for cid in ("github", "argocd")}
+        known = {f"{e['kind']}:{e['id']}" for snap in snapshots.values() for e in snap.get("entities", [])}
+        sourced = [r["to"] for r in snapshots["argocd"].get("relations", []) if r["type"] == "sourced_from"]
+        self.assertEqual(len(sourced), 2, sourced)
+        self.assertEqual([ref for ref in sourced if ref not in known], [],
+                         "sourced_from para repositório que não existe nos snapshots")
 
 
 if __name__ == "__main__":
