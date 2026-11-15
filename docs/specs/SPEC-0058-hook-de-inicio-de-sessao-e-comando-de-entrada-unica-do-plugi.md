@@ -4,7 +4,7 @@ title: Hook de início de sessão e comando de entrada única do plugin
 tier: full
 type: feature
 user_facing: true
-status: approved
+status: in-progress
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0054]
@@ -172,6 +172,23 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Hook de início de sessão**
+- [ ] Red: UT-01 a UT-07 e IT-01 em `tests/plugin/test_session_start.py` com a tag `SPEC-0058:<ID>`, falhando pelo motivo certo
+- [ ] Green: `hooks/hooks.json` e `hooks/session_start.py` (stdlib, exec, sempre exit 0)
+
+**Fase 2: Contrato do plugin, comando e versão**
+- [ ] Red: UT-08 (forma exec, comando e guarda da raiz com lista exata e `bin/`) e UT-09 (regra de versão para `hooks/`, `commands/`, `mcp/` e `scripts/`)
+- [ ] Green: `commands/deliver.md`, `tests/plugin/test_plugin.py` (Emenda v4 da SPEC-0053), `check_plugin_version.py`, `README.md` e `version` do `plugin.json`
+
+**Fase 3: Jornada E2E**
+- [ ] Red: E2E-01 falhando pelo motivo certo
+- [ ] Green: instalação isolada traz hook e comando, e o hook devolve o `status`
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4), com a verificação manual do hook numa sessão real do Claude Code
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega, README e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
