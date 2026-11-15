@@ -1717,7 +1717,7 @@ CONVENTION_STATUSES = ("inferred", "confirmed", "rejected")
 CONVENTION_KEYS = ("id", "title", "kind", "scope", "status", "proposed_at", "confirmed_by", "confirmed_at",
                    "confirmed_via", "reason")
 CONVENTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-VIA_RE = re.compile(r"^(PR #[0-9]+|local)$")  # ASCII digits only (not \d: "PR #３")
+VIA_RE = re.compile(r"^(PR #[0-9]+|local)\Z")  # ASCII digits only (not \d: "PR #３")
 BAD_VIA = "--via aceita 'PR #<n>' ou 'local'"
 SAMPLE_MAX = 10
 MERGE_METHODS = ("merge", "squash", "rebase")
@@ -2551,15 +2551,16 @@ def _special_kind(mode) -> str:
 
 class _AtlasFiles:
     """Every regular file of the atlas (VCS folders skipped, and .org-atlas/skill/scripts/atlas.py, the tool written
-    by vendor, whose own patterns look like secrets: when it differs from this atlas.py it is an outdated copy, a
-    config warning in `outdated`, never a secret-leak; every other file of the copy is read), read once. Symlinks,
-    FIFOs, sockets and devices are
+    by vendor, when identical to this atlas.py: its own patterns look like secrets), read once. A copy that differs
+    is an outdated copy: a config warning in `outdated`, and it is still read and scanned (secret-leak drops only the
+    matches whose text is also in this atlas.py, `tool_text`). Symlinks, FIFOs, sockets and devices are
     never read nor followed; they, unreadable files and folders, non-UTF-8 files (also kept, decoded with
     replacement, for secret-leak) and JSON with an invalid content or shape become `problems` (config findings)."""
 
     def __init__(self, atlas: Path):
         self.atlas, self.texts, self.lossy, self.names, self.problems, self._json = atlas, {}, {}, [], {}, {}
         self.outdated = {}  # rel -> (detail, suggestion): config warnings
+        self.tool_text = ""  # this atlas.py, when a copy is outdated: its own regexes and examples are not secrets
         self._copy_tool = f"{SKILL_COPY}/scripts/atlas.py"
         for root, dirs, files in os.walk(atlas, onerror=self._walk_error):
             kept = []
@@ -2583,7 +2584,8 @@ class _AtlasFiles:
                     copy = self._is_skill_copy(path, self.rel(path))
                     if copy == "outdated":
                         self.outdated[self.rel(path)] = (OUTDATED_COPY, OUTDATED_SUGGESTION)
-                    if copy:
+                        self.tool_text = self._tool_text()
+                    elif copy:
                         continue
                     self.names.append((self.rel(path), name))
                     self._read(path, self.rel(path))
@@ -2598,9 +2600,9 @@ class _AtlasFiles:
     def _is_skill_copy(self, path, rel):
         """.org-atlas/skill/scripts/atlas.py written by vendor: "same" when identical to this atlas.py or, when the
         lint runs from the copy itself (nothing else to compare with), that same file; "outdated" when it is a
-        regular file that differs (another version of the skill: its own patterns would look like secrets);
-        False for any other path, or when it is not a regular file or cannot be read (read as any file).
-        Limitation: an edit to the atlas.py of the copy is not scanned for secrets."""
+        regular file that differs (another version of the skill, or edited: still read and scanned); False for any
+        other path, or when it is not a regular file or cannot be read (read as any file). Limitation: when the lint
+        runs from the copy itself there is nothing to compare with, and an edit to it is not scanned."""
         if rel != self._copy_tool:
             return False
         source = Path(__file__).resolve()
@@ -2617,6 +2619,13 @@ class _AtlasFiles:
                 return "same" if handle.read(len(expected) + 1) == expected else "outdated"
         except OSError:
             return False
+
+    @staticmethod
+    def _tool_text() -> str:
+        try:
+            return Path(__file__).resolve().read_bytes().decode("utf-8", "replace")
+        except OSError:
+            return ""
 
     def problem(self, rel, detail, suggestion=READ_SUGGESTION) -> None:
         self.problems.setdefault(rel, (detail, suggestion))
@@ -2695,7 +2704,9 @@ def _name_patterns(name, patterns) -> list:
 
 def _lint_secrets(files: _AtlasFiles, extras) -> list:
     """secret-leak: each match of a redaction pattern (built-in and extra_patterns) in any file, by file:line and
-    pattern name, and each file or folder whose name matches one; never the value."""
+    pattern name, and each file or folder whose name matches one; never the value. In an outdated copy of the tool
+    (.org-atlas/skill/scripts/atlas.py) a match whose text is also in the installed atlas.py (its own regexes and
+    examples) is not a secret; any other match is."""
     findings, seen = [], set()
     patterns = _lint_patterns(extras)
     for rel, name in files.names:
@@ -2706,9 +2717,10 @@ def _lint_secrets(files: _AtlasFiles, extras) -> list:
                                                          "mostrado)", "renomeie sem o valor e troque a credencial "
                                                                       "(o histórico do git também guarda o nome)"))
     for rel, text in (*files.texts.items(), *files.lossy.items()):
+        known = files.tool_text if rel in files.outdated else ""
         for name, regex in patterns:
             for match in regex.finditer(text):
-                if not match.group(0):
+                if not match.group(0) or (known and match.group(0) in known):
                     continue
                 line = text.count("\n", 0, match.start()) + 1
                 if (rel, line, name) in seen:
