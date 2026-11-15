@@ -65,9 +65,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — c47fd0d | 2026-11-15 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 3089403 | 2026-11-15 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2; 0 falhas em 11 rodadas sob carga 2-3x núcleos; regressão 3x pega) — 9938d60 | 2026-11-15 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK); nota: nota: CI do PR #28 em 6bb32cb verde (run 43682326239 ci Python 3.9/3.15, com a checagem de versão do plugin; run 43682326245 sdd/pr-check) — 6bb32cb | 2026-11-15 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-15 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-15 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
