@@ -4,9 +4,9 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 7, implemented 47
-- Impedimentos: **0 aberto(s)**, 25 resolvido(s)
+- Validação (G0): **2 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, approved 6, implemented 48
+- Impedimentos: **0 aberto(s)**, 26 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -25,18 +25,18 @@ Perfil: **minimo**
 
 **Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0046
+**Próximo lote:** SPEC-0047
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0046 | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite/S | approved | ✅ pronta |  |
+| 1 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | approved | ✅ pronta |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0047 | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0046 |
-| 3 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0046; saiu da onda 2: arquivos em comum com SPEC-0047 |
-| 4 | SPEC-0058 | Hook de início de sessão e comando de entrada única do plugin | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0046; saiu da onda 2: arquivos em comum com SPEC-0047; saiu da onda 3: arquivos em comum com SPEC-0048 |
-| 5 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | approved | ⛔ aguarda implementação de SPEC-0058 |  |
-| 6 | SPEC-0060 | Servidor MCP: tools sdd de leitura do processo | full/S | approved | ⛔ aguarda implementação de SPEC-0059 |  |
-| 7 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | approved | ⛔ aguarda implementação de SPEC-0058; aguarda implementação de SPEC-0060 |  |
+| 2 | SPEC-0048 | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0047 |
+| 3 | SPEC-0058 | Hook de início de sessão e comando de entrada única do plugin | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0047; saiu da onda 2: arquivos em comum com SPEC-0048 |
+| 4 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | approved | ⛔ aguarda implementação de SPEC-0058 |  |
+| 5 | SPEC-0060 | Servidor MCP: tools sdd de leitura do processo | full/S | approved | ⛔ aguarda implementação de SPEC-0059 |  |
+| 6 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | approved | ⛔ aguarda implementação de SPEC-0058; aguarda implementação de SPEC-0060 |  |
+| 7 | SPEC-0062 | photon-brain: regra de processo com alias e imports de nomes | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0047, SPEC-0028; saiu da onda 2: arquivos em comum com SPEC-0048; saiu da onda 3: arquivos em comum com SPEC-0058; saiu da onda 4: arquivos em comum com SPEC-0059; saiu da onda 5: arquivos em comum com SPEC-0060; saiu da onda 6: arquivos em comum com SPEC-0061 |
 
 ## Épicos
 
@@ -55,14 +55,14 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
-  S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::approved
+  S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::implemented
   S0047["SPEC-0047<br/>org-atlas: ids de repositório sem difer…"]:::approved
   S0048["SPEC-0048<br/>org-atlas: endurecimento da curadoria, …"]:::approved
+  S0062["SPEC-0062<br/>photon-brain: regra de processo com ali…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0029["SPEC-0029 · org-atlas: mapa da organização para agentes"]
-    S0033["SPEC-0033<br/>org-atlas: scan com contrato dos coleto…"]:::implemented
     S0034["SPEC-0034<br/>org-atlas: coletores generic e GitHub"]:::implemented
     S0035["SPEC-0035<br/>org-atlas: coletor Argo CD"]:::implemented
     S0037["SPEC-0037<br/>org-atlas: curadoria de convenções"]:::implemented
@@ -79,12 +79,9 @@ flowchart LR
     S0061["SPEC-0061<br/>Auto-melhoria: aviso de instalação anti…"]:::approved
   end
   S0023 --> S0028
-  S0033 -. contrato v1 .-> S0034
-  S0033 -. contrato v1 .-> S0035
   S0037 -. contrato v2 .-> S0038
   S0037 -. contrato v2 .-> S0039
   S0039 --> S0040
-  S0033 --> S0046
   S0034 --> S0047
   S0035 --> S0047
   S0037 --> S0048
@@ -100,6 +97,7 @@ flowchart LR
   S0059 --> S0060
   S0058 --> S0061
   S0060 --> S0061
+  S0046 --> S0062
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -156,7 +154,7 @@ flowchart LR
 | [SPEC-0043](SPEC-0043-second-brain-description-do-skill-md-dentro-do-limite-de-102.md) | second-brain: description do SKILL.md dentro do limite de 1024 caracteres | lite | fix | implemented | 2026-11-02 | — | — | — |
 | [SPEC-0044](SPEC-0044-second-brain-captura-e-leitura-pelo-conector-do-provedor.md) | second-brain: captura e leitura pelo conector do provedor | full | feature | implemented | 2026-11-02 | — | SPEC-0021 | — |
 | [SPEC-0045](SPEC-0045-sdd-management-teste-de-tempo-do-leak-check-tolerante-a-carg.md) | sdd-management: teste de tempo do leak-check tolerante à carga | lite | fix | implemented | 2026-11-02 | — | — | — |
-| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | approved | 2026-10-30 | — | SPEC-0033 | — |
+| [SPEC-0046](SPEC-0046-org-atlas-testes-do-endurecimento-e-regra-de-processo.md) | org-atlas: testes do endurecimento do init e do doctor e regra de processo com alias | lite | fix | implemented | 2026-10-30 | — | SPEC-0033 | — |
 | [SPEC-0047](SPEC-0047-org-atlas-ids-de-repositorio-sem-diferenca-de-caixa-entre-co.md) | org-atlas: ids de repositório sem diferença de caixa entre coletores | lite | fix | approved | 2026-11-02 | — | SPEC-0034, SPEC-0035 | — |
 | [SPEC-0048](SPEC-0048-org-atlas-endurecimento-da-curadoria-e-alcance-da-rejeicao.md) | org-atlas: endurecimento da curadoria, do context e do lint, e alcance da rejeição | lite | fix | approved | 2026-11-02 | — | SPEC-0037, SPEC-0038, SPEC-0039, SPEC-0040 | — |
 | [SPEC-0050](SPEC-0050-second-brain-itens-confidenciais-e-cofre-de-senhas.md) | second-brain: itens confidenciais e cofre de senhas | full | feature | implemented | 2026-11-02 | — | SPEC-0023, SPEC-0024, SPEC-0044 | — |
@@ -171,6 +169,7 @@ flowchart LR
 | [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0058 | — |
 | [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
 | [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
+| [SPEC-0062](SPEC-0062-photon-brain-regra-de-processo-com-alias-e-imports-de-nomes.md) | photon-brain: regra de processo com alias e imports de nomes | lite | fix | proposed | 2026-11-15 | — | SPEC-0046 | — |
 
 ## ADRs
 

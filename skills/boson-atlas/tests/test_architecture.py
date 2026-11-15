@@ -5,7 +5,10 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 - scripts/atlas.py é arquivo único (nenhum outro .py em scripts/) e importa só a biblioteca padrão;
 - nenhum import de outra skill (gluon-spec, photon-brain, e pelos nomes antigos) nem de tools/, nem caminho para elas; e nenhum
   código de outra skill ou de tools/ importa atlas (o uso é só pela CLI);
-- processo externo só dentro da função run_collector, sem shell;
+- processo externo só dentro da função run_collector, sem shell; inclusive por import de nome ou com alias
+  (from subprocess import run, import subprocess as sp, from os import system) — SPEC-0046:UT-01;
+- nos coletores de assets/collectors/*.py, subprocess só na função que chama o executável do provedor (run_gh no
+  github.py, run_cli no argocd.py), com lista de argumentos e sem shell; os.system/os.popen proibidos — SPEC-0046:UT-04;
 - os coletores de assets/collectors/*.py, quando a pasta existe, importam só a biblioteca padrão e nada de
   outra skill;
 - nenhum caminho pessoal absoluto em arquivos de skills/boson-atlas/ fora de tests/ (placeholders como
@@ -13,6 +16,7 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 """
 import unittest
 
+import architecture_rules
 from architecture_rules import (
     cross_skill_path_findings,
     import_findings,
@@ -26,6 +30,18 @@ from helpers import SCRIPT, SKILL
 ALLOWED_PROCESS_FUNCTIONS = ("run_collector",)
 REPO = SKILL.parent.parent
 COLLECTORS = SKILL / "assets" / "collectors"
+
+
+# função do coletor que chama o executável do provedor (SPEC-0046:UT-04); coletor fora do mapa não roda processo
+COLLECTOR_PROCESS_FUNCTIONS = {"github.py": ("run_gh",), "argocd.py": ("run_cli",)}
+
+
+def collector_process_findings(*args, **kwargs):
+    """architecture_rules.collector_process_findings(source, filename, allowed) (SPEC-0046:UT-04)."""
+    rule = getattr(architecture_rules, "collector_process_findings", None)
+    if rule is None:
+        raise AssertionError("architecture_rules.collector_process_findings não existe (SPEC-0046)")
+    return rule(*args, **kwargs)
 
 
 def report(findings):
@@ -130,6 +146,48 @@ class ProcessRulesTest(unittest.TestCase):
         self.assertIn("doctor", findings[0])
         self.assertIn("scripts/atlas.py:7", findings[1])
 
+    def test_process_imported_by_name_or_alias_outside_run_collector_is_reported(self):
+        """SPEC-0046:UT-01"""
+        source = (
+            "from subprocess import run\n"
+            "import subprocess as sp\n"
+            "from os import system\n"
+            "import os\n"
+            "import subprocess\n"
+            "from os import path\n"
+            "def doctor():\n"
+            "    return path.exists('x')\n"
+        )
+        findings = subprocess_findings(source, "scripts/atlas.py", ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual(len(findings), 3, report(findings))
+        for finding, line in zip(findings, (1, 2, 3)):
+            self.assertIn(f"scripts/atlas.py:{line} ", finding)
+            self.assertIn("processos externos só em run_collector", finding)
+
+    def test_process_imported_by_name_or_alias_inside_run_collector_is_not_reported(self):
+        """SPEC-0046:UT-01"""
+        source = (
+            "def run_collector(argv):\n"
+            "    from subprocess import run\n"
+            "    import subprocess as sp\n"
+            "    from os import system, popen\n"
+            "    sp.Popen(argv)\n"
+            "    return run(argv)\n"
+        )
+        findings = subprocess_findings(source, "scripts/atlas.py", ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual(findings, [], report(findings))
+
+    def test_process_imported_by_name_from_os_popen_exec_spawn_is_reported(self):
+        """SPEC-0046:UT-01"""
+        source = ("from os import popen\n"
+                  "from os import execv\n"
+                  "from os import spawnv\n"
+                  "def doctor():\n"
+                  "    from os import system as sh\n")
+        findings = subprocess_findings(source, "scripts/atlas.py", ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual(len(findings), 4, report(findings))
+        self.assertIn("doctor", findings[3])
+
     def test_shell_is_reported(self):
         """SPEC-0032:UT-05"""
         source = ("import subprocess\n"
@@ -145,6 +203,76 @@ class ProcessRulesTest(unittest.TestCase):
         source = script_source()
         findings = subprocess_findings(source, "scripts/atlas.py", ALLOWED_PROCESS_FUNCTIONS)
         findings += shell_findings(source, "scripts/atlas.py")
+        self.assertEqual(findings, [], report(findings))
+
+
+class CollectorProcessRulesTest(unittest.TestCase):
+    GOOD = (
+        "import subprocess\n"
+        "def run_gh(gh, args, path):\n"
+        "    proc = subprocess.run([gh, *args], stdin=subprocess.DEVNULL, capture_output=True, timeout=60)\n"
+        "    return proc.stdout\n"
+        "def collect():\n"
+        "    try:\n"
+        "        return run_gh('gh', ['api'], 'x')\n"
+        "    except subprocess.TimeoutExpired:\n"
+        "        return None\n"
+    )
+
+    def test_collector_process_outside_the_provider_function_or_with_shell_is_reported(self):
+        """SPEC-0046:UT-04"""
+        cases = {
+            "subprocess.run fora de run_gh": (("import subprocess\n"
+                                               "def collect(gh):\n"
+                                               "    return subprocess.run([gh, 'api'])\n"), 3),
+            "subprocess no nível de módulo": (("import subprocess\n"
+                                               "subprocess.check_output(['gh', 'api'])\n"), 2),
+            "shell=True em run_gh": (("import subprocess\n"
+                                      "def run_gh(gh, args):\n"
+                                      "    return subprocess.run([gh, *args], shell=True)\n"), 3),
+            "texto em vez de lista em run_gh": (("import subprocess\n"
+                                                 "def run_gh(gh, args):\n"
+                                                 "    return subprocess.run(gh + ' api')\n"), 3),
+            "os.system em run_gh": (("import os\n"
+                                     "def run_gh(gh, args):\n"
+                                     "    return os.system('gh api')\n"), 3),
+            "os.popen em run_gh": (("import os\n"
+                                    "def run_gh(gh, args):\n"
+                                    "    return os.popen('gh api').read()\n"), 3),
+            "import com alias fora de run_gh": (("import subprocess as sp\n"
+                                                 "def run_gh(gh, args):\n"
+                                                 "    return [gh, *args]\n"), 1),
+        }
+        for name, (source, line) in cases.items():
+            with self.subTest(name):
+                findings = collector_process_findings(source, "assets/collectors/github.py", ("run_gh",))
+                self.assertTrue(findings, f"{name}: nenhum achado")
+                self.assertTrue(any(f"assets/collectors/github.py:{line} " in f for f in findings), report(findings))
+
+    def test_collector_process_with_unpacked_kwargs_in_the_provider_function_is_reported(self):
+        """SPEC-0046:UT-04"""
+        # `**opts` pode esconder shell=True, então a chamada é reportada mesmo dentro de run_gh
+        source = ("import subprocess\n"
+                  "def run_gh(gh, args, opts):\n"
+                  "    return subprocess.run([\"gh\"], **opts)\n")
+        findings = collector_process_findings(source, "assets/collectors/github.py", ("run_gh",))
+        self.assertTrue(findings, "kwargs desempacotados em run_gh: nenhum achado")
+        self.assertTrue(any("assets/collectors/github.py:3 " in f for f in findings), report(findings))
+
+    def test_collector_process_only_in_the_provider_function_with_a_list_is_not_reported(self):
+        """SPEC-0046:UT-04"""
+        findings = collector_process_findings(self.GOOD, "assets/collectors/github.py", ("run_gh",))
+        self.assertEqual(findings, [], report(findings))
+
+    def test_real_collectors_run_processes_only_in_the_provider_function(self):
+        """SPEC-0046:UT-04"""
+        github = COLLECTORS / "github.py"
+        self.assertTrue(github.is_file(), f"{github} não existe (SPEC-0034)")
+        findings = []
+        for path in sorted(COLLECTORS.glob("*.py")):
+            rel = path.relative_to(SKILL).as_posix()
+            allowed = COLLECTOR_PROCESS_FUNCTIONS.get(path.name, ())
+            findings += collector_process_findings(path.read_text(encoding="utf-8"), rel, allowed)
         self.assertEqual(findings, [], report(findings))
 
 

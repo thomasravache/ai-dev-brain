@@ -2,10 +2,23 @@
 
 O atlas guarda só metadados, nunca valor de segredo (ADR-0010). Por isso o `atlas.py scan` passa toda saída de coletor já validada (`references/collector-contract.md`) pela função `redact` **antes** de gravar o snapshot: cada trecho de texto que casa com um dos padrões abaixo vira `[REDACTED]`. O resto do texto fica como está.
 
-- Vale para todo texto da saída: `name`, `id`, valores de `attrs` (também dentro de listas), relações e sinais, e também as **chaves** dos objetos (um token usado como chave de `attrs` ou de `pattern_counts` vira `[REDACTED]` e conta). Se duas chaves do mesmo objeto viram `[REDACTED]`, as outras ficam `[REDACTED]#2`, `[REDACTED]#3`… numa ordem fixa, então nenhum valor se perde e o snapshot continua estável. Chave de `attrs` com nome de segredo (`password`, `passwd`, `pwd`, `token`, `api_key`...) e campo fora do contrato são descartados pelo validador, antes.
+- Vale para todo texto da saída: `name`, `id`, valores de `attrs` (também dentro de listas), relações e sinais, e também as **chaves** dos objetos (um token usado como chave de `attrs` ou de `pattern_counts` vira `[REDACTED]` e conta). Se duas chaves do mesmo objeto viram `[REDACTED]`, as outras ficam `[REDACTED]#2`, `[REDACTED]#3`… numa ordem fixa, então nenhum valor se perde e o snapshot continua estável. Chave de `attrs` (ou de sinal) com nome de segredo e campo fora do contrato são descartados pelo validador, antes (regra abaixo).
 - Números, booleanos e `null` ficam como estão.
 - O relatório mostra só a contagem — `N valor(es) mascarado(s)` (`redacted` no `--json`) —, **nunca** o valor mascarado.
 - O stderr de um coletor com falha é mascarado **inteiro** antes de ser cortado (últimas 20 linhas, 500 caracteres por linha): um bloco de chave em várias linhas some todo e um token no limite do corte não deixa pedaço. As mensagens de violação e os nomes descartados passam pelos mesmos padrões antes de aparecer na tela.
+
+## Chave proibida
+
+O validador descarta, e reporta pelo nome (nunca pelo valor), a chave de `attrs` ou de sinal cujo nome diz segredo. O nome é comparado em minúsculas, com camelCase separado (`apiToken` = `api_token`) e dividido em partes por qualquer caractere que não seja letra ou número (SPEC-0046):
+
+- `password`, `passwd`, `secret` ou `credential` em qualquer lugar do nome (`db_password`, `clientSecret`);
+- `token`, `tokens`, `private`, `pwd`, `auth` ou `authorization` como parte inteira (`api_token`, `db_pwd`, `auth`, `basic_auth`), ou o nome terminando em `token`/`tokens` (`accesstoken`);
+- `key`/`keys` como parte inteira (`key`, `api_key`, `deploy_keys`), menos depois de um qualificador de chave de dados: `primary`, `sort`, `public`, `foreign`, `partition`, `range`, `hash`, `unique`, `composite`, `natural`, `surrogate`, `row`, `cache`, `idempotency`, `lookup`, `index` ou `join` (`primary_key`, `sort_keys` e `public_key` ficam);
+- qualquer nome terminado em `key`/`keys` colado (`apikey`, `privkey`, `hmackey`, `accountkey`, `sessionkey`, `licensekey`, `hostkey`...), menos as palavras comuns `monkey`, `donkey`, `turkey`, `hockey`, `jockey` e `whiskey` (e os plurais) e um dos qualificadores acima colado no `key` (`primarykey`, `sortkey`, `publickey`).
+
+Não são proibidas: `monkey`, `author`, `tokenizer`, `primary_key`, `sort_keys`, `public_key`. Na dúvida a regra descarta: o valor de uma chave descartada nunca chega ao snapshot.
+
+> **Aviso:** `primary_key` (e `primaryKey`, `primarykey`) fica liberado porque a SPEC-0046 manda assim: na maioria dos sistemas é o nome da chave de uma tabela. Em alguns provedores de nuvem, como o Azure, `primaryKey` é a chave de acesso de uma conta de armazenamento ou de um serviço. Um coletor de nuvem nunca deve expor `primaryKey` (nem `secondaryKey`) de credencial como atributo: o validador não vai descartá-lo.
 
 ## Padrões embutidos
 

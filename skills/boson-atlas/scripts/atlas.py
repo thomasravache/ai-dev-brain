@@ -26,7 +26,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.3"
+ATLAS_VERSION = "2026.11.4"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -415,6 +415,8 @@ def load_config(config_home=None) -> dict:
     validate_credentials(credentials)
     values["credentials"] = credentials if isinstance(credentials, dict) else {}
     origins["credentials"] = ORIGIN_LOCAL if "credentials" in local else ORIGIN_DEFAULT
+    if values["atlas"]:
+        require_readable_atlas(values["atlas"])
     shared_path = Path(values["atlas"]) / SHARED_FILE if values["atlas"] else None
     shared = read_yaml(shared_path) if shared_path and shared_path.is_file() else {}
     validate_ci(shared.get("ci"))
@@ -465,8 +467,17 @@ RELATION_ALLOWED = RELATION_FIELDS + ("inferred",)
 SIGNAL_ALLOWED = ("type", "repository", "total", "pattern_counts", "sample", "counts", "present")
 # keys whose name says "secret": dropped and reported, never a violation (ADR-0011); fields outside the contract
 # get the same treatment (G4 review): only the contract's fields reach the snapshot
-FORBIDDEN_WORDS = ("password", "passwd", "secret", "token", "credential")  # anywhere in the name (api_token)
-FORBIDDEN_PARTS = ("key", "keys", "private", "pwd")  # a whole part of the name (api_key, db_pwd), or ...key at the end
+# (SPEC-0046) words anywhere in the name; whole parts of the name (api_token, db_pwd, basic_auth); ...token at
+# the end (accesstoken, not tokenizer); key/keys as a part unless it names a data key (primary_key, sort_keys,
+# public_key); and any name glued to key/keys at the end (privkey, hmackey, apikey), except a few common words
+# (monkey) and a data-key qualifier glued to it (primarykey). When in doubt, the key is dropped.
+FORBIDDEN_WORDS = ("password", "passwd", "secret", "credential")
+FORBIDDEN_PARTS = ("token", "tokens", "private", "pwd", "auth", "authorization")
+FORBIDDEN_ENDINGS = ("token", "tokens")
+KEY_PARTS = ("key", "keys")
+DATA_KEY_QUALIFIERS = ("primary", "sort", "public", "foreign", "partition", "range", "hash", "unique", "composite",
+                       "natural", "surrogate", "row", "cache", "idempotency", "lookup", "index", "join")
+KEY_WORDS = ("monkey", "donkey", "turkey", "hockey", "jockey", "whiskey")  # common words ending in key
 ENTITY_REF_RE = re.compile(r"^([a-z][a-z-]*):(.+)$")
 COLLECTED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$")
 NAME_PARTS_RE = re.compile(r"[a-z0-9]+")
@@ -481,8 +492,18 @@ def is_scalar_value(value) -> bool:
 def is_forbidden_key(name) -> bool:
     text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(name)).lower()  # camelCase -> camel_case
     parts = NAME_PARTS_RE.findall(text)
-    return (any(word in text for word in FORBIDDEN_WORDS) or any(part in FORBIDDEN_PARTS for part in parts)
-            or text.endswith(("key", "keys")))
+    if any(word in text for word in FORBIDDEN_WORDS) or any(part in FORBIDDEN_PARTS for part in parts):
+        return True
+    if "".join(parts).endswith(FORBIDDEN_ENDINGS):
+        return True
+    if any(part in KEY_PARTS and (index == 0 or parts[index - 1] not in DATA_KEY_QUALIFIERS)
+           for index, part in enumerate(parts)):
+        return True
+    last = parts[-1] if parts else ""
+    if last in KEY_PARTS or not last.endswith(KEY_PARTS):
+        return False
+    stem = last[:-4] if last.endswith("keys") else last[:-3]
+    return not (stem in DATA_KEY_QUALIFIERS or last in KEY_WORDS or last[:-1] in KEY_WORDS)
 
 
 def entity_ref_problem(value) -> bool:
@@ -599,9 +620,9 @@ def validate_collector_output(data) -> tuple:
 
     violations empty = valid. A relation to an entity of another collector is valid (only the kind:id format is
     checked; dangling references are a lint warning, SPEC-0039). Only the contract's fields stay in `clean`
-    (output, entity, relation and signal); any other field and every forbidden key (password, passwd, pwd, secret,
-    token, key, credential, private — in attrs and in a signal) is dropped and reported in `dropped` by where it
-    was and its name, never its value. Dropping is not a violation."""
+    (output, entity, relation and signal); any other field and every forbidden key (is_forbidden_key: password,
+    secret, token, auth, api_key, privkey, credential, private...; in attrs and in a signal) is dropped and reported
+    in `dropped` by where it was and its name, never its value. Dropping is not a violation."""
     if not isinstance(data, dict):
         return data, ["a saída não é um objeto JSON"], []
     violations, dropped = [], []
@@ -970,6 +991,19 @@ def _without_collected_at(snapshot) -> dict:
     return {k: v for k, v in (snapshot or {}).items() if k != "collected_at"}
 
 
+def identity_violations(data, collector: dict) -> list:
+    """category of the output that differs from the category declared in atlas-config.yml (SPEC-0046, Emenda v2;
+    an addition to org-atlas/collector@1). `collector` is the name of whoever produced the output and may differ
+    from the declared id (generic declared as db-facts): it is not checked, and the snapshot always goes by the
+    declared id. A missing or non-text category is already a violation of validate_collector_output."""
+    if not isinstance(data, dict):
+        return []
+    value, declared = data.get("category"), collector.get("category")
+    if value in CATEGORIES and value != declared:  # an unknown category is already its own violation
+        return [f"category da saída ({value}) diferente da declarada no atlas-config.yml ({declared})"]
+    return []
+
+
 def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
     """Runs, validates, redacts, normalizes and writes one collector; returns its report (never raises for a
     failure of the collector: the previous snapshot is kept)."""
@@ -989,6 +1023,7 @@ def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
         report["reason"] = f"JSON inválido na saída: {e.msg} (linha {e.lineno}, coluna {e.colno})"
         return report
     clean, violations, dropped = validate_collector_output(data)
+    violations += identity_violations(data, collector)
     if violations:
         report["reason"] = f"saída fora do contrato {CONTRACT} ({len(violations)} violação(ões))"
         report["violations"] = [_redact_text(v, extras)[0] for v in violations]
@@ -1045,6 +1080,7 @@ def scan_config():
     atlas = local.get("atlas")
     if not isinstance(atlas, str) or not atlas:
         raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
+    require_readable_atlas(atlas)
     shared_path = Path(atlas) / SHARED_FILE
     if not shared_path.is_file():
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared_path}", 2)
@@ -2892,6 +2928,7 @@ def _lint_atlas() -> Path:
         raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
     if not os.path.isdir(atlas):
         raise AtlasError(f"pasta do atlas não encontrada: {atlas} — rode init (ou init --join)", 3)
+    require_readable_atlas(atlas)
     return Path(atlas)
 
 
@@ -3062,6 +3099,7 @@ def create_structure(atlas: Path, organization: str, shared_text: str) -> list:
 
 
 def join_atlas(atlas_path: str, local_path: Path) -> int:
+    require_readable_atlas(atlas_path)
     shared = Path(atlas_path) / SHARED_FILE
     if not shared.is_file():
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared}", 2)
@@ -3093,6 +3131,7 @@ def cmd_init(args):
     shared = atlas / SHARED_FILE
     if atlas.exists() and not atlas.is_dir():
         raise AtlasError(f"não é uma pasta: {atlas_path}", 2)
+    require_readable_atlas(atlas)
     local_text = render_local_config(atlas_path, credentials)
 
     if shared.is_file():
@@ -3221,6 +3260,32 @@ def credential_checks(credentials) -> list:
     return rows
 
 
+def unreadable_atlas(atlas) -> str:
+    """Problem of an existing atlas folder that cannot be listed or entered ("" when it can, or when it is not a
+    folder). Newer Pythons answer False in Path.exists()/is_file() on PermissionError, so a folder without
+    permission would look empty; this check runs before them (SPEC-0046)."""
+    atlas = Path(atlas)
+    try:
+        if not atlas.is_dir():
+            return ""
+        if os.access(atlas, os.R_OK | os.X_OK):
+            with os.scandir(atlas) as entries:
+                next(entries, None)
+            return ""
+    except PermissionError:
+        pass
+    except OSError as e:
+        return f"não consegui ler {atlas}: {e.strerror or e}"
+    return f"sem permissão de leitura: {atlas} — dê permissão de leitura e de listagem à pasta"
+
+
+def require_readable_atlas(atlas) -> None:
+    """AtlasError (exit 1) when the atlas folder exists but cannot be read (unreadable_atlas)."""
+    problem = unreadable_atlas(atlas)
+    if problem:
+        raise AtlasError(f"pasta do atlas {problem}", 1)
+
+
 def atlas_checks(atlas: Path) -> tuple:
     """(rows, shared) for atlas-config.yml, the structure and git of an existing atlas folder."""
     rows, shared = [], None
@@ -3278,6 +3343,10 @@ def doctor_rows(config_home=None) -> list:
     try:
         if not Path(atlas).is_dir():
             rows.append(("ERRO", "pasta do atlas", f"não existe: {atlas}"))
+            return rows + credential_checks(credentials)
+        problem = unreadable_atlas(atlas)
+        if problem:
+            rows.append(("ERRO", "pasta do atlas", problem))
             return rows + credential_checks(credentials)
         found, shared = atlas_checks(Path(atlas))
     except OSError as e:

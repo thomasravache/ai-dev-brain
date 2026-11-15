@@ -31,8 +31,8 @@ O coletor imprime na **saída padrão um único objeto JSON** e sai com 0. O que
 | Campo | Obrigatório | Conteúdo |
 |---|---|---|
 | `contract` | sim | `"org-atlas/collector@1"` |
-| `collector` | sim | id do coletor (texto não vazio) |
-| `category` | sim | `code`, `ci`, `delivery`, `runtime`, `data`, `messaging`, `observability`, `tracker`, `docs` ou `secrets` |
+| `collector` | sim | nome de quem gerou a saída (texto não vazio); pode ser diferente do `id` declarado no `atlas-config.yml` — o `generic` declarado como `db-facts` imprime `generic` — e não é conferido: o snapshot vai sempre para `snapshots/<id declarado>.json` (SPEC-0046) |
+| `category` | sim | `code`, `ci`, `delivery`, `runtime`, `data`, `messaging`, `observability`, `tracker`, `docs` ou `secrets`; tem de ser igual à `category` declarada para o coletor no `atlas-config.yml`, senão é violação (SPEC-0046) |
 | `collected_at` | sim | ISO 8601 UTC, por exemplo `2026-10-30T12:00:00Z` |
 | `entities` | sim | lista de entidades (pode ser vazia) |
 | `relations` | sim | lista de relações (pode ser vazia) |
@@ -71,6 +71,7 @@ Uma saída com violação não é gravada: o `scan` mostra `FALHA <id> — saíd
 | `contract não suportado: <valor>` | `contract` diferente de `org-atlas/collector@1` |
 | `collector precisa ser um texto não vazio` | `collector` vazio ou que não é texto |
 | `category desconhecida: <valor>` | `category` fora da lista |
+| `category da saída (<valor>) diferente da declarada no atlas-config.yml (<declarada>)` | `category` diferente da declarada para o coletor (SPEC-0046; mudança aditiva no `org-atlas/collector@1`) |
 | `collected_at fora do formato ISO 8601 UTC (AAAA-MM-DDTHH:MM:SSZ): <valor>` | data sem formato ou fora de UTC |
 | `entities precisa ser uma lista`, `relations precisa ser uma lista`, `signals precisa ser uma lista` | campo com outro tipo |
 | `entities[<i>]: kind desconhecido: <valor>` | `kind` fora da lista |
