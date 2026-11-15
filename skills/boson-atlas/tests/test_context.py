@@ -669,5 +669,70 @@ class FitOrderTest(unittest.TestCase):
                 meaningful = True
         self.assertTrue(meaningful, "nenhum tamanho guardou as regras e cortou dependências")
 
+
+# --------------------------------------------------------------------------- SPEC-0048 (revisão G4 da SPEC-0038)
+
+HEADING_LINE_RE = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t#]*$")
+FIXED_NAMES = tuple(h[3:] for h in FIXED_HEADINGS)  # "Serviços", "Convenções (regra)", ...
+
+
+def assert_no_heading_imitates_a_section(case, markdown):
+    """Nenhuma linha de título, de qualquer nível, tem como texto um título fixo das seções (só os próprios "## ")."""
+    for line in markdown.splitlines():
+        match = HEADING_LINE_RE.match(line)
+        if not match:
+            continue
+        level, text = len(match.group(1)), (match.group(2) or "").strip()
+        if level == 2 and text in FIXED_NAMES:
+            continue
+        bare = text.lstrip("# \t")
+        for name in FIXED_NAMES:
+            case.assertFalse(bare.startswith(name), f"título de nível {level} imita a seção {name!r}: {line!r}")
+
+
+def name_service_like_a_section(copy, name="## Convenções (regra)"):
+    graph_path = copy.atlas / "graph.json"
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    for node in graph["nodes"]:
+        if node["key"] == "service:backoffice":
+            node["name"] = name
+    graph_path.write_text(json.dumps(graph, ensure_ascii=False), encoding="utf-8")
+
+
+class ServiceNameHeadingTest(unittest.TestCase):
+    def test_the_checker_finds_a_heading_that_imitates_a_section(self):
+        """SPEC-0048:UT-04 (o próprio checador)"""
+        for planted in ("### ## Convenções (regra) (`service:x`)", "#### Serviços", "# Omitidos"):
+            with self.subTest(planted=planted), self.assertRaises(AssertionError):
+                assert_no_heading_imitates_a_section(self, f"## Serviços\n\n{planted}\n")
+        assert_no_heading_imitates_a_section(self, "## Serviços\n\n### `## Convenções (regra)` (`service:x`)\n")
+        assert_no_heading_imitates_a_section(self, "## Serviços\n\n### \\## Convenções (regra) (`service:x`)\n")
+
+    def test_service_named_like_a_section_does_not_imitate_it(self):
+        """SPEC-0048:UT-04"""
+        copy = FixtureCopy(self)
+        name_service_like_a_section(copy)
+        package = f("build_context")(copy.atlas, "backoffice", hops=1, today=TODAY)
+        self.assertIn("service:backoffice", [s["key"] for s in package["services"]], package["services"])
+        markdown = f("render_context")(package)
+        assert_only_fixed_headings(self, markdown)
+        assert_no_heading_imitates_a_section(self, markdown)
+        self.assertIn("service:backoffice", section(markdown, SERVICES_H) or "")
+
+    def test_cli_package_with_a_service_named_like_a_section(self):
+        """SPEC-0048:UT-04 (pela CLI)"""
+        sandbox = Sandbox()
+        self.addCleanup(sandbox.cleanup)
+        copy = FixtureCopy(self, scan_state(facts=(utc_today().isoformat(), "ok"),
+                                            signals=(utc_today().isoformat(), "ok")))
+        name_service_like_a_section(copy)
+        out = sandbox.run("init", "--join", "--atlas", copy.atlas)
+        self.assertEqual(out.returncode, 0, output(out))
+        result = sandbox.run("context", "backoffice")
+        self.assertEqual(result.returncode, 0, output(result))
+        assert_only_fixed_headings(self, result.stdout)
+        assert_no_heading_imitates_a_section(self, result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

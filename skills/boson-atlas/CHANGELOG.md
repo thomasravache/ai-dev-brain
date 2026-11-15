@@ -9,6 +9,18 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.6] - 2026-11-15
+
+### Fixed
+- `curate propose`: o nome do repositório e o padrão vindos do coletor passam pela mesma limpeza dos títulos da amostra (uma linha, `<!--`/`-->` neutralizados) na evidência e no título; um nome com `<!-- atlas:end evidence -->` não fecha mais a região nem faz o arquivo crescer a cada `propose` (SPEC-0048).
+- `curate propose`: dois repositórios que caem no mesmo id (`acme/a-b` e `acme-a/b`) ganham um sufixo curto e estável (hash de `<org>/<nome>`, como o slug da SPEC-0036) e deixam de escrever o mesmo arquivo; um repositório sem colisão mantém o id (SPEC-0048).
+- `curate confirm`/`reject`: `--via "PR #n"` aceita só dígitos ASCII (`PR #３` sai com 2) e o valor inteiro, sem quebra de linha no fim (`\Z` em vez de `$`) (SPEC-0048).
+- Uma rejeição vale para o mesmo kind e padrão em qualquer escopo: rejeitada `pr-title-conventional` (organization), o `propose` não cria `pr-title-conventional-<repo>` (nem o contrário). Nova função `is_rejected`; o padrão de uma rejeitada sai do id, do `kind` e do `scope` do frontmatter, sem mudar o formato do arquivo (`references/curation.md`) (SPEC-0048).
+- `context`: o nome do serviço no título `### ` vai entre crases e crases dentro de valores viram `'`; um serviço chamado `## Convenções (regra)` não imita mais uma seção do pacote (SPEC-0048).
+- `lint`: depois da máscara por componente, o caminho inteiro também é mascarado (padrão que atravessa `/`); o radical até o primeiro ponto também é testado e mascarado (`acme-x.tar.gz`, `.acme-x`); destinos de link são mascarados sem `#fragmento`/`?query` (SPEC-0048).
+- `lint`: uma `.org-atlas/skill/scripts/atlas.py` diferente da skill instalada vira AVISO `config` (``cópia da skill desatualizada — rode `vendor` ``) em vez de um ERRO `secret-leak` falso. A cópia desatualizada continua sendo varrida (texto e nome): só são descartadas as ocorrências cujo texto casado também aparece no `atlas.py` instalado (as regex e os exemplos da própria ferramenta), então um token plantado nela, um conteúdo qualquer nesse caminho ou um segredo em outro arquivo da cópia continuam ERRO (SPEC-0048).
+- `curate propose`: documentado em `references/curation.md` que o sufixo de colisão só aparece quando há colisão (um repositório que passa a colidir muda de id e gera proposta nova; uma `confirmed` fica sem evidência atualizada até consolidação à mão) e que padrões com o mesmo `_id_part` no mesmo repositório ou na organização continuam colidindo (SPEC-0048).
+
 ## [2026.11.5] - 2026-11-15
 
 ### Fixed

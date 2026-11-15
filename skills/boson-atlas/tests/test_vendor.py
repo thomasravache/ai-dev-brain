@@ -447,5 +447,101 @@ class GenericScriptTest(VendorCase):
         self.assertEqual(failed.returncode, 1, f"coletor falhando: {output(failed)}")
 
 
+
+# --------------------------------------------------------------------------- SPEC-0048 (revisão G4 da SPEC-0040)
+
+LINT_LINE = re.compile(r"^(ERRO|AVISO) (\S+) (\S+) — (.+)$")
+
+
+class OutdatedCopyTest(VendorCase):
+    """A cópia vendorizada de atlas.py difere da skill instalada (versão anterior, sem segredo): o lint rodado pela
+    skill instalada não acusa as regex da própria ferramenta como segredo, e sim um AVISO config que manda rodar
+    vendor."""
+
+    def setUp(self):
+        super().setUp()
+        out = self.vendor("--ci", "github")
+        self.assert_vendor_ran(out)
+        copy = self.atlas / COPY_SCRIPT
+        copy.write_text(SCRIPT.read_text(encoding="utf-8").replace('ATLAS_VERSION = "', 'ATLAS_VERSION = "0.', 1)
+                        + "\n# versão anterior da skill\n", encoding="utf-8")
+        self.assertNotEqual(copy.read_bytes(), SCRIPT.read_bytes())
+
+    def lint(self):
+        """(achados do --json, linhas do texto) do lint pela skill instalada."""
+        as_json, text = self.box.run("lint", "--json"), self.box.run("lint")
+        for out in (as_json, text):
+            self.assertNotIn("Traceback", output(out), output(out))
+        lines = [LINT_LINE.match(line) for line in text.stdout.splitlines() if LINT_LINE.match(line)]
+        return json.loads(as_json.stdout)["findings"], lines, (as_json.returncode, text.returncode)
+
+    def assert_outdated_copy_warning(self, findings, lines):
+        tool = COPY_SCRIPT.as_posix()
+        leaks = [x for x in findings if x["rule"] == "secret-leak" and x["path"].startswith(tool)]
+        self.assertEqual(leaks, [], "as regex da própria ferramenta viraram secret-leak")
+        self.assertFalse([m for m in lines if m.group(2) == "secret-leak" and m.group(3).startswith(tool)])
+        warnings = [x for x in findings if x["rule"] == "config" and x["path"] == tool]
+        self.assertEqual(len(warnings), 1, findings)
+        self.assertEqual(warnings[0]["severity"], "warn", warnings)
+        self.assertIn("vendor", warnings[0]["detail"] + " " + warnings[0]["suggestion"], warnings)
+        text = [m for m in lines if m.group(2) == "config" and m.group(3) == tool]
+        self.assertEqual([m.group(1) for m in text], ["AVISO"], [m.group(0) for m in lines])
+        self.assertIn("vendor", text[0].group(4))
+
+    def test_outdated_copy_is_a_config_warning_not_a_secret_leak(self):
+        """SPEC-0048:UT-06"""
+        findings, lines, codes = self.lint()
+        self.assert_outdated_copy_warning(findings, lines)
+        self.assertEqual([x for x in findings if x["severity"] == "error"], [], findings)
+        self.assertEqual(codes, (0, 0))
+
+    def test_a_secret_in_another_file_of_the_copy_is_still_an_error(self):
+        """SPEC-0048:UT-06 (um segredo plantado em outro arquivo da cópia continua ERRO)"""
+        token = secret_like()
+        (self.atlas / COPY / "notes.txt").write_text(f"token do time: {token}\n", encoding="utf-8")
+        findings, lines, codes = self.lint()
+        self.assert_outdated_copy_warning(findings, lines)
+        planted = [x for x in findings if x["rule"] == "secret-leak" and x["path"].startswith(f"{COPY}/notes.txt")]
+        self.assertEqual(len(planted), 1, findings)
+        self.assertEqual(planted[0]["severity"], "error")
+        self.assertTrue([m for m in lines if (m.group(1), m.group(2)) == ("ERRO", "secret-leak")
+                         and m.group(3).startswith(f"{COPY}/notes.txt")])
+        self.assertEqual(codes, (1, 1))
+        self.assertNotIn(token, json.dumps(findings))
+
+    def assert_secret_in_the_tool_is_an_error(self, token):
+        tool = COPY_SCRIPT.as_posix()
+        findings, lines, codes = self.lint()
+        leaks = [x for x in findings if x["rule"] == "secret-leak" and x["path"].startswith(f"{tool}:")]
+        self.assertTrue(leaks, f"segredo plantado em {tool} não virou secret-leak: {findings}")
+        self.assertEqual({x["severity"] for x in leaks}, {"error"}, leaks)
+        self.assertTrue([m for m in lines if (m.group(1), m.group(2)) == ("ERRO", "secret-leak")
+                         and m.group(3).startswith(f"{tool}:")], [m.group(0) for m in lines])
+        self.assertEqual(codes, (1, 1))
+        self.assertNotIn(token, json.dumps(findings))
+        self.assertNotIn(token[4:16], json.dumps(findings))
+        for out in (self.box.run("lint"), self.box.run("lint", "--json")):
+            self.assertNotIn(token, output(out), "o lint repete o valor do segredo")
+        return findings, lines
+
+    def test_a_secret_planted_in_the_outdated_tool_is_still_an_error(self):
+        """SPEC-0048:UT-06 (revisão G4: a cópia desatualizada de atlas.py não é ponto cego do lint)"""
+        token = secret_like()
+        copy = self.atlas / COPY_SCRIPT
+        copy.write_text(copy.read_text(encoding="utf-8") + f"# token do time: {token}\n", encoding="utf-8")
+        findings, _ = self.assert_secret_in_the_tool_is_an_error(token)
+        tool = COPY_SCRIPT.as_posix()
+        warnings = [x for x in findings if x["rule"] == "config" and x["path"] == tool]
+        self.assertEqual(len(warnings), 1, findings)
+        self.assertEqual(warnings[0]["severity"], "warn", warnings)
+        self.assertIn("vendor", warnings[0]["detail"] + " " + warnings[0]["suggestion"], warnings)
+
+    def test_tool_replaced_by_arbitrary_content_with_a_secret_is_an_error(self):
+        """SPEC-0048:UT-06 (revisão G4: atlas.py da cópia trocado por conteúdo qualquer com segredo)"""
+        token = secret_like()
+        (self.atlas / COPY_SCRIPT).write_text(f"token={token}\n", encoding="utf-8")
+        self.assert_secret_in_the_tool_is_an_error(token)
+
+
 if __name__ == "__main__":
     unittest.main()

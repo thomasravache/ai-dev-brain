@@ -26,7 +26,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.5"
+ATLAS_VERSION = "2026.11.6"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -1717,7 +1717,7 @@ CONVENTION_STATUSES = ("inferred", "confirmed", "rejected")
 CONVENTION_KEYS = ("id", "title", "kind", "scope", "status", "proposed_at", "confirmed_by", "confirmed_at",
                    "confirmed_via", "reason")
 CONVENTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-VIA_RE = re.compile(r"^(PR #\d+|local)$")
+VIA_RE = re.compile(r"^(PR #[0-9]+|local)\Z")  # ASCII digits only (not \d: "PR #３")
 BAD_VIA = "--via aceita 'PR #<n>' ou 'local'"
 SAMPLE_MAX = 10
 MERGE_METHODS = ("merge", "squash", "rebase")
@@ -1764,7 +1764,8 @@ def _id_part(text) -> str:
 
 
 def _clean_line(text) -> str:
-    """A sample title as one Markdown line that cannot close the generated region."""
+    """A collector text (sample title, repository name, pattern) as one Markdown line that cannot close the
+    generated region."""
     return " ".join(str(text).split()).replace("<!--", "&lt;!--").replace("-->", "--&gt;")
 
 
@@ -1779,6 +1780,7 @@ def _signals_by_type(signals) -> dict:
 
 
 def _item_title(kind, pattern) -> str:
+    pattern = _clean_line(pattern)
     if kind == "pr-title":
         return PR_TITLE_TITLES.get(pattern, f"Títulos de PR no padrão {pattern}")
     return f"Branches com o prefixo {pattern}"
@@ -1790,7 +1792,7 @@ def _item_evidence(kind, pattern, repos, by_repo, follows) -> str:
     count = sum(_number((by_repo[r].get("pattern_counts" if kind == "pr-title" else "counts") or {}).get(pattern))
                 for r in repos)
     unit = "PRs" if kind == "pr-title" else "branches"
-    lines = [f"- Padrão: `{pattern}`", (f"- Total: {total} {unit} da amostra; seguem o padrão: {count} "
+    lines = [f"- Padrão: `{_clean_line(pattern)}`", (f"- Total: {total} {unit} da amostra; seguem o padrão: {count} "
                                          f"({_percent(count, total)})"),
              f"- Repositórios com o padrão dominante: {len([r for r in repos if r in follows])} de {len(repos)}"]
     for repo in repos:
@@ -1798,7 +1800,7 @@ def _item_evidence(kind, pattern, repos, by_repo, follows) -> str:
         counts = item.get("pattern_counts" if kind == "pr-title" else "counts") or {}
         part, whole = _number(counts.get(pattern)), _number(item.get("total"))
         mark = "" if repo in follows else " — sem padrão dominante"
-        lines.append(f"  - {repo}: {part} de {whole} ({_percent(part, whole)}){mark}")
+        lines.append(f"  - {_clean_line(repo)}: {part} de {whole} ({_percent(part, whole)}){mark}")
     sample = [title for repo in repos if repo in follows
               for title in (by_repo[repo].get("sample") or []) if isinstance(title, str)][:SAMPLE_MAX]
     if sample:
@@ -1829,7 +1831,7 @@ def _item_proposals(kind, by_repo, settings) -> list:
                               "pattern": pattern, "evidence": _item_evidence(kind, pattern, repos, by_repo, follows)})
             continue
         for repo in follows:
-            proposals.append({"id": f"{base}-{_id_part(repo)}", "title": f"{title} em {repo}", "kind": kind,
+            proposals.append({"id": f"{base}-{_id_part(repo)}", "title": f"{title} em {_clean_line(repo)}", "kind": kind,
                               "scope": f"repository:{repo}", "pattern": pattern,
                               "evidence": _item_evidence(kind, pattern, [repo], by_repo, follows)})
     return proposals
@@ -1864,16 +1866,84 @@ def _repository_proposals(kind, by_repo, settings) -> list:
         for repo in repos:
             other = patterns[repo] if kind == "merge-method" else None
             if repo in follows:
-                lines.append(f"  - {repo}: segue")
+                lines.append(f"  - {_clean_line(repo)}: segue")
             elif kind == "merge-method" and other is None:
-                lines.append(f"  - {repo}: mais de um método (ou nenhum) permitido")
+                lines.append(f"  - {_clean_line(repo)}: mais de um método (ou nenhum) permitido")
             elif other:
-                lines.append(f"  - {repo}: só `{other}`")
+                lines.append(f"  - {_clean_line(repo)}: só `{other}`")
             else:
-                lines.append(f"  - {repo}: sem template")
+                lines.append(f"  - {_clean_line(repo)}: sem template")
         proposals.append({"id": f"{kind}-{pattern}", "title": title, "kind": kind, "scope": "organization",
                           "pattern": pattern, "evidence": "\n".join(lines)})
     return proposals
+
+
+def _repo_suffix(repo) -> str:
+    """Short stable suffix of a repository id (hash of `<org>/<name>`), as the slug of long page names (SPEC-0036)."""
+    return hashlib.sha1(str(repo).encode("utf-8")).hexdigest()[:8]
+
+
+def _without_id_collisions(proposals) -> list:
+    """Repository-scope proposals whose id is shared with another proposal get "-<hash of the repository>"
+    (acme/a-b and acme-a/b both give "...-acme-a-b"); an id without collision stays as it was. Depends only on the
+    set of proposals, never on the order of the signals."""
+    count = {}
+    for proposal in proposals:
+        count[proposal["id"]] = count.get(proposal["id"], 0) + 1
+    for proposal in proposals:
+        scope = proposal["scope"]
+        if count[proposal["id"]] > 1 and scope.startswith("repository:"):
+            proposal["id"] = f"{proposal['id']}-{_repo_suffix(scope[len('repository:'):])}"
+    return proposals
+
+
+def _id_pattern(kind, scope, cid):
+    """The pattern part of a convention id (`_id_part` of the pattern) from its kind, scope and id, the way
+    propose builds it: "<kind>-<pattern>" (organization) or "<kind>-<pattern>-<repository>[-<hash>]"; None when
+    the id does not have that shape (written by hand)."""
+    prefix = f"{kind}-"
+    if not kind or not cid.startswith(prefix):
+        return None
+    rest = cid[len(prefix):]
+    if scope.startswith("repository:"):
+        repo = scope[len("repository:"):]
+        for end in (f"-{_id_part(repo)}-{_repo_suffix(repo)}", f"-{_id_part(repo)}"):
+            if rest.endswith(end) and len(rest) > len(end):
+                return rest[:-len(end)]
+        return None
+    return rest or None
+
+
+EVIDENCE_PATTERN_RE = re.compile(r"^- Padrão: `([^`\n]+)`$", re.MULTILINE)
+
+
+def _rejections(conventions: dict) -> list:
+    """{id, kind, scope, pattern} of the rejected conventions. The file has no `pattern` key (its format does not
+    change): the pattern comes from the id (kind, scope and id of the frontmatter, the record a person decided on);
+    an id written by hand falls back to the "- Padrão: `x`" line of the evidence; neither = None (id only)."""
+    result = []
+    for cid, (meta, text) in conventions.items():
+        if meta.get("status") != "rejected":
+            continue
+        kind, scope = str(meta.get("kind") or ""), str(meta.get("scope") or "")
+        pattern = _id_pattern(kind, scope, cid)
+        if pattern is None:
+            found = EVIDENCE_PATTERN_RE.search(page_regions(text).get("evidence", ""))
+            pattern = found.group(1) if found else None
+        result.append({"id": cid, "kind": kind, "scope": scope, "pattern": pattern})
+    return result
+
+
+def is_rejected(proposal: dict, rejections: list) -> bool:
+    """True when a rejected convention has the same id, or the same kind and pattern in any scope: whoever rejects
+    the rule rejects the rule, not the scope (ADR-0012). Patterns are compared as they appear in ids (_id_part)."""
+    kind, pattern = proposal.get("kind"), _id_part(proposal.get("pattern"))
+    for item in rejections or []:
+        if item.get("id") == proposal.get("id"):
+            return True
+        if item.get("pattern") is not None and item.get("kind") == kind and _id_part(item["pattern"]) == pattern:
+            return True
+    return False
 
 
 def propose_conventions(signals: list, curation=None) -> list:
@@ -1886,7 +1956,7 @@ def propose_conventions(signals: list, curation=None) -> list:
         proposals += _item_proposals(kind, by_type.get(signal_type, {}), settings)
     for signal_type, kind in REPOSITORY_SIGNALS.items():
         proposals += _repository_proposals(kind, by_type.get(signal_type, {}), settings)
-    return sorted(proposals, key=lambda p: p["id"])
+    return sorted(_without_id_collisions(proposals), key=lambda p: p["id"])
 
 
 def split_frontmatter(text: str) -> tuple:
@@ -1926,8 +1996,8 @@ def _new_convention(proposal: dict, organization: str, today: str) -> str:
 
 def curate_propose(atlas: Path, shared: dict) -> dict:
     """Creates conventions/<id>.md (status inferred) for each new proposal and refreshes only the evidence region
-    of the existing ones, whatever their status (a rejected id is never proposed again: its file already exists).
-    Never writes a decision."""
+    of the existing ones, whatever their status. A rejected rule is never proposed again, in any scope: same id
+    (its file already exists) or same kind and pattern (is_rejected). Never writes a decision."""
     collectors = validate_collectors(shared.get("collectors"))
     snapshots, warnings = read_snapshots(atlas, [c["id"] for c in collectors])
     signals = [s for cid in snapshots for s in snapshots[cid].get("signals", [])]
@@ -1936,6 +2006,7 @@ def curate_propose(atlas: Path, shared: dict) -> dict:
     organization = str(shared.get("organization") or "")
     folder = atlas / CONVENTIONS_DIR
     existing = _conventions(atlas)
+    rejections = _rejections(existing)
     new, updated = [], []
     for proposal in proposals:
         path = folder / f"{proposal['id']}.md"
@@ -1945,6 +2016,8 @@ def curate_propose(atlas: Path, shared: dict) -> dict:
             if changed != text:
                 write_atomic(path, changed)
                 updated.append(proposal["id"])
+            continue
+        if is_rejected(proposal, rejections):
             continue
         folder.mkdir(parents=True, exist_ok=True)
         write_atomic(path, _new_convention(proposal, organization, today))
@@ -2319,7 +2392,8 @@ def _existing_service_pages(atlas: Path) -> dict:
 
 
 def _service_lines(service) -> list:
-    lines = [f"### {service['name']} (`{service['key']}`)", "",
+    name = service["name"] or service["key"]  # in a code span: a name never reads as a heading ("## Serviços")
+    lines = [f"### `{name}` (`{service['key']}`)", "",
              f"- Página: {service['page']}",
              f"- Encontrado por: {service['reason']} (pontuação {service['score']})"]
     if service["repositories"]:
@@ -2351,10 +2425,10 @@ def _convention_line(item, hint) -> str:
 
 
 def _flat(value):
-    """Every text of the package on one line (newlines, CR and tabs become spaces): data from the atlas never
-    becomes a heading or an item of the package."""
+    """Every text of the package on one line (newlines, CR and tabs become spaces) and without backticks (they
+    become "'"): data from the atlas never becomes a heading or an item of the package, nor leaves a code span."""
     if isinstance(value, str):
-        return " ".join(value.split())
+        return " ".join(value.replace("`", "'").split())
     if isinstance(value, dict):
         return {_flat(key): _flat(item) for key, item in value.items()}
     if isinstance(value, list):
@@ -2440,6 +2514,9 @@ READ_SUGGESTION = ("regrave o arquivo em UTF-8 válido; se é gerado (snapshots/
 GENERATED_SUGGESTION = "arquivo gerado com formato inesperado: rode `atlas.py scan` (ou `build`) para refazê-lo"
 SPECIAL_SUGGESTION = ("o atlas só tem arquivos e pastas comuns: troque por uma cópia do conteúdo ou tire da pasta do "
                       "atlas")
+OUTDATED_COPY = "cópia da skill desatualizada — rode `vendor`"
+OUTDATED_SUGGESTION = ("rode `atlas.py vendor` para regravar .org-atlas/skill com a versão instalada da skill "
+                       "(references/modes.md)")
 PERMISSION_SUGGESTION = "dê permissão de leitura (e de listagem, numa pasta) ou tire da pasta do atlas"
 
 
@@ -2454,8 +2531,9 @@ def lint_rules(only=None) -> list:
     return [rule for rule in LINT_RULES if rule in wanted]
 
 
-def _finding(rule, path, detail, suggestion=None) -> dict:
-    return {"rule": rule, "severity": "error" if rule in LINT_ERRORS else "warn", "path": path, "detail": detail,
+def _finding(rule, path, detail, suggestion=None, severity=None) -> dict:
+    severity = severity or ("error" if rule in LINT_ERRORS else "warn")
+    return {"rule": rule, "severity": severity, "path": path, "detail": detail,
             "suggestion": suggestion or LINT_SUGGESTIONS.get(rule, "")}
 
 
@@ -2473,12 +2551,16 @@ def _special_kind(mode) -> str:
 
 class _AtlasFiles:
     """Every regular file of the atlas (VCS folders skipped, and .org-atlas/skill/scripts/atlas.py, the tool written
-    by vendor, whose own patterns look like secrets; every other file of the copy is read), read once. Symlinks, FIFOs, sockets and devices are
+    by vendor, when identical to this atlas.py: its own patterns look like secrets), read once. A copy that differs
+    is an outdated copy: a config warning in `outdated`, and it is still read and scanned (secret-leak drops only the
+    matches whose text is also in this atlas.py, `tool_text`). Symlinks, FIFOs, sockets and devices are
     never read nor followed; they, unreadable files and folders, non-UTF-8 files (also kept, decoded with
     replacement, for secret-leak) and JSON with an invalid content or shape become `problems` (config findings)."""
 
     def __init__(self, atlas: Path):
         self.atlas, self.texts, self.lossy, self.names, self.problems, self._json = atlas, {}, {}, [], {}, {}
+        self.outdated = {}  # rel -> (detail, suggestion): config warnings
+        self.tool_text = ""  # this atlas.py, when a copy is outdated: its own regexes and examples are not secrets
         self._copy_tool = f"{SKILL_COPY}/scripts/atlas.py"
         for root, dirs, files in os.walk(atlas, onerror=self._walk_error):
             kept = []
@@ -2499,7 +2581,11 @@ class _AtlasFiles:
             for name in sorted(files):
                 if name not in LINT_IGNORED_FILES:
                     path = os.path.join(root, name)
-                    if self._is_skill_copy(path, self.rel(path)):
+                    copy = self._is_skill_copy(path, self.rel(path))
+                    if copy == "outdated":
+                        self.outdated[self.rel(path)] = (OUTDATED_COPY, OUTDATED_SUGGESTION)
+                        self.tool_text = self._tool_text()
+                    elif copy:
                         continue
                     self.names.append((self.rel(path), name))
                     self._read(path, self.rel(path))
@@ -2511,24 +2597,35 @@ class _AtlasFiles:
             return "."
         return rel or "."
 
-    def _is_skill_copy(self, path, rel) -> bool:
-        """.org-atlas/skill/scripts/atlas.py as vendor wrote it: identical to this atlas.py or, when the lint runs from
-        the copy itself (nothing else to compare with), that same file. Limitation: an edit to the atlas.py of the
-        copy is not scanned when the lint runs from it."""
+    def _is_skill_copy(self, path, rel):
+        """.org-atlas/skill/scripts/atlas.py written by vendor: "same" when identical to this atlas.py or, when the
+        lint runs from the copy itself (nothing else to compare with), that same file; "outdated" when it is a
+        regular file that differs (another version of the skill, or edited: still read and scanned); False for any
+        other path, or when it is not a regular file or cannot be read (read as any file). Limitation: when the lint
+        runs from the copy itself there is nothing to compare with, and an edit to it is not scanned."""
         if rel != self._copy_tool:
             return False
         source = Path(__file__).resolve()
         try:
             info = os.lstat(path)
-            if stat.S_ISREG(info.st_mode) and os.path.samefile(path, source):
-                return True
-            expected = source.read_bytes()
-            if not stat.S_ISREG(info.st_mode) or info.st_size != len(expected):
+            if not stat.S_ISREG(info.st_mode):
                 return False
+            if os.path.samefile(path, source):
+                return "same"
+            expected = source.read_bytes()
+            if info.st_size != len(expected):
+                return "outdated"
             with os.fdopen(os.open(path, LINT_OPEN_FLAGS), "rb") as handle:
-                return handle.read(len(expected) + 1) == expected
+                return "same" if handle.read(len(expected) + 1) == expected else "outdated"
         except OSError:
             return False
+
+    @staticmethod
+    def _tool_text() -> str:
+        try:
+            return Path(__file__).resolve().read_bytes().decode("utf-8", "replace")
+        except OSError:
+            return ""
 
     def problem(self, rel, detail, suggestion=READ_SUGGESTION) -> None:
         self.problems.setdefault(rel, (detail, suggestion))
@@ -2588,17 +2685,28 @@ def _matching_patterns(text, patterns) -> list:
     return [name for name, regex in patterns if any(m.group(0) for m in regex.finditer(text))]
 
 
+def _radical(name) -> str:
+    """A name up to its first dot, without the leading dots of a hidden file: acme-x.tar.gz and .acme-x.md give
+    acme-x."""
+    return name.lstrip(".").split(".", 1)[0]
+
+
 def _name_patterns(name, patterns) -> list:
-    """Patterns that match a file or folder name, or its stem without the extension (^acme-[0-9a-f]{8}$ matches
-    acme-feedface.md): the same pieces _mask_path masks."""
-    stem = os.path.splitext(name)[0]
-    found = set(_matching_patterns(name, patterns)) | (set(_matching_patterns(stem, patterns)) if stem else set())
+    """Patterns that match a file or folder name, its stem without the extension (^acme-[0-9a-f]{8}$ matches
+    acme-feedface.md) or its radical up to the first dot (acme-feedface.tar.gz, .acme-feedface): the same pieces
+    _mask_path masks."""
+    found = set()
+    for piece in {name, os.path.splitext(name)[0], _radical(name)}:
+        if piece:
+            found |= set(_matching_patterns(piece, patterns))
     return [label for label, _ in patterns if label in found]
 
 
 def _lint_secrets(files: _AtlasFiles, extras) -> list:
     """secret-leak: each match of a redaction pattern (built-in and extra_patterns) in any file, by file:line and
-    pattern name, and each file or folder whose name matches one; never the value."""
+    pattern name, and each file or folder whose name matches one; never the value. In an outdated copy of the tool
+    (.org-atlas/skill/scripts/atlas.py) a match whose text is also in the installed atlas.py (its own regexes and
+    examples) is not a secret; any other match is."""
     findings, seen = [], set()
     patterns = _lint_patterns(extras)
     for rel, name in files.names:
@@ -2609,9 +2717,10 @@ def _lint_secrets(files: _AtlasFiles, extras) -> list:
                                                          "mostrado)", "renomeie sem o valor e troque a credencial "
                                                                       "(o histórico do git também guarda o nome)"))
     for rel, text in (*files.texts.items(), *files.lossy.items()):
+        known = files.tool_text if rel in files.outdated else ""
         for name, regex in patterns:
             for match in regex.finditer(text):
-                if not match.group(0):
+                if not match.group(0) or (known and match.group(0) in known):
                     continue
                 line = text.count("\n", 0, match.start()) + 1
                 if (rel, line, name) in seen:
@@ -2625,6 +2734,8 @@ def _lint_config(files: _AtlasFiles, problems) -> list:
     findings = [_finding("config", SHARED_FILE, problem, SHARED_SUGGESTION) for problem in problems]
     for rel, (detail, suggestion) in sorted(files.problems.items()):
         findings.append(_finding("config", rel, detail, suggestion))
+    for rel, (detail, suggestion) in sorted(files.outdated.items()):
+        findings.append(_finding("config", rel, detail, suggestion, severity="warn"))
     return findings
 
 
@@ -2806,7 +2917,7 @@ def _lint_broken_refs(files: _AtlasFiles, extras) -> list:
                 continue
             problem = _link_problem(atlas_root, base, target, files.problems)
             if problem:
-                findings.append(_finding("broken-ref", rel, f"link para {_mask_path(target, extras)}: {problem}",
+                findings.append(_finding("broken-ref", rel, f"link para {_mask_link(target, extras)}: {problem}",
                                          "corrija o link ou crie a página; links são relativos à página e ficam "
                                          "dentro do atlas"))
     return findings
@@ -2843,14 +2954,29 @@ def _mask_all(text, extras) -> str:
     return _redact_text(str(text), [regex for _, regex in extras])[0]
 
 
+def _mask_component(part, extras) -> str:
+    """One "/" component masked by its radical (up to the first dot, after the leading dots), its stem without the
+    extension and as a whole: the pieces _name_patterns tests."""
+    lead = part[:len(part) - len(part.lstrip("."))]
+    radical, dot, tail = part[len(lead):].partition(".")
+    if radical:
+        part = lead + _mask_all(radical, extras) + dot + tail
+    stem, ext = os.path.splitext(part)
+    return _mask_all(_mask_all(stem, extras) + ext if stem else part, extras)
+
+
 def _mask_path(path, extras) -> str:
-    """path with each "/" component, and that component's stem without the extension, masked on its own: an
-    anchored pattern (^...$) that matches a name is masked exactly as it is detected (_name_patterns)."""
-    masked = []
-    for part in str(path).split("/"):
-        stem, ext = os.path.splitext(part)
-        masked.append(_mask_all(_mask_all(stem, extras) + ext if stem else part, extras))
-    return "/".join(masked)
+    """path with each "/" component masked on its own (an anchored pattern, ^...$, that matches a name is masked
+    exactly as it is detected by _name_patterns), then the whole path (a pattern that crosses "/", like
+    vault/[a-z0-9]{8})."""
+    return _mask_all("/".join(_mask_component(part, extras) for part in str(path).split("/")), extras)
+
+
+def _mask_link(target, extras) -> str:
+    """A link target masked as a path without its "#fragment" or "?query", which comes back after (masked too)."""
+    target = str(target)
+    cut = min((i for i in (target.find("#"), target.find("?")) if i >= 0), default=len(target))
+    return _mask_path(target[:cut], extras) + _mask_all(target[cut:], extras)
 
 
 def _mask_finding_path(finding, extras) -> str:

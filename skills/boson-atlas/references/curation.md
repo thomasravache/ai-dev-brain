@@ -18,7 +18,7 @@ python3 <skill-dir>/scripts/atlas.py curate reject  ID --by NOME --via "PR #n"|l
 | Mensagem | Quando |
 |---|---|
 | `confirm exige --by e --via` (ou `reject exige --by e --via`) | falta `--by` ou `--via`, ou um deles está vazio |
-| `--via aceita 'PR #<n>' ou 'local'` | `--via` fora do formato (`PR #3` e `local` exatamente) |
+| `--via aceita 'PR #<n>' ou 'local'` | `--via` fora do formato (`PR #3` e `local` exatamente; o número só com dígitos ASCII `0-9`, então `PR #３` ou `PR #٣` são recusados) |
 | `convenção não encontrada: ID` | não existe `conventions/ID.md` |
 | `convenção já está <status>` | a convenção já foi confirmada ou rejeitada (decidir de novo = editar o arquivo à mão, num PR) |
 
@@ -90,7 +90,10 @@ curation: {min_share: 0.6, min_total: 20, min_repos: 3}
 | `branch-prefix` | `branch-prefixes` | branches da amostra (`total`) | cada chave de `counts` (`feat/`, `fix/`…) | `branch-prefix-<prefixo sem />` (`branch-prefix-feat`) |
 
 - Um padrão **domina num repositório** quando `contagem / total ≥ min_share` e `total ≥ min_total`.
-- **Escopo:** `organization` quando **mais da metade** dos repositórios com o sinal (todos, inclusive os sem padrão dominante ou com poucos itens) tem o mesmo padrão dominante; a evidência soma os itens de todos eles. Senão, uma convenção por repositório em que o padrão domina, com `scope: repository:<org>/<nome>` (o id do repositório em minúsculas, como o coletor GitHub o emite; escopos antigos em outra caixa, como `repository:Acme/API`, continuam valendo, porque o `context` compara o escopo sem diferença de caixa — SPEC-0047) e id `<kind>-<padrão>-<org>-<nome>` (`pr-title-conventional-acme-api`).
+- **Escopo:** `organization` quando **mais da metade** dos repositórios com o sinal (todos, inclusive os sem padrão dominante ou com poucos itens) tem o mesmo padrão dominante; a evidência soma os itens de todos eles. Senão, uma convenção por repositório em que o padrão domina, com `scope: repository:<org>/<nome>` (o id do repositório em minúsculas, como o coletor GitHub o emite; escopos antigos em outra caixa, como `repository:Acme/API`, continuam valendo, porque o `context` compara o escopo sem diferença de caixa — SPEC-0047) e id `<kind>-<padrão>-<org>-<nome>` (`pr-title-conventional-acme-api`). Quando dois repositórios caem no mesmo id (`acme/a-b` e `acme-a/b` dão `...-acme-a-b`), cada um ganha um sufixo curto e estável, os 8 primeiros caracteres do SHA-1 de `<org>/<nome>` (`pr-title-conventional-acme-a-b-<hash>`), como o slug das páginas longas (SPEC-0036); um repositório sem colisão mantém o id sem sufixo, e a ordem dos sinais não muda os ids (SPEC-0048).
+  - O sufixo só aparece **quando há colisão**. Se outro repositório passa a colidir com um que já tinha convenção, o id do primeiro muda (ganha o sufixo) e aparece uma proposta nova, com outro arquivo; o arquivo antigo fica como está. Se ele já estava `confirmed`, a evidência dele deixa de ser atualizada até alguém consolidar à mão (confirmar a nova e apagar ou ajustar a antiga, num PR).
+  - Padrões diferentes com o mesmo `_id_part` (`feat/` e `feat-`) no **mesmo** repositório, ou no escopo `organization`, continuam caindo no mesmo id: o sufixo resolve só a colisão entre repositórios.
+- Textos vindos do coletor (nome do repositório, padrão e títulos da amostra) entram na evidência e no título numa linha só, com `<!--` e `-->` neutralizados (`&lt;!--`, `--&gt;`): um nome como `acme/x<!-- atlas:end evidence -->` não fecha a região `evidence` nem faz o arquivo crescer a cada `propose` (SPEC-0048).
 
 **Por repositório — `merge-method` e `pr-template`:**
 
@@ -107,6 +110,7 @@ curation: {min_share: 0.6, min_total: 20, min_repos: 3}
 ## Ciclo de vida
 
 - O id inclui o padrão dominante. Se o padrão muda (por exemplo de `squash` para `merge`), é **outra** convenção, com outro arquivo; a anterior fica como está.
-- Uma convenção `rejected` nunca é proposta de novo com o mesmo id (o arquivo já existe), mas a evidência dela continua sendo atualizada a cada `scan`.
+- Uma convenção `rejected` nunca volta: nem com o mesmo id (o arquivo já existe; a evidência dela continua sendo atualizada a cada `scan`), nem com o mesmo **kind e padrão em outro escopo**. Quem rejeita a regra rejeita a regra, não o escopo (ADR-0012): rejeitada `pr-title-conventional` (organization), o `propose` não cria `pr-title-conventional-<org>-<repo>` quando a maioria muda, e o contrário também vale; um padrão diferente do mesmo kind (`pr-title-ticket-key-...`) continua sendo proposto (SPEC-0048).
+- **De onde sai o padrão de uma rejeitada:** o frontmatter não tem `pattern` e o formato do arquivo não muda. O padrão é tirado do **id**, junto com o `kind` e o `scope` do frontmatter (o registro que a pessoa decidiu, que o `propose` nunca reescreve): tira-se `<kind>-` do começo e, no escopo `repository:<org>/<nome>`, o `-<org>-<nome>` (ou `-<org>-<nome>-<hash>`) do fim; o que sobra é o padrão como aparece em ids (`ticket_key` → `ticket-key`). A comparação com a proposta é feita nessa forma (`_id_part` do padrão), então não depende da evidência, que é regenerada a cada `scan`. Só um id escrito à mão, fora desse formato, usa a linha ``- Padrão: `x` `` da evidência; sem nenhum dos dois, a rejeitada bloqueia só o próprio id. Limite conhecido: dois padrões que dão o mesmo trecho de id (`feat/` e `feat-`) contam como o mesmo padrão.
 - Uma convenção que deixa de ser proposta (o padrão deixou de dominar) não é apagada nem alterada.
 - `curate list` mostra `<status> <id> — <título> (<escopo>)` e, para as decididas, quem, quando e por onde; `--json` imprime `{"version", "conventions": [{id, title, kind, scope, status, proposed_at, confirmed_by, confirmed_at, confirmed_via, reason}]}`.

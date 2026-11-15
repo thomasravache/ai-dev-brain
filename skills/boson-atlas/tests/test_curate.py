@@ -785,5 +785,175 @@ class ConventionContractTest(CurateCase):
             self.assertIn(word, text, word)
 
 
+# --------------------------------------------------------------------------- SPEC-0048 (revisão G4 da SPEC-0037)
+#
+# Contrato esperado (o Implementer segue estes testes):
+#
+#     is_rejected(proposal: dict, rejections: list[dict]) -> bool
+#         `proposal` = uma proposta de propose_conventions ({id, kind, scope, pattern, ...}); `rejections` = as
+#         convenções rejeitadas ({id, kind, scope, pattern}). Verdadeiro quando alguma tem o mesmo id ou o mesmo
+#         (kind, pattern), em qualquer escopo: quem rejeita a regra rejeita a regra, não o escopo (ADR-0012).
+
+END_EVIDENCE = "<!-- atlas:end evidence -->"
+BEGIN_EVIDENCE = "<!-- atlas:begin evidence -->"
+SPEC_48 = "SPEC-0048"
+
+
+def rejection(cid, kind, scope, pattern):
+    return {"id": cid, "kind": kind, "scope": scope, "pattern": pattern}
+
+
+class EvidenceRegionTest(CurateCase):
+    def assert_stable(self, cid):
+        path = self.conventions / f"{cid}.md"
+        first = path.read_text(encoding="utf-8")
+        for run in range(4):
+            self.curate("propose")
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(len(text), len(first), f"o arquivo cresceu no propose {run + 1}:\n{text}")
+            self.assertEqual(text.count(BEGIN_EVIDENCE), 1, text)
+            self.assertEqual(text.count(END_EVIDENCE), 1, f"o nome fechou a região evidence:\n{text}")
+            self.assertEqual(len(regions(text)), 1, text)
+
+    def test_repository_name_cannot_close_the_evidence_region(self):
+        """SPEC-0048:UT-01"""
+        poisoned = "acme/x" + END_EVIDENCE + "y"
+        self.set_signals([pr_titles(repo, 30, 21, 3) for repo in REPOS[:4]] + [pr_titles(poisoned, 30, 21, 3)])
+        self.scan()
+        self.assertEqual(self.files(), [f"{ID}.md"])
+        self.assert_stable(ID)
+
+    def test_pattern_cannot_close_the_evidence_region(self):
+        """SPEC-0048:UT-01 (o padrão também passa por _clean_line)"""
+        prefix = "feat" + END_EVIDENCE + "/"
+        self.set_signals([branch_prefixes(repo, 30, {prefix: 21, "fix/": 6}) for repo in REPOS])
+        self.scan()
+        files = self.files()
+        self.assertEqual(len(files), 1, files)
+        self.assert_stable(files[0][:-3])
+
+
+COLLIDING = ("acme/a-b", "acme-a/b")
+
+
+def colliding_signals(order=1):
+    """acme/a-b, acme-a/b e acme/c com Conventional Commits dominante, 3 sem padrão: 3 de 6 = escopo repositório."""
+    signals = [pr_titles(repo, 30, 21) for repo in (*COLLIDING, "acme/c")]
+    signals += [mixed(repo) for repo in ("acme/d", "acme/e", "acme/f")]
+    return signals[::order]
+
+
+class IdCollisionTest(unittest.TestCase):
+    def ids(self, order=1):
+        proposals = [p for p in f("propose_conventions")(colliding_signals(order), None) if p["kind"] == "pr-title"]
+        return {p["scope"]: p["id"] for p in proposals}
+
+    def test_repositories_with_the_same_id_part_get_two_ids(self):
+        """SPEC-0048:UT-02"""
+        ids = self.ids()
+        self.assertEqual(sorted(ids), sorted(f"repository:{repo}" for repo in (*COLLIDING, "acme/c")), ids)
+        first, second = ids[f"repository:{COLLIDING[0]}"], ids[f"repository:{COLLIDING[1]}"]
+        self.assertNotEqual(first, second, "acme/a-b e acme-a/b caíram no mesmo id")
+        for cid in ids.values():
+            self.assertRegex(cid, r"^[a-z0-9][a-z0-9-]*$")
+            self.assertTrue(cid.startswith("pr-title-conventional-"), cid)
+        self.assertEqual(ids["repository:acme/c"], "pr-title-conventional-acme-c", "id sem colisão mudou")
+
+    def test_the_suffix_is_stable(self):
+        """SPEC-0048:UT-02 (sufixo estável: não depende da ordem dos sinais nem da execução)"""
+        self.assertEqual(self.ids(), self.ids())
+        self.assertEqual(self.ids(), self.ids(order=-1))
+
+
+class IdCollisionCliTest(CurateCase):
+    def test_two_colliding_repositories_give_two_files(self):
+        """SPEC-0048:UT-02"""
+        self.set_signals(colliding_signals())
+        self.scan()
+        scopes = self.ids_with_scope()
+        self.assertEqual(len(self.files()), 3, self.files())
+        for repo in COLLIDING:
+            self.assertIn(f"repository:{repo}", scopes, self.files())
+        self.assertNotEqual(scopes[f"repository:{COLLIDING[0]}"], scopes[f"repository:{COLLIDING[1]}"])
+        for cid in scopes.values():
+            self.assertEqual(self.meta(cid)["id"], cid)
+
+
+class AsciiViaTest(CurateCase):
+    def setUp(self):
+        super().setUp()
+        self.set_signals(org_signals())
+        self.scan()
+        self.before = self.text()
+
+    def test_via_with_non_ascii_digits_exits_2(self):
+        """SPEC-0048:UT-03"""
+        for via in ("PR #３", "PR #٣", "PR #1２"):  # dígito de largura total e arábico-índico
+            for action in ("confirm", "reject"):
+                with self.subTest(action=action, via=via):
+                    result = self.curate(action, ID, "--by", "thomas", "--via", via, code=2)
+                    self.assertIn(BAD_VIA, output(result))
+                    self.assertEqual(self.text(), self.before, "a convenção mudou depois de um --via recusado")
+        self.curate("confirm", ID, "--by", "thomas", "--via", "PR #3")
+        self.assertEqual(self.meta()["confirmed_via"], "PR #3")
+
+
+class RejectionRuleTest(unittest.TestCase):
+    def blocked(self, proposal, rejections):
+        return fn("is_rejected", SPEC_48)(proposal, rejections)
+
+    def test_a_rejection_covers_the_same_kind_and_pattern_in_any_scope(self):
+        """SPEC-0048:UT-07"""
+        org = [rejection(ID, "pr-title", "organization", "conventional")]
+        same_rule = rejection("pr-title-conventional-acme-r0", "pr-title", "repository:acme/r0", "conventional")
+        other_pattern = rejection("pr-title-ticket-prefix", "pr-title", "organization", "ticket-prefix")
+        self.assertTrue(self.blocked(same_rule, org), "mesma regra em escopo de repositório não foi bloqueada")
+        self.assertFalse(self.blocked(other_pattern, org), "outro padrão do mesmo kind foi bloqueado")
+
+    def test_the_rule_works_the_other_way_and_keeps_the_same_id(self):
+        """SPEC-0048:UT-07 (rejeitada a de um repositório, a da organização também não volta; mesmo id continua)"""
+        repo = [rejection("pr-title-conventional-acme-r0", "pr-title", "repository:acme/r0", "conventional")]
+        self.assertTrue(self.blocked(rejection(ID, "pr-title", "organization", "conventional"), repo))
+        self.assertTrue(self.blocked(rejection("pr-title-conventional-acme-r0", "pr-title", "repository:acme/r0",
+                                               "conventional"), repo))
+        self.assertFalse(self.blocked(rejection("branch-prefix-conventional", "branch-prefix", "organization",
+                                                "conventional"), repo), "outro kind com o mesmo padrão")
+        self.assertFalse(self.blocked(rejection(ID, "pr-title", "organization", "conventional"), []))
+
+
+class RejectionScopeCliTest(CurateCase):
+    def listed_ids(self):
+        rows = json.loads(self.curate("list", "--json").stdout)["conventions"]
+        return sorted(row["id"] for row in rows)
+
+    def test_rejected_organization_rule_is_not_proposed_per_repository(self):
+        """SPEC-0048:IT-01"""
+        self.set_signals(org_signals())
+        self.scan()
+        self.curate("reject", ID, "--by", "ana", "--via", "local", "--reason", "não é regra do time")
+        # a maioria muda: só acme/a segue Conventional Commits
+        self.set_signals([pr_titles("acme/a", 30, 21)] + [mixed(repo) for repo in REPOS[1:]])
+        result = self.scan()
+        self.assertEqual(self.files(), [f"{ID}.md"], "a regra rejeitada voltou como proposta por repositório")
+        self.assertEqual(self.summary(result)[0], 0)
+        self.assertEqual(self.listed_ids(), [ID])
+        listed = [line for line in output(self.curate("list")).splitlines() if line.startswith(STATUSES)]
+        self.assertEqual(len(listed), 1, listed)
+        self.assertTrue(listed[0].startswith(f"rejected {ID} "), listed)
+        # um padrão diferente do mesmo kind continua sendo proposto
+        self.set_signals([pr_titles("acme/a", 30, 21), pr_titles("acme/b", 30, 3, 21)]
+                         + [mixed(repo) for repo in REPOS[2:]])
+        result = self.scan()
+        scopes = self.ids_with_scope()
+        self.assertEqual(sorted(scopes), ["organization", "repository:acme/b"], self.files())
+        other = scopes["repository:acme/b"]
+        self.assertEqual(self.meta(other)["kind"], "pr-title")
+        self.assertEqual(self.meta(other)["status"], "inferred")
+        self.assertNotIn("conventional", other)
+        self.assertEqual(self.summary(result)[0], 1)
+        self.assertEqual(self.listed_ids(), sorted([ID, other]))
+        self.assertEqual(self.meta()["status"], "rejected")
+
+
 if __name__ == "__main__":
     unittest.main()

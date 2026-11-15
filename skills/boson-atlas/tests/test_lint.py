@@ -24,6 +24,7 @@ CLI (seção 6): lint [--json] [--only regra,...]
 Valores de segredo dos testes são montados em tempo de execução (nunca literais no arquivo).
 """
 import datetime
+import gzip
 import json
 import os
 import re
@@ -786,6 +787,47 @@ class LinkIntoUnreadableDirectoryTest(unittest.TestCase):
         self.assertTrue([x for x in of_rule(findings, "config") if x["path"].startswith("process/private")], findings)
         missing = [x for x in of_rule(findings, "broken-ref") if "private" in x["detail"] and "não existe" in x["detail"]]
         self.assertEqual(missing, [], "link para pasta ilegível reportado como inexistente")
+
+
+# --------------------------------------------------------------------------- SPEC-0048 (revisão G4 da SPEC-0039)
+
+CROSSING = "'vault/[a-z0-9]{8}'"  # atravessa "/": a máscara por componente não o pega
+
+
+class WholePathMaskTest(LeakCase):
+    """Padrão que atravessa "/", radical de nome com vários pontos e link com #fragmento: o valor nunca aparece."""
+
+    def setUp(self):
+        super().setUp()
+        config = self.atlas / "atlas-config.yml"
+        text = config.read_text(encoding="utf-8")
+        self.assertIn("redaction: {extra_patterns: []}", text)
+        config.write_text(text.replace("redaction: {extra_patterns: []}",
+                                       f"redaction: {{extra_patterns: [{CROSSING}, {ANCHORED}]}}"), encoding="utf-8")
+        self.vault_name = "abcd" + "1234"
+        self.archive = acme("bbbbcccc")
+        self.linked = acme("eeee1111")
+        (self.atlas / "vault").mkdir()
+        (self.atlas / "vault" / f"{self.vault_name}.bin").write_bytes(b"\xff\xfe\x00 bytes\n")
+        (self.atlas / "process" / f"{self.archive}.tar.gz").write_bytes(gzip.compress(b"dados do time\n"))
+        path = self.atlas / "services" / "search.md"
+        path.write_text(path.read_text(encoding="utf-8") + f"\n[anexo]({self.linked}#sec)\n", encoding="utf-8")
+
+    def test_no_value_shows_in_text_or_json(self):
+        """SPEC-0048:UT-05"""
+        text_out, json_out = self.lint_all(code=1)
+        values = ("vault/" + self.vault_name, self.vault_name, self.archive, self.archive[len("acme-"):],
+                  self.linked, self.linked[len("acme-"):])
+        self.assert_no_secret((text_out, json_out), values)
+        findings = json.loads(json_out.stdout)["findings"]
+        config = [x["path"] for x in of_rule(findings, "config")]
+        for suffix in (".bin", ".tar.gz"):  # não UTF-8: achado config, com o caminho mascarado
+            self.assertTrue([p for p in config if p.endswith(suffix) and "[REDACTED]" in p], config)
+        refs = [x for x in of_rule(findings, "broken-ref") if x["path"] == "services/search.md"]
+        self.assertTrue([x for x in refs if "#sec" in x["detail"] and "[REDACTED]" in x["detail"]], refs)
+        names = [x["path"] for x in of_rule(findings, "secret-leak")]
+        self.assertTrue([p for p in names if p.startswith("process/[REDACTED]")], names)  # radical até o 1º ponto
+
 
 if __name__ == "__main__":
     unittest.main()

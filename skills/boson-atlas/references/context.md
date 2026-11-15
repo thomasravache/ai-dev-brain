@@ -37,7 +37,7 @@ Quando nada é encontrado, o pacote só tem o aviso (se houver) e a linha fixa `
 
 ## Formato em Markdown
 
-Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas (nomes, ids, atributos, evidência, títulos, escopo, `confirmed_by`, donos, ambientes, repositórios) sai numa linha só (quebra de linha, CR e tabulação viram espaço), então nenhum `## ` ou item do pacote pode vir de um dado.
+Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas (nomes, ids, atributos, evidência, títulos, escopo, `confirmed_by`, donos, ambientes, repositórios) sai numa linha só (quebra de linha, CR e tabulação viram espaço), e a crase de um valor vira `'`, então nenhum `## ` ou item do pacote pode vir de um dado nem um valor sai do código inline. O nome do serviço no título `### ` vai entre crases (`` ### `backoffice` (`service:backoffice`) ``): um serviço chamado `## Convenções (regra)` não vira um título que imita uma seção (SPEC-0048).
 
 ```markdown
 ## Aviso de envelhecimento
@@ -47,7 +47,7 @@ Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas 
 
 ## Serviços
 
-### backoffice (`service:backoffice`)
+### `backoffice` (`service:backoffice`)
 
 - Página: services/backoffice.md
 - Encontrado por: nome: backoffice; notas: cashout, backoffice (pontuação 12)
