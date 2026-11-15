@@ -453,11 +453,18 @@ class LeakCheckCommandTest(PrivateTestCase):
 class LeakCheckLimiteTest(unittest.TestCase):
     def test_limite_follows_baseline_under_load(self):
         """SPEC-0045:UT-01"""
-        self.assertAlmostEqual(limite(0.05), 2.0)
-        self.assertLess(1.5, limite(0.05))
-        self.assertAlmostEqual(limite(0.4), 4.0)
-        self.assertLess(3.8, limite(0.4))
-        self.assertGreaterEqual(2.5, limite(0.05))
+        # base 1,0 s, leak-check 1,5 s: passa (limite 3 s)
+        self.assertAlmostEqual(limite(1.0), 3.0)
+        self.assertTrue(1.5 < limite(1.0), "base 1,0 s e leak-check 1,5 s devem passar")
+        # base 2,0 s (carga), leak-check 3,8 s: passa (limite 6 s)
+        self.assertAlmostEqual(limite(2.0), 6.0)
+        self.assertTrue(3.8 < limite(2.0), "base 2,0 s e leak-check 3,8 s devem passar")
+        # base 0,5 s, leak-check 2,5 s: FALHA (limite 2 s, o piso)
+        self.assertAlmostEqual(limite(0.5), 2.0)
+        self.assertFalse(
+            2.5 < limite(0.5),
+            "caso que deve falhar: base 0,5 s e leak-check 2,5 s estouram o piso de 2 s",
+        )
 
 
 class LeakIntegrationTest(PrivateTestCase):
