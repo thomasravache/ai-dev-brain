@@ -69,7 +69,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=2, skipped=1)) — 235917f | 2026-11-16 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 5f6bbb7 | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — cf7245c | 2026-11-16 |
-| G4 Review | FAIL | Reviewer independente: REJECTED (major: em submódulo e --separate-git-dir a worktree vai para dentro do .git do superprojeto ou para a pasta errada; major: misplaced_worktrees ainda acusa worktree liberada em worktree_allow de dentro de uma worktree ligada; minors: validate_worktrees perde o aviso de worktree_dir fora do .gitignore, monorepo muda {repo} sem documentar) — Emenda v2 | 2026-11-16 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2, após Emenda v2: raiz só em worktree ligada, mesma raiz nas três funções; submódulo, separate-git-dir, monorepo, worktree_allow, .gitignore, worktree_dir absoluto, GIT_DIR e modo privado conferidos; 2 minors, 1 nit e 1 limitação como pendências) — 6584bd9 | 2026-11-16 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
