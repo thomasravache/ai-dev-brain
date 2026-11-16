@@ -52,8 +52,13 @@ class ConfidentialLogTestCase(unittest.TestCase):
         self.assertEqual(out.returncode, 0, f"{args}: {output(out)}")
         return out
 
-    def assertNothingHidden(self, text, label):
-        low = text.lower()
+    def assertNothingHidden(self, data, label):
+        """data: a saída (objeto ou texto JSON); o campo "query" só repete a consulta e fica fora da checagem."""
+        if isinstance(data, str):
+            data = json.loads(data)
+        if isinstance(data, dict):
+            data = {key: value for key, value in data.items() if key != "query"}
+        low = json.dumps(data, ensure_ascii=False).lower()
         for item in HIDDEN:
             self.assertNotIn(item.lower(), low, f"{label}: {item!r} vazou na saída")
 
@@ -69,19 +74,19 @@ class ConfidentialLogUnitTest(ConfidentialLogTestCase):
         for query in QUERIES:
             with self.subTest(query=query):
                 results = search(notes, query)
-                self.assertNothingHidden(json.dumps(results, ensure_ascii=False), f"search {query!r}")
+                self.assertNothingHidden(results, f"search {query!r}")
                 package = build_context(notes, query, values=values)
-                self.assertNothingHidden(json.dumps(package, ensure_ascii=False), f"context {query!r}")
+                self.assertNothingHidden(package, f"context {query!r}")
 
         # o log.md continua no pacote quando ainda casa (linha da nota comum), sem as linhas das confidenciais
         package = build_context(notes, "quokka", values=values)
         log = [n for n in package["notes"] if n["path"] == "log.md"]
         self.assertEqual(len(log), 1, package)
         self.assertIn(COMMON, log[0]["content"])
-        self.assertNothingHidden(json.dumps(package, ensure_ascii=False), "context 'quokka'")
+        self.assertNothingHidden(package, "context 'quokka'")
         results = search(notes, "quokka")
         self.assertIn("log.md", [r["path"] for r in results])
-        self.assertNothingHidden(json.dumps(results, ensure_ascii=False), "search 'quokka'")
+        self.assertNothingHidden(results, "search 'quokka'")
 
         # com --include-confidential o log.md volta a trazer as linhas (inclusive a antiga)
         shown = search(notes, "payments secret plan", include_confidential=True)
