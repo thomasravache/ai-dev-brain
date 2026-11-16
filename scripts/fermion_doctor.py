@@ -21,6 +21,7 @@ fora da pasta conferida e mostra caminho e versão, nunca conteúdo de arquivo. 
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -40,6 +41,7 @@ BLOCK_END = "<!-- sdd:end -->"
 CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas")
 UNREADABLE = "unreadable-version"
 VERSION_TEXT_RE = re.compile(r"^\d+(?:\.\d+)*$")
+READ_LIMIT = 256 * 1024  # só os primeiros 256 KB de cada arquivo (Emenda v2)
 USAGE = "uso: fermion_doctor.py [--project PASTA] [--json]"
 
 
@@ -63,11 +65,12 @@ def is_file(path, root):
 
 
 def read_text(path, root):
-    """Texto do arquivo dentro de root; None quando não existe, sai de root ou não dá para ler."""
+    """Os primeiros READ_LIMIT bytes do arquivo dentro de root, como texto; None quando não existe, sai de root ou não dá para ler."""
     if not is_file(path, root):
         return None
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        with path.open("rb") as stream:
+            return stream.read(READ_LIMIT).decode("utf-8", errors="replace")
     except (OSError, ValueError):
         return None
 
@@ -78,6 +81,11 @@ def read_version(text, constant):
     if not match or not VERSION_TEXT_RE.match(match.group(1)):
         return None
     return match.group(1)
+
+
+def quoted(path):
+    """Caminho com aspas de shell, pronto para colar no terminal (Emenda v2)."""
+    return shlex.quote(str(path))
 
 
 def version_tuple(version):
@@ -147,10 +155,10 @@ def check_stale_copies(report, folder, versions, plugin_root):
         version = read_version(text, constant)
         if version is None:
             report.add("stale-copy", UNREADABLE, path, "versão não encontrada",
-                       f"copie de novo de {Path(plugin_root) / 'skills' / skill} ou remova a pasta")
+                       f"copie de novo de {quoted(Path(plugin_root) / 'skills' / skill)} ou remova a pasta")
         elif older(version, versions[skill]):
             report.add("stale-copy", "stale-copy", copy, f"{version} < {versions[skill]}",
-                       f"copie de novo de {Path(plugin_root) / 'skills' / skill} ou remova a pasta")
+                       f"copie de novo de {quoted(Path(plugin_root) / 'skills' / skill)} ou remova a pasta")
 
 
 def check_sdd_tool(report, project, versions, plugin_root):
@@ -159,7 +167,7 @@ def check_sdd_tool(report, project, versions, plugin_root):
     if text is None:
         return
     cli = Path(plugin_root) / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
-    fix = f"rode: python3 {cli} whats-new, depois vendor"
+    fix = f"rode: python3 {quoted(cli)} whats-new, depois vendor"
     version = read_version(text, SKILL_SCRIPTS["gluon-spec"][1])
     if version is None:
         report.add("stale-sdd-tool", UNREADABLE, relative, "versão não encontrada", fix)
@@ -182,7 +190,7 @@ def check_sdd_blocks(report, project, plugin_root):
         block = sdd_block(read_text(project / name, root) or "")
         if block and "sdd-management" in block and "gluon-spec" not in block:
             report.add("old-sdd-block", "old-sdd-block", name, "bloco SDD com o nome antigo",
-                       f"rode: python3 {cli} vendor --agents")
+                       f"rode: python3 {quoted(cli)} vendor --agents")
 
 
 def check_atlas(report, project, versions, plugin_root):
@@ -191,7 +199,7 @@ def check_atlas(report, project, versions, plugin_root):
     if text is None:
         return
     cli = Path(plugin_root) / "skills" / "boson-atlas" / "scripts" / "atlas.py"
-    fix = (f"rode no repositório do atlas: python3 {cli} vendor --ci <github|generic>, o mesmo --ci da "
+    fix = (f"rode no repositório do atlas: python3 {quoted(cli)} vendor --ci <github|generic>, o mesmo --ci da "
            "instalação")
     version = read_version(text, SKILL_SCRIPTS["boson-atlas"][1])
     if version is None:

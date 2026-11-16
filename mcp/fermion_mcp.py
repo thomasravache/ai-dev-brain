@@ -529,9 +529,13 @@ def map_output(name, completed):
     """CallToolResult a partir do exit code e da saída da CLI (seção 6 da SPEC-0054 e da SPEC-0059)."""
     code = completed.returncode
     stdout = completed.stdout or ""
-    if name == "fermion_doctor":  # o doctor sempre sai com 0; outro exit é falha
+    if name == "fermion_doctor":  # o doctor sempre sai com 0; outro exit, ou saída sem findings, é falha
+        report = _json_object(stdout)
+        if code == 0 and report is not None and isinstance(report.get("findings"), list):
+            return _text_result(stdout, False, report)
         if code == 0:
-            return _text_result(stdout, False, _json_object(stdout))
+            return _text_result(_with_stderr("fermion_doctor.py saiu com 0 sem um objeto JSON com findings",
+                                             completed.stderr), True)
         return _text_result(_with_stderr(f"fermion_doctor.py saiu com o código {code}", completed.stderr), True)
     if name.startswith("sdd_"):  # texto da CLI, sem structuredContent (seção 6 da SPEC-0060)
         if code == 0 or (code == LINT_REPORT_EXIT and name in SDD_REPORT_TOOLS):
