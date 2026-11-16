@@ -4,7 +4,7 @@ title: "photon-brain: título de nota confidencial fora do log.md na busca e no 
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-16
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, sk
 adrs: [ADR-0014]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-16
 ---
 
 # SPEC-0064 — photon-brain: título de nota confidencial fora do log.md na busca e no contexto
@@ -53,6 +53,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 e IT-01 em `skills/photon-brain/tests/` com a tag `SPEC-0064:<ID>`, falhando pelo motivo certo
+- [ ] Green: `search` e `build_context` leem o `log.md` gerado sem as linhas de notas confidenciais
+- [ ] Validar: suíte completa + arquitetura (G2/G3); `references/`, CHANGELOG, `BRAIN_VERSION` e `version` do plugin
+- [ ] Review independente (G4), integração + CI (G5) e H2, Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
