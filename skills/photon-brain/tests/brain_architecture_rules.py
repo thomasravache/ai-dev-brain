@@ -101,31 +101,87 @@ def cross_skill_path_findings(source, filename):
     return [message for _, message in sorted(findings)]
 
 
-def _process_call(node):
+def _is_process_name(module, name):
+    """True quando `name` de `module` inicia um processo externo (os.exec* e os.spawn* inclusive)."""
+    if module == "os" and name.startswith(("exec", "spawn")):
+        return True
+    return name in PROCESS_CALLS.get(module, ())
+
+
+def _process_names(tree):
+    """(apelidos de módulo, nomes importados) do código: {"sp": "subprocess"} e {"run": "subprocess.run"}.
+
+    Aproximação sem escopos: um import em qualquer lugar do arquivo vale para o arquivo inteiro."""
+    modules = {module: module for module in PROCESS_CALLS}
+    names = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in PROCESS_CALLS:
+                    modules[alias.asname or alias.name] = alias.name
+        elif isinstance(node, ast.ImportFrom) and not node.level and node.module in PROCESS_CALLS:
+            for alias in node.names:
+                if _is_process_name(node.module, alias.name):
+                    names[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return modules, names
+
+
+def _process_import(node):
+    """Texto de um import que esconde a chamada de processo da checagem módulo.função (SPEC-0062:UT-01), ou None:
+    from subprocess import ..., import subprocess as x e from os import system|popen|exec*|spawn*."""
+    if isinstance(node, ast.Import):
+        hidden = [f"import {a.name} as {a.asname}" for a in node.names
+                  if a.name == "subprocess" and a.asname and a.asname != a.name]
+    elif isinstance(node, ast.ImportFrom) and not node.level and node.module in PROCESS_CALLS:
+        if node.module == "subprocess":
+            hidden = [f"from subprocess import {a.name}" for a in node.names]
+        else:
+            hidden = [f"from {node.module} import {a.name}" for a in node.names
+                      if _is_process_name(node.module, a.name)]
+    else:
+        return None
+    return ", ".join(hidden) or None
+
+
+def _process_call(node, modules, names):
+    """'módulo.função' de uma chamada que inicia processo externo (pelo módulo, apelido ou nome importado), ou None."""
     func = node.func
-    if (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)
-            and func.attr in PROCESS_CALLS.get(func.value.id, ())):
-        return f"{func.value.id}.{func.attr}"
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id in modules:
+        module = modules[func.value.id]
+        if _is_process_name(module, func.attr):
+            return f"{module}.{func.attr}"
+    if isinstance(func, ast.Name) and func.id in names:
+        return names[func.id]
     return None
 
 
 def subprocess_findings(source, filename, allowed=("run_processor",)):
-    """Chamadas de processo externo fora das funções permitidas (padrão: só run_processor)."""
+    """Chamadas de processo externo fora das funções permitidas (padrão: só run_processor), inclusive por import
+    de nome ou com apelido (from subprocess import run, import subprocess as sp, from os import system) e os
+    próprios imports que escondem a chamada — SPEC-0062.
+
+    A regra é por nome: não pega acesso dinâmico (__import__("subprocess"), importlib.import_module,
+    getattr(os, "system"))."""
     allowed = set(allowed)
+    tree = ast.parse(source)
+    modules, names = _process_names(tree)
     findings = []
 
     def visit(node, function):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             function = node.name
+        found = None
         if isinstance(node, ast.Call):
-            call = _process_call(node)
-            if call and function not in allowed:
-                where = f"{function}()" if function else "nível de módulo"
-                findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_PROCESS} — {call} em {where}"))
+            found = _process_call(node, modules, names)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            found = _process_import(node)
+        if found and function not in allowed:
+            where = f"{function}()" if function else "nível de módulo"
+            findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_PROCESS} — {found} em {where}"))
         for child in ast.iter_child_nodes(node):
             visit(child, function)
 
-    visit(ast.parse(source), None)
+    visit(tree, None)
     return [message for _, message in sorted(findings)]
 
 
