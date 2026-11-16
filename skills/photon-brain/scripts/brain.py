@@ -54,7 +54,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.6"
+BRAIN_VERSION = "2026.11.7"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -1316,11 +1316,12 @@ def make_snippet(note: Note, terms) -> str:
 
 
 def search(notes: list, query: str, context=None, note_type=None, tag=None, limit=10,
-           include_confidential=False) -> list:
+           include_confidential=False, values=None) -> list:
     """Notes of the query by score: sum per query term of tf * idf, weighting title 3, tags 2 and body 1.
     Only score > 0, descending; filters by context, frontmatter.type and tag. Confidential notes are left out
-    (never counted in the idf either) unless include_confidential."""
-    notes = visible_notes(notes, include_confidential)
+    (never counted in the idf either) unless include_confidential, and the generated log.md is read without the
+    lines that name one (readable_notes; layout.log of values, "log.md" when None)."""
+    notes = readable_notes(notes, values, include_confidential)
     terms = unique(tokenize(query))
     if not terms:
         return []
@@ -1366,6 +1367,37 @@ def generated_notes(paths, values=None) -> set:
     """The paths (of notes) that are the generated index.md or log.md, compared with _link_key."""
     keys = generated_paths(values)
     return {path for path in paths if _link_key(path) in keys}
+
+
+def log_mentions(line: str, keys: set, index: LinkIndex, hidden: set) -> bool:
+    """True when a line of log.md names a note of `hidden`: its path as the log writes it (_link_key + ".md", so an
+    old line or another case/normalization still counts) or a [[link]] that resolves to it ("relate")."""
+    folded = unicodedata.normalize("NFC", line.replace("\\", "/")).lower()
+    return (any(key + ".md" in folded for key in keys)
+            or any(index.resolve(link_target(m)) in hidden for m in WIKILINK_RE.findall(line)))
+
+
+def readable_notes(notes: list, values=None, include_confidential: bool = False) -> list:
+    """visible_notes, with the generated log.md read without the lines that name a confidential note (log_mentions;
+    SPEC-0064, ADR-0014): search and context score, quote and package that text. The file never changes (only
+    appended to, ADR-0007); with include_confidential, or without confidential notes, nothing changes."""
+    shown = visible_notes(notes, include_confidential)
+    hidden = {note.path for note in notes} - {note.path for note in shown}
+    if not hidden:
+        return shown
+    keys, index = {_link_key(path) for path in hidden}, LinkIndex(note.path for note in notes)
+    log_key = {_link_key(path) for path in layout_paths(values["layout"] if values else {"log": "log.md"}, ("log",))}
+    logs = {note.path for note in shown if _link_key(note.path) in log_key}
+    result = []
+    for note in shown:
+        if note.path in logs:
+            text = "".join(line for line in (note.text or "").splitlines(keepends=True)
+                           if not log_mentions(line, keys, index, hidden))
+            redacted = parse_note(note.path, text)
+            redacted.context, redacted.warnings = note.context, note.warnings
+            note = redacted
+        result.append(note)
+    return result
 
 
 def moc_notes(paths, values=None) -> set:
@@ -1517,13 +1549,14 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     the package would have picked with them."""
     by_path = {note.path: note for note in notes}
     index = LinkIndex(by_path)
-    shown = visible_notes(notes, include_confidential)
+    shown = readable_notes(notes, values, include_confidential)
     picked = context_picks(shown, index, query, context, hops, limit, values)
+    readable = {note.path: note for note in shown}
     hidden = by_path.keys() - {note.path for note in shown}
     every = context_picks(notes, index, query, context, hops, limit, values) if hidden else []
     package, omitted, broken, size = [], [], [], 0
     for path, reason in picked:
-        note = by_path[path]
+        note = readable[path]
         content = note.text or ""
         if size + len(content) <= max_chars:
             size += len(content)
@@ -2315,10 +2348,10 @@ def print_confidential_omitted(omitted: int):
 def cmd_search(args, config_home=None) -> int:
     check_limit(args.limit)
     query = " ".join(args.query)
-    notes, warnings = load_notes(config_home)
+    values, notes, warnings = load_vault(config_home)
     include = args.include_confidential
     results = search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
-                     include_confidential=include)
+                     include_confidential=include, values=values)
     omitted = 0 if include or not has_confidential(notes) else confidential_omitted(
         search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
                include_confidential=True), notes)

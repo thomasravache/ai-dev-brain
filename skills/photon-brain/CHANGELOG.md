@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.7] - 2026-11-16
+
+### Fixed
+- `search` e `context` sem `--include-confidential` leem o `log.md` gerado sem as linhas que citam uma nota `confidential: true` (o caminho como o `log.md` o escreve, inclusive linhas antigas, ou um `[[link]]` que resolve para ela): o título e o caminho da nota não aparecem mais em resultado, trecho nem conteúdo do pacote, e o `log.md` só aparece se o texto filtrado ainda casar com a consulta. Com `--include-confidential` nada muda; o arquivo `log.md` não muda (ADR-0007, ADR-0014) (SPEC-0064).
+
 ## [2026.11.6] - 2026-11-12
 
 ### Changed

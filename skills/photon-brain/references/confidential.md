@@ -83,6 +83,7 @@ Com a marca, a nota:
 
 - fica fora de `search`, `related`, `context` e `links` (resultados, vizinhas, links de saída e backlinks). Um link para ela não vira "link quebrado": só não é listado. As saídas `--json` dizem quantas ficaram fora em `confidential_omitted`, sem citar nenhuma;
 - não aparece no MOC (região `notes`) nem no `recent` do `index.md`;
+- não aparece pelo `log.md` em `search` e `context`: sem `--include-confidential`, os dois leem o `log.md` gerado sem as linhas que citam a nota (o caminho como o `log.md` o escreve, inclusive linhas antigas, de antes da marca, ou um `[[link]]` que resolve para ela); pontuação, trecho e conteúdo do pacote usam esse texto, e o `log.md` só aparece se ainda casar com a consulta. O arquivo `log.md` não muda (só recebe acréscimos) e continua registrando o caminho, para a pessoa auditar o vault;
 - nunca vai para o pacote do `export-notebooklm` (não há opção para incluir): um wikilink para ela em qualquer nota exportada (inclusive `[[Nota#parte]]` e `[[Nota|apelido]]`) vira o texto `[confidencial]`, então o título não aparece no pacote, no `combined.md` nem no `--json`. Um MOC confidencial não é exportado (exit 2);
 - não é acusada como `orphan` pelo `lint`;
 - só entra na contagem do `doctor`: `OK confidential — N notas confidenciais`, sem título nem caminho.
