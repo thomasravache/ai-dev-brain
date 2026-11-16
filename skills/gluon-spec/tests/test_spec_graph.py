@@ -770,6 +770,60 @@ class WorktreeTest(ProjectTest):
         self.assertNotIn("não está no .gitignore", self.p.validate().stdout)
 
 
+class WorktreeFromLinkedCheckoutTest(ProjectTest):
+    """worktree_dir vem do checkout principal, mesmo com a CLI rodando de dentro de uma worktree."""
+
+    def setUp(self):
+        self.outer = Path(tempfile.mkdtemp()).resolve()
+        self.tmp = self.outer / "repo"
+        self.p = Project(self.tmp)
+        self.x = self.full("Primeira feature")
+        self.y = self.full("Segunda feature")
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: specs")
+        self.base = self.outer / "repo.worktrees"
+        self.wt_x = self.base / f"{self.x}-primeira-feature"
+        created = self.p.run("worktree", self.x, "--create")
+        self.assertEqual(created.returncode, 0, created.stderr)
+        self.assertTrue((self.wt_x / "README.md").exists())
+
+    def tearDown(self):
+        shutil.rmtree(self.outer, ignore_errors=True)
+
+    def run_in(self, cwd, *args):
+        return subprocess.run([sys.executable, str(SCRIPT), *args], check=False, cwd=cwd, capture_output=True,
+                              text=True, env=dict(os.environ))
+
+    def test_linked_worktree_is_not_misplaced_and_paths_match_main(self):
+        """SPEC-0063:UT-01"""
+        for command in ("status", "validate"):
+            out = self.run_in(self.wt_x, command)
+            self.assertNotIn("Traceback", out.stderr)
+            self.assertNotIn("fora do worktree_dir", out.stdout + out.stderr,
+                             f"{command} rodado de dentro de {self.wt_x}")
+        from_main = self.p.run("worktree", self.y)
+        from_wt = self.run_in(self.wt_x, "worktree", self.y)
+        self.assertEqual(from_main.returncode, 0, from_main.stderr)
+        self.assertEqual(from_wt.returncode, 0, from_wt.stderr)
+        self.assertEqual(Path(from_main.stdout.split("\n")[0]), self.base / f"{self.y}-segunda-feature")
+        self.assertEqual(from_wt.stdout, from_main.stdout)
+
+    def test_create_from_linked_worktree_lands_next_to_it(self):
+        """SPEC-0063:IT-01"""
+        out = self.run_in(self.wt_x, "worktree", self.y, "--create")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        expected = self.base / f"{self.y}-segunda-feature"
+        self.assertIn(str(expected), out.stdout)
+        self.assertTrue((expected / "README.md").exists(), out.stdout)
+        self.assertEqual(sorted(p.name for p in self.base.iterdir()),
+                         sorted([self.wt_x.name, expected.name]))
+        listed = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=self.tmp, check=True,
+                                capture_output=True, text=True).stdout
+        paths = [Path(line[9:]).resolve() for line in listed.splitlines() if line.startswith("worktree ")]
+        self.assertIn(expected, paths)
+        self.assertFalse(any(self.wt_x in p.parents or p.name.endswith(".worktrees") for p in paths[1:]), paths)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()
