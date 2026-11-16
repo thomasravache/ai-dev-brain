@@ -68,9 +68,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — dd1eabe | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — cc78d15 | 2026-11-16 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (2ª rodada; achados 1–5 resolvidos; 1 minor: --scan não lista hooks órfãos de private off — coberto à mão no passo pós-merge; 3 nits) — 8e36546 | 2026-11-16 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 9684fb9 | 2026-11-16 |
+| H2 Integração aprovada | PASS | aprovado por política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS; CI do PR #41 verde (ci 3.9/3.15 e sdd) | 2026-11-16 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-16 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -82,28 +82,44 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+- O `pre-push` do leak-check do modo privado acha a ferramenta sozinho: caminho gravado → `gluon-spec` do plugin `fermion` (`installed_plugins.json` em `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`) → cópia de skill do usuário (`gluon-spec`, depois o nome antigo) → `tools/sdd/` não rastreado. Sem ferramenta, diz "ferramenta do leak-check não encontrada"; "marcas do SDD encontradas" só quando o leak-check sai 1; outro código vira "falha ao rodar o leak-check (exit N)"; interpretador gravado ausente cai para `python3` do PATH.
+- `private hooks [--refresh] [--scan PASTA]`: relatório, regravação só de hooks do SDD (inclusive o órfão de `private off` e com marcador de gerenciador do time; hook de outra origem nunca) e varredura dos repositórios registrados como privados.
+- `private status` e o `fermion_doctor` (check `broken-leak-hook`, só leitura, índice git v2/v3 lido por entradas) avisam hook do SDD sem ferramenta, com o comando de conserto.
+- gluon-spec 2026.11.5, plugin 2026.11.14.
 
 ### Como foi feito
+- Template `assets/hooks/pre-push-leak` com `find_tool` POSIX; `render_leak_hook`/`write_leak_hook` compartilhados por `private init` e `--refresh` (recusam caminho com `"`, `$` ou crase); `find_leak_tool` em Python com a mesma ordem; `tools/sdd/` vendorizado idêntico.
+- Testes em 89c9b6c e 5a66070 (emenda v3); correções em 4c57505 e dd1eabe; isolamento de subteste em 1f1eefc (TEST_DEFECT).
+- **Revisão G4:** rodada 1 CHANGES_REQUESTED (hook órfão de `private off` sem conserto, marcador de time, interpretador ausente, índice v4) → Emenda v3; rodada 2 APPROVED com experimentos repetidos contra o HEAD.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes:** 89c9b6c vermelho — o hook dizia "ferramenta do leak-check não encontrada" sem procurar o plugin/cópia e `private hooks` não existia (10 falhas); 5a66070 vermelho para os casos da emenda v3 (7 + 2 falhas).
+- **Depois:** 4c57505/dd1eabe verdes; suíte completa no G5 (9684fb9) e CI do PR #41 (Python 3.9 e 3.15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Hook instalado por `private init` recusa push com marca e aceita sem | PASS | `test_private_mode.py::LeakHookToolLookupTest` — CI do PR #41 e suíte local no G5 |
+| UT-01 | Busca: plugin (lista/objeto), cópia de skill (nome novo e antigo, `$HOME/.claude`), nenhuma → "não encontrada"; `python3` do PATH; exit ≠ 1 não vira "marcas"; caminho inseguro recusado; aviso no `private status` | PASS | `test_private_mode.py::LeakHookToolLookupTest` e `LeakHookAmendmentV3Test` — CI do PR #41 |
+| UT-02 | `--refresh` regrava só hook do SDD (inclusive órfão e com marcador de time); hook de outra origem intacto; `--scan` só nos registrados | PASS | `test_private_mode.py::LeakHookToolLookupTest` e `LeakHookAmendmentV3Test` — CI do PR #41 |
+| IT-01 | Repo real com hook apontando para cópia apagada: depois do `--refresh`, push com marca recusado e sem marca aceito | PASS | `test_private_mode.py::LeakHookToolLookupTest` — CI do PR #41 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — 89c9b6c/5a66070 vermelhos, 4c57505/dd1eabe verdes
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido — busca da SPEC-0057; doctor só lê e só avisa (SPEC-0061, ADR-0019)
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — CHANGELOG da gluon-spec 2026.11.5 e `references/private-mode.md`
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — nenhuma: `commit-msg` e `pre-commit` usam `tools/sdd/` versionado (conferido na revisão)
 
 ### Deploy
+N/A — plugin 2026.11.14, PR #41.
 
 ### Pendências
+- Minor da revisão: `--refresh --scan` não lista hooks órfãos de repositórios que saíram do modo privado; coberto à mão no passo pós-merge nesta máquina.
+- Nits: `private hooks` sem `--refresh` termina em traceback com caminho inseguro; exceção não tratada na ferramenta sai 1 e vira "marcas"; concordância "do ferramenta" em `leak_hook_problem`.
+- `spec_graph.py pr --title` gerou título com 112 caracteres (o `pr-check` limita a 100); ajustado à mão no PR.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
