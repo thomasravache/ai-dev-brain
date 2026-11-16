@@ -17,7 +17,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.11.3"
+SDD_TOOL_VERSION = "2026.11.4"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -1285,10 +1285,33 @@ def cmd_living_docs(project: Project, init: bool):
 WORKTREE_DIR_DEFAULT = "../{repo}.worktrees"
 
 
+def main_checkout(root: Path) -> Path:
+    """Raiz do projeto no checkout principal. Só difere de root numa worktree ligada (--git-dir diferente de
+    --git-common-dir): aí é a árvore de core.worktree do common-dir, senão o pai do common-dir, mantendo a
+    subpasta do projeto (monorepo). Fora de worktree ligada (inclusive submódulo e --separate-git-dir), root."""
+    here = root.resolve()
+    code, out, _ = run_git(root, "rev-parse", "--absolute-git-dir", "--git-common-dir", "--show-toplevel")
+    lines = out.splitlines()
+    if code != 0 or len(lines) < 3:
+        return here
+    git_dir = Path(lines[0]).resolve()
+    common = (root / lines[1]).resolve()
+    if git_dir == common:
+        return here
+    code, tree, _ = run_git(root, "--git-dir", str(common), "config", "--get", "core.worktree")
+    main = (common / tree.strip()).resolve() if code == 0 and tree.strip() else common.parent
+    try:
+        rel = here.relative_to(Path(lines[2]).resolve())
+    except ValueError:
+        rel = Path()
+    return (main / rel).resolve()
+
+
 def worktree_base(project: Project) -> Path:
-    pattern = project.cfg("worktree_dir", WORKTREE_DIR_DEFAULT).replace("{repo}", project.root.name)
+    main = main_checkout(project.root)
+    pattern = project.cfg("worktree_dir", WORKTREE_DIR_DEFAULT).replace("{repo}", main.name)
     base = Path(pattern)
-    return (base if base.is_absolute() else project.root / base).resolve()
+    return (base if base.is_absolute() else main / base).resolve()
 
 
 def spec_slug(doc: Doc) -> str:
@@ -1337,7 +1360,7 @@ def stale_worktrees(project: Project):
 def misplaced_worktrees(project: Project):
     """Worktrees outside worktree_dir (e.g. old sibling folders, or a folder inside the repo)."""
     base = worktree_base(project)
-    root = project.root.resolve()
+    root = main_checkout(project.root)
     allow = project.cfg_list("worktree_allow", [])
     out = []
     for entry in list_worktrees(project):
@@ -1352,7 +1375,7 @@ def misplaced_worktrees(project: Project):
         m = re.search(r"\bsdd/(SPEC-\d{4,}[\w-]*)", branch)
         target = base / (m.group(1) if m else path.name)
         why = ""
-        if inside and run_git(project.root, "check-ignore", "-q", rel + "/")[0] != 0:
+        if inside and run_git(root, "check-ignore", "-q", rel + "/")[0] != 0:
             why = " — está DENTRO do repositório e fora do .gitignore (ferramentas podem ver o código em dobro)"
         out.append((str(path), (f"fora do worktree_dir{why}; quando ninguém estiver trabalhando nela: "
                                 f"`git worktree move {path} {target}`")))
@@ -1363,11 +1386,12 @@ def validate_worktrees(project: Project, add):
     if run_git(project.root, "rev-parse", "--is-inside-work-tree")[0] != 0:
         return
     base = worktree_base(project)
+    root = main_checkout(project.root)
     try:
-        inside = base.relative_to(project.root.resolve())
+        inside = base.relative_to(root)
     except ValueError:
         inside = None
-    if inside is not None and run_git(project.root, "check-ignore", "-q", str(inside) + "/")[0] != 0:
+    if inside is not None and run_git(root, "check-ignore", "-q", str(inside) + "/")[0] != 0:
         add("WARN", "worktrees", f"worktree_dir '{inside}' fica dentro do repositório e não está no .gitignore — "
                                  "adicione-o (e exclua a pasta de builds de container, IDE e descoberta de testes) ou use "
                                  f"o padrão {WORKTREE_DIR_DEFAULT}")

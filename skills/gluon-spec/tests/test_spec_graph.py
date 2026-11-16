@@ -770,6 +770,170 @@ class WorktreeTest(ProjectTest):
         self.assertNotIn("não está no .gitignore", self.p.validate().stdout)
 
 
+class WorktreeFromLinkedCheckoutTest(ProjectTest):
+    """worktree_dir vem do checkout principal, mesmo com a CLI rodando de dentro de uma worktree."""
+
+    def setUp(self):
+        self.outer = Path(tempfile.mkdtemp()).resolve()
+        self.tmp = self.outer / "repo"
+        self.p = Project(self.tmp)
+        self.x = self.full("Primeira feature")
+        self.y = self.full("Segunda feature")
+        git(self.tmp, "add", "-A")
+        git(self.tmp, "commit", "-qm", "docs: specs")
+        self.base = self.outer / "repo.worktrees"
+        self.wt_x = self.base / f"{self.x}-primeira-feature"
+        created = self.p.run("worktree", self.x, "--create")
+        self.assertEqual(created.returncode, 0, created.stderr)
+        self.assertTrue((self.wt_x / "README.md").exists())
+
+    def tearDown(self):
+        shutil.rmtree(self.outer, ignore_errors=True)
+
+    def run_in(self, cwd, *args):
+        return subprocess.run([sys.executable, str(SCRIPT), *args], check=False, cwd=cwd, capture_output=True,
+                              text=True, env=dict(os.environ))
+
+    def test_linked_worktree_is_not_misplaced_and_paths_match_main(self):
+        """SPEC-0063:UT-01"""
+        for command in ("status", "validate"):
+            out = self.run_in(self.wt_x, command)
+            self.assertNotIn("Traceback", out.stderr)
+            self.assertNotIn("fora do worktree_dir", out.stdout + out.stderr,
+                             f"{command} rodado de dentro de {self.wt_x}")
+        from_main = self.p.run("worktree", self.y)
+        from_wt = self.run_in(self.wt_x, "worktree", self.y)
+        self.assertEqual(from_main.returncode, 0, from_main.stderr)
+        self.assertEqual(from_wt.returncode, 0, from_wt.stderr)
+        self.assertEqual(Path(from_main.stdout.split("\n")[0]), self.base / f"{self.y}-segunda-feature")
+        self.assertEqual(from_wt.stdout, from_main.stdout)
+
+    def test_create_from_linked_worktree_lands_next_to_it(self):
+        """SPEC-0063:IT-01"""
+        out = self.run_in(self.wt_x, "worktree", self.y, "--create")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        expected = self.base / f"{self.y}-segunda-feature"
+        self.assertIn(str(expected), out.stdout)
+        self.assertTrue((expected / "README.md").exists(), out.stdout)
+        self.assertEqual(sorted(p.name for p in self.base.iterdir()),
+                         sorted([self.wt_x.name, expected.name]))
+        listed = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=self.tmp, check=True,
+                                capture_output=True, text=True).stdout
+        paths = [Path(line[9:]).resolve() for line in listed.splitlines() if line.startswith("worktree ")]
+        self.assertIn(expected, paths)
+        self.assertFalse(any(self.wt_x in p.parents or p.name.endswith(".worktrees") for p in paths[1:]), paths)
+
+
+class WorktreeRootLayoutsTest(unittest.TestCase):
+    """SPEC-0063:UT-02 — submódulo, --separate-git-dir, monorepo e avisos de dentro de uma worktree ligada."""
+
+    def setUp(self):
+        self.outer = Path(tempfile.mkdtemp()).resolve()
+
+    def tearDown(self):
+        shutil.rmtree(self.outer, ignore_errors=True)
+
+    @staticmethod
+    def run_in(cwd, *args):
+        return subprocess.run([sys.executable, str(SCRIPT), *args], check=False, cwd=cwd, capture_output=True,
+                              text=True, env=dict(os.environ))
+
+    @staticmethod
+    def add_spec(p, title):
+        sid = p.new("full", title)
+        p.fill(sid, touches="[src/a/**, tests/a/**]")
+        return sid
+
+    def worktree_path(self, cwd, sid):
+        out = self.run_in(cwd, "worktree", sid)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return Path(out.stdout.split("\n")[0])
+
+    def test_submodule_keeps_its_own_worktree_dir(self):
+        """SPEC-0063:UT-02"""
+        src = Project(self.outer / "subsrc")
+        sid = self.add_spec(src, "Segunda feature")
+        git(src.root, "add", "-A")
+        git(src.root, "commit", "-qm", "docs: spec")
+        sup = self.outer / "super"
+        sup.mkdir()
+        git(sup, "init", "-q", "-b", "main")
+        git(sup, "config", "user.email", "t@t")
+        git(sup, "config", "user.name", "t")
+        git(sup, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(src.root), "sub")
+        git(sup, "commit", "-qm", "chore: sub")
+        self.assertEqual(self.worktree_path(sup / "sub", sid), sup / "sub.worktrees" / f"{sid}-segunda-feature")
+
+    def test_separate_git_dir_keeps_repo_name(self):
+        """SPEC-0063:UT-02"""
+        repo = self.outer / "repo"
+        (self.outer / "store").mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main", "--separate-git-dir", str(self.outer / "store" / "repo.git"),
+                        str(repo)], check=True, capture_output=True)
+        p = Project(repo)
+        self.assertTrue((repo / ".git").is_file())
+        sid = self.add_spec(p, "Segunda feature")
+        self.assertEqual(self.worktree_path(repo, sid), self.outer / "repo.worktrees" / f"{sid}-segunda-feature")
+
+    def test_monorepo_subfolder_keeps_subfolder_name(self):
+        """SPEC-0063:UT-02"""
+        mono, svc = self.outer / "mono", self.outer / "mono" / "svc"
+        (svc / "docs" / "specs").mkdir(parents=True)
+        git(mono, "init", "-q", "-b", "main")
+        git(mono, "config", "user.email", "t@t")
+        git(mono, "config", "user.name", "t")
+        (svc / "docs/specs/sdd-config.yml").write_text("base_branch: main\nmax_parallel: 2\ntest_paths:\n  - \"tests/**\"\n",
+                                                       encoding="utf-8")
+        (svc / "README.md").write_text("# svc\n", encoding="utf-8")
+        p = Project.__new__(Project)
+        p.root = svc
+        sid = self.add_spec(p, "Segunda feature")
+        git(mono, "add", "-A")
+        git(mono, "commit", "-qm", "chore: init")
+        self.assertEqual(self.worktree_path(svc, sid), mono / "svc.worktrees" / f"{sid}-segunda-feature")
+
+    def linked_repo(self, config_extra="", gitignore=None):
+        repo = self.outer / "repo"
+        p = Project(repo, config_extra)
+        if gitignore is not None:
+            (repo / ".gitignore").write_text(gitignore, encoding="utf-8")
+        sid = self.add_spec(p, "Primeira feature")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "docs: spec")
+        created = p.run("worktree", sid, "--create")
+        self.assertEqual(created.returncode, 0, created.stderr)
+        wt = Path(created.stdout.split("\n")[0].split(": ", 1)[1])
+        self.assertTrue((wt / "README.md").exists())
+        return p, wt
+
+    def assert_allowed_tool_worktree_is_quiet(self, config_extra, gitignore=None):
+        allow = 'worktree_allow:\n  - ".claude/worktrees/**"\n'
+        p, wt = self.linked_repo(config_extra + allow, gitignore)
+        tool = (p.root / ".claude" / "worktrees" / "tool").resolve()
+        git(p.root, "worktree", "add", "-q", str(tool), "-b", "tool")
+        for cwd in (p.root, wt):
+            for command in ("status", "validate"):
+                out = self.run_in(cwd, command)
+                self.assertNotIn("Traceback", out.stderr)
+                self.assertNotIn(str(tool), out.stdout + out.stderr, f"{command} rodado de {cwd}")
+                self.assertNotIn("fora do worktree_dir", out.stdout + out.stderr, f"{command} rodado de {cwd}")
+
+    def test_worktree_allow_from_linked_worktree_default_pattern(self):
+        """SPEC-0063:UT-02"""
+        self.assert_allowed_tool_worktree_is_quiet("")
+
+    def test_worktree_allow_from_linked_worktree_inside_pattern(self):
+        """SPEC-0063:UT-02"""
+        self.assert_allowed_tool_worktree_is_quiet("worktree_dir: .worktrees\n", gitignore=".worktrees/\n")
+
+    def test_gitignore_warning_shows_from_linked_worktree(self):
+        """SPEC-0063:UT-02"""
+        p, wt = self.linked_repo("worktree_dir: .worktrees\n")
+        self.assertEqual(wt.parent, (p.root / ".worktrees").resolve())
+        self.assertIn("não está no .gitignore", p.validate().stdout)
+        self.assertIn("não está no .gitignore", self.run_in(wt, "validate").stdout)
+
+
 class UpgradeTest(ProjectTest):
     def test_upgrade_restores_sections_keys_and_gate_rows(self):
         sid = self.full()

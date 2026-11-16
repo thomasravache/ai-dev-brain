@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, in-progress 1, implemented 55
+- Validação (G0): **2 erro(s), 17 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, in-progress 1, implemented 56
 - Impedimentos: **0 aberto(s)**, 28 resolvido(s)
 
 ## Cobertura de Pilares
@@ -128,6 +128,7 @@ flowchart LR
 | [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
 | [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
 | [SPEC-0062](SPEC-0062-photon-brain-regra-de-processo-com-alias-e-imports-de-nomes.md) | photon-brain: regra de processo com alias e imports de nomes | lite | fix | in-progress | 2026-11-15 | — | SPEC-0046 | — |
+| [SPEC-0063](SPEC-0063-gluon-spec-worktree-dir-calculado-a-partir-do-checkout-princ.md) | gluon-spec: worktree_dir calculado a partir do checkout principal | lite | fix | implemented | 2026-11-16 | — | — | — |
 | [SPEC-0064](SPEC-0064-photon-brain-titulo-de-nota-confidencial-fora-do-log-md-na-b.md) | photon-brain: título de nota confidencial fora do log.md na busca e no contexto | lite | fix | implemented | 2026-11-16 | — | — | — |
 
 ## ADRs
