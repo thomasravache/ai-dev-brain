@@ -131,7 +131,7 @@ nenhuma linha de comando contém --include-confidential como argumento próprio:
 - N/A — o servidor repassa o JSON da CLI sem interpretar; a igualdade com a CLI é provada no IT-01.
 
 ### 7.5 Testes E2E
-- N/A — a instalação é a jornada do SPEC-0053:E2E-01 e o protocolo é provado com o processo real nos IT; a conexão no Claude Code é conferida no G4 (`/mcp` lista as tools `brain_*`).
+- N/A — a instalação é a jornada E2E da SPEC-0053 e o protocolo é provado com o processo real nos IT; a conexão no Claude Code é conferida no G4 (`/mcp` lista as tools `brain_*`).
 
 ### 7.6 Outros
 - Tempo de resposta no IT-01 (menos de 5 s por chamada no vault de fixture).
