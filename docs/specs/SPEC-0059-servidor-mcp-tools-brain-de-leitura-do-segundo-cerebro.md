@@ -9,7 +9,7 @@ created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0054, SPEC-0058]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [mcp/**, .claude-plugin/plugin.json]
 adrs: [ADR-0017, ADR-0014]
@@ -45,7 +45,7 @@ O servidor MCP `fermion` (SPEC-0054) ganha oito tools de leitura do segundo cér
 ## 4. Decisão Arquitetural
 **Contexto:** brownfield. Referência: as tools `atlas_*` em `mcp/fermion_mcp.py` (`TOOLS`, `command_args`, `map_output`) e as suítes `mcp/tests/test_server.py` e `mcp/tests/test_architecture.py`.
 
-**Decisão:** as tools `brain_*` entram na mesma tabela `TOOLS` e no mesmo `command_args`, apontando para `skills/photon-brain/scripts/brain.py`. Texto livre vai sempre depois de `--` (busca, contexto e links) ou colado na opção (`--note=<valor>`, `--text=<valor>`, porque o argparse recusa `--note -x`), sem shell. O ambiente é herdado (`BRAIN_CONFIG_HOME`).
+**Decisão:** as tools `brain_*` entram na mesma tabela `TOOLS` e no mesmo `command_args`, apontando para `skills/photon-brain/scripts/brain.py`. Texto livre vai sempre depois de `--` (busca, contexto e links) e toda opção com valor vai colada (`--note=<valor>`, `--context=<valor>`; o argparse recusa `--note -x`, e assim nenhum valor vira argumento próprio), sem shell. O ambiente é herdado (`BRAIN_CONFIG_HOME`).
 
 **Justificativa:** um servidor só, com prefixo por skill (épico, frente 3); a CLI continua a fonte da verdade (ADR-0001, ADR-0017).
 
@@ -72,14 +72,14 @@ tools/list → as tools atlas_* da SPEC-0054 e mais estas, todas com inputSchema
   brain_config       {}                                                    → brain.py config --json
   brain_doctor       {}                                                    → brain.py doctor --json
   brain_search       {query: string 1..500 (obrigatório), context: string 1..100, type: string 1..50, tag: string 1..100, limit: int 1..100}
-                                                                           → brain.py search [--context C] [--type T] [--tag G] [--limit L] --json -- <query dividida em palavras>
+                                                                           → brain.py search [--context=C] [--type=T] [--tag=G] [--limit=L] --json -- <query dividida em palavras>
   brain_related      {note: string 1..500, text: string 1..2000, limit: int 1..100}; inputSchema com as duas opcionais e a descrição "exatamente um de note ou text"; o servidor confere depois do schema (nenhum ou os dois → -32602)
-                                                                           → brain.py related (--note=N | --text=X) [--limit L] --json
+                                                                           → brain.py related (--note=N | --text=X) [--limit=L] --json
   brain_links        {note: string 1..500 (obrigatório)}                   → brain.py links --json -- <note>
   brain_context      {query: string 1..500 (obrigatório), context: string 1..100, hops: int 0..2, limit: int 1..50, max_chars: int 500..200000}
-                                                                           → brain.py context [--context C] [--hops H] [--limit L] [--max-chars M] --json -- <query dividida em palavras>
+                                                                           → brain.py context [--context=C] [--hops=H] [--limit=L] [--max-chars=M] --json -- <query dividida em palavras>
   brain_inbox_list   {}                                                    → brain.py inbox list --json
-  brain_lint         {only: array de strings [a-z-]+ (opcional)}           → brain.py lint --json [--only a,b]
+  brain_lint         {only: array de strings [a-z-]+ (opcional)}           → brain.py lint --json [--only=a,b]
   strings: o mesmo padrão de query da SPEC-0054 (sem caracteres de controle, exceto tab, LF e CR); query só de espaços → -32602 (sem palavra depois de dividir)
 
 tools/call
@@ -91,7 +91,7 @@ tools/call
   exit 3 → isError: true, "segundo cérebro não configurado nesta máquina — rode a skill photon-brain (onboarding)" + stderr
   exit 2 em brain_lint (regra desconhecida em only) → isError: true com o stderr
   outro exit → isError: true com o exit code e o stderr; timeout → "brain.py não respondeu em 120 s"; CLI ausente → caminho procurado
-nenhuma linha de comando contém --include-confidential
+nenhuma linha de comando contém --include-confidential como argumento próprio: toda opção com valor vai colada (--opção=valor), e texto livre só depois de --
 ```
 
 **Design:** N/A — sem interface.
@@ -108,7 +108,7 @@ nenhuma linha de comando contém --include-confidential
 | Nota inexistente ou confidencial | `brain_links` ou `brain_related` por `note` | `isError: true` com o stderr da CLI, sem o conteúdo da nota | IT-03 |
 | Mesmo resultado da CLI | servidor real num vault de fixture | `brain_search`, `brain_context`, `brain_links` e `brain_lint` iguais ao stdout da CLI | IT-01 |
 | Cérebro não configurado | `BRAIN_CONFIG_HOME` vazio | `brain_doctor` com `isError: true` e a orientação de onboarding | IT-02 |
-| Confidencial fora | vault de fixture com nota `confidential: true` que casa com a busca | nenhum resultado `brain_*` traz o título ou o corpo dela | IT-03 |
+| Confidencial fora | vault de fixture com nota `confidential: true` que casa com a busca | nenhum resultado `brain_*` traz o corpo dela nem a tem como resultado (`path`); o título no `log.md` é da CLI (SPEC-0064) | IT-03 |
 | Fronteira com as CLIs | código do servidor | processo só para as três CLIs das skills; sem import de `skills/` | UT-05 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
@@ -125,7 +125,7 @@ nenhuma linha de comando contém --include-confidential
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um vault de fixture criado pela própria CLI (`init` num `BRAIN_CONFIG_HOME` temporário e notas com `new-note`), quando o servidor real é aberto por stdio e recebe `tools/call` de `brain_search`, `brain_context`, `brain_links` e `brain_lint`, então o texto de cada resultado é igual ao stdout da CLI com os mesmos argumentos, e cada resposta chega em menos de 5 s.
 - **IT-02** — Dado `BRAIN_CONFIG_HOME` numa pasta vazia, quando `brain_doctor` é chamado pelo servidor real, então o resultado tem `isError: true` e a orientação de onboarding.
-- **IT-03** — Dado o vault de fixture com uma nota `confidential: true` cujo título e corpo casam com a consulta, quando `brain_search`, `brain_context`, `brain_related` (por texto e por `note` com o nome dela) e `brain_links` (com o nome dela) são chamados pelo servidor real, então nenhum resultado contém o corpo dessa nota, busca e contexto não trazem o título, e `brain_related`/`brain_links` por nome devolvem `isError: true` com a recusa da CLI; `brain_links` com uma nota inexistente também devolve `isError: true`.
+- **IT-03** — Dado o vault de fixture com uma nota `confidential: true` cujo título e corpo casam com a consulta, quando `brain_search`, `brain_context`, `brain_related` (por texto e por `note` com o nome dela) e `brain_links` (com o nome dela) são chamados pelo servidor real, então nenhum resultado contém o corpo dessa nota, nenhum resultado de busca, contexto, related ou backlink tem a nota como `path`, `confidential_omitted` é pelo menos 1, e `brain_related`/`brain_links` por nome devolvem `isError: true` com a recusa da CLI; `brain_links` com uma nota inexistente também devolve `isError: true`.
 
 ### 7.4 Testes de Contrato
 - N/A — o servidor repassa o JSON da CLI sem interpretar; a igualdade com a CLI é provada no IT-01.
@@ -193,6 +193,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-16 | G1 | spec | SPEC_DEFECT do Test-writer: IT-03 exige que busca e contexto não tragam o título da nota confidencial, mas brain.py new-note grava o título em log.md e search/context devolvem log.md (CLI fora do touches); e opções com valor em dois argumentos deixariam um valor '--include-confidential' antes do '--' (recusado pelo argparse, mas contra a letra do contrato) | Test-writer conferiu na CLI real em 2026-11-16: search -- zebracorn secret devolve log.md com o título; corpo não vaza | thomas | Emenda v2 — opções com valor coladas; IT-03 sem o título do log.md, que vai para a SPEC-0064 (photon-brain) | 2026-11-16 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -234,3 +235,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0059`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-16 | Opções com valor sempre coladas (`--opção=valor`) em todas as `brain_*`; IT-03 e Mapa: a nota confidencial nunca aparece como resultado (`path`) nem tem o corpo exposto, e o título que a CLI grava no `log.md` sai do escopo (vai para a SPEC-0064, da `photon-brain`) | IMP-01: SPEC_DEFECT do Test-writer — `new-note` grava o título no `log.md`, que `search`/`context` devolvem (CLI fora do `touches`); valor `--include-confidential` em opção de dois argumentos ficaria antes do `--` | nenhuma (sem consumidores) | thomas, 2026-11-16 (piloto automático com o recomendado) |
