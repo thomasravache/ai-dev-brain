@@ -1,8 +1,8 @@
 # Servidor MCP `fermion`
 
-Servidor MCP local do plugin `fermion` (SPEC-0054, SPEC-0059, ADR-0017). Arquivo único, `mcp/fermion_mcp.py`, só biblioteca padrão, Python 3.9+, transporte stdio.
+Servidor MCP local do plugin `fermion` (SPEC-0054, SPEC-0059, SPEC-0060, ADR-0017). Arquivo único, `mcp/fermion_mcp.py`, só biblioteca padrão, Python 3.9+, transporte stdio.
 
-Ele expõe o atlas da organização (`atlas_*`) e o segundo cérebro (`brain_*`) como tools de leitura. Cada tool chama a CLI da skill (`skills/boson-atlas/scripts/atlas.py ... --json` ou `skills/photon-brain/scripts/brain.py ... --json`) e devolve o resultado dela, sem interpretar o conteúdo. A CLI continua sendo a única implementação (ADR-0001).
+Ele expõe o atlas da organização (`atlas_*`), o segundo cérebro (`brain_*`) e o processo SDD do projeto (`sdd_*`) como tools de leitura. Cada tool chama a CLI da skill (`skills/boson-atlas/scripts/atlas.py ... --json`, `skills/photon-brain/scripts/brain.py ... --json` ou `skills/gluon-spec/scripts/spec_graph.py --root <projeto> ...`) e devolve o resultado dela, sem interpretar o conteúdo. A CLI continua sendo a única implementação (ADR-0001).
 
 ## Tools
 
@@ -23,16 +23,25 @@ Todas têm `annotations.readOnlyHint: true` e `inputSchema` fechado (`additional
 | `brain_context` | `query` (texto, 1 a 500, obrigatório), `context` (1 a 100), `hops` (0 a 2), `limit` (1 a 50), `max_chars` (500 a 200000) | `brain.py context [--context=C] [--hops=H] [--limit=L] [--max-chars=M] --json -- <palavras da query>` |
 | `brain_inbox_list` | nenhum | `brain.py inbox list --json` |
 | `brain_lint` | `only` (lista de nomes de regra `[a-z-]+`) | `brain.py lint --json [--only=a,b]` |
+| `sdd_status` | `ids` (lista de 0 a 20 `SPEC-NNNN`) | `spec_graph.py --root <projeto> status [ids...]` |
+| `sdd_validate` | `ids` (lista de 0 a 20 `SPEC-NNNN` ou `ADR-NNNN`) | `spec_graph.py --root <projeto> validate [ids...]` |
+| `sdd_next` | nenhum | `spec_graph.py --root <projeto> next` |
+| `sdd_waves` | nenhum | `spec_graph.py --root <projeto> waves` |
+| `sdd_report` | `id` (`SPEC-NNNN`, obrigatório) | `spec_graph.py --root <projeto> report <id>` |
+| `sdd_whats_new` | nenhum | `spec_graph.py --root <projeto> whats-new` |
+
+Nas `sdd_*`, `<projeto>` é o valor de `CLAUDE_PROJECT_DIR` quando a variável não está vazia, senão a pasta corrente do servidor. Os dois são lidos a cada chamada, nunca vêm do agente.
 
 Como o resultado é montado:
 
 - exit 0, exit 1 no `atlas_lint` e exit 1 no `brain_doctor` e no `brain_lint` com stdout objeto JSON (que significa "há ERRO no relatório"): o stdout da CLI vai em `content` como texto, e também em `structuredContent` quando é um objeto JSON. `isError` fica `false`.
+- nas `sdd_*`, exit 0 e exit 1 no `sdd_validate` (que significa "há ERRO na validação"): o stdout da CLI vai em `content` como texto, sem `structuredContent`, e `isError` fica `false`. Qualquer outro exit, inclusive exit 1 nas demais `sdd_*`, dá `isError: true`, com o código e o stderr da CLI. O timeout dá "spec_graph.py não respondeu em 120 s".
 - exit 1 sem relatório JSON (erro de leitura do vault) e exit 2 nas `brain_*` (nota não encontrada, nota confidencial recusada, regra desconhecida no lint): `isError: true`, com o stderr da CLI.
 - exit 3: `isError: true`, com a orientação de onboarding ("rode a skill boson-atlas" ou "rode a skill photon-brain") e o stderr da CLI.
 - outro exit: `isError: true`, com o código e o stderr da CLI.
 - timeout de 120 s, `python3` ausente ou CLI ausente: `isError: true`, com o motivo. Quando a CLI falta, o texto traz o caminho procurado.
 
-Argumento fora do schema ou tool desconhecida recebem o erro JSON-RPC `-32602`, e a CLI nem é chamada. O mesmo vale para `brain_related` com `note` e `text` juntos ou sem nenhum dos dois, e para `brain_search` ou `brain_context` com `query` só de espaços.
+Argumento fora do schema ou tool desconhecida recebem o erro JSON-RPC `-32602`, e a CLI nem é chamada. Isso inclui lista com menos itens que `minItems` ou mais que `maxItems` (por exemplo, mais de 20 `ids`). O mesmo vale para `brain_related` com `note` e `text` juntos ou sem nenhum dos dois, e para `brain_search` ou `brain_context` com `query` só de espaços.
 
 ## Segurança
 
@@ -40,12 +49,13 @@ Argumento fora do schema ou tool desconhecida recebem o erro JSON-RPC `-32602`, 
 - O texto livre da `query` vai depois de `--`, uma palavra por argumento. Uma `query` como `-rf --hops 9; rm` vira só termos de busca. Uma `query` com caractere de controle (abaixo de 0x20 ou DEL) recebe `-32602`. A exceção são tab, `\n` e `\r`, que a CLI separa como espaço.
 - Nas `brain_*`, toda opção com valor vai colada (`--note=<valor>`, `--context=<valor>`), e o texto livre (`query`, `note` do `brain_links`) só depois de `--`. Assim nenhum valor vira opção própria.
 - Notas confidenciais nunca saem por MCP: o servidor nunca passa `--include-confidential` e nenhuma tool aceita pedir isso (ADR-0014). A CLI omite essas notas e recusa `links` e `related` por nome de nota confidencial. Nota confidencial só sai pela CLI, quando a pessoa pede.
+- Nas `sdd_*`, os ids só passam se casam com `SPEC-NNNN` (ou `ADR-NNNN` no `sdd_validate`), então nenhum vira opção. O servidor nunca passa `--ack`, `--apply`, `--create` nem `--out`: nenhuma `sdd_*` grava no projeto.
 - O processo externo só é aberto na função `run_cli`. O servidor não importa código das skills. Os testes de arquitetura do ADR-0017 (`mcp/tests/test_architecture.py`) garantem as duas coisas.
 - O stdout é só do protocolo. O stderr recebe uma linha por erro, sem argumentos nem saída da CLI. O nome do método aparece cortado no primeiro caractere de controle e truncado em 64 caracteres, para que ninguém forje linhas no log.
 
 ## Por que não há tools que gravam
 
-Só há leitura. `scan`, `build`, `init` e `vendor` mudam o atlas ou a máquina e continuam na skill, onde a pessoa vê o que acontece. No segundo cérebro, `capture`, `ingest`, `new-note`, `relate`, `index`, `inbox done`, `context add`, `process`, `backup`, `restore` e `init` também ficam na skill: gravação por MCP depende de um ADR de política de escrita. `curate confirm` e `curate reject` nunca viram tool: confirmar ou rejeitar uma convenção é decisão de pessoas, não de agente (ADR-0012). Como o servidor decide quais operações existem, essa política fica fora do alcance do agente.
+Só há leitura. `scan`, `build`, `init` e `vendor` mudam o atlas ou a máquina e continuam na skill, onde a pessoa vê o que acontece. No segundo cérebro, `capture`, `ingest`, `new-note`, `relate`, `index`, `inbox done`, `context add`, `process`, `backup`, `restore` e `init` também ficam na skill: gravação por MCP depende de um ADR de política de escrita. No processo SDD, `new`, `set`, `gate`, `impede`, `resolve`, `validate --apply`, `whats-new --ack` e `report --out` mudam specs ou estado e continuam na skill gluon-spec. `curate confirm` e `curate reject` nunca viram tool: confirmar ou rejeitar uma convenção é decisão de pessoas, não de agente (ADR-0012). Como o servidor decide quais operações existem, essa política fica fora do alcance do agente.
 
 ## As duas eras do protocolo
 
