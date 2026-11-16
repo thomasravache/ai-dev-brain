@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 3, implemented 51
+- Validação (G0): **2 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, approved 2, in-progress 1, implemented 51
 - Impedimentos: **0 aberto(s)**, 26 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0059  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0059
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0059 | Servidor MCP: tools brain de leitura do segundo cérebro | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0060 | Servidor MCP: tools sdd de leitura do processo | full/S | approved | ⛔ aguarda implementação de SPEC-0059 |  |
 | 3 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | approved | ⛔ aguarda implementação de SPEC-0060 |  |
@@ -60,7 +60,7 @@ flowchart LR
   subgraph E0031["SPEC-0031 · Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"]
     S0054["SPEC-0054<br/>Servidor MCP local do plugin com as too…"]:::implemented
     S0058["SPEC-0058<br/>Hook de início de sessão e comando de e…"]:::implemented
-    S0059["SPEC-0059<br/>Servidor MCP: tools brain de leitura do…"]:::approved
+    S0059["SPEC-0059<br/>Servidor MCP: tools brain de leitura do…"]:::inprogress
     S0060["SPEC-0060<br/>Servidor MCP: tools sdd de leitura do p…"]:::approved
     S0061["SPEC-0061<br/>Auto-melhoria: aviso de instalação anti…"]:::approved
   end
@@ -141,7 +141,7 @@ flowchart LR
 | [SPEC-0056](SPEC-0056-fermion-versao-do-plugin-sobe-quando-as-skills-mudam.md) | fermion: versão do plugin sobe quando as skills mudam | lite | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0053 | — |
 | [SPEC-0057](SPEC-0057-gluon-spec-hook-do-leak-check-sem-caminho-absoluto-da-instal.md) | gluon-spec: hook do leak-check sem caminho absoluto da instalação | lite | fix | implemented | 2026-11-13 | — | SPEC-0053 | — |
 | [SPEC-0058](SPEC-0058-hook-de-inicio-de-sessao-e-comando-de-entrada-unica-do-plugi.md) | Hook de início de sessão e comando de entrada única do plugin | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0053, SPEC-0054 | — |
-| [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0058 | — |
+| [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | in-progress | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0058 | — |
 | [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
 | [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
 | [SPEC-0062](SPEC-0062-photon-brain-regra-de-processo-com-alias-e-imports-de-nomes.md) | photon-brain: regra de processo com alias e imports de nomes | lite | fix | proposed | 2026-11-15 | — | SPEC-0046 | — |

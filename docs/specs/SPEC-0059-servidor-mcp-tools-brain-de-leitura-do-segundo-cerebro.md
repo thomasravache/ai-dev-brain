@@ -4,7 +4,7 @@ title: "Servidor MCP: tools brain de leitura do segundo cérebro"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0054, SPEC-0058]
@@ -157,6 +157,23 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Tools, schemas e linhas de comando**
+- [ ] Red: UT-01 a UT-04 em `mcp/tests/test_server.py` (UT-01 da SPEC-0054 passa a conferir as `atlas_*` por prefixo, Emenda v3 da SPEC-0054) com a tag `SPEC-0059:<ID>`, falhando pelo motivo certo
+- [ ] Green: as oito `brain_*` em `TOOLS`, `command_args` e `map_output` de `mcp/fermion_mcp.py`
+
+**Fase 2: Fronteira com as CLIs**
+- [ ] Red: UT-05 em `mcp/tests/test_architecture.py` (processo só para `atlas.py` e `brain.py`)
+- [ ] Green: regra aceita as duas CLIs; código real sem achado
+
+**Fase 3: Servidor real num vault de fixture**
+- [ ] Red: IT-01 a IT-03 (vault criado pela CLI do `photon-brain` num `BRAIN_CONFIG_HOME` temporário, com nota confidencial)
+- [ ] Green: resultados iguais aos da CLI, confidencial fora, onboarding quando não configurado
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Validar: suíte completa + arquitetura (G2/G3); `mcp/README.md` e `version` do `plugin.json`
+- [ ] Review independente (G4), com `/mcp` listando as `brain_*` numa sessão real do Claude Code
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega e README (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
