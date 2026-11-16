@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""Servidor MCP local do plugin fermion (SPEC-0054, SPEC-0059, ADR-0017): tools de leitura do atlas da organização
-(atlas_*) e do segundo cérebro (brain_*).
+"""Servidor MCP local do plugin fermion (SPEC-0054, SPEC-0059, SPEC-0060, ADR-0017): tools de leitura do atlas da
+organização (atlas_*), do segundo cérebro (brain_*) e do processo SDD do projeto (sdd_*).
 
 JSON-RPC 2.0 sobre stdio, uma mensagem por linha. Atende as duas eras do protocolo MCP:
 - legada: handshake `initialize` (versões 2025-11-25, 2025-06-18, 2025-03-26 e 2024-11-05);
 - moderna (2026-07-28): sem handshake, versão em params._meta, `server/discover` e `resultType` nos resultados.
 
-Cada tool vira uma linha de comando da CLI de uma skill (`atlas.py` da boson-atlas, `brain.py` da photon-brain;
-`<comando> ... --json`), executada só por run_cli: argv em lista, sem shell, com timeout e o ambiente herdado. O
+Cada tool vira uma linha de comando da CLI de uma skill (`atlas.py` da boson-atlas e `brain.py` da photon-brain,
+`<comando> ... --json`; `spec_graph.py --root <projeto> <comando> ...` da gluon-spec), executada só por run_cli: argv em lista, sem shell, com timeout e o ambiente herdado. O
 servidor não importa código das skills e não interpreta a saída da CLI; só expõe leitura (confirmar ou rejeitar
 convenção é de pessoas, ADR-0012) e nunca pede notas confidenciais do cérebro (ADR-0014). Toda opção com valor
-das brain_* vai colada (--opção=valor) e o texto livre só depois de `--`.
+das brain_* vai colada (--opção=valor) e o texto livre só depois de `--`. As sdd_* nunca gravam (sem --ack, --apply,
+--create nem --out) e o projeto vem de CLAUDE_PROJECT_DIR ou do cwd do servidor, lidos a cada chamada.
 
 stdout é reservado ao protocolo; diagnóstico vai para o stderr, sem argumentos nem saída da CLI.
 Só biblioteca padrão, Python 3.9+.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -25,6 +27,8 @@ PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SERVER_NAME = "fermion"
 CLI_RELATIVE = ("skills", "boson-atlas", "scripts", "atlas.py")
 BRAIN_CLI_RELATIVE = ("skills", "photon-brain", "scripts", "brain.py")
+SDD_CLI_RELATIVE = ("skills", "gluon-spec", "scripts", "spec_graph.py")
+PROJECT_ENV = "CLAUDE_PROJECT_DIR"
 CLI_TIMEOUT = 120  # segundos por chamada da CLI
 
 LEGACY_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -50,6 +54,11 @@ LINT_REPORT_EXIT = 1  # no lint, exit 1 = "há ERRO no relatório", não falha d
 BRAIN_NOT_CONFIGURED = "segundo cérebro não configurado nesta máquina — rode a skill photon-brain (onboarding)"
 BRAIN_TIMEOUT_TEXT = f"brain.py não respondeu em {CLI_TIMEOUT} s"
 BRAIN_REPORT_TOOLS = ("brain_doctor", "brain_lint")  # exit 1 com relatório JSON = "há ERRO no relatório"
+SDD_TIMEOUT_TEXT = f"spec_graph.py não respondeu em {CLI_TIMEOUT} s"
+SDD_REPORT_TOOLS = ("sdd_validate",)  # exit 1 = "há ERRO na validação"
+SDD_MAX_IDS = 20
+SPEC_ID_PATTERN = "^SPEC-[0-9]{4,}$"
+ANY_ID_PATTERN = "^(SPEC|ADR)-[0-9]{4,}$"
 
 MAX_DEPTH = 256  # aninhamento máximo de uma mensagem; além disso vira -32700 (o parser do json é recursivo)
 LOG_METHOD_MAX = 64
@@ -80,6 +89,11 @@ def _text(low, high, description):
 
 def _int(low, high, description):
     return {"type": "integer", "minimum": low, "maximum": high, "description": description}
+
+
+def _ids(pattern, description):
+    return {"type": "array", "items": {"type": "string", "pattern": pattern}, "minItems": 0,
+            "maxItems": SDD_MAX_IDS, "description": description}
 
 
 RELATED_ONE_OF = "Exatamente um de note ou text."
@@ -209,6 +223,51 @@ TOOLS = (
         }),
         "annotations": READ_ONLY,
     },
+    {
+        "name": "sdd_status",
+        "description": ("Estado das specs do projeto e o próximo passo de cada uma (spec_graph.py status). Sem ids, "
+                        "todas as specs."),
+        "inputSchema": _object({
+            "ids": _ids(SPEC_ID_PATTERN, "Só estas specs (SPEC-NNNN), até 20."),
+        }),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "sdd_validate",
+        "description": ("Validação das specs e ADRs do projeto (spec_graph.py validate). Achados de ERRO vêm no "
+                        "relatório, não como erro da tool."),
+        "inputSchema": _object({
+            "ids": _ids(ANY_ID_PATTERN, "Só estas specs ou ADRs (SPEC-NNNN ou ADR-NNNN), até 20."),
+        }),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "sdd_next",
+        "description": "Specs prontas para despachar agora no projeto (spec_graph.py next).",
+        "inputSchema": _object(),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "sdd_waves",
+        "description": "Ondas de execução das specs do projeto pelas dependências (spec_graph.py waves).",
+        "inputSchema": _object(),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "sdd_report",
+        "description": "Relatório de entrega de uma spec do projeto (spec_graph.py report), sem gravar arquivo.",
+        "inputSchema": _object({
+            "id": {"type": "string", "pattern": SPEC_ID_PATTERN, "description": "A spec (SPEC-NNNN)."},
+        }, required=["id"]),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "sdd_whats_new",
+        "description": ("Novidades do processo SDD desde a última confirmação (spec_graph.py whats-new), sem "
+                        "confirmar a leitura."),
+        "inputSchema": _object(),
+        "annotations": READ_ONLY,
+    },
 )
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 
@@ -325,6 +384,8 @@ def _check(value, schema, path):
     elif kind == "array":
         if not isinstance(value, list):
             raise ProtocolError(INVALID_PARAMS, f"{path}: precisa ser lista")
+        if not schema.get("minItems", 0) <= len(value) <= schema.get("maxItems", len(value)):
+            raise ProtocolError(INVALID_PARAMS, f"{path}: número de itens fora da faixa")
         for index, item in enumerate(value):
             _check(item, schema["items"], f"{path}[{index}]")
 
@@ -379,10 +440,34 @@ def brain_command_args(name, arguments):
     raise ProtocolError(INVALID_PARAMS, f"tool desconhecida: {name}")
 
 
+def project_dir():
+    """Pasta do projeto das sdd_*: CLAUDE_PROJECT_DIR se não vazio, senão o cwd do servidor (lido a cada chamada)."""
+    return os.environ.get(PROJECT_ENV) or os.getcwd()
+
+
+def sdd_command_args(name, arguments):
+    """Argumentos da CLI (depois de `spec_graph.py --root <projeto>`) para uma tool sdd_* já validada; nunca grava."""
+    if name == "sdd_status":
+        return ["status"] + list(arguments.get("ids", []))
+    if name == "sdd_validate":
+        return ["validate"] + list(arguments.get("ids", []))
+    if name == "sdd_next":
+        return ["next"]
+    if name == "sdd_waves":
+        return ["waves"]
+    if name == "sdd_report":
+        return ["report", arguments["id"]]
+    if name == "sdd_whats_new":
+        return ["whats-new"]
+    raise ProtocolError(INVALID_PARAMS, f"tool desconhecida: {name}")
+
+
 def command_args(name, arguments):
-    """Argumentos da CLI (depois de `atlas.py` ou `brain.py`) para uma tool já validada."""
+    """Argumentos da CLI (depois de `atlas.py`, `brain.py` ou `spec_graph.py`) para uma tool já validada."""
     if name.startswith("brain_"):
         return brain_command_args(name, arguments)
+    if name.startswith("sdd_"):
+        return ["--root", project_dir()] + sdd_command_args(name, arguments)
     if name == "atlas_config":
         return ["config", "--json"]
     if name == "atlas_doctor":
@@ -430,6 +515,10 @@ def map_output(name, completed):
     """CallToolResult a partir do exit code e da saída da CLI (seção 6 da SPEC-0054 e da SPEC-0059)."""
     code = completed.returncode
     stdout = completed.stdout or ""
+    if name.startswith("sdd_"):  # texto da CLI, sem structuredContent (seção 6 da SPEC-0060)
+        if code == 0 or (code == LINT_REPORT_EXIT and name in SDD_REPORT_TOOLS):
+            return _text_result(stdout, False)
+        return _text_result(_with_stderr(f"spec_graph.py saiu com o código {code}", completed.stderr), True)
     brain = name.startswith("brain_")
     if name == "atlas_lint":
         report = code == LINT_REPORT_EXIT
@@ -453,6 +542,7 @@ class Server:
         self.plugin_root = Path(plugin_root)
         self.cli = self.plugin_root.joinpath(*CLI_RELATIVE)
         self.brain_cli = self.plugin_root.joinpath(*BRAIN_CLI_RELATIVE)
+        self.sdd_cli = self.plugin_root.joinpath(*SDD_CLI_RELATIVE)
         self.server_info = {"name": SERVER_NAME, "version": plugin_version(self.plugin_root)}
         self.legacy_version = None  # versão negociada no initialize (era legada)
 
@@ -541,20 +631,23 @@ class Server:
         if arguments is None:
             arguments = {}
         _check(arguments, TOOLS_BY_NAME[name]["inputSchema"], "arguments")
-        brain = name.startswith("brain_")
-        if brain:
+        family = name.split("_", 1)[0]
+        if family == "brain":
             check_brain_arguments(name, arguments)
         args = command_args(name, arguments)
-        cli = self.brain_cli if brain else self.cli
+        cli, owner, timeout_text = {
+            "atlas": (self.cli, "do atlas", TIMEOUT_TEXT),
+            "brain": (self.brain_cli, "do segundo cérebro", BRAIN_TIMEOUT_TEXT),
+            "sdd": (self.sdd_cli, "do processo SDD", SDD_TIMEOUT_TEXT),
+        }[family]
         if not cli.is_file():
-            owner = "do segundo cérebro" if brain else "do atlas"
             return _text_result(f"CLI {owner} não encontrada em {cli}", True)
         argv = [python_executable(), str(cli)] + args
         try:
             completed = self.runner(argv, CLI_TIMEOUT)
         except subprocess.TimeoutExpired:
             log(f"{name}: timeout da CLI")
-            return _text_result(BRAIN_TIMEOUT_TEXT if brain else TIMEOUT_TEXT, True)
+            return _text_result(timeout_text, True)
         except OSError as exc:
             log(f"{name}: falha ao abrir a CLI ({type(exc).__name__})")
             return _text_result(f"não foi possível executar {argv[0]} {cli}: {exc.strerror or exc}", True)

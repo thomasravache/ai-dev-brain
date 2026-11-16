@@ -1,4 +1,4 @@
-"""Testes de arquitetura do servidor MCP (ADR-0017, SPEC-0054:UT-07, SPEC-0059:UT-05).
+"""Testes de arquitetura do servidor MCP (ADR-0017, SPEC-0054:UT-07, SPEC-0059:UT-05, SPEC-0060:UT-05).
 Run: python3 -m unittest discover -s mcp/tests -p test_architecture.py
 
 Cada regra é testada contra um exemplo que a viola e contra o código real de mcp/fermion_mcp.py:
@@ -6,10 +6,12 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de m
 - só biblioteca padrão; nenhum import de código das skills nem de tools/, nem carregamento dinâmico de código;
 - nenhum shell;
 - processo externo só na função executora run_cli, e só para as CLIs aceitas (Emenda v3 da SPEC-0054,
-  SPEC-0059): nenhum texto aponta para a CLI de outra skill nem cita outro script, e cada tool, rodada de verdade
-  com subprocess.run substituído, abre só `<python> <raiz>/skills/boson-atlas/scripts/atlas.py ...` (atlas_*) ou
-  `<python> <raiz>/skills/photon-brain/scripts/brain.py ...` (brain_*).
+  SPEC-0059, SPEC-0060): nenhum texto aponta para a CLI de outra skill nem cita outro script, e cada tool, rodada
+  de verdade com subprocess.run substituído, abre só `<python> <raiz>/skills/boson-atlas/scripts/atlas.py ...`
+  (atlas_*), `<python> <raiz>/skills/photon-brain/scripts/brain.py ...` (brain_*) ou
+  `<python> <raiz>/skills/gluon-spec/scripts/spec_graph.py --root <projeto> ...` (sdd_*).
 """
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -28,6 +30,9 @@ from helpers import (
     BRAIN_CLI,
     BRAIN_TOOLS,
     MCP,
+    PROJECT_ENV,
+    SDD_CLI,
+    SDD_TOOLS,
     SERVER,
     TOOLS,
     attr,
@@ -51,6 +56,12 @@ VALID_ARGUMENTS = {
     "brain_context": {"query": "api", "context": "college", "hops": 1, "limit": 3, "max_chars": 1000},
     "brain_inbox_list": {},
     "brain_lint": {"only": ["broken-link"]},
+    "sdd_status": {"ids": ["SPEC-0001"]},
+    "sdd_validate": {"ids": ["ADR-0001", "SPEC-0002"]},
+    "sdd_next": {},
+    "sdd_waves": {},
+    "sdd_report": {"id": "SPEC-0001"},
+    "sdd_whats_new": {},
 }
 
 
@@ -213,10 +224,11 @@ class ProcessRulesTest(unittest.TestCase):
         self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (1, 3)], report(findings))
 
     def test_other_skill_clis_are_reported(self):
-        """SPEC-0054:UT-07 (Emenda v3: a CLI da photon-brain passa a ser aceita, SPEC-0059)"""
+        """SPEC-0054:UT-07 (Emenda v3: as CLIs da photon-brain e da gluon-spec passam a ser aceitas, SPEC-0059 e
+        SPEC-0060; a pasta antiga continua acusada)"""
         source = (
             "ATLAS = 'skills/boson-atlas/scripts/atlas.py'\n"
-            "SDD = 'skills/gluon-spec/scripts/spec_graph.py'\n"
+            "SDD = 'sdd-management/scripts/spec_graph.py'\n"
             "BRAIN = 'skills/photon-brain/scripts/brain.py'\n"
             "OLD = 'tools/sdd/spec_graph.py'\n"
             "METHODS = ('tools/list', 'tools/call')\n"
@@ -254,7 +266,7 @@ class BrainBoundaryTest(unittest.TestCase):
     """SPEC-0059:UT-05 — processo só para atlas.py e brain.py das skills; nada de skills/ importado; sem shell."""
 
     def test_scripts_other_than_atlas_and_brain_are_reported(self):
-        """SPEC-0059:UT-05"""
+        """SPEC-0059:UT-05 (spec_graph.py, aceito desde a SPEC-0060, conta como violação na lista da SPEC-0059)"""
         source = (
             "ATLAS = ('skills', 'boson-atlas', 'scripts', 'atlas.py')\n"
             "BRAIN = ('skills', 'photon-brain', 'scripts', 'brain.py')\n"
@@ -264,16 +276,16 @@ class BrainBoundaryTest(unittest.TestCase):
             "SHELLY = f'{x}/run_me.py --json'\n"
             "METHODS = ('tools/list', 'tools/call')\n"
         )
-        findings = script_findings(source, NAME)
+        findings = script_findings(source, NAME, allowed=("atlas.py", "brain.py"))
         self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (3, 4, 6)],
                          report(findings))
 
     def test_photon_brain_is_accepted_and_other_skills_are_not(self):
-        """SPEC-0059:UT-05"""
+        """SPEC-0059:UT-05 (a gluon-spec é aceita desde a SPEC-0060; a pasta antiga dela continua acusada)"""
         source = (
             "BRAIN = 'skills/photon-brain/scripts/brain.py'\n"
             "HINT = 'rode a skill photon-brain (onboarding)'\n"
-            "SDD = 'skills/gluon-spec/scripts/spec_graph.py'\n"
+            "SDD = 'sdd-management/scripts/spec_graph.py'\n"
             "OLD_BRAIN = 'second-brain/scripts/brain.py'\n"  # pasta antiga, sem o prefixo (guarda da SPEC-0055)
             "OLD_SDD = 'sdd-management/scripts/x'\n"
             "TOOLS_DIR = 'tools/sdd'\n"
@@ -341,6 +353,110 @@ class BrainBoundaryTest(unittest.TestCase):
                 self.assertTrue(Path(argv[0]).name.startswith("python"), argv)
                 expected = BRAIN_CLI if name.startswith("brain_") else ATLAS_CLI
                 self.assertEqual(Path(argv[1]).resolve(), expected.resolve(), argv)
+                self.assertFalse(kwargs.get("shell", False))
+
+
+
+class SddBoundaryTest(unittest.TestCase):
+    """SPEC-0060:UT-05 — processo só para atlas.py, brain.py e spec_graph.py das skills; nada de skills/ importado;
+    sem shell."""
+
+    def test_scripts_other_than_the_three_clis_are_reported(self):
+        """SPEC-0060:UT-05"""
+        source = (
+            "ATLAS = ('skills', 'boson-atlas', 'scripts', 'atlas.py')\n"
+            "BRAIN = ('skills', 'photon-brain', 'scripts', 'brain.py')\n"
+            "SDD = ('skills', 'gluon-spec', 'scripts', 'spec_graph.py')\n"
+            "TEXT = f'spec_graph.py não respondeu em {120} s'\n"
+            "OTHER = ('skills', 'gluon-spec', 'scripts', 'board_sync.py')\n"
+            "HOOK = 'hooks/session_start.py'\n"
+            "SHELLY = f'{x}/run_me.py --json'\n"
+            "VENDORED = 'tools/sdd/spec_graph.py'\n"
+        )
+        findings = script_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (5, 6, 7)],
+                         report(findings))
+
+    def test_gluon_spec_is_accepted_and_old_folders_are_not(self):
+        """SPEC-0060:UT-05 (a pasta da gluon-spec é aceita; a antiga, a do org-atlas e tools/sdd continuam acusadas)"""
+        source = (
+            "SDD = 'skills/gluon-spec/scripts/spec_graph.py'\n"
+            "PARTS = ('skills', 'gluon-spec', 'scripts', 'spec_graph.py')\n"
+            "OLD_SDD = 'sdd-management/scripts/spec_graph.py'\n"
+            "VENDORED = 'tools/sdd/spec_graph.py'\n"
+            "OLD_ATLAS = 'org-atlas/scripts/atlas.py'\n"
+            "OLD_BRAIN = 'second-brain/scripts/brain.py'\n"
+            "METHODS = ('tools/list', 'tools/call')\n"
+        )
+        findings = other_cli_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (3, 4, 5, 6)],
+                         report(findings))
+
+    def test_importing_spec_graph_code_is_reported(self):
+        """SPEC-0060:UT-05"""
+        source = (
+            "import json\n"
+            "import spec_graph\n"
+            "from spec_graph import main\n"
+            "import gluon_spec.scripts\n"
+            "from tools.sdd import spec_graph\n"
+        )
+        findings = import_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (2, 3, 4, 5)],
+                         report(findings))
+        loader = (
+            "import importlib.util, runpy\n"
+            "spec = importlib.util.spec_from_file_location('sg', 'skills/gluon-spec/scripts/spec_graph.py')\n"
+            "runpy.run_path('skills/gluon-spec/scripts/spec_graph.py')\n"
+        )
+        findings = dynamic_code_findings(loader, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (2, 3)], report(findings))
+
+    def test_process_or_shell_for_the_sdd_cli_outside_run_cli_is_reported(self):
+        """SPEC-0060:UT-05"""
+        source = (
+            "import subprocess\n"
+            "def run_cli(argv, timeout):\n"
+            "    subprocess.run(argv, check=False)\n"
+            "    subprocess.run('python3 spec_graph.py status', shell=True, check=False)\n"
+            "def sdd_status():\n"
+            "    subprocess.run(['python3', 'spec_graph.py', 'status'], check=False)\n"
+        )
+        self.assertEqual([f.split(" — ")[0] for f in shell_findings(source, NAME)], [f"{NAME}:4"])
+        findings = process_findings(source, NAME, ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:6"], report(findings))
+
+    def test_server_has_no_finding(self):
+        """SPEC-0060:UT-05 (código real sem achado)"""
+        source = server_source()
+        findings = (script_findings(source, NAME) + other_cli_findings(source, NAME)
+                    + process_findings(source, NAME, ALLOWED_PROCESS_FUNCTIONS) + shell_findings(source, NAME)
+                    + import_findings(source, NAME) + dynamic_code_findings(source, NAME))
+        self.assertEqual(findings, [], report(findings))
+
+    def test_every_tool_opens_only_its_cli(self):
+        """SPEC-0060:UT-05 (comportamento: atlas_* → atlas.py, brain_* → brain.py, sdd_* → spec_graph.py --root)"""
+        module = server_module()
+        done = subprocess.CompletedProcess(["x"], 0, stdout="{}", stderr="")
+        names = TOOLS + BRAIN_TOOLS + SDD_TOOLS
+        clis = {"atlas": ATLAS_CLI, "brain": BRAIN_CLI, "sdd": SDD_CLI}
+        with mock.patch.dict(os.environ, {PROJECT_ENV: "/p"}), \
+                mock.patch.object(module.subprocess, "run", return_value=done) as run, \
+                mock.patch.object(module.subprocess, "Popen", side_effect=AssertionError("Popen não é usado")):
+            server = attr("Server")()
+            for index, name in enumerate(names, 1):
+                with self.subTest(tool=name):
+                    response = server.handle(call(name, VALID_ARGUMENTS[name], id=index)) or {}
+                    self.assertIn("result", response, f"{name}: {response}")
+        self.assertEqual(run.call_count, len(names))
+        for name, (args, kwargs) in zip(names, run.call_args_list):
+            argv = args[0] if args else kwargs.get("args")
+            with self.subTest(tool=name):
+                self.assertIsInstance(argv, list)
+                self.assertTrue(Path(argv[0]).name.startswith("python"), argv)
+                self.assertEqual(Path(argv[1]).resolve(), clis[name.split("_")[0]].resolve(), argv)
+                if name.startswith("sdd_"):
+                    self.assertEqual(argv[2:4], ["--root", "/p"], argv)
                 self.assertFalse(kwargs.get("shell", False))
 
 

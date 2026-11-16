@@ -1,11 +1,13 @@
-"""Apoio comum da suíte mcp/tests (SPEC-0054, SPEC-0059): carrega mcp/fermion_mcp.py, cria um atlas de fixture
-pela CLI da boson-atlas e um vault de fixture pela CLI da photon-brain, e abre o servidor real por stdio.
+"""Apoio comum da suíte mcp/tests (SPEC-0054, SPEC-0059, SPEC-0060): carrega mcp/fermion_mcp.py, cria um atlas de
+fixture pela CLI da boson-atlas, um vault de fixture pela CLI da photon-brain e um projeto SDD de fixture pela CLI da
+gluon-spec, e abre o servidor real por stdio.
 
 - `server_module()` importa mcp/fermion_mcp.py pelo caminho (importlib). Ausente ou com erro de import vira uma
   falha clara do teste (AssertionError), não um erro de coleta.
 - `Sandbox` cria um diretório temporário resolvido (macOS: /var -> /private/var) com HOME, ATLAS_CONFIG_HOME e
   BRAIN_CONFIG_HOME próprios; nunca toca ~/.config/org-atlas, ~/.config/second-brain nem a configuração do Claude
-  Code. Padrão copiado de skills/boson-atlas/tests/helpers.py e skills/photon-brain/tests/brain_support.py (sem
+  Code. `Sandbox.sdd_env()` acrescenta SDD_CONFIG_HOME e XDG_* temporários e CLAUDE_PROJECT_DIR apontando para o
+  projeto de fixture (nunca o valor do ambiente real). Padrão copiado de skills/boson-atlas/tests/helpers.py e skills/photon-brain/tests/brain_support.py (sem
   importar de lá: ADR-0010 e ADR-0017).
 - `ServerProcess` abre `python3 mcp/fermion_mcp.py` com stdin/stdout em pipe, uma mensagem JSON por linha.
 """
@@ -27,6 +29,7 @@ REPO = MCP.parent
 SERVER = MCP / "fermion_mcp.py"
 ATLAS_CLI = REPO / "skills" / "boson-atlas" / "scripts" / "atlas.py"
 BRAIN_CLI = REPO / "skills" / "photon-brain" / "scripts" / "brain.py"
+SDD_CLI = REPO / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
 PLUGIN_JSON = REPO / ".claude-plugin" / "plugin.json"
 FAKE_COLLECTOR = TESTS / "fixtures" / "collector.py"
 SPEC = "SPEC-0054"
@@ -52,6 +55,12 @@ OTHER_NOTE = "Billing Flow"
 SECRET_NOTE = "Payments Secret Plan"
 SECRET_BODY = "Payments plan rollout code quokka7731 stays offline."
 SECRET_MARKER = "quokka7731"  # só existe no corpo da nota confidencial
+# SPEC-0060 (seção 6): as seis tools de leitura do processo SDD
+SDD_TOOLS = ("sdd_status", "sdd_validate", "sdd_next", "sdd_waves", "sdd_report", "sdd_whats_new")
+SDD_TIMEOUT_TEXT = "spec_graph.py não respondeu em 120 s"
+PROJECT_ENV = "CLAUDE_PROJECT_DIR"
+# projeto SDD de fixture (IT-01 e IT-02): git init + duas specs lite criadas pela CLI da gluon-spec
+SDD_FIXTURE_TITLES = ("Fixture A", "Fixture B")
 CLI_TIMEOUT = 120
 RESPONSE_TIMEOUT = 5.0  # seção 5: cada resposta do IT-01 em menos de 5 s
 PROCESS_TIMEOUT = 60
@@ -145,6 +154,7 @@ class Sandbox:
         self.atlas = self.root / "work" / "acme-atlas"
         self.vault = self.root / "drive" / "vault"
         self.files = self.root / "drive" / "files"
+        self.project = self.root / "work" / "sdd-project"
 
     def cleanup(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -204,16 +214,45 @@ class Sandbox:
         return out
 
 
+    def sdd_env(self):
+        """Ambiente da CLI da gluon-spec e do servidor nos IT da SPEC-0060: HOME, SDD_CONFIG_HOME e XDG_* dentro
+        do sandbox; CLAUDE_PROJECT_DIR = projeto de fixture."""
+        environ = self.env()
+        for key, folder in (("SDD_CONFIG_HOME", "sdd-config-home"), ("XDG_CONFIG_HOME", "xdg-config"),
+                            ("XDG_DATA_HOME", "xdg-data"), ("XDG_CACHE_HOME", "xdg-cache"),
+                            ("XDG_STATE_HOME", "xdg-state")):
+            environ[key] = str(self.root / folder)
+        environ["GIT_CONFIG_NOSYSTEM"] = "1"
+        environ[PROJECT_ENV] = str(self.project)
+        return environ
+
+    def sdd_cli(self, *args):
+        """spec_graph.py --root <projeto> <args>, com o ambiente de sdd_env() e o cwd do servidor (raiz do sandbox)."""
+        argv = [sys.executable, str(SDD_CLI), "--root", str(self.project), *[str(a) for a in args]]
+        return subprocess.run(argv, check=False, cwd=self.root, capture_output=True, text=True, env=self.sdd_env(),
+                              timeout=PROCESS_TIMEOUT)
+
+    def fixture_project(self):
+        """git init + `new --tier lite --title ...` duas vezes, tudo pela CLI da gluon-spec."""
+        self.project.mkdir(parents=True)
+        out = subprocess.run(["git", "init", "-q"], check=False, cwd=self.project, capture_output=True, text=True,
+                             env=self.sdd_env(), timeout=PROCESS_TIMEOUT)
+        assert out.returncode == 0, f"git init falhou ({out.returncode}): {out.stdout}{out.stderr}"
+        for title in SDD_FIXTURE_TITLES:
+            out = self.sdd_cli("new", "--tier", "lite", "--title", title)
+            assert out.returncode == 0, f"new {title!r} falhou ({out.returncode}): {out.stdout}{out.stderr}"
+
+
 class ServerProcess:
     """O servidor real (python3 mcp/fermion_mcp.py) por stdio; stderr vai para um arquivo do sandbox."""
 
-    def __init__(self, sandbox, config_home=None, brain_config_home=None):
+    def __init__(self, sandbox, config_home=None, brain_config_home=None, env=None):
         if not SERVER.exists():
             raise AssertionError(f"{SERVER} não existe ({SPEC})")
         self.stderr_path = sandbox.root / "server-stderr.txt"
         self._stderr = open(self.stderr_path, "w", encoding="utf-8")  # noqa: SIM115 — fechado em close()
         self.proc = subprocess.Popen([sys.executable, str(SERVER)], cwd=sandbox.root,
-                                     env=sandbox.env(config_home, brain_config_home),
+                                     env=env if env is not None else sandbox.env(config_home, brain_config_home),
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr,
                                      text=True, encoding="utf-8", bufsize=1)
         self.lines = queue.Queue()

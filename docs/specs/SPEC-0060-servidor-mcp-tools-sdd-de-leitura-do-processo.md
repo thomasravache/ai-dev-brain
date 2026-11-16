@@ -4,7 +4,7 @@ title: "Servidor MCP: tools sdd de leitura do processo"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0054, SPEC-0059]
@@ -119,7 +119,7 @@ tools/call
 - N/A — texto repassado sem interpretar; igualdade com a CLI provada no IT-01.
 
 ### 7.5 Testes E2E
-- N/A — instalação é a jornada do SPEC-0053:E2E-01; protocolo provado com processo real nos IT; conexão conferida no G4 (`/mcp` lista as `sdd_*`).
+- N/A — instalação é a jornada E2E da SPEC-0053; protocolo provado com processo real nos IT; conexão conferida no G4 (`/mcp` lista as `sdd_*`).
 
 ### 7.6 Outros
 - Tempo de resposta no IT-01.
@@ -145,20 +145,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Tools, schemas, pasta do projeto e saída**
+- [x] Red: UT-01 a UT-04 em `mcp/tests/` com a tag `SPEC-0060:<ID>`, falhando pelo motivo certo
+- [x] Green: as seis `sdd_*` em `TOOLS`, `command_args` (`--root` do ambiente) e `map_output`; `_check` confere `minItems`/`maxItems`
+
+**Fase 2: Fronteira com as CLIs**
+- [x] Red: UT-05 (processo só para `atlas.py`, `brain.py` e `spec_graph.py`)
+- [x] Green: regra aceita as três CLIs; código real sem achado
+
+**Fase 3: Servidor real num projeto de fixture**
+- [x] Red: IT-01 e IT-02 (projeto criado pela CLI da `gluon-spec` em pasta temporária)
+- [x] Green: resultados iguais aos da CLI; nenhum arquivo muda
+
+**Fase final: Integração, entrega e documentação**
+- [x] Validar: suíte completa + arquitetura (G2/G3); `mcp/README.md` e `version` do `plugin.json`
+- [x] Review independente (G4), com as `sdd_*` listadas numa sessão real do Claude Code
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — c5417ad (árvore suja) | 2026-11-13 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=101)) — 5e2e7a4 | 2026-11-16 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — f264956 | 2026-11-16 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 760d20c | 2026-11-16 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (sem blocker/major; 17 de 18 mutações pegas; 2 minors e 3 nits como pendências). Verificação manual em 2026-11-16 com Claude Code 2.1.322 e --plugin-dir: servidor plugin:fermion:fermion connected com 19 tools, entre elas as seis sdd_*. — a866f2c | 2026-11-16 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ab54ad2 | 2026-11-16 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-16 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-16 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 79651f6 | 2026-11-16 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -169,37 +186,48 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- O servidor MCP `fermion` ganhou seis tools de leitura do processo SDD: `sdd_status`, `sdd_validate`, `sdd_next`, `sdd_waves`, `sdd_report` e `sdd_whats_new`. Cada uma chama `spec_graph.py --root <projeto>` com a pasta do projeto aberto (`CLAUDE_PROJECT_DIR` ou o cwd do servidor) e devolve o texto da CLI; nada que grave sai por MCP.
+- O validador de argumentos passou a conferir `minItems`/`maxItems` de qualquer array.
+- `mcp/README.md`; `version` do plugin 2026.11.9.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Mesmo padrão das `atlas_*` e `brain_*` (tabela `TOOLS`, `run_cli`, argv em lista, ADR-0017); `project_dir()` lido a cada chamada; `Server._call` escolhe CLI, rótulo e timeout por família, com as mensagens anteriores iguais.
+- Testes em 5e2e7a4; implementação em f264956.
+- **Revisão G4:** APPROVED na rodada 1; 17 de 18 mutações pegas pela suíte. Verificação manual: numa sessão real do Claude Code 2.1.322 o servidor conecta com 19 tools, entre elas as seis `sdd_*`.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | `tools/list` com as seis `sdd_*`, schemas fechados (padrão de id, 0..20 itens) e `readOnlyHint`; tools anteriores iguais | PASS | `test_sdd_server.py::SddToolsListTest` — CI do PR #34 (run 43898353874, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | Id fora do padrão, ADR no status, 21 ids, report sem id, `--ack`, chave extra → -32602 sem processo; `minItems`/`maxItems` em qualquer array | PASS | `test_sdd_server.py::SddInvalidArgumentsTest, ArrayLimitsTest` — CI do PR #34 (run 43898353874, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | `--root` de `CLAUDE_PROJECT_DIR` ou do cwd (vazio/ausente), lido na chamada; nunca `--ack`/`--apply`/`--create`/`--out` | PASS | `test_sdd_server.py::SddProjectDirTest, SddCommandLineTest` — CI do PR #34 (run 43898353874, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | Exit 0, 1 (normal só no validate), 2, timeout e CLI ausente; sem `structuredContent` | PASS | `test_sdd_server.py::SddOutputMappingTest` — CI do PR #34 (run 43898353874, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-05 | Processo só para `atlas.py`, `brain.py` e `spec_graph.py`; cada tool abre só a sua CLI | PASS | `test_architecture.py::SddBoundaryTest (também no `arch_test` do G3)` — CI do PR #34 (run 43898353874, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Servidor real: `sdd_status`, `sdd_validate` e `sdd_next` iguais à CLI, cada um em menos de 5 s | PASS | `test_sdd_server.py::SddSameResultAsCliTest` — CI do PR #34 (run 43898353874, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-02 | As seis tools pelo servidor real não mudam conteúdo nem mtime de nenhum arquivo do projeto (inclusive `.git`) nem do HOME | PASS | `test_sdd_server.py::SddNothingWritesTest` — CI do PR #34 (run 43898353874, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — padrão das `atlas_*` (SPEC-0054, ADR-0017)
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — IT-01 abaixo de 5 s; timeout de 120 s (UT-04)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: distribuído pelo plugin; conferido numa sessão real no G4
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — stderr do servidor; rollback = reverter o merge
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `mcp/README.md`; sem CHANGELOG raiz
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma) — nenhuma spec nova; minors e nits abaixo
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin `fermion` 2026.11.9, PR #34.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- Minors da revisão, sem spec: o texto "CLI do atlas/do segundo cérebro não encontrada" não tem assert do texto completo (lacuna anterior à spec); em modo privado da `gluon-spec`, o `git status` do `status` pode atualizar o `.git/index` do `spec_root` (não é arquivo do projeto nem gravação da CLI).
+- Nits: `--root` em dois argumentos (o valor vem do ambiente, não do cliente); espaçamento em `mcp/tests/helpers.py`; caso explícito de id com dígito unicode.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0060`. -->
