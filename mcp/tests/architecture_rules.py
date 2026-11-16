@@ -1,4 +1,5 @@
-"""Checadores das regras do ADR-0017, usados por test_architecture.py (SPEC-0054:UT-07, SPEC-0059:UT-05).
+"""Checadores das regras do ADR-0017, usados por test_architecture.py (SPEC-0054:UT-07, SPEC-0059:UT-05,
+SPEC-0060:UT-05).
 
 Escritos aqui, sem importar das skills (o padrão é o de skills/boson-atlas/tests/architecture_rules.py, copiado).
 Cada checador recebe o código-fonte e devolve uma linha por violação: "<arquivo>:<linha> — <regra> — <achado>".
@@ -10,9 +11,9 @@ Regras:
 - nenhum shell (shell= diferente de False, os.system, os.popen, create_subprocess_shell, getoutput, também por
   alias ou getattr, e nenhum ** numa chamada de processo);
 - processo externo só dentro da função executora (run_cli), pelo nome literal do módulo (sem alias, sem
-  `from subprocess import run`, sem getattr), e só para as CLIs aceitas (Emenda v3 da SPEC-0054, SPEC-0059):
-  `atlas.py` da boson-atlas e `brain.py` da photon-brain; nenhum texto aponta para a CLI ou a pasta de outra
-  skill, nem cita outro script `.py`.
+  `from subprocess import run`, sem getattr), e só para as CLIs aceitas (Emenda v3 da SPEC-0054, SPEC-0059,
+  SPEC-0060): `atlas.py` da boson-atlas, `brain.py` da photon-brain e `spec_graph.py` da gluon-spec; nenhum texto
+  aponta para a CLI ou a pasta de outra skill (nem pelos nomes antigos, nem tools/sdd), nem cita outro script `.py`.
 """
 import ast
 import importlib.util
@@ -25,8 +26,8 @@ RULE_STDLIB = "só biblioteca padrão"
 RULE_SKILLS = "nenhum import de skills/ nem carregamento de código"
 RULE_SHELL = "processos sem shell"
 RULE_PROCESS = "processo só na função executora"
-RULE_ATLAS_ONLY = "processo só para as CLIs das skills (atlas.py, brain.py)"
-ALLOWED_SCRIPTS = ("atlas.py", "brain.py")  # SPEC-0059: brain.py entra; spec_graph.py só com a SPEC-0060
+RULE_ATLAS_ONLY = "processo só para as CLIs das skills (atlas.py, brain.py, spec_graph.py)"
+ALLOWED_SCRIPTS = ("atlas.py", "brain.py", "spec_graph.py")  # SPEC-0059: brain.py; SPEC-0060: spec_graph.py
 SCRIPT = re.compile(r"[\w.-]*\.py\b")
 
 # módulos das skills (nomes novos e antigos), de tools/ e das suítes de teste
@@ -49,10 +50,9 @@ PROCESS_CALLS = {
 }
 SHELL_CALLS = {"os.system", "os.popen", "subprocess.getoutput", "subprocess.getstatusoutput",
                "asyncio.create_subprocess_shell"}
-# CLIs e pastas de outras skills (nomes novos e antigos) e tools/sdd/ (métodos MCP como tools/list não contam);
-# a photon-brain e o brain.py são aceitos desde a SPEC-0059
-OTHER_CLI = re.compile(r"spec_graph\.py|gluon-spec|sdd-management|second-brain"
-                       r"|(^|/)tools/sdd(/|$)")
+# pastas antigas das skills e tools/sdd/ (métodos MCP como tools/list não contam); a photon-brain e o brain.py são
+# aceitos desde a SPEC-0059, a gluon-spec e o spec_graph.py desde a SPEC-0060
+OTHER_CLI = re.compile(r"sdd-management|second-brain|org-atlas|(^|/)tools/sdd(/|$)")
 
 
 def is_stdlib(name):
@@ -269,7 +269,8 @@ def other_cli_findings(source, filename):
 
 
 def script_findings(source, filename, allowed=ALLOWED_SCRIPTS):
-    """Textos que citam um script .py fora dos aceitos (atlas.py e brain.py), inclusive em f-strings."""
+    """Textos que citam um script .py fora dos aceitos (atlas.py, brain.py e spec_graph.py), inclusive em
+    f-strings."""
     findings = []
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
