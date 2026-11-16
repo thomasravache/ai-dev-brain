@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 17 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, in-progress 1, implemented 55
+- Validação (G0): **2 erro(s), 18 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, implemented 56
 - Impedimentos: **0 aberto(s)**, 28 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,15 +23,14 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0063  
+**Em andamento:** —  
 **Paradas por impedimento:** —  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0063 | gluon-spec: worktree_dir calculado a partir do checkout principal | lite/S | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0062 | photon-brain: regra de processo com alias e imports de nomes | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0063, SPEC-0028 |
+| 2 | SPEC-0062 | photon-brain: regra de processo com alias e imports de nomes | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0028 |
 
 ## Épicos
 
@@ -52,7 +51,6 @@ flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
   S0046["SPEC-0046<br/>org-atlas: testes do endurecimento do i…"]:::implemented
   S0062["SPEC-0062<br/>photon-brain: regra de processo com ali…"]:::proposed
-  S0063["SPEC-0063<br/>gluon-spec: worktree_dir calculado a pa…"]:::inprogress
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
@@ -130,7 +128,7 @@ flowchart LR
 | [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
 | [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
 | [SPEC-0062](SPEC-0062-photon-brain-regra-de-processo-com-alias-e-imports-de-nomes.md) | photon-brain: regra de processo com alias e imports de nomes | lite | fix | proposed | 2026-11-15 | — | SPEC-0046 | — |
-| [SPEC-0063](SPEC-0063-gluon-spec-worktree-dir-calculado-a-partir-do-checkout-princ.md) | gluon-spec: worktree_dir calculado a partir do checkout principal | lite | fix | in-progress | 2026-11-16 | — | — | — |
+| [SPEC-0063](SPEC-0063-gluon-spec-worktree-dir-calculado-a-partir-do-checkout-princ.md) | gluon-spec: worktree_dir calculado a partir do checkout principal | lite | fix | implemented | 2026-11-16 | — | — | — |
 | [SPEC-0064](SPEC-0064-photon-brain-titulo-de-nota-confidencial-fora-do-log-md-na-b.md) | photon-brain: título de nota confidencial fora do log.md na busca e no contexto | lite | fix | implemented | 2026-11-16 | — | — | — |
 
 ## ADRs
