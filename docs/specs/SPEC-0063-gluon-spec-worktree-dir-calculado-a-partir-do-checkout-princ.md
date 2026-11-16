@@ -56,10 +56,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01 e IT-01 em `skills/gluon-spec/tests/` com a tag `SPEC-0063:<ID>`, falhando pelo motivo certo
-- [ ] Green: `worktree_base` a partir do checkout principal (pai do `--git-common-dir`)
-- [ ] Validar: suíte completa + arquitetura (G2/G3); `vendor` em `tools/sdd/`, `SDD_TOOL_VERSION`, CHANGELOG da `gluon-spec` e `version` do plugin
-- [ ] Review independente (G4), integração + CI (G5) e H2, Relatório de Entrega (G7)
+- [x] Red: UT-01 e IT-01 em `skills/gluon-spec/tests/` com a tag `SPEC-0063:<ID>`, falhando pelo motivo certo
+- [x] Green: `worktree_base` a partir do checkout principal (pai do `--git-common-dir`)
+- [x] Validar: suíte completa + arquitetura (G2/G3); `vendor` em `tools/sdd/`, `SDD_TOOL_VERSION`, CHANGELOG da `gluon-spec` e `version` do plugin
+- [x] Review independente (G4), integração + CI (G5) e H2, Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -70,9 +70,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 5f6bbb7 | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — cf7245c | 2026-11-16 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2, após Emenda v2: raiz só em worktree ligada, mesma raiz nas três funções; submódulo, separate-git-dir, monorepo, worktree_allow, .gitignore, worktree_dir absoluto, GIT_DIR e modo privado conferidos; 2 minors, 1 nit e 1 limitação como pendências) — 6584bd9 | 2026-11-16 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — b42e542 | 2026-11-16 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-16 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-16 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -84,28 +84,40 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+- De dentro de uma worktree ligada, `status`, `validate`, `worktree` e `worktree --create` da `gluon-spec` dão o mesmo resultado que no checkout principal: a worktree não é mais acusada como fora do lugar nem recebe sugestão de `git worktree move` para dentro dela mesma, e worktrees novas são criadas ao lado, não aninhadas. `worktree_allow` e o aviso do `.gitignore` também valem igual de qualquer lugar. Submódulo, `--separate-git-dir` e monorepo mantêm o caminho de antes. `SDD_TOOL_VERSION` 2026.11.4, `tools/sdd/` atualizado; plugin 2026.11.12.
 
 ### Como foi feito
+- `main_checkout` só difere da raiz do projeto numa worktree ligada (`--git-dir` ≠ `--git-common-dir`): usa `core.worktree` do common-dir ou o pai dele, mantendo a subpasta do projeto; `worktree_base`, `misplaced_worktrees` e `validate_worktrees` usam essa raiz; `repo_keys` (modo privado) inalterado.
+- Testes em 235917f e 4eb67a6; correção em 90f1a10 e 5f6bbb7.
+- **Emenda v2:** raiz só em worktree ligada, mesma raiz nas três funções, UT-02.
+- **Revisão G4:** rodada 1 REJECTED (major: regressão em submódulo e `--separate-git-dir`; major: `misplaced_worktrees` acusando worktree liberada de dentro de worktree; minors); rodada 2 APPROVED.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes:** 235917f vermelho (o `status` acusava `repo.worktrees/SPEC-0001-… fora do worktree_dir` e sugeria mover para `…/SPEC-0001-….worktrees/…`; o `--create` aninhava); 4eb67a6 vermelho em 6 casos (submódulo em `super/.git/modules.worktrees/…`, `store.worktrees/…`, monorepo, `worktree_allow` e `.gitignore` de dentro da worktree).
+- **Depois:** 5f6bbb7 verde; suíte completa em 3.9 e 3.14 e CI do PR #37.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | De dentro de uma worktree ligada, a worktree não é acusada e `worktree SPEC-Y` dá o mesmo caminho do checkout principal | PASS | `test_spec_graph.py::WorktreeFromLinkedCheckoutTest` — CI do PR #37 (run 43933445408, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | Submódulo, `--separate-git-dir` e monorepo mantêm o caminho; `worktree_allow` e aviso do `.gitignore` iguais de dentro da worktree | PASS | `test_spec_graph.py::WorktreeRootLayoutsTest` — CI do PR #37 (run 43933445408, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | `worktree SPEC-Y --create` de dentro da worktree de SPEC-X cria ao lado, em `<repo>.worktrees/` | PASS | `test_spec_graph.py::WorktreeFromLinkedCheckoutTest` — CI do PR #37 (run 43933445408, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — 235917f/4eb67a6 vermelhos, 90f1a10/5f6bbb7 verdes
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão existente mantido — leitura do checkout principal como em `repo_keys`; padrão `../{repo}.worktrees` inalterado
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — CHANGELOG `[2026.11.4]` da `gluon-spec`
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — `misplaced_worktrees` e `validate_worktrees` entraram pela Emenda v2
 
 ### Deploy
+N/A — `SDD_TOOL_VERSION` 2026.11.4, plugin 2026.11.12, PR #37.
 
 ### Pendências
+- Limitação conhecida: com `--separate-git-dir`, rodando de dentro de uma worktree ligada, o git não guarda o caminho da árvore principal; a pasta sai `store.worktrees/…` e a worktree é acusada.
+- Minors e nit da revisão, sem spec: nenhum teste com worktree ligada de submódulo (`core.worktree`) nem de monorepo vista de dentro; `check-ignore` com a raiz do projeto não é pego por teste.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
