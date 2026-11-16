@@ -12,7 +12,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 ## [2026.11.4] - 2026-11-16
 
 ### Fixed
-- `worktree_dir` passa a ser calculado a partir do checkout principal (pai do `--git-common-dir`), não da worktree onde o `spec_graph.py` roda: de dentro de uma worktree, `status` e `validate` deixam de acusá-la como fora do `worktree_dir` (e de sugerir movê-la para dentro dela mesma), e `worktree SPEC-X [--create]` aponta para a mesma pasta que no checkout principal; fora de um repositório git, continua o `project.root` (SPEC-0063).
+- De dentro de uma worktree ligada (`--git-dir` diferente de `--git-common-dir`), `worktree_dir`, `worktree_allow` e o aviso de `worktree_dir` fora do `.gitignore` passam a usar a raiz do checkout principal (a árvore de `core.worktree` do common-dir, senão o pai do common-dir, mantendo a subpasta do projeto num monorepo), não a worktree onde o `spec_graph.py` roda: `status` e `validate` deixam de acusar a worktree como fora do `worktree_dir` (e de sugerir movê-la para dentro dela mesma) e dão os mesmos avisos que no checkout principal, e `worktree SPEC-X [--create]` aponta para a mesma pasta. No checkout principal, em submódulo, com `--separate-git-dir`, num monorepo ou fora de um repositório git, nada muda (SPEC-0063).
 
 ## [2026.11.3] - 2026-11-13
 
