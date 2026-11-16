@@ -274,8 +274,8 @@ class BrainBoundaryTest(unittest.TestCase):
             "BRAIN = 'skills/photon-brain/scripts/brain.py'\n"
             "HINT = 'rode a skill photon-brain (onboarding)'\n"
             "SDD = 'skills/gluon-spec/scripts/spec_graph.py'\n"
-            "OLD_BRAIN = 'skills/second-brain/scripts/brain.py'\n"
-            "OLD_SDD = 'skills/sdd-management/scripts/x'\n"
+            "OLD_BRAIN = 'second-brain/scripts/brain.py'\n"  # pasta antiga, sem o prefixo (guarda da SPEC-0055)
+            "OLD_SDD = 'sdd-management/scripts/x'\n"
             "TOOLS_DIR = 'tools/sdd'\n"
         )
         findings = other_cli_findings(source, NAME)
