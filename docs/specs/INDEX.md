@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 1, implemented 53
+- Validação (G0): **2 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, in-progress 1, implemented 53
 - Impedimentos: **0 aberto(s)**, 27 resolvido(s)
 
 ## Cobertura de Pilares
@@ -23,13 +23,13 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0061  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0061
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | approved | ✅ pronta |  |
+| 1 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0062 | photon-brain: regra de processo com alias e imports de nomes | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0061, SPEC-0028 |
 
@@ -58,7 +58,7 @@ flowchart LR
   subgraph E0031["SPEC-0031 · Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"]
     S0058["SPEC-0058<br/>Hook de início de sessão e comando de e…"]:::implemented
     S0060["SPEC-0060<br/>Servidor MCP: tools sdd de leitura do p…"]:::implemented
-    S0061["SPEC-0061<br/>Auto-melhoria: aviso de instalação anti…"]:::approved
+    S0061["SPEC-0061<br/>Auto-melhoria: aviso de instalação anti…"]:::inprogress
   end
   S0023 --> S0028
   S0058 --> S0061
@@ -134,7 +134,7 @@ flowchart LR
 | [SPEC-0058](SPEC-0058-hook-de-inicio-de-sessao-e-comando-de-entrada-unica-do-plugi.md) | Hook de início de sessão e comando de entrada única do plugin | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0053, SPEC-0054 | — |
 | [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0058 | — |
 | [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
-| [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
+| [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | in-progress | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
 | [SPEC-0062](SPEC-0062-photon-brain-regra-de-processo-com-alias-e-imports-de-nomes.md) | photon-brain: regra de processo com alias e imports de nomes | lite | fix | proposed | 2026-11-15 | — | SPEC-0046 | — |
 
 ## ADRs

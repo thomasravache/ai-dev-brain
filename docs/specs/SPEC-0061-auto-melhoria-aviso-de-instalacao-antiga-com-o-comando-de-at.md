@@ -4,7 +4,7 @@ title: "Auto-melhoria: aviso de instalação antiga com o comando de atualizaç�
 tier: full
 type: feature
 user_facing: true
-status: approved
+status: in-progress
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0058, SPEC-0060]
@@ -170,6 +170,23 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Doctor do plugin**
+- [ ] Red: UT-01 a UT-06 e IT-01 em `tests/plugin/test_fermion_doctor.py` (regras do ADR-0019 em `tests/plugin/`, incluídas no `arch_test` pelo Architect no G1), com a tag `SPEC-0061:<ID>`
+- [ ] Green: `scripts/fermion_doctor.py` (stdlib, só leitura, sempre exit 0)
+
+**Fase 2: Hook e tool MCP**
+- [ ] Red: UT-07 em `tests/plugin/test_session_start.py` e UT-08 em `mcp/tests/` (regra de arquitetura aceita `scripts/fermion_doctor.py`)
+- [ ] Green: bloco "Instalação desatualizada" em `hooks/session_start.py` (dentro do prazo total da SPEC-0058) e tool `fermion_doctor` em `mcp/fermion_mcp.py`
+
+**Fase 3: Jornada E2E**
+- [ ] Red: E2E-01 falhando pelo motivo certo
+- [ ] Green: aviso aparece com a cópia antiga e some depois de removê-la
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Validar: suíte completa + arquitetura (G2/G3); `README.md`, `mcp/README.md` e `version` do `plugin.json`
+- [ ] Review independente (G4), com o aviso conferido numa sessão real do Claude Code
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7) e fechamento do épico SPEC-0031
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
