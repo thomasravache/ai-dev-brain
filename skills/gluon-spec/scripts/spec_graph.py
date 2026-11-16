@@ -17,7 +17,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.11.3"
+SDD_TOOL_VERSION = "2026.11.4"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -509,9 +509,7 @@ def repo_keys(root: Path):
     code, out, _ = run_git(root, "remote", "get-url", "origin")
     if code == 0 and out.strip():
         keys.append(normalize_remote(out))
-    code, out, _ = run_git(root, "rev-parse", "--git-common-dir")
-    main = (root / out.strip()).resolve().parent if code == 0 and out.strip() else root.resolve()
-    keys.append(str(main))
+    keys.append(str(main_checkout(root)))
     return keys
 
 
@@ -1285,10 +1283,17 @@ def cmd_living_docs(project: Project, init: bool):
 WORKTREE_DIR_DEFAULT = "../{repo}.worktrees"
 
 
+def main_checkout(root: Path) -> Path:
+    """Checkout principal (pai do --git-common-dir); fora de um repositório git, o próprio root."""
+    code, out, _ = run_git(root, "rev-parse", "--git-common-dir")
+    return (root / out.strip()).resolve().parent if code == 0 and out.strip() else root.resolve()
+
+
 def worktree_base(project: Project) -> Path:
-    pattern = project.cfg("worktree_dir", WORKTREE_DIR_DEFAULT).replace("{repo}", project.root.name)
+    main = main_checkout(project.root)
+    pattern = project.cfg("worktree_dir", WORKTREE_DIR_DEFAULT).replace("{repo}", main.name)
     base = Path(pattern)
-    return (base if base.is_absolute() else project.root / base).resolve()
+    return (base if base.is_absolute() else main / base).resolve()
 
 
 def spec_slug(doc: Doc) -> str:

@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.4] - 2026-11-16
+
+### Fixed
+- `worktree_dir` passa a ser calculado a partir do checkout principal (pai do `--git-common-dir`), não da worktree onde o `spec_graph.py` roda: de dentro de uma worktree, `status` e `validate` deixam de acusá-la como fora do `worktree_dir` (e de sugerir movê-la para dentro dela mesma), e `worktree SPEC-X [--create]` aponta para a mesma pasta que no checkout principal; fora de um repositório git, continua o `project.root` (SPEC-0063).
+
 ## [2026.11.3] - 2026-11-13
 
 ### Fixed
