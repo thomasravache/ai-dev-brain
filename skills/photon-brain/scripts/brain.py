@@ -54,7 +54,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.6"
+BRAIN_VERSION = "2026.11.7"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -105,6 +105,12 @@ FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 CLOSING_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})\s*$")  # CommonMark: only spaces after a closing fence
 INLINE_CODE_RE = re.compile(r"(?<!`)(`+)(?!`)[^\n]*?(?<!`)\1(?!`)")  # a run of N backticks closed by N
 WIKILINK_RE = re.compile(r"!?\[\[([^\[\]\n]+?)\]\]")
+# log.md (SPEC-0064): where a line writes a path, where it ends, a move and a confidential ingest (on log_key text)
+LOG_HEAD = r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} (?:context add|\S+) "
+LOG_PATH_ANCHOR_RE = re.compile(LOG_HEAD + r"|→ |← |— |nota: ")
+LOG_PATH_END_RE = re.compile(r"[ ;|#\]]")
+LOG_MOVE_RE = re.compile(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} inbox-(?:move|done) (.+?) → (.*)$")
+LOG_CONFIDENTIAL_INGEST_RE = re.compile(LOG_HEAD.replace(r"(?:context add|\S+)", "ingest") + r".+? — (.+); confidencial$")
 HEADING_RE = re.compile(r"^#[ \t]+(.+?)[ \t#]*$")
 TAG_RE = re.compile(r"(?<!\S)#([\w/-]+)")
 TOKEN_RE = re.compile(r"[^\W_]+")
@@ -1316,11 +1322,12 @@ def make_snippet(note: Note, terms) -> str:
 
 
 def search(notes: list, query: str, context=None, note_type=None, tag=None, limit=10,
-           include_confidential=False) -> list:
+           include_confidential=False, values=None) -> list:
     """Notes of the query by score: sum per query term of tf * idf, weighting title 3, tags 2 and body 1.
     Only score > 0, descending; filters by context, frontmatter.type and tag. Confidential notes are left out
-    (never counted in the idf either) unless include_confidential."""
-    notes = visible_notes(notes, include_confidential)
+    (never counted in the idf either) unless include_confidential, and the generated log.md is read without the
+    lines that name one (readable_notes; layout.log of values, "log.md" when None)."""
+    notes = readable_notes(notes, values, include_confidential)
     terms = unique(tokenize(query))
     if not terms:
         return []
@@ -1366,6 +1373,88 @@ def generated_notes(paths, values=None) -> set:
     """The paths (of notes) that are the generated index.md or log.md, compared with _link_key."""
     keys = generated_paths(values)
     return {path for path in paths if _link_key(path) in keys}
+
+
+def log_key(path: str) -> str:
+    """How log_paths compares a path written in log.md: NFC, "/" (an old "\\" too), lowercased, no leading "./"."""
+    key = unicodedata.normalize("NFC", str(path).strip().replace("\\", "/")).lower()
+    while key.startswith("./"):
+        key = key[2:]
+    return key
+
+
+def log_paths(line: str) -> set:
+    """Every candidate path (log_key) of a log.md line, anchored where the log writes a path: right after the
+    command ("- AAAA-MM-DD HH:MM <comando> "), after "→ ", "← ", "— " and "nota: ", each one ending at a space, ";",
+    "|", "#", "]" or the end of the line. Never a suffix of a longer path ("Plan.md" is not in "Business Plan.md");
+    the work does not depend on how many notes are confidential (the caller looks the candidates up in a set)."""
+    folded = log_key(line.rstrip("\r\n"))
+    starts = [m.end() for m in LOG_PATH_ANCHOR_RE.finditer(folded)]
+    if not starts:
+        return set()
+    ends = [m.start() for m in LOG_PATH_END_RE.finditer(folded)] + [len(folded)]
+    return {folded[start:end] for start in starts for end in ends if end > start}
+
+
+def log_move(line: str):
+    """(origin, rest) of a move line of log.md ("inbox-move <origem> → <destino>", also inbox-done), else None."""
+    m = LOG_MOVE_RE.match(log_key(line.rstrip("\r\n")))
+    return (m.group(1), m.group(2)) if m else None
+
+
+def confidential_log_keys(notes: list, hidden: set, lines: list) -> set:
+    """log_key of everything log.md may name for the confidential notes of `hidden`: their paths, the stored file of
+    a confidential source note (frontmatter `files`, and the "— <arquivo>; confidencial" of an old ingest line), as
+    the file and as "<files>/<arquivo>", and the original name in inbox/ of a move line that took it there."""
+    keys = {log_key(path) for path in hidden}
+    stored = [item for note in notes if note.path in hidden
+              for item in (note.frontmatter.get("files") or []) if isinstance(item, str)]
+    for line in lines:
+        m = LOG_CONFIDENTIAL_INGEST_RE.match(log_key(line.rstrip("\r\n")))
+        if m:
+            stored.append(m.group(1))
+    for item in stored:
+        keys |= {log_key(item), "<files>/" + log_key(item).lstrip("/")}
+    moves = [move for move in map(log_move, lines) if move]
+    changed = True
+    while changed:  # an origin hidden by its move may itself be the destination of an earlier move
+        changed = False
+        for origin, rest in moves:
+            if origin not in keys and log_paths("- 0000-00-00 00:00 x " + rest) & keys:
+                keys.add(origin)
+                changed = True
+    return keys
+
+
+def log_mentions(line: str, keys: set, index: LinkIndex, hidden: set) -> bool:
+    """True when a line of log.md names something of `keys` (confidential_log_keys) where the log writes a path
+    (log_paths: an old line, another case, NFD or "\\" still count) or has a [[link]] that resolves to a note of
+    `hidden` ("relate")."""
+    return bool(log_paths(line) & keys) or any(index.resolve(link_target(m)) in hidden
+                                               for m in WIKILINK_RE.findall(line))
+
+
+def readable_notes(notes: list, values=None, include_confidential: bool = False) -> list:
+    """visible_notes, with the generated log.md read without the lines that name a confidential note or its stored
+    file (log_mentions; SPEC-0064, ADR-0014): search and context score, quote and package that text. The file never
+    changes (only appended to, ADR-0007); with include_confidential, or without confidential notes, nothing changes."""
+    shown = visible_notes(notes, include_confidential)
+    hidden = {note.path for note in notes} - {note.path for note in shown}
+    if not hidden:
+        return shown
+    index = LinkIndex(note.path for note in notes)
+    log_keys = {_link_key(path) for path in layout_paths(values["layout"] if values else {"log": "log.md"}, ("log",))}
+    result = []
+    for note in shown:
+        if _link_key(note.path) in log_keys:
+            lines = (note.text or "").splitlines(keepends=True)
+            keys = confidential_log_keys(notes, hidden, lines)
+            redacted = parse_note(note.path, "".join(line for line in lines
+                                                      if not log_mentions(line, keys, index, hidden)))
+            redacted.context, redacted.warnings = note.context, note.warnings
+            note = redacted
+        result.append(note)
+    return result
 
 
 def moc_notes(paths, values=None) -> set:
@@ -1517,13 +1606,14 @@ def build_context(notes: list, query: str, context=None, hops=1, limit=8, max_ch
     the package would have picked with them."""
     by_path = {note.path: note for note in notes}
     index = LinkIndex(by_path)
-    shown = visible_notes(notes, include_confidential)
+    shown = readable_notes(notes, values, include_confidential)
     picked = context_picks(shown, index, query, context, hops, limit, values)
+    readable = {note.path: note for note in shown}
     hidden = by_path.keys() - {note.path for note in shown}
     every = context_picks(notes, index, query, context, hops, limit, values) if hidden else []
     package, omitted, broken, size = [], [], [], 0
     for path, reason in picked:
-        note = by_path[path]
+        note = readable[path]
         content = note.text or ""
         if size + len(content) <= max_chars:
             size += len(content)
@@ -2315,10 +2405,10 @@ def print_confidential_omitted(omitted: int):
 def cmd_search(args, config_home=None) -> int:
     check_limit(args.limit)
     query = " ".join(args.query)
-    notes, warnings = load_notes(config_home)
+    values, notes, warnings = load_vault(config_home)
     include = args.include_confidential
     results = search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
-                     include_confidential=include)
+                     include_confidential=include, values=values)
     omitted = 0 if include or not has_confidential(notes) else confidential_omitted(
         search(notes, query, context=args.context, note_type=args.type, tag=args.tag, limit=args.limit,
                include_confidential=True), notes)
