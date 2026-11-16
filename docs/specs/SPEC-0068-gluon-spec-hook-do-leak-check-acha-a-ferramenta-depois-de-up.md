@@ -67,7 +67,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=10, skipped=1)) — 89c9b6c | 2026-11-16 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 1f1eefc | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 7b8874d | 2026-11-16 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | CHANGES_REQUESTED: 1 major (hook órfão após private off sem conserto: refresh morre fora do modo privado) + 3 minor (marcador de time bloqueia regravar o próprio hook; interpretador gravado ausente vira 'marcas'; doctor erra índice git v4) + nits | 2026-11-16 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -110,3 +110,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | v2 | 2026-11-16 | `touches` ganha `scripts/fermion_doctor.py` e `tests/plugin/**`; o refresh vira `private hooks --refresh` no repositório atual ou `--scan PASTA`, no lugar de "todos os repositórios do registro" | o aviso do doctor mora fora da skill; o registro guarda o remoto normalizado, não a pasta, então só uma varredura acha os repositórios | nenhuma | thomas, 2026-11-16 (piloto automático com o recomendado) |
+| v3 | 2026-11-16 | `private hooks --refresh` no repositório atual também regrava hook do SDD (cabeçalho reconhecido) fora do modo privado (hook órfão de `private off`); hook do próprio SDD é regravado mesmo com marcador de gerenciador do time (só hook de outra origem bloqueia); o hook cai para `python3` do PATH quando o interpretador gravado não é executável e só diz "marcas do SDD encontradas" quando o leak-check sai 1 (outro código: "falha ao rodar o leak-check (exit N)"); o doctor só aceita `tools/sdd/` não rastreado lendo índice v2/v3 com o nome ancorado na entrada (v4, ilegível ou grande: não aceita); `render_leak_hook` recusa caminho com `"`, `$` ou crase; `--scan` não visita submódulos (documentado) | G4 da SPEC-0068 (CHANGES_REQUESTED): o comando recomendado não resolvia esses casos | nenhuma | thomas, 2026-11-16 (piloto automático com o recomendado) |
