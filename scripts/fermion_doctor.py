@@ -12,7 +12,8 @@ Confere se há instalação antiga ao lado do plugin e diz como atualizar; nunca
 - broken-leak-hook: pre-push do leak-check instalado pelo SDD (modo privado) cujo caminho gravado não existe e sem
   nenhuma alternativa da busca do hook (plugin fermion do installed_plugins.json, cópias de skill do usuário,
   tools/sdd/ não rastreado) — todo push seria recusado (SPEC-0068). O hook é lido de <projeto>/.git (pasta, ou
-  arquivo `gitdir:` de worktree seguindo `commondir`); "não rastreado" é conferido no índice do git, sem rodar git.
+  arquivo `gitdir:` de worktree seguindo `commondir`); "não rastreado" é conferido nas entradas do índice do git v2/v3,
+  sem rodar git (índice ausente, v4, ilegível ou grande demais: tools/sdd/ não conta como alternativa).
 Cópia com versão ilegível vira unreadable-version.
 
 Pasta de skills do usuário: $CLAUDE_CONFIG_DIR/skills, senão $HOME/.claude/skills; do projeto:
@@ -286,12 +287,39 @@ def leak_tool_alternatives(project, env, git_dir):
         yield config / "skills" / skill / "scripts" / "spec_graph.py"
     vendored = Path(project) / VENDORED_TOOL
     if exists(vendored):
-        index = read_bytes(git_dir / "index", real(git_dir))
-        missing_index = not exists(git_dir / "index")
-        # rastreado (ou índice grande demais para conferir no limite de leitura) não serve de alternativa
-        if missing_index or (index is not None and len(index) < READ_LIMIT
-                             and VENDORED_TOOL.encode("utf-8") + b"\x00" not in index):
+        tracked = index_paths(read_bytes(git_dir / "index", real(git_dir)))
+        if tracked is not None and VENDORED_TOOL.encode("utf-8") not in tracked:
             yield vendored
+
+
+def index_paths(data):
+    """Caminhos das entradas de um índice do git v2/v3 (Emenda v3); None quando não dá para ter certeza: índice
+    ausente, ilegível, v4 (caminhos comprimidos), truncado ou no limite de leitura (grande demais)."""
+    if data is None or len(data) >= READ_LIMIT or len(data) < 12 or data[:4] != b"DIRC":
+        return None
+    version = int.from_bytes(data[4:8], "big")
+    count = int.from_bytes(data[8:12], "big")
+    if version not in (2, 3):
+        return None
+    paths, offset = set(), 12
+    for _ in range(count):
+        fixed = 62
+        if offset + fixed > len(data):
+            return None
+        flags = int.from_bytes(data[offset + 60:offset + 62], "big")
+        if flags & 0x4000:  # flags estendidas (só v3)
+            if version < 3:
+                return None
+            fixed += 2
+        start = offset + fixed
+        end = data.find(b"\x00", start)
+        if end < 0:
+            return None
+        paths.add(data[start:end])
+        offset += (fixed + (end - start) + 8) & ~7  # entrada com 1 a 8 NULs até múltiplo de 8
+        if offset > len(data):
+            return None
+    return paths
 
 
 def check_leak_hook(report, project, env, plugin_root):

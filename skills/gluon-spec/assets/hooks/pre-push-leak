@@ -5,8 +5,11 @@
 # ordem: o caminho gravado no `private init`; a gluon-spec do plugin fermion instalado (installed_plugins.json da
 # pasta de configuração do Claude Code: $CLAUDE_CONFIG_DIR, senão ~/.claude); as cópias de skill do usuário
 # (gluon-spec, depois a de nome antigo); tools/sdd/spec_graph.py da worktree desde que NÃO seja rastreado pelo git.
-# Atualize este hook com `spec_graph.py private hooks --refresh` (SPEC-0068).
+# O Python é o gravado no `private init`, senão o python3 do PATH. "Marcas do SDD encontradas" só quando o leak-check
+# sai com 1; outro código é falha ao rodar a ferramenta. Atualize este hook com `spec_graph.py private hooks --refresh`.
 recorded="__SDD_TOOL__"
+python="__PYTHON__"
+[ -x "$python" ] || python=python3
 tool=
 use_tool() {
   tool=$1
@@ -20,7 +23,7 @@ find_tool() {
   config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
   registry="$config/plugins/installed_plugins.json"
   if [ -f "$registry" ]; then
-    plugin=$("__PYTHON__" -c '
+    plugin=$("$python" -c '
 import json, os, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as stream:
@@ -36,7 +39,7 @@ try:
                     sys.exit(0)
 except Exception:
     pass
-' "$registry" 2>/dev/null)
+' "$registry" </dev/null 2>/dev/null)
     if [ -n "$plugin" ] && [ -f "$plugin" ]; then
       use_tool "$plugin"
       return 0
@@ -61,12 +64,19 @@ except Exception:
 }
 zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
 status=0
+marks=0
 while read -r _ local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue
   if [ -z "$tool" ]; then
     find_tool || exit 1
   fi
-  "__PYTHON__" "$tool" leak-check --range "$remote_sha..$local_sha" --branch "${remote_ref#refs/heads/}" || status=1
+  "$python" "$tool" leak-check --range "$remote_sha..$local_sha" --branch "${remote_ref#refs/heads/}" </dev/null
+  code=$?
+  case $code in
+    0) ;;
+    1) marks=1; status=1 ;;
+    *) echo "pre-push: falha ao rodar o leak-check (exit $code) com $tool" >&2; status=1 ;;
+  esac
 done
-[ "$status" -eq 0 ] || echo "pre-push: marcas do SDD encontradas — remova-as antes de enviar ao time" >&2
+[ "$marks" -eq 0 ] || echo "pre-push: marcas do SDD encontradas — remova-as antes de enviar ao time" >&2
 exit $status

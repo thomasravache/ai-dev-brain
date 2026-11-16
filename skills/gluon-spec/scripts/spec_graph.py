@@ -728,6 +728,9 @@ def cmd_private(project: Project, action: str, spec_root, sync):
         return 0
     if run_git(root, "rev-parse", "--is-inside-work-tree")[0] != 0:
         die("private init roda dentro de um repositório git")
+    problem = leak_hook_problem()
+    if problem and not team_hook_manager(root) and not leak_hook_path(root).exists():
+        die(f"private init: {problem}")
     if run_git(root, "ls-files", "docs/specs")[1].strip():
         die("este repositório usa o SDD versionado (modo completo) em docs/specs; o modo privado é para "
             "repositórios onde o SDD não está no repositório")
@@ -920,15 +923,34 @@ SCAN_MAX_DEPTH = 5
 SCAN_SKIP_DIRS = {"node_modules", ".git"}
 
 
+UNSAFE_HOOK_CHARS = ('"', "$", "`")  # quebrariam as aspas duplas do hook (Emenda v3 da SPEC-0068)
+
+
+def leak_hook_problem():
+    """Motivo para não gravar o hook com este Python e esta ferramenta (caminho com aspas, $ ou crase); None se ok."""
+    for label, value in (("ferramenta", str(Path(__file__).resolve())), ("Python", sys.executable)):
+        bad = [c for c in UNSAFE_HOOK_CHARS if c in value]
+        if bad:
+            return (f"o caminho do {label} ({value}) tem {' '.join(bad)}, que o hook pre-push não grava com "
+                    "segurança — use a gluon-spec de uma pasta sem aspas, $ ou crase")
+    return None
+
+
 def render_leak_hook() -> str:
-    """Texto do pre-push do leak-check: template atual com este Python e esta ferramenta gravados."""
+    """Texto do pre-push do leak-check: template atual com este Python e esta ferramenta gravados.
+
+    Recusa (ValueError) caminho com aspas, $ ou crase."""
+    problem = leak_hook_problem()
+    if problem:
+        raise ValueError(problem)
     text = (ASSETS_DIR / "hooks" / "pre-push-leak").read_text(encoding="utf-8")
     return text.replace("__PYTHON__", sys.executable).replace("__SDD_TOOL__", str(Path(__file__).resolve()))
 
 
 def write_leak_hook(hook: Path):
+    text = render_leak_hook()
     hook.parent.mkdir(parents=True, exist_ok=True)
-    hook.write_text(render_leak_hook(), encoding="utf-8")
+    hook.write_text(text, encoding="utf-8")
     hook.chmod(0o755)
 
 
@@ -1023,15 +1045,18 @@ def install_leak_hook(root: Path) -> str:
 
 
 def refresh_leak_hook(root: Path) -> str:
-    """Regrava o pre-push do leak-check com o template atual, só quando foi o SDD que o instalou (SPEC-0068)."""
-    manager = team_hook_manager(root)
-    if manager:
-        return (f"⚠ hooks do time detectados ({manager}): o pre-push não foi regravado — o leak-check roda dentro de "
-                "worktree/gate/pr")
+    """Regrava o pre-push do leak-check com o template atual, só quando foi o SDD que o instalou (SPEC-0068).
+
+    Vale também fora do modo privado (hook órfão de `private off`) e com marcador de gerenciador de hooks do time:
+    só um hook de outra origem bloqueia (Emenda v3). Caminho inseguro para o hook: ValueError, nada gravado."""
     hook = leak_hook_path(root)
     try:
         text = hook.read_text(encoding="utf-8")
     except FileNotFoundError:
+        manager = team_hook_manager(root)
+        if manager:
+            return (f"⚠ hooks do time detectados ({manager}) e sem pre-push do SDD em {hook}: nada a regravar — o "
+                    "leak-check roda dentro de worktree/gate/pr")
         return f"sem pre-push em {hook}: nada a regravar (rode `private init` para instalar o hook do leak-check)"
     except (OSError, UnicodeDecodeError):
         return f"⚠ {hook}: pre-push ilegível, não regravado"
@@ -1071,6 +1096,9 @@ def cmd_private_hooks_scan(folder: Path):
     folder = folder.expanduser().resolve()
     if not folder.is_dir():
         die(f"private hooks --scan: {folder} não é uma pasta")
+    problem = leak_hook_problem()
+    if problem:
+        die(f"private hooks --scan: {problem}")
     seen, total, private = set(), 0, 0
     for repo in git_repositories(folder):
         total += 1
@@ -1088,11 +1116,16 @@ def cmd_private_hooks_scan(folder: Path):
 
 
 def cmd_private_hooks(project: Project, refresh: bool):
-    if not project.private:
-        die("private hooks: este repositório não está em modo privado (rode `private init` ou use --scan PASTA)")
+    """Hook do leak-check do repositório atual; com --refresh, regrava o do SDD mesmo fora do modo privado (hook
+    órfão de `private off`, Emenda v3)."""
     root = project.root
+    if run_git(root, "rev-parse", "--git-dir")[0] != 0:
+        die("private hooks roda dentro de um repositório git (ou use --refresh --scan PASTA)")
     if refresh:
-        print(refresh_leak_hook(root))
+        try:
+            print(refresh_leak_hook(root))
+        except ValueError as e:
+            die(f"private hooks --refresh: {e}")
         return 0
     hook = leak_hook_path(root)
     try:
