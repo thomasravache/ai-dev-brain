@@ -767,6 +767,26 @@ class DoctorBlockTest(HookTestCase):
             self.assertTrue(context.startswith(SDD_HEADER), context)
             self.assertTrue(context.rstrip().endswith(BRAIN_LINE + "\n\n" + expected), context)
 
+    def test_whitespace_in_detail_and_fix_is_flattened_to_one_line_per_finding(self):
+        """SPEC-0061:UT-07 (Emenda v2: quebra de linha, \\r e tab no detail/fix viram um espaço; nada de '#' injetado)"""
+        findings = [{"check": "old-name-copy", "level": "warn", "path": "/x/a",
+                     "detail": "cópia antiga\n## X injetado\r\tsegunda parte",
+                     "fix": "remova\n## Y\ra\tpasta"},
+                    doctor_findings(1)[0]]
+        project = make_project(self.base / "p", sdd=False)
+        code, out, _ = self.run_hook(FakeRunner(doctor=doctor_answer(findings)), cwd=project)
+        self.assertEqual(code, 0)
+        block = self.doctor_block(self.context(out))
+        lines = block.split("\n")
+        self.assertEqual(lines[0] + "\n", DOCTOR_HEADER)
+        self.assertEqual(len(lines), 1 + len(findings), lines)
+        self.assertEqual(lines[1], "- cópia antiga ## X injetado segunda parte → remova ## Y a pasta")
+        for line in lines[1:]:
+            self.assertTrue(line.startswith("- "), line)
+            self.assertNotIn("\r", line)
+            self.assertNotIn("\t", line)
+        self.assertEqual([line for line in block.splitlines() if line.startswith("#")], [DOCTOR_HEADER.strip()])
+
     def test_doctor_runs_once_with_project_and_json_inside_the_budget(self):
         """SPEC-0061:UT-07 (linha de comando do doctor: --project <raiz do projeto> --json, cwd e timeout)"""
         project = make_project(self.base / "p", sdd=False)
@@ -832,6 +852,7 @@ class DoctorBlockTest(HookTestCase):
         """SPEC-0061:UT-07 (doctor que falha: sem bloco, linha 'Doctor indisponível' no stderr, o resto fica)"""
         failures = {
             "exit 1": (1, "", "erro: x\n"),
+            "exit 1 com JSON válido": (1, doctor_answer(doctor_findings(1))[1], "erro"),  # Emenda v2
             "json ilegível": (0, "não é json", ""),
             "json sem findings": (0, json.dumps({"plugin_versions": {}}), ""),
             "timeout": subprocess.TimeoutExpired(["python3"], 10),

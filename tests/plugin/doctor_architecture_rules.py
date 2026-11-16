@@ -6,15 +6,16 @@ por violação: "<arquivo>:<linha> — <regra> — <achado>", em ordem de linha.
 Regras (o doctor só lê e avisa, nunca atualiza sozinho):
 - só biblioteca padrão;
 - nenhum processo: sem subprocess, os.system, os.popen, os.exec*, os.spawn*, os.fork, pty, multiprocessing nem
-  asyncio.create_subprocess_*;
+  asyncio.create_subprocess_*, também por getattr (Emenda v2);
 - nenhuma rede: sem socket, ssl, urllib, http, ftplib, smtplib, poplib, imaplib, telnetlib, xmlrpc nem asyncio de
   conexão (open_connection, create_connection);
 - nenhuma escrita: open/io.open/Path.open com modo de escrita (w, a, x ou +) ou modo que não é texto literal,
   os.open, write_text, write_bytes, unlink, rmtree, rename, mkdir, makedirs, rmdir, removedirs, touch, symlink_to,
   hardlink_to, chmod, lchmod, chown, truncate, utime; os.remove, os.replace, os.link, os.symlink e shutil.copy*,
-  shutil.move (também importados com from);
-- nenhum carregamento de código (importlib, runpy, __import__, exec, eval, compile): as versões são lidas por
-  expressão regular, nunca importando os scripts das skills.
+  shutil.move (também importados com from ou por getattr); tempfile, sqlite3, shelve, dbm e logging.FileHandler (e os
+  handlers de arquivo de logging.handlers) (Emenda v2);
+- nenhum carregamento de código (importlib, runpy, __import__, exec, eval, compile) nem código nativo (ctypes): as
+  versões são lidas por expressão regular, nunca importando os scripts das skills.
 """
 import ast
 import importlib.util
@@ -49,7 +50,11 @@ WRITE_CALLS = {
                "make_archive", "unpack_archive"},
 }
 OPEN_FUNCTIONS = {"open", "io.open", "codecs.open"}
-DYNAMIC_MODULES = ("importlib", "runpy", "imp", "zipimport")
+# Emenda v2 (G4): módulos que só existem para gravar e os handlers de arquivo do logging
+WRITE_MODULES = ("tempfile", "sqlite3", "shelve", "dbm", "logging.handlers")
+LOG_FILE_HANDLERS = {"FileHandler", "WatchedFileHandler", "RotatingFileHandler", "TimedRotatingFileHandler"}
+DYNAMIC_MODULES = ("importlib", "runpy", "imp", "zipimport", "ctypes")
+GETATTR_MODULES = ("os", "subprocess", "pty", "multiprocessing", "asyncio", "shutil")
 DYNAMIC_BUILTINS = {"__import__", "exec", "eval", "compile"}
 
 
@@ -123,6 +128,20 @@ def _call_name(node, modules, functions):
     return name
 
 
+def _getattr_target(node, modules):
+    """(módulo, atributo ou None quando calculado) de getattr(<módulo importado>, ...); None para o resto."""
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr"
+            and node.args):
+        return None
+    base = _dotted(node.args[0])
+    module = modules.get(base, base) if base else None
+    if module not in GETATTR_MODULES:
+        return None
+    attr = node.args[1] if len(node.args) > 1 else None
+    name = attr.value if isinstance(attr, ast.Constant) and isinstance(attr.value, str) else None
+    return module, name
+
+
 def _finding(findings, line, filename, rule, detail):
     findings.append((line, f"{filename}:{line} — {rule} — {detail}"))
 
@@ -155,6 +174,12 @@ def process_findings(source, filename):
             _finding(findings, line, filename, RULE_PROCESS, f"from {module} import {name}")
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
+            target = _getattr_target(node, modules)
+            if target:
+                module, attr = target
+                if attr is None or attr in PROCESS_CALLS.get(module, ()) or _under(module, PROCESS_MODULES):
+                    _finding(findings, node.lineno, filename, RULE_PROCESS, f"getattr({module}, {attr or '?'})")
+                continue
             name = _call_name(node, modules, functions)
             module, _, func = (name or "").rpartition(".")
             if func in PROCESS_CALLS.get(module, ()) or (name and _under(module, PROCESS_MODULES)):
@@ -206,15 +231,27 @@ def write_findings(source, filename):
     modules, functions = _aliases(tree)
     findings = []
     for line, module, name, _ in _imported(tree):
-        if name and name in WRITE_CALLS.get(module, ()):
+        full = f"{module}.{name}" if name else module
+        if _under(module, WRITE_MODULES) or _under(full, WRITE_MODULES):
+            _finding(findings, line, filename, RULE_WRITE, f"import de '{full}'")
+        elif name and (name in WRITE_CALLS.get(module, ()) or (module == "logging" and name in LOG_FILE_HANDLERS)):
             _finding(findings, line, filename, RULE_WRITE, f"from {module} import {name}")
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
+        target = _getattr_target(node, modules)
+        if target:
+            module, attr = target
+            if attr is None and module in ("os", "shutil") or attr in WRITE_CALLS.get(module, ()) \
+                    or attr in WRITE_METHODS:
+                _finding(findings, node.lineno, filename, RULE_WRITE, f"getattr({module}, {attr or '?'})")
+            continue
         name = _call_name(node, modules, functions) or ""
         module, _, func = name.rpartition(".")
         is_attribute = isinstance(node.func, ast.Attribute)
-        if name in OPEN_FUNCTIONS:
+        if _under(module, WRITE_MODULES) or (module == "logging" and func in LOG_FILE_HANDLERS):
+            _finding(findings, node.lineno, filename, RULE_WRITE, f"{name}()")
+        elif name in OPEN_FUNCTIONS:
             if _writes(_open_mode(node, 1)):
                 _finding(findings, node.lineno, filename, RULE_WRITE, f"{name}() com modo de escrita")
         elif func in WRITE_CALLS.get(module, ()):

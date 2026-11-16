@@ -179,6 +179,17 @@ class DoctorCallTest(ProjectEnvCase):
                 self.assertIs(result.get("isError"), True, result)
                 self.assertTrue(text_of(result).strip())
 
+    def test_exit_0_without_a_findings_object_is_a_tool_error(self):
+        """SPEC-0061:UT-08 (Emenda v2: exit 0 sem objeto JSON com findings → isError true com o stderr)"""
+        cases = {"vazio": "", "texto": "não é json\n", "lista": "[]", "sem findings": '{"plugin_versions": {}}'}
+        for label, stdout in cases.items():
+            with self.subTest(caso=label):
+                runner = FakeRunner(0, stdout, "aviso do doctor no stderr\n")
+                result = result_of(self, new_server(runner).handle(call(DOCTOR_TOOL, {})))
+                self.assertIs(result.get("isError"), True, result)
+                self.assertIn("aviso do doctor no stderr", text_of(result))
+                self.assertNotIn("structuredContent", result)
+
     def test_missing_doctor_is_reported_without_a_process(self):
         """SPEC-0061:UT-08 (doctor ausente na raiz do plugin)"""
         root = Path(tempfile.mkdtemp()).resolve()

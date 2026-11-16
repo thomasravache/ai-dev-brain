@@ -30,6 +30,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -56,6 +57,7 @@ IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
 DOCTOR_TIMEOUT = 60
 LOW_VERSION = "2026.10.1"
 HOOK_HEADER = "## Instalação desatualizada (fermion)"
+READ_LIMIT = 256 * 1024  # Emenda v2: só os primeiros 256 KB de cada arquivo
 
 
 def read_version(path, constant):
@@ -369,6 +371,30 @@ class StaleProjectTest(DoctorTestCase):
         lines = warn_lines(run_doctor(self, self.sandbox, as_json=False))
         self.assertEqual(sorted(lines), ["old-sdd-block", "stale-atlas", "stale-sdd-tool"], lines)
 
+    def test_plugin_path_with_space_is_shell_quoted_in_the_commands(self):
+        """SPEC-0061:UT-04 (Emenda v2: caminho do plugin com espaço vai entre aspas de shell, shlex.quote)"""
+        require_doctor(self)
+        plugin = fake_plugin(self.sandbox.base / "plugin com espaço", {"gluon-spec": "2026.11.3",
+                                                                     "photon-brain": "2026.11.3",
+                                                                     "boson-atlas": "2026.11.3"})
+        project = self.sandbox.project
+        write(project / "tools" / "sdd" / "spec_graph.py", version_line("gluon-spec", LOW_VERSION))
+        write(project / "AGENTS.md", sdd_block("sdd-management"))
+        write(project / ".org-atlas" / "skill" / "scripts" / "atlas.py", version_line("boson-atlas", LOW_VERSION))
+        stale = skill_copy(self.sandbox.user_skills, "gluon-spec", LOW_VERSION)
+        data = run_doctor(self, self.sandbox, script=plugin / "scripts" / DOCTOR.name)
+        dump = json.dumps(data, ensure_ascii=False, indent=1)
+        self.assertEqual(sorted(f["check"] for f in data["findings"]),
+                         ["old-sdd-block", "stale-atlas", "stale-copy", "stale-sdd-tool"], dump)
+        spec_graph = shlex.quote(str(plugin / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"))
+        atlas = shlex.quote(str(plugin / "skills" / "boson-atlas" / "scripts" / "atlas.py"))
+        self.assertTrue(spec_graph.startswith("'"), spec_graph)
+        self.assertIn(spec_graph + " whats-new", by_check(data, "stale-sdd-tool")[0]["fix"])
+        self.assertIn(spec_graph + " vendor --agents", by_check(data, "old-sdd-block")[0]["fix"])
+        self.assertIn(atlas + " vendor --ci", by_check(data, "stale-atlas")[0]["fix"])
+        self.assertIn(shlex.quote(str(plugin / "skills" / "gluon-spec")), by_check(data, "stale-copy")[0]["fix"])
+        self.assert_path(by_check(data, "stale-copy")[0], stale, stale / "scripts" / "spec_graph.py")
+
     def test_up_to_date_vendored_atlas_and_tools_are_not_reported(self):
         """SPEC-0061:UT-04 (mesma versão do plugin: nada)"""
         self.sandbox.up_to_date_project()
@@ -391,6 +417,25 @@ class UnreadableTest(DoctorTestCase):
         self.assert_path(data["findings"][0], copy / "scripts" / "spec_graph.py", copy)
         lines = warn_lines(run_doctor(self, self.sandbox, as_json=False))
         self.assertEqual(list(lines), ["unreadable-version"], lines)
+
+    def test_reading_is_limited_to_the_first_256_kb(self):
+        """SPEC-0061:UT-05 (Emenda v2: constante depois dos primeiros 256 KB → unreadable-version; no topo → lida)"""
+        padding = "# preenchimento para passar dos 256 KB da leitura limitada\n" * (READ_LIMIT // 50 + 200)
+        self.assertGreater(len(padding.encode("utf-8")), READ_LIMIT)
+        constant = f'SDD_TOOL_VERSION = "{LOW_VERSION}"\n'
+        cases = (("constante depois de 256 KB", padding + constant, "unreadable-version"),
+                 ("constante no topo", constant + padding, "stale-copy"))
+        for label, text, expected in cases:
+            with self.subTest(caso=label):
+                sandbox = Sandbox(self)
+                sandbox.up_to_date_project()
+                copy = skill_copy(sandbox.user_skills, "gluon-spec")
+                write(copy / "scripts" / "spec_graph.py", text)
+                self.assertGreater((copy / "scripts" / "spec_graph.py").stat().st_size, READ_LIMIT)
+                data = run_doctor(self, sandbox)
+                self.assertEqual([f["check"] for f in data["findings"]], [expected],
+                                 json.dumps(data, ensure_ascii=False, indent=1))
+                self.assert_path(data["findings"][0], copy, copy / "scripts" / "spec_graph.py")
 
     @unittest.skipIf(IS_ROOT, "root lê pastas sem permissão (os.geteuid() == 0)")
     def test_skills_folder_without_read_permission_is_ignored(self):
@@ -507,6 +552,37 @@ class DoctorArchitectureTest(unittest.TestCase):
                    "re.compile('x')\n")                          # 6
         found = self.rules.dynamic_code_findings(dynamic, DOCTOR_NAME)
         self.assertEqual(sorted(set(lines_of(found))), [1, 2, 3, 4], "\n".join(found))
+
+    def test_rules_report_the_g4_bypasses(self):
+        """SPEC-0061:UT-06 (Emenda v2: getattr de processo, tempfile, ctypes, sqlite3, shelve, dbm, logging.FileHandler)"""
+        cases = {
+            "process_findings": (("import os\n"
+                                 "getattr(os, 'system')('ls')\n"                       # 2
+                                 "import subprocess as s\n"                            # 3
+                                 "getattr(s, nome)\n"                                  # 4
+                                 "getattr(objeto, 'system')\n"), [2, 3, 4]),            # 5: não é módulo de processo
+            "write_findings": (("import tempfile\n"                                    # 1
+                               "tempfile.mkdtemp()\n"                                 # 2
+                               "from tempfile import NamedTemporaryFile\n"            # 3
+                               "import sqlite3\n"                                     # 4
+                               "import shelve\n"                                      # 5
+                               "import dbm.dumb\n"                                    # 6
+                               "import logging\n"                                     # 7
+                               "logging.FileHandler('x.log')\n"                       # 8
+                               "from logging import FileHandler\n"                    # 9
+                               "logging.getLogger('x')\n"                             # 10: só lê
+                               "import os\n"                                          # 11
+                               "getattr(os, 'remove')('x')\n"), [1, 2, 3, 4, 5, 6, 8, 9, 12]),
+            "dynamic_code_findings": (("import ctypes\n"                               # 1
+                                      "from ctypes import CDLL\n"                     # 2
+                                      "import json\n"), [1, 2]),
+        }
+        for rule, (source, expected) in cases.items():
+            with self.subTest(regra=rule):
+                found = getattr(self.rules, rule)(source, DOCTOR_NAME)
+                self.assertEqual(sorted(set(lines_of(found))), expected, "\n".join(found))
+        everything = "\n".join(source for source, _ in cases.values())
+        self.assertTrue(self.rules.all_findings(everything, DOCTOR_NAME))
 
     def test_findings_carry_file_line_and_rule(self):
         """SPEC-0061:UT-06 (formato "<arquivo>:<linha> — <regra> — <achado>")"""
