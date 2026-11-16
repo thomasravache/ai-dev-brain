@@ -1,4 +1,5 @@
-"""Testes de arquitetura do servidor MCP (ADR-0017, SPEC-0054:UT-07, SPEC-0059:UT-05, SPEC-0060:UT-05).
+"""Testes de arquitetura do servidor MCP (ADR-0017, ADR-0019, SPEC-0054:UT-07, SPEC-0059:UT-05, SPEC-0060:UT-05,
+SPEC-0061:UT-08).
 Run: python3 -m unittest discover -s mcp/tests -p test_architecture.py
 
 Cada regra é testada contra um exemplo que a viola e contra o código real de mcp/fermion_mcp.py:
@@ -9,7 +10,9 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de m
   SPEC-0059, SPEC-0060): nenhum texto aponta para a CLI de outra skill nem cita outro script, e cada tool, rodada
   de verdade com subprocess.run substituído, abre só `<python> <raiz>/skills/boson-atlas/scripts/atlas.py ...`
   (atlas_*), `<python> <raiz>/skills/photon-brain/scripts/brain.py ...` (brain_*) ou
-  `<python> <raiz>/skills/gluon-spec/scripts/spec_graph.py --root <projeto> ...` (sdd_*).
+  `<python> <raiz>/skills/gluon-spec/scripts/spec_graph.py --root <projeto> ...` (sdd_*), ou
+  `<python> <raiz>/scripts/fermion_doctor.py --project <projeto> --json` (fermion_doctor, SPEC-0061, ADR-0019), que
+  também nunca é importado.
 """
 import os
 import subprocess
@@ -31,6 +34,7 @@ from helpers import (
     BRAIN_TOOLS,
     MCP,
     PROJECT_ENV,
+    REPO,
     SDD_CLI,
     SDD_TOOLS,
     SERVER,
@@ -457,6 +461,89 @@ class SddBoundaryTest(unittest.TestCase):
                 self.assertEqual(Path(argv[1]).resolve(), clis[name.split("_")[0]].resolve(), argv)
                 if name.startswith("sdd_"):
                     self.assertEqual(argv[2:4], ["--root", "/p"], argv)
+                self.assertFalse(kwargs.get("shell", False))
+
+
+class DoctorBoundaryTest(unittest.TestCase):
+    """SPEC-0061:UT-08 — a regra do ADR-0017 passa a aceitar scripts/fermion_doctor.py (Emenda v3 da SPEC-0054,
+    ADR-0019): processo só para as três CLIs e o doctor; o doctor nunca é importado; sem shell."""
+
+    def test_doctor_script_is_accepted_and_other_scripts_are_not(self):
+        """SPEC-0061:UT-08 (fermion_doctor.py aceito; outro script de scripts/ continua acusado)"""
+        source = (
+            "DOCTOR = ('scripts', 'fermion_doctor.py')\n"
+            "TEXT = 'scripts/fermion_doctor.py não respondeu'\n"
+            "SDD = ('skills', 'gluon-spec', 'scripts', 'spec_graph.py')\n"
+            "OTHER = ('scripts', 'fermion_update.py')\n"
+            "HOOK = 'hooks/session_start.py'\n"
+        )
+        findings = script_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (4, 5)], report(findings))
+
+    def test_importing_the_doctor_is_reported(self):
+        """SPEC-0061:UT-08 (o doctor só por processo)"""
+        source = (
+            "import json\n"
+            "import fermion_doctor\n"
+            "from fermion_doctor import main\n"
+            "from scripts import fermion_doctor\n"
+            "import scripts.fermion_doctor\n"
+        )
+        findings = import_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (2, 3, 4, 5)],
+                         report(findings))
+        loader = "import runpy\nrunpy.run_path('scripts/fermion_doctor.py')\n"
+        findings = dynamic_code_findings(loader, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:2"], report(findings))
+
+    def test_doctor_process_outside_run_cli_or_with_shell_is_reported(self):
+        """SPEC-0061:UT-08"""
+        source = (
+            "import subprocess\n"
+            "def run_cli(argv, timeout):\n"
+            "    subprocess.run(argv, check=False)\n"
+            "    subprocess.run('python3 fermion_doctor.py --json', shell=True, check=False)\n"
+            "def fermion_doctor():\n"
+            "    subprocess.run(['python3', 'scripts/fermion_doctor.py', '--json'], check=False)\n"
+        )
+        self.assertEqual([f.split(" — ")[0] for f in shell_findings(source, NAME)], [f"{NAME}:4"])
+        findings = process_findings(source, NAME, ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:6"], report(findings))
+
+    def test_server_has_no_finding(self):
+        """SPEC-0061:UT-08 (código real sem achado)"""
+        source = server_source()
+        findings = (script_findings(source, NAME) + other_cli_findings(source, NAME)
+                    + process_findings(source, NAME, ALLOWED_PROCESS_FUNCTIONS) + shell_findings(source, NAME)
+                    + import_findings(source, NAME) + dynamic_code_findings(source, NAME))
+        self.assertEqual(findings, [], report(findings))
+
+    def test_every_tool_opens_only_its_cli_and_the_doctor_opens_the_doctor(self):
+        """SPEC-0061:UT-08 (comportamento: fermion_doctor → scripts/fermion_doctor.py --project /p --json)"""
+        module = server_module()
+        done = subprocess.CompletedProcess(["x"], 0, stdout='{"plugin_versions": {}, "findings": []}', stderr="")
+        names = TOOLS + BRAIN_TOOLS + SDD_TOOLS + ("fermion_doctor",)
+        clis = {"atlas": ATLAS_CLI, "brain": BRAIN_CLI, "sdd": SDD_CLI,
+                "fermion": REPO / "scripts" / "fermion_doctor.py"}
+        arguments = {**VALID_ARGUMENTS, "fermion_doctor": {}}
+        with mock.patch.dict(os.environ, {PROJECT_ENV: "/p"}), \
+                mock.patch.object(module.subprocess, "run", return_value=done) as run, \
+                mock.patch.object(module.subprocess, "Popen", side_effect=AssertionError("Popen não é usado")):
+            server = attr("Server")()
+            for index, name in enumerate(names, 1):
+                with self.subTest(tool=name):
+                    response = server.handle(call(name, arguments[name], id=index)) or {}
+                    self.assertIn("result", response, f"{name}: {response}")
+                    self.assertIs(response["result"].get("isError"), False, f"{name}: {response}")
+        self.assertEqual(run.call_count, len(names))
+        for name, (args, kwargs) in zip(names, run.call_args_list):
+            argv = args[0] if args else kwargs.get("args")
+            with self.subTest(tool=name):
+                self.assertIsInstance(argv, list)
+                self.assertTrue(Path(argv[0]).name.startswith("python"), argv)
+                self.assertEqual(Path(argv[1]).resolve(), clis[name.split("_")[0]].resolve(), argv)
+                if name == "fermion_doctor":
+                    self.assertEqual(argv[2:], ["--project", "/p", "--json"], argv)
                 self.assertFalse(kwargs.get("shell", False))
 
 

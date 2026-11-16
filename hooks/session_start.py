@@ -2,7 +2,9 @@
 
 Lê o JSON do hook no stdin (só o "cwd"), roda só comandos de leitura das CLIs do próprio plugin e imprime
 `hookSpecificOutput.additionalContext` com até três blocos: o `status` do SDD (quando o projeto tem
-docs/specs/sdd-config.yml), a linha do atlas e a linha do segundo cérebro (quando `config --json` sai com 0).
+docs/specs/sdd-config.yml), a linha do atlas e a linha do segundo cérebro (quando `config --json` sai com 0). Depois
+deles, o bloco "Instalação desatualizada" quando o doctor do plugin (scripts/fermion_doctor.py, SPEC-0061, ADR-0019)
+tem achado.
 Prazo de 10 s por CLI e 20 s no total (Emenda v2). Sempre sai com 0: CLI ou cwd que falha tira só o bloco dela e
 vira uma linha de diagnóstico no stderr. Só stdlib, Python 3.9+.
 """
@@ -17,17 +19,20 @@ SKILLS = PLUGIN_ROOT / "skills"
 SPEC_GRAPH = SKILLS / "gluon-spec" / "scripts" / "spec_graph.py"
 ATLAS = SKILLS / "boson-atlas" / "scripts" / "atlas.py"
 BRAIN = SKILLS / "photon-brain" / "scripts" / "brain.py"
+DOCTOR = PLUGIN_ROOT / "scripts" / "fermion_doctor.py"
 
 CLI_TIMEOUT = 10
 TOTAL_TIMEOUT = 20
 NOT_CONFIGURED = 3
 SDD_LIMIT = 6000
 CONTEXT_LIMIT = 8000
+DOCTOR_LIMIT = 1500
 
 SDD_HEADER = "## SDD (gluon-spec)\n"
 CUT_NOTICE = "… (cortado; rode `status`)"
 ATLAS_LINE = ("Atlas da organização (boson-atlas) configurado nesta máquina: para contexto de sistemas, use a skill "
               "boson-atlas ou a tool MCP atlas_context.")
+DOCTOR_HEADER = "## Instalação desatualizada (fermion)\n"
 BRAIN_LINE = ("Segundo cérebro (photon-brain) configurado nesta máquina: para notas e decisões do usuário, use a "
               "skill photon-brain.")
 
@@ -133,6 +138,45 @@ def configured_line(runner, deadline, script, line, cwd):
     raise Unavailable(f"config saiu com {result.returncode}")
 
 
+def doctor_lines(stdout):
+    """Uma linha "- <detail> → <fix>" por achado do `--json` do doctor; Unavailable quando o JSON não serve."""
+    try:
+        data = json.loads(stdout or "")
+    except ValueError:
+        raise Unavailable("saída do doctor não é JSON") from None
+    findings = data.get("findings") if isinstance(data, dict) else None
+    if not isinstance(findings, list):
+        raise Unavailable("saída do doctor sem findings")
+    lines = []
+    for finding in findings:
+        detail = finding.get("detail") if isinstance(finding, dict) else None
+        fix = finding.get("fix") if isinstance(finding, dict) else None
+        if not isinstance(detail, str) or not isinstance(fix, str):
+            raise Unavailable("achado do doctor sem detail ou fix")
+        lines.append(f"- {' '.join(detail.split())} → {' '.join(fix.split())}")
+    return lines
+
+
+def doctor_block(runner, deadline, project):
+    """Bloco do doctor com até DOCTOR_LIMIT caracteres; o que não cabe vira "… e mais N". None sem achado."""
+    if project is None:
+        return None
+    result = call(runner, deadline, DOCTOR, ["--project", project, "--json"], project)
+    if result.returncode != 0:
+        raise Unavailable(f"exit {result.returncode}")
+    lines = doctor_lines(result.stdout)
+    if not lines:
+        return None
+    block = DOCTOR_HEADER.rstrip("\n")
+    for shown, line in enumerate(lines):
+        rest = len(lines) - shown - 1
+        more = f"\n… e mais {rest}" if rest else ""
+        if len(block) + 1 + len(line) + len(more) > DOCTOR_LIMIT:
+            return block + f"\n… e mais {len(lines) - shown}"
+        block += "\n" + line
+    return block
+
+
 def report(stderr, name, error):
     try:
         print(f"session_start: {name} indisponível ({error})", file=stderr)
@@ -163,9 +207,18 @@ def main(stdin=None, stdout=None, stderr=None, runner=run_cli, clock=time.monoto
             continue
         if block:
             blocks.append(block)
+    try:
+        doctor = doctor_block(runner, deadline, cli_cwd)
+    except Unavailable as error:
+        report(stderr, "Doctor", error)
+        doctor = None
 
-    if blocks:
-        context = "\n\n".join(blocks)[:CONTEXT_LIMIT]
+    if blocks or doctor:
+        context = "\n\n".join(blocks)
+        if doctor:  # o corte dos 8.000 cai nos blocos da SPEC-0058, nunca no aviso
+            room = CONTEXT_LIMIT - len(doctor) - (2 if context else 0)
+            context = (context[:room] + "\n\n" if context else "") + doctor
+        context = context[:CONTEXT_LIMIT]
         output = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
         try:
             stdout.write(json.dumps(output, ensure_ascii=False) + "\n")

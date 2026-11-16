@@ -4,9 +4,9 @@
 
 ## Saúde
 
-- Validação (G0): **2 erro(s), 21 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 1, in-progress 1, implemented 53
-- Impedimentos: **0 aberto(s)**, 27 resolvido(s)
+- Validação (G0): **2 erro(s), 19 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 2, in-progress 1, implemented 54
+- Impedimentos: **0 aberto(s)**, 28 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -30,9 +30,8 @@ Perfil: **minimo**
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0064 | photon-brain: título de nota confidencial fora do log.md na busca e no contexto | lite/S | in-progress | 🔄 em andamento |  |
-| 2 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0064 |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0064 |
-| 3 | SPEC-0062 | photon-brain: regra de processo com alias e imports de nomes | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0064; saiu da onda 2: arquivos em comum com SPEC-0061, SPEC-0028 |
+| 3 | SPEC-0062 | photon-brain: regra de processo com alias e imports de nomes | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0064; saiu da onda 2: arquivos em comum com SPEC-0028 |
 
 ## Épicos
 
@@ -42,7 +41,7 @@ Perfil: **minimo**
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
 | SPEC-0029 | org-atlas: mapa da organização para agentes | implemented | 10/10 implementadas |
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
-| SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | approved | 7/8 implementadas |
+| SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | implemented | 8/8 implementadas |
 
 ## Grafo de Dependências
 
@@ -57,14 +56,7 @@ flowchart LR
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
-  subgraph E0031["SPEC-0031 · Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"]
-    S0058["SPEC-0058<br/>Hook de início de sessão e comando de e…"]:::implemented
-    S0060["SPEC-0060<br/>Servidor MCP: tools sdd de leitura do p…"]:::implemented
-    S0061["SPEC-0061<br/>Auto-melhoria: aviso de instalação anti…"]:::approved
-  end
   S0023 --> S0028
-  S0058 --> S0061
-  S0060 --> S0061
   S0046 --> S0062
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
@@ -107,7 +99,7 @@ flowchart LR
 | [SPEC-0028](SPEC-0028-second-brain-padroes-de-copia-de-conflito-reais-por-provedor.md) | second-brain: padrões de cópia de conflito reais por provedor | lite | feature | proposed | 2026-10-30 | — | SPEC-0023 | — |
 | [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | implemented | 2026-10-30 | — | — | — |
 | [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | org-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | proposed | 2026-10-30 | — | SPEC-0029 | — |
-| [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | approved | 2026-10-30 | — | SPEC-0029 | — |
+| [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | implemented | 2026-10-30 | — | SPEC-0029 | — |
 | [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | implemented | 2026-10-30 | SPEC-0029 | — | — |
 | [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
 | [SPEC-0034](SPEC-0034-org-atlas-coletores-generic-e-github.md) | org-atlas: coletores generic e GitHub | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | SPEC-0033@1 |
@@ -136,7 +128,7 @@ flowchart LR
 | [SPEC-0058](SPEC-0058-hook-de-inicio-de-sessao-e-comando-de-entrada-unica-do-plugi.md) | Hook de início de sessão e comando de entrada única do plugin | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0053, SPEC-0054 | — |
 | [SPEC-0059](SPEC-0059-servidor-mcp-tools-brain-de-leitura-do-segundo-cerebro.md) | Servidor MCP: tools brain de leitura do segundo cérebro | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0058 | — |
 | [SPEC-0060](SPEC-0060-servidor-mcp-tools-sdd-de-leitura-do-processo.md) | Servidor MCP: tools sdd de leitura do processo | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0054, SPEC-0059 | — |
-| [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | approved | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
+| [SPEC-0061](SPEC-0061-auto-melhoria-aviso-de-instalacao-antiga-com-o-comando-de-at.md) | Auto-melhoria: aviso de instalação antiga com o comando de atualização | full | feature | implemented | 2026-11-13 | SPEC-0031 | SPEC-0058, SPEC-0060 | — |
 | [SPEC-0062](SPEC-0062-photon-brain-regra-de-processo-com-alias-e-imports-de-nomes.md) | photon-brain: regra de processo com alias e imports de nomes | lite | fix | proposed | 2026-11-15 | — | SPEC-0046 | — |
 | [SPEC-0064](SPEC-0064-photon-brain-titulo-de-nota-confidencial-fora-do-log-md-na-b.md) | photon-brain: título de nota confidencial fora do log.md na busca e no contexto | lite | fix | in-progress | 2026-11-16 | — | — | — |
 

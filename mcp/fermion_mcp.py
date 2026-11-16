@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Servidor MCP local do plugin fermion (SPEC-0054, SPEC-0059, SPEC-0060, ADR-0017): tools de leitura do atlas da
-organização (atlas_*), do segundo cérebro (brain_*) e do processo SDD do projeto (sdd_*).
+"""Servidor MCP local do plugin fermion (SPEC-0054, SPEC-0059, SPEC-0060, SPEC-0061, ADR-0017, ADR-0019): tools de
+leitura do atlas da organização (atlas_*), do segundo cérebro (brain_*), do processo SDD do projeto (sdd_*) e o
+doctor de instalação antiga do plugin (fermion_doctor).
 
 JSON-RPC 2.0 sobre stdio, uma mensagem por linha. Atende as duas eras do protocolo MCP:
 - legada: handshake `initialize` (versões 2025-11-25, 2025-06-18, 2025-03-26 e 2024-11-05);
@@ -11,7 +12,8 @@ Cada tool vira uma linha de comando da CLI de uma skill (`atlas.py` da boson-atl
 servidor não importa código das skills e não interpreta a saída da CLI; só expõe leitura (confirmar ou rejeitar
 convenção é de pessoas, ADR-0012) e nunca pede notas confidenciais do cérebro (ADR-0014). Toda opção com valor
 das brain_* vai colada (--opção=valor) e o texto livre só depois de `--`. As sdd_* nunca gravam (sem --ack, --apply,
---create nem --out) e o projeto vem de CLAUDE_PROJECT_DIR ou do cwd do servidor, lidos a cada chamada.
+--create nem --out) e o projeto vem de CLAUDE_PROJECT_DIR ou do cwd do servidor, lidos a cada chamada. A
+fermion_doctor roda `scripts/fermion_doctor.py --project <projeto> --json` do plugin, que só lê (ADR-0019).
 
 stdout é reservado ao protocolo; diagnóstico vai para o stderr, sem argumentos nem saída da CLI.
 Só biblioteca padrão, Python 3.9+.
@@ -28,6 +30,7 @@ SERVER_NAME = "fermion"
 CLI_RELATIVE = ("skills", "boson-atlas", "scripts", "atlas.py")
 BRAIN_CLI_RELATIVE = ("skills", "photon-brain", "scripts", "brain.py")
 SDD_CLI_RELATIVE = ("skills", "gluon-spec", "scripts", "spec_graph.py")
+DOCTOR_RELATIVE = ("scripts", "fermion_doctor.py")  # SPEC-0061, ADR-0019
 PROJECT_ENV = "CLAUDE_PROJECT_DIR"
 CLI_TIMEOUT = 120  # segundos por chamada da CLI
 
@@ -57,6 +60,7 @@ BRAIN_REPORT_TOOLS = ("brain_doctor", "brain_lint")  # exit 1 com relatório JSO
 SDD_TIMEOUT_TEXT = f"spec_graph.py não respondeu em {CLI_TIMEOUT} s"
 SDD_REPORT_TOOLS = ("sdd_validate",)  # exit 1 = "há ERRO na validação"
 SDD_MAX_IDS = 20
+DOCTOR_TIMEOUT_TEXT = f"fermion_doctor.py não respondeu em {CLI_TIMEOUT} s"
 SPEC_ID_PATTERN = "^SPEC-[0-9]{4,}$"
 ANY_ID_PATTERN = "^(SPEC|ADR)-[0-9]{4,}$"
 
@@ -268,6 +272,14 @@ TOOLS = (
         "inputSchema": _object(),
         "annotations": READ_ONLY,
     },
+    {
+        "name": "fermion_doctor",
+        "description": ("Confere se há instalação antiga ao lado do plugin fermion (cópias de skills com o nome "
+                        "antigo ou mais velhas, processo SDD ou atlas do projeto desatualizados) e traz o comando de "
+                        "atualização de cada achado. Só lê; nada é atualizado sozinho."),
+        "inputSchema": _object(),
+        "annotations": READ_ONLY,
+    },
 )
 TOOLS_BY_NAME = {tool["name"]: tool for tool in TOOLS}
 
@@ -468,6 +480,8 @@ def command_args(name, arguments):
         return brain_command_args(name, arguments)
     if name.startswith("sdd_"):
         return ["--root", project_dir()] + sdd_command_args(name, arguments)
+    if name == "fermion_doctor":
+        return ["--project", project_dir(), "--json"]
     if name == "atlas_config":
         return ["config", "--json"]
     if name == "atlas_doctor":
@@ -515,6 +529,14 @@ def map_output(name, completed):
     """CallToolResult a partir do exit code e da saída da CLI (seção 6 da SPEC-0054 e da SPEC-0059)."""
     code = completed.returncode
     stdout = completed.stdout or ""
+    if name == "fermion_doctor":  # o doctor sempre sai com 0; outro exit, ou saída sem findings, é falha
+        report = _json_object(stdout)
+        if code == 0 and report is not None and isinstance(report.get("findings"), list):
+            return _text_result(stdout, False, report)
+        if code == 0:
+            return _text_result(_with_stderr("fermion_doctor.py saiu com 0 sem um objeto JSON com findings",
+                                             completed.stderr), True)
+        return _text_result(_with_stderr(f"fermion_doctor.py saiu com o código {code}", completed.stderr), True)
     if name.startswith("sdd_"):  # texto da CLI, sem structuredContent (seção 6 da SPEC-0060)
         if code == 0 or (code == LINT_REPORT_EXIT and name in SDD_REPORT_TOOLS):
             return _text_result(stdout, False)
@@ -543,6 +565,7 @@ class Server:
         self.cli = self.plugin_root.joinpath(*CLI_RELATIVE)
         self.brain_cli = self.plugin_root.joinpath(*BRAIN_CLI_RELATIVE)
         self.sdd_cli = self.plugin_root.joinpath(*SDD_CLI_RELATIVE)
+        self.doctor = self.plugin_root.joinpath(*DOCTOR_RELATIVE)
         self.server_info = {"name": SERVER_NAME, "version": plugin_version(self.plugin_root)}
         self.legacy_version = None  # versão negociada no initialize (era legada)
 
@@ -639,6 +662,7 @@ class Server:
             "atlas": (self.cli, "do atlas", TIMEOUT_TEXT),
             "brain": (self.brain_cli, "do segundo cérebro", BRAIN_TIMEOUT_TEXT),
             "sdd": (self.sdd_cli, "do processo SDD", SDD_TIMEOUT_TEXT),
+            "fermion": (self.doctor, "do doctor do plugin", DOCTOR_TIMEOUT_TEXT),
         }[family]
         if not cli.is_file():
             return _text_result(f"CLI {owner} não encontrada em {cli}", True)
