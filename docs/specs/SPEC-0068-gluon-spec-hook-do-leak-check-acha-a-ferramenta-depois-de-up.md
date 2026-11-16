@@ -4,7 +4,7 @@ title: "gluon-spec: hook do leak-check acha a ferramenta depois de update do plu
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-16
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/assets/hook
 adrs: [ADR-0019]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-16
 ---
 
 # SPEC-0068 — gluon-spec: hook do leak-check acha a ferramenta depois de update do plugin ou remoção da cópia
