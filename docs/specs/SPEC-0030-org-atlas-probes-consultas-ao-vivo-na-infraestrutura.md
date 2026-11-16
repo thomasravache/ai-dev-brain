@@ -66,11 +66,10 @@ O atlas (SPEC-0029) é o que torna isso útil: ele sabe que o serviço X é o de
 <!-- Uma linha por spec filha. As colunas de dependência são informativas: a fonte da verdade é o frontmatter de cada filha. -->
 | Spec | Título | Tier | Tipo | Tamanho | Depende de | Consome contrato de |
 |---|---|---|---|---|---|---|
-| a criar | Núcleo do `probe`: configuração, lista de verbos, ambientes, confirmação em produção, redaction e registro | full | feature | M | SPEC-0029 | — |
-| a criar | Probes de dados | full | feature | M | núcleo | — |
-| a criar | Probes de nuvem | full | feature | M | núcleo | — |
-| a criar | Probes de runtime (cluster e logs) | full | feature | M | núcleo | — |
-| a criar | Probes de observabilidade | full | feature | S | núcleo | — |
+| a criar | Núcleo do `probe` e contrato de adaptador agnóstico: configuração, lista de verbos, ambientes, confirmação em produção, redaction e registro local | full | feature | M | SPEC-0029 | — |
+| a criar | Adaptador de referência de dados (SQL só leitura) | full | feature | M | núcleo | contrato do núcleo |
+| a criar | Adaptador de referência de runtime (Kubernetes: get, describe, logs, events) | full | feature | M | núcleo | contrato do núcleo |
+| depois | Adaptadores de nuvem e de observabilidade | full | feature | M | núcleo | contrato do núcleo |
 
 ## 5. Estratégia de Entrega
 - **Ambientes:** N/A, sem deploy.
@@ -96,9 +95,9 @@ O atlas (SPEC-0029) é o que torna isso útil: ele sabe que o serviço X é o de
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
 - [x] Probe é outra skill? — Não: comando da `org-atlas`, porque depende do mapa e da configuração dela; com ADR próprio e desligado por padrão (thomas, 2026-10-30)
 - [x] Nome da capacidade? — **Muon** (múons "radiografaram" a Grande Pirâmide sem mover uma pedra: ver por dentro sem alterar); o comando continua `probe`; se um dia virar skill, `muon-probe`; nomes finais na SPEC-0031 (thomas, 2026-10-30)
-- [ ] Produção pode ser alvo de probe, mesmo com confirmação, ou só réplica e staging? (thomas)
-- [ ] Onde fica o registro de probes: só local ou também no atlas (sem resultados)? (thomas)
-- [ ] Quais categorias entram primeiro? (thomas)
+- [x] Produção pode ser alvo de probe, mesmo com confirmação, ou só réplica e staging? — Sim, só com confirmação humana a cada consulta; o padrão continua réplica ou staging e tudo vem desligado (thomas, 2026-11-16)
+- [x] Onde fica o registro de probes: só local ou também no atlas (sem resultados)? — Só local, na máquina de quem consulta; o atlas é compartilhado e versionado e não recebe o registro (thomas, 2026-11-16)
+- [x] Quais categorias entram primeiro? — Um contrato de adaptador agnóstico (no modelo do `collector@1`) e dois adaptadores de referência: dados por SQL só leitura e runtime por Kubernetes; nuvem e observabilidade entram depois, como adaptadores. A skill segue agnóstica de provedor (thomas, 2026-11-16)
 
 ## 9. Aprovação (H1)
 Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com ele. Registrada no frontmatter (`approved_by`, `approved_at`) do épico e de cada filha.
