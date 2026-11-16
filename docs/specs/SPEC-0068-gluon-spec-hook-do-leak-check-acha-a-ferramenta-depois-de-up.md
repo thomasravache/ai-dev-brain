@@ -54,10 +54,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Fase 1 (test-writer): CH-01, UT-01, UT-02, IT-01 em `skills/gluon-spec/tests/test_private_mode.py` e o aviso do doctor em `tests/plugin/test_fermion_doctor.py`, com `CLAUDE_CONFIG_DIR`/`HOME` temporários — commit `test(...)` vermelho
-- [ ] Fase 2 (implementer): busca no template `pre-push-leak`, `private hooks --refresh [--scan]`, aviso em `private status` e check `broken-leak-hook` no `fermion_doctor`; `tools/sdd/` vendorizado, CHANGELOG, `references/private-mode.md`, versão do plugin
-- [ ] Fase 3 (reviewer): G4 independente
-- [ ] Depois do merge: `private hooks --refresh --scan ~/dev/repos` nesta máquina (com o ok do thomas)
+- [x] Fase 1 (test-writer): CH-01, UT-01, UT-02, IT-01 em `skills/gluon-spec/tests/test_private_mode.py` e o aviso do doctor em `tests/plugin/test_fermion_doctor.py`, com `CLAUDE_CONFIG_DIR`/`HOME` temporários — commit `test(...)` vermelho
+- [x] Fase 2 (implementer): busca no template `pre-push-leak`, `private hooks --refresh [--scan]`, aviso em `private status` e check `broken-leak-hook` no `fermion_doctor`; `tools/sdd/` vendorizado, CHANGELOG, `references/private-mode.md`, versão do plugin
+- [x] Fase 3 (reviewer): G4 independente
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -117,6 +116,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 N/A — plugin 2026.11.14, PR #41.
 
 ### Pendências
+- Depois do merge, nesta máquina: `private hooks --refresh --scan ~/dev/repos` e conferir órfãos de `private off` (fora do repositório; com o ok do thomas).
 - Minor da revisão: `--refresh --scan` não lista hooks órfãos de repositórios que saíram do modo privado; coberto à mão no passo pós-merge nesta máquina.
 - Nits: `private hooks` sem `--refresh` termina em traceback com caminho inseguro; exceção não tratada na ferramenta sai 1 e vira "marcas"; concordância "do ferramenta" em `leak_hook_problem`.
 - `spec_graph.py pr --title` gerou título com 112 caracteres (o `pr-check` limita a 100); ajustado à mão no PR.
