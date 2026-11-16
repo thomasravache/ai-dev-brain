@@ -1,8 +1,8 @@
 # Servidor MCP `fermion`
 
-Servidor MCP local do plugin `fermion` (SPEC-0054, SPEC-0059, SPEC-0060, ADR-0017). Arquivo único, `mcp/fermion_mcp.py`, só biblioteca padrão, Python 3.9+, transporte stdio.
+Servidor MCP local do plugin `fermion` (SPEC-0054, SPEC-0059, SPEC-0060, SPEC-0061, ADR-0017, ADR-0019). Arquivo único, `mcp/fermion_mcp.py`, só biblioteca padrão, Python 3.9+, transporte stdio.
 
-Ele expõe o atlas da organização (`atlas_*`), o segundo cérebro (`brain_*`) e o processo SDD do projeto (`sdd_*`) como tools de leitura. Cada tool chama a CLI da skill (`skills/boson-atlas/scripts/atlas.py ... --json`, `skills/photon-brain/scripts/brain.py ... --json` ou `skills/gluon-spec/scripts/spec_graph.py --root <projeto> ...`) e devolve o resultado dela, sem interpretar o conteúdo. A CLI continua sendo a única implementação (ADR-0001).
+Ele expõe o atlas da organização (`atlas_*`), o segundo cérebro (`brain_*`), o processo SDD do projeto (`sdd_*`) e o doctor de instalação antiga do plugin (`fermion_doctor`) como tools de leitura. Cada tool chama a CLI da skill (`skills/boson-atlas/scripts/atlas.py ... --json`, `skills/photon-brain/scripts/brain.py ... --json` ou `skills/gluon-spec/scripts/spec_graph.py --root <projeto> ...`) e devolve o resultado dela, sem interpretar o conteúdo. A CLI continua sendo a única implementação (ADR-0001).
 
 ## Tools
 
@@ -29,13 +29,15 @@ Todas têm `annotations.readOnlyHint: true` e `inputSchema` fechado (`additional
 | `sdd_waves` | nenhum | `spec_graph.py --root <projeto> waves` |
 | `sdd_report` | `id` (`SPEC-NNNN`, obrigatório) | `spec_graph.py --root <projeto> report <id>` |
 | `sdd_whats_new` | nenhum | `spec_graph.py --root <projeto> whats-new` |
+| `fermion_doctor` | nenhum | `scripts/fermion_doctor.py --project <projeto> --json` |
 
-Nas `sdd_*`, `<projeto>` é o valor de `CLAUDE_PROJECT_DIR` quando a variável não está vazia, senão a pasta corrente do servidor. Os dois são lidos a cada chamada, nunca vêm do agente.
+Nas `sdd_*` e na `fermion_doctor`, `<projeto>` é o valor de `CLAUDE_PROJECT_DIR` quando a variável não está vazia, senão a pasta corrente do servidor. Os dois são lidos a cada chamada, nunca vêm do agente.
 
 Como o resultado é montado:
 
 - exit 0, exit 1 no `atlas_lint` e exit 1 no `brain_doctor` e no `brain_lint` com stdout objeto JSON (que significa "há ERRO no relatório"): o stdout da CLI vai em `content` como texto, e também em `structuredContent` quando é um objeto JSON. `isError` fica `false`.
 - nas `sdd_*`, exit 0 e exit 1 no `sdd_validate` (que significa "há ERRO na validação"): o stdout da CLI vai em `content` como texto, sem `structuredContent`, e `isError` fica `false`. Qualquer outro exit, inclusive exit 1 nas demais `sdd_*`, dá `isError: true`, com o código e o stderr da CLI. O timeout dá "spec_graph.py não respondeu em 120 s".
+- na `fermion_doctor`, exit 0: o JSON do doctor (`plugin_versions` e `findings`, cada achado com `check`, `level`, `path`, `detail` e `fix`) vai em `content` como texto e em `structuredContent`, e `isError` fica `false`, com ou sem achado. O doctor sempre sai com 0, então qualquer outro exit dá `isError: true`, com o código e o stderr; o timeout dá "fermion_doctor.py não respondeu em 120 s".
 - exit 1 sem relatório JSON (erro de leitura do vault) e exit 2 nas `brain_*` (nota não encontrada, nota confidencial recusada, regra desconhecida no lint): `isError: true`, com o stderr da CLI.
 - exit 3: `isError: true`, com a orientação de onboarding ("rode a skill boson-atlas" ou "rode a skill photon-brain") e o stderr da CLI.
 - outro exit: `isError: true`, com o código e o stderr da CLI.
@@ -50,7 +52,8 @@ Argumento fora do schema ou tool desconhecida recebem o erro JSON-RPC `-32602`, 
 - Nas `brain_*`, toda opção com valor vai colada (`--note=<valor>`, `--context=<valor>`), e o texto livre (`query`, `note` do `brain_links`) só depois de `--`. Assim nenhum valor vira opção própria.
 - Notas confidenciais nunca saem por MCP: o servidor nunca passa `--include-confidential` e nenhuma tool aceita pedir isso (ADR-0014). A CLI omite essas notas e recusa `links` e `related` por nome de nota confidencial. Nota confidencial só sai pela CLI, quando a pessoa pede.
 - Nas `sdd_*`, os ids só passam se casam com `SPEC-NNNN` (ou `ADR-NNNN` no `sdd_validate`), então nenhum vira opção. O servidor nunca passa `--ack`, `--apply`, `--create` nem `--out`: nenhuma `sdd_*` grava no projeto.
-- O processo externo só é aberto na função `run_cli`. O servidor não importa código das skills. Os testes de arquitetura do ADR-0017 (`mcp/tests/test_architecture.py`) garantem as duas coisas.
+- A `fermion_doctor` não aceita argumento nenhum. O doctor só lê arquivos: nunca grava, apaga nem move nada, não abre processo nem usa rede, e nunca atualiza sozinho o que está velho; o achado traz o comando, e quem roda é a pessoa (ADR-0019).
+- O processo externo só é aberto na função `run_cli`, e só para as CLIs das skills e o `scripts/fermion_doctor.py`. O servidor não importa código das skills nem o doctor. Os testes de arquitetura do ADR-0017 (`mcp/tests/test_architecture.py`) garantem as duas coisas.
 - O stdout é só do protocolo. O stderr recebe uma linha por erro, sem argumentos nem saída da CLI. O nome do método aparece cortado no primeiro caractere de controle e truncado em 64 caracteres, para que ninguém forje linhas no log.
 
 ## Por que não há tools que gravam
