@@ -72,8 +72,8 @@ Cada CLI resolve a pasta de configuração assim: variável de ambiente (`BRAIN_
 - [ ] O `doctor` acusa o caminho antigo e mostra como migrar — teste a definir nas filhas
 
 ## 8. Questões em Aberto
-- [ ] Por quanto tempo o caminho antigo continua lido antes da remoção (sugestão do arquiteto: três versões mensais, anunciadas no CHANGELOG)? (thomas)
-- [ ] O `doctor` copia a configuração antiga para a nova quando a pessoa confirma, ou só mostra o comando de cópia (sugestão: só o comando, como o ADR-0019)? (thomas)
+- [x] Por quanto tempo o caminho antigo continua lido antes da remoção? — Três versões mensais, com a data da remoção anunciada no CHANGELOG de cada skill (thomas, 2026-11-16: segue o recomendado)
+- [x] O `doctor` copia a configuração antiga para a nova quando a pessoa confirma, ou só mostra o comando de cópia? — Só mostra o comando, como o ADR-0019 (thomas, 2026-11-16: segue o recomendado)
 
 ## 9. Aprovação (H1)
 Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com ele. Registrada no frontmatter (`approved_by`, `approved_at`) do épico e de cada filha.
