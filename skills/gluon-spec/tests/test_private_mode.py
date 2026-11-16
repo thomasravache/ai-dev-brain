@@ -1182,8 +1182,12 @@ class LeakHookToolLookupTest(PrivateTestCase):
     def test_missing_recorded_tool_falls_back_to_the_fermion_plugin(self):
         """SPEC-0068:UT-01 (a: gluon-spec do plugin fermion lido do installed_plugins.json, lista ou objeto)"""
         write_hook(self.e.repo, hook_text(self.missing_tool))
+        base = git(self.e.repo, "rev-parse", "HEAD", env=self.e.env).strip()
         for shape in ("lista", "objeto"):
             with self.subTest(valor=shape):
+                # cada forma parte do commit limpo inicial: o commit com marca recusado na forma anterior não vai
+                # junto no push "limpo" desta
+                git(self.e.repo, "reset", "-q", "--hard", base, env=self.e.env)
                 config = self.tmp / f"claude-{shape}"
                 install = self.tmp / f"cache-{shape}" / "fermion-lab" / "fermion" / "9.9.9"
                 tool = copy_skill(install / "skills" / "gluon-spec")
