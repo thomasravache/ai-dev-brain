@@ -1,13 +1,14 @@
-"""Testes de arquitetura do servidor MCP (ADR-0017, SPEC-0054:UT-07).
+"""Testes de arquitetura do servidor MCP (ADR-0017, SPEC-0054:UT-07, SPEC-0059:UT-05).
 Run: python3 -m unittest discover -s mcp/tests -p test_architecture.py
 
 Cada regra é testada contra um exemplo que a viola e contra o código real de mcp/fermion_mcp.py:
 - arquivo único: mcp/ tem só fermion_mcp.py como código (fora de tests/);
 - só biblioteca padrão; nenhum import de código das skills nem de tools/, nem carregamento dinâmico de código;
 - nenhum shell;
-- processo externo só na função executora run_cli, e só para a CLI do atlas: nenhum texto aponta para a CLI de
-  outra skill, e cada tool, rodada de verdade com subprocess.run substituído, abre só
-  `<python> <raiz>/skills/boson-atlas/scripts/atlas.py ...`.
+- processo externo só na função executora run_cli, e só para as CLIs aceitas (Emenda v3 da SPEC-0054,
+  SPEC-0059): nenhum texto aponta para a CLI de outra skill nem cita outro script, e cada tool, rodada de verdade
+  com subprocess.run substituído, abre só `<python> <raiz>/skills/boson-atlas/scripts/atlas.py ...` (atlas_*) ou
+  `<python> <raiz>/skills/photon-brain/scripts/brain.py ...` (brain_*).
 """
 import subprocess
 import unittest
@@ -19,9 +20,20 @@ from architecture_rules import (
     import_findings,
     other_cli_findings,
     process_findings,
+    script_findings,
     shell_findings,
 )
-from helpers import ATLAS_CLI, MCP, SERVER, TOOLS, attr, call, server_module
+from helpers import (
+    ATLAS_CLI,
+    BRAIN_CLI,
+    BRAIN_TOOLS,
+    MCP,
+    SERVER,
+    TOOLS,
+    attr,
+    call,
+    server_module,
+)
 
 ALLOWED_PROCESS_FUNCTIONS = ("run_cli",)
 NAME = "mcp/fermion_mcp.py"
@@ -31,6 +43,14 @@ VALID_ARGUMENTS = {
     "atlas_context": {"query": "api", "hops": 1, "limit": 3, "max_chars": 1000},
     "atlas_lint": {"only": ["stale"]},
     "atlas_curate_list": {"status": "confirmed"},
+    "brain_config": {},
+    "brain_doctor": {},
+    "brain_search": {"query": "api", "context": "college", "type": "note", "tag": "api", "limit": 3},
+    "brain_related": {"note": "Payments API", "limit": 3},
+    "brain_links": {"note": "Payments API"},
+    "brain_context": {"query": "api", "context": "college", "hops": 1, "limit": 3, "max_chars": 1000},
+    "brain_inbox_list": {},
+    "brain_lint": {"only": ["broken-link"]},
 }
 
 
@@ -193,7 +213,7 @@ class ProcessRulesTest(unittest.TestCase):
         self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (1, 3)], report(findings))
 
     def test_other_skill_clis_are_reported(self):
-        """SPEC-0054:UT-07"""
+        """SPEC-0054:UT-07 (Emenda v3: a CLI da photon-brain passa a ser aceita, SPEC-0059)"""
         source = (
             "ATLAS = 'skills/boson-atlas/scripts/atlas.py'\n"
             "SDD = 'skills/gluon-spec/scripts/spec_graph.py'\n"
@@ -202,7 +222,7 @@ class ProcessRulesTest(unittest.TestCase):
             "METHODS = ('tools/list', 'tools/call')\n"
         )
         findings = other_cli_findings(source, NAME)
-        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (2, 3, 4)],
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (2, 4)],
                          report(findings))
 
     def test_server_runs_processes_only_in_run_cli_and_only_for_the_atlas(self):
@@ -228,6 +248,100 @@ class ProcessRulesTest(unittest.TestCase):
             self.assertTrue(Path(argv[0]).name.startswith("python"), argv)
             self.assertEqual(Path(argv[1]).resolve(), ATLAS_CLI.resolve(), argv)
             self.assertFalse(kwargs.get("shell", False))
+
+
+class BrainBoundaryTest(unittest.TestCase):
+    """SPEC-0059:UT-05 — processo só para atlas.py e brain.py das skills; nada de skills/ importado; sem shell."""
+
+    def test_scripts_other_than_atlas_and_brain_are_reported(self):
+        """SPEC-0059:UT-05"""
+        source = (
+            "ATLAS = ('skills', 'boson-atlas', 'scripts', 'atlas.py')\n"
+            "BRAIN = ('skills', 'photon-brain', 'scripts', 'brain.py')\n"
+            "SDD = 'skills/gluon-spec/scripts/spec_graph.py'\n"
+            "OTHER = ('skills', 'photon-brain', 'scripts', 'backup.py')\n"
+            "TEXT = f'brain.py saiu com o código {1}'\n"
+            "SHELLY = f'{x}/run_me.py --json'\n"
+            "METHODS = ('tools/list', 'tools/call')\n"
+        )
+        findings = script_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (3, 4, 6)],
+                         report(findings))
+
+    def test_photon_brain_is_accepted_and_other_skills_are_not(self):
+        """SPEC-0059:UT-05"""
+        source = (
+            "BRAIN = 'skills/photon-brain/scripts/brain.py'\n"
+            "HINT = 'rode a skill photon-brain (onboarding)'\n"
+            "SDD = 'skills/gluon-spec/scripts/spec_graph.py'\n"
+            "OLD_BRAIN = 'skills/second-brain/scripts/brain.py'\n"
+            "OLD_SDD = 'skills/sdd-management/scripts/x'\n"
+            "TOOLS_DIR = 'tools/sdd'\n"
+        )
+        findings = other_cli_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (3, 4, 5, 6)],
+                         report(findings))
+
+    def test_importing_brain_code_is_reported(self):
+        """SPEC-0059:UT-05"""
+        source = (
+            "import json\n"
+            "import brain\n"
+            "from brain import search\n"
+            "from brain_support import fn\n"
+            "import photon_brain.scripts\n"
+        )
+        findings = import_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (2, 3, 4, 5)],
+                         report(findings))
+        loader = (
+            "import importlib.util, runpy\n"
+            "spec = importlib.util.spec_from_file_location('brain', 'skills/photon-brain/scripts/brain.py')\n"
+            "runpy.run_path('skills/photon-brain/scripts/brain.py')\n"
+        )
+        findings = dynamic_code_findings(loader, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:{n}" for n in (2, 3)], report(findings))
+
+    def test_shell_for_the_brain_cli_is_reported(self):
+        """SPEC-0059:UT-05"""
+        source = (
+            "import subprocess\n"
+            "def run_cli(argv, timeout):\n"
+            "    subprocess.run(argv, check=False)\n"
+            "    subprocess.run('python3 brain.py search --json -- x', shell=True, check=False)\n"
+        )
+        findings = shell_findings(source, NAME)
+        self.assertEqual([f.split(" — ")[0] for f in findings], [f"{NAME}:4"], report(findings))
+
+    def test_server_cites_only_the_accepted_scripts(self):
+        """SPEC-0059:UT-05 (código real sem achado)"""
+        source = server_source()
+        findings = (script_findings(source, NAME) + other_cli_findings(source, NAME)
+                    + process_findings(source, NAME, ALLOWED_PROCESS_FUNCTIONS) + shell_findings(source, NAME)
+                    + import_findings(source, NAME) + dynamic_code_findings(source, NAME))
+        self.assertEqual(findings, [], report(findings))
+
+    def test_every_tool_opens_only_the_atlas_or_the_brain_cli(self):
+        """SPEC-0059:UT-05 (comportamento: atlas_* abrem atlas.py e brain_* abrem brain.py, sem shell)"""
+        module = server_module()
+        done = subprocess.CompletedProcess(["x"], 0, stdout="{}", stderr="")
+        names = TOOLS + BRAIN_TOOLS
+        with mock.patch.object(module.subprocess, "run", return_value=done) as run, \
+                mock.patch.object(module.subprocess, "Popen", side_effect=AssertionError("Popen não é usado")):
+            server = attr("Server")()
+            for index, name in enumerate(names, 1):
+                with self.subTest(tool=name):
+                    response = server.handle(call(name, VALID_ARGUMENTS[name], id=index)) or {}
+                    self.assertIn("result", response, f"{name}: {response}")
+        self.assertEqual(run.call_count, len(names))
+        for name, (args, kwargs) in zip(names, run.call_args_list):
+            argv = args[0] if args else kwargs.get("args")
+            with self.subTest(tool=name):
+                self.assertIsInstance(argv, list)
+                self.assertTrue(Path(argv[0]).name.startswith("python"), argv)
+                expected = BRAIN_CLI if name.startswith("brain_") else ATLAS_CLI
+                self.assertEqual(Path(argv[1]).resolve(), expected.resolve(), argv)
+                self.assertFalse(kwargs.get("shell", False))
 
 
 if __name__ == "__main__":
