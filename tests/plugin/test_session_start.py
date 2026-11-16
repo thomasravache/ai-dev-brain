@@ -25,6 +25,14 @@ mcp/tests/architecture_rules.py (carregadas por caminho); a regra "processo só 
 
 IT-01 cria um projeto temporário com a CLI real da gluon-spec e roda o hook como processo, com HOME, XDG_CONFIG_HOME,
 ATLAS_CONFIG_HOME e BRAIN_CONFIG_HOME temporários: nunca toca a configuração real de quem roda.
+
+SPEC-0061 (ADR-0019): o hook também roda `<python> <PLUGIN_ROOT>/scripts/fermion_doctor.py --project <raiz do projeto>
+--json` (cwd = a mesma raiz das CLIs), dentro do mesmo prazo (timeout <= min(10, restante); sem tempo, pulado), e
+com achado acrescenta, depois dos blocos da SPEC-0058, o bloco "## Instalação desatualizada (fermion)\n" com uma linha
+"- <detail> → <fix>" por achado, no máximo 1.500 caracteres (o que não cabe vira a última linha "… e mais N"). Sem
+achado, nenhum bloco. Doctor que falha (exit diferente de 0, JSON ilegível, timeout, ausente) tira só esse bloco e vira
+a linha `session_start: Doctor indisponível (...)` no stderr. O FakeRunner responde ao doctor com zero achados por
+padrão, para que os testes da SPEC-0058 continuem valendo com o doctor no hook.
 """
 import ast
 import importlib.util
@@ -55,6 +63,9 @@ CLIS = {
     "brain.py": REPO / "skills" / "photon-brain" / "scripts" / "brain.py",
 }
 READ_COMMANDS = {"spec_graph.py": ["status"], "atlas.py": ["config", "--json"], "brain.py": ["config", "--json"]}
+DOCTOR = REPO / "scripts" / "fermion_doctor.py"  # SPEC-0061
+NO_FINDINGS = json.dumps({"plugin_versions": {"gluon-spec": "2026.11.3", "photon-brain": "2026.11.6",
+                                              "boson-atlas": "2026.11.6"}, "findings": []})
 
 SDD_HEADER = "## SDD (gluon-spec)\n"
 CUT_NOTICE = "… (cortado; rode `status`)"
@@ -62,7 +73,7 @@ ATLAS_LINE = ("Atlas da organização (boson-atlas) configurado nesta máquina: 
               "boson-atlas ou a tool MCP atlas_context.")
 BRAIN_LINE = ("Segundo cérebro (photon-brain) configurado nesta máquina: para notas e decisões do usuário, use a "
               "skill photon-brain.")
-UNAVAILABLE_RE = re.compile(r"^session_start: (SDD|Atlas|Brain) indisponível \(.+\)$", re.IGNORECASE)
+UNAVAILABLE_RE = re.compile(r"^session_start: (SDD|Atlas|Brain|Doctor) indisponível \(.+\)$", re.IGNORECASE)
 SDD_LIMIT, CONTEXT_LIMIT = 6000, 8000
 
 GIT_ENV = {
@@ -100,13 +111,15 @@ def completed(argv, returncode=0, stdout="", stderr=""):
 
 
 class FakeRunner:
-    """Executor substituível: responde por CLI (`spec_graph.py`, `atlas.py`, `brain.py`) e grava cada chamada.
+    """Executor substituível: responde por CLI (`spec_graph.py`, `atlas.py`, `brain.py`, `fermion_doctor.py`) e grava
+    cada chamada.
 
-    Cada resposta é um CompletedProcess-like (returncode, stdout, stderr) ou uma exceção a levantar.
+    Cada resposta é um CompletedProcess-like (returncode, stdout, stderr) ou uma exceção a levantar. O doctor
+    (SPEC-0061) responde por padrão com zero achados.
     """
 
-    def __init__(self, status=(0, "", ""), atlas=(3, "", ""), brain=(3, "", "")):
-        self.answers = {"spec_graph.py": status, "atlas.py": atlas, "brain.py": brain}
+    def __init__(self, status=(0, "", ""), atlas=(3, "", ""), brain=(3, "", ""), doctor=(0, NO_FINDINGS, "")):
+        self.answers = {"spec_graph.py": status, "atlas.py": atlas, "brain.py": brain, "fermion_doctor.py": doctor}
         self.calls = []
 
     def __call__(self, argv, cwd=None, timeout=None):
@@ -437,7 +450,8 @@ class DeadlineTest(HookTestCase):
     def assert_budget(self, runner, clock_at_calls, all_time_out=False):
         """Cada timeout <= min(10, restante na hora da chamada); quando todas esgotam o tempo, a soma <= 20."""
         total = 0
-        for call, at in zip(runner.calls, clock_at_calls):
+        three = [c for c in runner.calls if Path(str(c["argv"][1])).name in CLIS]  # o doctor (SPEC-0061) vem depois
+        for call, at in zip(three, clock_at_calls):
             remaining = TOTAL_BUDGET - at
             self.assertIsNotNone(call["timeout"], call)
             self.assertGreater(call["timeout"], 0, call)
@@ -474,7 +488,7 @@ class DeadlineTest(HookTestCase):
         self.assertEqual(runner.calls_to("brain.py"), [], "sem tempo restante a CLI do cérebro deveria ser pulada")
         labels = [UNAVAILABLE_RE.match(line).group(1).lower() for line in err.splitlines()
                   if UNAVAILABLE_RE.match(line)]
-        self.assertEqual(sorted(labels), ["atlas", "brain", "sdd"], err)
+        self.assertEqual(sorted(label for label in labels if label != "doctor"), ["atlas", "brain", "sdd"], err)
 
     def test_each_call_gets_at_most_the_remaining_time(self):
         """SPEC-0058:UT-05 (prazo total: status gasta 7 s, atlas esgota o tempo, cérebro recebe o resto)"""
@@ -486,7 +500,7 @@ class DeadlineTest(HookTestCase):
         runner = FakeRunner(status=status, atlas=atlas, brain=brain)
         code, out, err = self.run_with_clock(runner, clock, project)
         self.assertEqual(code, 0)
-        self.assertEqual(len(runner.calls), 3, runner.calls)
+        self.assertEqual(len([c for c in runner.calls if Path(str(c["argv"][1])).name in CLIS]), 3, runner.calls)
         self.assert_budget(runner, m1 + m2 + m3)
         self.assertLessEqual(runner.calls_to("brain.py")[0]["timeout"], 3 + 1e-6)
         context = self.context(out)
@@ -573,7 +587,8 @@ class UnreadableCwdAndClosedStdinTest(HookTestCase):
 # ---------------------------------------------------------------- UT-07
 
 RULE_THREE_CLIS = "processo só para as três CLIs"
-ALLOWED_SCRIPTS = {"spec_graph.py", "atlas.py", "brain.py", "session_start.py"}
+ALLOWED_SCRIPTS = {"spec_graph.py", "atlas.py", "brain.py", "session_start.py",
+                   "fermion_doctor.py"}  # SPEC-0061: scripts/fermion_doctor.py do plugin (ADR-0019)
 SCRIPT_RE = re.compile(r"[\w.-]+\.py\b")
 EXTERNAL_COMMAND_RE = re.compile(r"^(?:git|gh|sh|bash|zsh|fish|cmd|powershell|pwsh|jq|curl|wget|claude|npm|npx|node"
                                  r"|uv|uvx|pip|pip3|xdg-open)(?:\.exe)?(?:\s|$)")
@@ -671,14 +686,18 @@ class HookArchitectureTest(unittest.TestCase):
             project = make_project(Path(tmp).resolve() / "p")
             stdin_text = json.dumps({"cwd": str(project), "session_id": "INJETADO; rm -rf /",
                                      "source": "--write", "transcript_path": "/tmp/INJETADO"})
-            done = completed(["x"], 0, stdout="SPEC-0001 proposed\n")
-            with mock.patch.object(hook.subprocess, "run", return_value=done) as run, \
+            def answer(argv, *args, **kwargs):
+                doctor = Path(str(argv[1])).name == DOCTOR.name  # SPEC-0061
+                return completed(argv, 0, stdout=NO_FINDINGS if doctor else "SPEC-0001 proposed\n")
+            with mock.patch.object(hook.subprocess, "run", side_effect=answer) as run, \
                     mock.patch.object(hook.subprocess, "Popen", side_effect=AssertionError("Popen não é usado")):
                 code = hook.main(stdin=io.StringIO(stdin_text), stdout=io.StringIO(), stderr=io.StringIO())
         self.assertEqual(code, 0)
-        self.assertEqual(run.call_count, 3, run.call_args_list)
+        calls = [(args, kwargs) for args, kwargs in run.call_args_list
+                 if Path(str((args[0] if args else kwargs.get("args"))[1])).name != DOCTOR.name]  # SPEC-0061: UT-07
+        self.assertEqual(len(calls), 3, run.call_args_list)
         seen = set()
-        for args, kwargs in run.call_args_list:
+        for args, kwargs in calls:
             argv = args[0] if args else kwargs.get("args")
             self.assertIsInstance(argv, list, "argv tem de ser lista (sem shell)")
             self.assertFalse(kwargs.get("shell", False))
@@ -696,6 +715,202 @@ class HookArchitectureTest(unittest.TestCase):
         """SPEC-0058:UT-07 (raiz do plugin por Path(__file__))"""
         hook = load_hook(self)
         self.assertEqual(Path(hook.PLUGIN_ROOT).resolve(), REPO.resolve())
+
+
+# ---------------------------------------------------------------- SPEC-0061:UT-07 (bloco do doctor)
+
+DOCTOR_HEADER = "## Instalação desatualizada (fermion)\n"
+DOCTOR_LIMIT = 1500
+MORE_RE = re.compile(r"^… e mais (\d+)$")
+
+
+def doctor_findings(count, prefix="cópia"):
+    return [{"check": "old-name-copy", "level": "warn", "path": f"/x/skills/antiga-{n:02d}",
+             "detail": f"{prefix} {n:02d} em /x/skills/antiga-{n:02d} com o nome antigo; o plugin já traz a nova",
+             "fix": f"remova a pasta /x/skills/antiga-{n:02d}"} for n in range(count)]
+
+
+def doctor_answer(findings):
+    return (0, json.dumps({"plugin_versions": {"gluon-spec": "2026.11.3", "photon-brain": "2026.11.6",
+                                               "boson-atlas": "2026.11.6"}, "findings": findings},
+                          ensure_ascii=False), "")
+
+
+def doctor_line(finding):
+    return f"- {finding['detail']} → {finding['fix']}"
+
+
+class DoctorBlockTest(HookTestCase):
+    def doctor_block(self, context):
+        self.assertTrue(DOCTOR_HEADER in context, f"sem o bloco do doctor; fim do contexto: {context[-300:]!r}")
+        block = context[context.index(DOCTOR_HEADER):].rstrip()
+        self.assertLessEqual(len(block), DOCTOR_LIMIT, f"bloco do doctor com {len(block)} caracteres")
+        return block
+
+    def test_two_findings_give_the_block_with_two_lines_after_the_others(self):
+        """SPEC-0061:UT-07 (dois achados: o bloco com as duas linhas, depois dos blocos da SPEC-0058)"""
+        findings = doctor_findings(2)
+        expected = DOCTOR_HEADER + "\n".join(doctor_line(f) for f in findings)
+        with self.subTest(caso="só o doctor"):
+            project = make_project(self.base / "so-doctor", sdd=False)
+            code, out, err = self.run_hook(FakeRunner(doctor=doctor_answer(findings)), cwd=project)
+            self.assertEqual(code, 0)
+            self.assertEqual(self.context(out).strip(), expected)
+            self.assertEqual(err.strip(), "")
+        with self.subTest(caso="com SDD, atlas e cérebro"):
+            project = make_project(self.base / "todos")
+            runner = FakeRunner(status=(0, "SPEC-0001 proposed\n", ""), atlas=(0, "{}", ""), brain=(0, "{}", ""),
+                                doctor=doctor_answer(findings))
+            code, out, _ = self.run_hook(runner, cwd=project)
+            self.assertEqual(code, 0)
+            context = self.context(out)
+            self.assertTrue(context.startswith(SDD_HEADER), context)
+            self.assertTrue(context.rstrip().endswith(BRAIN_LINE + "\n\n" + expected), context)
+
+    def test_whitespace_in_detail_and_fix_is_flattened_to_one_line_per_finding(self):
+        """SPEC-0061:UT-07 (Emenda v2: quebra de linha, \\r e tab no detail/fix viram um espaço; nada de '#' injetado)"""
+        findings = [{"check": "old-name-copy", "level": "warn", "path": "/x/a",
+                     "detail": "cópia antiga\n## X injetado\r\tsegunda parte",
+                     "fix": "remova\n## Y\ra\tpasta"},
+                    doctor_findings(1)[0]]
+        project = make_project(self.base / "p", sdd=False)
+        code, out, _ = self.run_hook(FakeRunner(doctor=doctor_answer(findings)), cwd=project)
+        self.assertEqual(code, 0)
+        block = self.doctor_block(self.context(out))
+        lines = block.split("\n")
+        self.assertEqual(lines[0] + "\n", DOCTOR_HEADER)
+        self.assertEqual(len(lines), 1 + len(findings), lines)
+        self.assertEqual(lines[1], "- cópia antiga ## X injetado segunda parte → remova ## Y a pasta")
+        for line in lines[1:]:
+            self.assertTrue(line.startswith("- "), line)
+            self.assertNotIn("\r", line)
+            self.assertNotIn("\t", line)
+        self.assertEqual([line for line in block.splitlines() if line.startswith("#")], [DOCTOR_HEADER.strip()])
+
+    def test_doctor_runs_once_with_project_and_json_inside_the_budget(self):
+        """SPEC-0061:UT-07 (linha de comando do doctor: --project <raiz do projeto> --json, cwd e timeout)"""
+        project = make_project(self.base / "p", sdd=False)
+        cwd = project / "src" / "app"
+        cwd.mkdir(parents=True)
+        runner = FakeRunner(doctor=doctor_answer(doctor_findings(2)))
+        self.run_hook(runner, cwd=cwd)
+        calls = runner.calls_to(DOCTOR.name)
+        self.assertEqual(len(calls), 1, runner.calls)
+        argv = calls[0]["argv"]
+        self.assertTrue(Path(argv[0]).name.startswith("python"), argv)
+        self.assertEqual(Path(argv[1]).resolve(), DOCTOR.resolve(), "doctor fora da raiz do plugin")
+        self.assertEqual(argv[2], "--project", argv)
+        self.assertTrue(same_dir(argv[3], project), f"--project {argv[3]}, esperado {project}")
+        self.assertEqual(argv[4:], ["--json"], argv)
+        self.assertTrue(same_dir(calls[0]["cwd"], project), calls[0])
+        self.assert_timeouts(runner)
+
+    def test_zero_findings_give_no_block(self):
+        """SPEC-0061:UT-07 (zero achados: nenhum bloco)"""
+        with self.subTest(caso="nada mais a dizer"):
+            project = make_project(self.base / "vazio", sdd=False)
+            code, out, err = self.run_hook(FakeRunner(doctor=doctor_answer([])), cwd=project)
+            self.assertEqual(code, 0)
+            self.assertEqual(out, "")
+            self.assertEqual(err.strip(), "")
+        with self.subTest(caso="com o atlas configurado"):
+            project = make_project(self.base / "atlas", sdd=False)
+            code, out, _ = self.run_hook(FakeRunner(atlas=(0, "{}", ""), doctor=doctor_answer([])), cwd=project)
+            self.assertEqual(self.context(out).strip(), ATLAS_LINE)
+
+    def test_forty_findings_are_cut_to_1500_characters_with_and_more(self):
+        """SPEC-0061:UT-07 (40 achados: até 1.500 caracteres, terminando em "… e mais N")"""
+        findings = doctor_findings(40)
+        project = make_project(self.base / "p", sdd=False)
+        code, out, _ = self.run_hook(FakeRunner(doctor=doctor_answer(findings)), cwd=project)
+        self.assertEqual(code, 0)
+        block = self.doctor_block(self.context(out))
+        lines = block[len(DOCTOR_HEADER):].split("\n")
+        more = MORE_RE.match(lines[-1])
+        self.assertIsNotNone(more, f"última linha não é '… e mais N': {lines[-1]!r}")
+        shown = lines[:-1]
+        self.assertGreater(len(shown), 0, "nenhum achado coube no bloco")
+        self.assertEqual(shown, [doctor_line(f) for f in findings[:len(shown)]], "os achados mostrados mudaram")
+        self.assertEqual(len(shown) + int(more.group(1)), 40)
+        room = DOCTOR_LIMIT - len(block)
+        self.assertLess(room, len(doctor_line(findings[len(shown)])) + 1,
+                        "cabia mais um achado no bloco antes do '… e mais N'")
+
+    def test_doctor_block_survives_the_8000_cut_of_a_long_status(self):
+        """SPEC-0061:UT-07 (status longo, atlas, cérebro e 40 achados: o bloco do doctor continua inteiro)"""
+        project = make_project(self.base / "p")
+        status = "".join(f"SPEC-{n:04d} proposed    linha longa de status para o corte\n" for n in range(400))
+        runner = FakeRunner(status=(0, status, ""), atlas=(0, "{}", ""), brain=(0, "{}", ""),
+                            doctor=doctor_answer(doctor_findings(40)))
+        _, out, _ = self.run_hook(runner, cwd=project)
+        context = self.context(out)
+        block = self.doctor_block(context)
+        self.assertIsNotNone(MORE_RE.match(block.split("\n")[-1]), block[-200:])
+        self.assertIn(BRAIN_LINE, context)
+
+    def test_failing_doctor_omits_only_its_block_with_stderr_line(self):
+        """SPEC-0061:UT-07 (doctor que falha: sem bloco, linha 'Doctor indisponível' no stderr, o resto fica)"""
+        failures = {
+            "exit 1": (1, "", "erro: x\n"),
+            "exit 1 com JSON válido": (1, doctor_answer(doctor_findings(1))[1], "erro"),  # Emenda v2
+            "json ilegível": (0, "não é json", ""),
+            "json sem findings": (0, json.dumps({"plugin_versions": {}}), ""),
+            "timeout": subprocess.TimeoutExpired(["python3"], 10),
+            "ausente": FileNotFoundError(2, "No such file or directory"),
+        }
+        for label, answer in failures.items():
+            with self.subTest(caso=label):
+                project = make_project(self.base / label.replace(" ", "-"), sdd=False)
+                runner = FakeRunner(atlas=(0, "{}", ""), doctor=answer)
+                code, out, err = self.run_hook(runner, cwd=project)
+                self.assertEqual(code, 0)
+                self.assertEqual(self.context(out).strip(), ATLAS_LINE)
+                labels = [UNAVAILABLE_RE.match(line).group(1).lower() for line in err.splitlines()
+                          if UNAVAILABLE_RE.match(line)]
+                self.assertEqual(labels, ["doctor"], err)
+                self.assertNotIn("Traceback", err)
+
+    def test_no_time_left_skips_the_doctor(self):
+        """SPEC-0061:UT-07 (prazo total da SPEC-0058: sem tempo restante o doctor não roda)"""
+        if "clock" not in inspect.signature(self.hook.main).parameters:
+            self.fail("main() não aceita clock=")
+        project = make_project(self.base / "p")
+        clock = FakeClock()
+        runner = FakeRunner(status=spends(clock), atlas=spends(clock), brain=spends(clock, 1, (0, "{}", "")),
+                            doctor=doctor_answer(doctor_findings(2)))
+        out, err = io.StringIO(), io.StringIO()
+        code = self.call_main(stdin=io.StringIO(json.dumps({"cwd": str(project)})), stdout=out, stderr=err,
+                              runner=runner, clock=clock)
+        self.assertEqual(code, 0)
+        self.assertEqual(runner.calls_to(DOCTOR.name), [], "o doctor rodou sem tempo restante")
+        self.assertNotIn(DOCTOR_HEADER.strip(), out.getvalue())
+        self.assertRegex(err.getvalue(),
+                         re.compile(r"^session_start: Doctor indisponível", re.IGNORECASE | re.MULTILINE))
+
+    def test_real_hook_opens_the_doctor_with_read_only_arguments(self):
+        """SPEC-0061:UT-07 (subprocess.run substituído: o doctor é o único processo além das três CLIs)"""
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp).resolve() / "p")
+
+            def answer(argv, *args, **kwargs):
+                if Path(str(argv[1])).name == DOCTOR.name:
+                    return completed(argv, 0, stdout=doctor_answer(doctor_findings(1))[1])
+                return completed(argv, 0, stdout="SPEC-0001 proposed\n")
+            out = io.StringIO()
+            with mock.patch.object(self.hook.subprocess, "run", side_effect=answer) as run:
+                self.hook.main(stdin=io.StringIO(json.dumps({"cwd": str(project)})), stdout=out,
+                               stderr=io.StringIO())
+        doctor_calls = [c for c in run.call_args_list if Path(str((c[0][0] if c[0] else c[1]["args"])[1])).name
+                        == DOCTOR.name]
+        self.assertEqual(len(doctor_calls), 1, run.call_args_list)
+        args, kwargs = doctor_calls[0]
+        argv = args[0] if args else kwargs.get("args")
+        self.assertIsInstance(argv, list)
+        self.assertFalse(kwargs.get("shell", False))
+        self.assertIsNotNone(kwargs.get("timeout"))
+        self.assertEqual(Path(argv[1]).resolve(), DOCTOR.resolve())
+        self.assertEqual([argv[2], argv[4:]], ["--project", ["--json"]], argv)
+        self.assertIn(DOCTOR_HEADER.strip(), self.context(out.getvalue()))
 
 
 # ---------------------------------------------------------------- IT-01

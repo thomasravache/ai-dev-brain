@@ -3,7 +3,7 @@ id: SPEC-0031
 title: "Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-10-30
 depends_on: [SPEC-0029]
 adrs: [ADR-0016, ADR-0017, ADR-0018, ADR-0019]
@@ -80,8 +80,8 @@ Desenho:
 | SPEC-0059 | Servidor MCP: tools `brain_*` de leitura | full | feature | M | SPEC-0054 | — |
 | SPEC-0060 | Servidor MCP: tools `sdd_*` de leitura | full | feature | S | SPEC-0054 | — |
 | SPEC-0061 | Auto-melhoria: aviso de instalação antiga (cópias, `tools/sdd/`, bloco SDD, atlas vendorizado) com o comando de atualização | full | feature | M | SPEC-0058, SPEC-0054 | — |
-| a criar | Auto-melhoria: versão mínima do Python (`type: migration`) e agente mantenedor que abre a spec de atualização | full | migration | M | SPEC-0061 | — |
-| a criar | Distribuição sem cópia do código e MCP remoto | full | feature | M | MCP | — |
+| pendência | Auto-melhoria: versão mínima do Python (`type: migration`) e agente mantenedor que abre a spec de atualização | full | migration | M | SPEC-0061 | — |
+| pendência | Distribuição sem cópia do código e MCP remoto | full | feature | M | MCP | — |
 
 ## 5. Estratégia de Entrega
 - **Ambientes:** N/A até a frente 6 (MCP remoto exige ambiente hospedado; definido na filha).
@@ -98,9 +98,9 @@ Desenho:
 
 ## 7. Critérios de Aceite do Épico
 <!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-- [ ] Um comando instala as três skills pelo plugin, e a cópia da pasta continua funcionando — SPEC-0053:E2E-01, SPEC-0053:IT-01
-- [ ] Uma tarefa pedida uma vez passa pelo atlas e pela `gluon-spec` sem o usuário chamar cada skill — SPEC-0058:E2E-01, SPEC-0058:UT-08
-- [ ] As tools MCP devolvem o mesmo resultado que a CLI correspondente — SPEC-0054:IT-01
+- [x] Um comando instala as três skills pelo plugin, e a cópia da pasta continua funcionando — SPEC-0053:E2E-01, SPEC-0053:IT-01
+- [x] Uma tarefa pedida uma vez passa pelo atlas e pela `gluon-spec` sem o usuário chamar cada skill — SPEC-0058:E2E-01, SPEC-0058:UT-08
+- [x] As tools MCP devolvem o mesmo resultado que a CLI correspondente — SPEC-0054:IT-01
 
 ## 8. Questões em Aberto
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
@@ -122,6 +122,15 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico: o que foi entregue, como (ondas e deploys com versão/data), resultado dos critérios de aceite com os testes que os provam, métricas pós-release, pendências como novas specs. `spec_graph.py report SPEC-0031` ajuda a montar. -->
+**O que foi entregue:** o kit passou a se chamar Fermion e a ser distribuído como o plugin `fermion` do marketplace `fermion-lab`: as skills `gluon-spec`, `photon-brain` e `boson-atlas` com os nomes novos (SPEC-0055), instaláveis por um comando (SPEC-0053) com a versão do plugin ligada às mudanças (SPEC-0056); um servidor MCP local só de leitura com 20 tools — `atlas_*` (SPEC-0054), `brain_*` (SPEC-0059), `sdd_*` (SPEC-0060) e `fermion_doctor` (SPEC-0061); o hook de início de sessão com o estado do SDD e o comando `/fermion:deliver` (SPEC-0058); e o aviso de instalação desatualizada com o comando de atualização (SPEC-0061).
+
+**Como:** uma filha por PR, em série porque todas mudam o `plugin.json`, cada uma com test-writer, implementer e revisor independente, CI em Python 3.9 e 3.15, e verificação manual numa sessão real do Claude Code (PRs #23 a #35; plugin de 2026.11.1 a 2026.11.10, 2026-11-12 a 2026-11-16).
+
+**Critérios de aceite:** os três marcados, provados por SPEC-0053:E2E-01 e IT-01 (instalação pelo plugin e por cópia), SPEC-0058:E2E-01 e UT-08 (hook e `/fermion:deliver` instalados) e SPEC-0054:IT-01, SPEC-0059:IT-01 e SPEC-0060:IT-01 (tools MCP iguais à CLI).
+
+**Métricas pós-release:** a primeira sessão real com o plugin achou três instalações desatualizadas nesta máquina (cópias antigas e `tools/sdd`), que é o problema que o épico quis resolver.
+
+**Pendências:** versão mínima do Python e agente mantenedor (ciclo de auto-melhoria da SPEC-0066); distribuição sem cópia do código e MCP remoto (sem spec ainda); aposentar os nomes técnicos antigos (spec de migração na fila); renomear o marketplace para `fermion-ai-lab` (não decidido).
 
 ## 12. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

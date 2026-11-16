@@ -1,0 +1,425 @@
+[
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Configuração efetiva do atlas da organização nesta máquina (atlas.py config --json).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "atlas_config"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Diagnóstico do atlas: configuração, pasta, coletores e frescor (atlas.py doctor --json).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "atlas_doctor"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Contexto do atlas para uma consulta em texto livre: serviços, times, convenções e vizinhos no grafo (atlas.py context --json).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "hops": {
+     "description": "Saltos no grafo a partir dos resultados.",
+     "maximum": 2,
+     "minimum": 0,
+     "type": "integer"
+    },
+    "limit": {
+     "description": "Número máximo de resultados.",
+     "maximum": 200,
+     "minimum": 1,
+     "type": "integer"
+    },
+    "max_chars": {
+     "description": "Tamanho máximo da saída em caracteres.",
+     "maximum": 200000,
+     "minimum": 500,
+     "type": "integer"
+    },
+    "query": {
+     "description": "Termos da consulta, separados por espaço (tab e quebra de linha contam como espaço).",
+     "maxLength": 500,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    }
+   },
+   "required": [
+    "query"
+   ],
+   "type": "object"
+  },
+  "name": "atlas_context"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Checagens de qualidade do atlas (atlas.py lint --json). Achados de ERRO vêm no relatório, não como erro da tool.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "only": {
+     "description": "Só estas regras do lint (nomes em minúsculas com hífen).",
+     "items": {
+      "pattern": "^[a-z-]+$",
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "name": "atlas_lint"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Convenções do atlas e o estado de curadoria de cada uma (atlas.py curate list --json). Confirmar ou rejeitar convenção é só de pessoas, fora do MCP.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "status": {
+     "description": "Só convenções neste estado.",
+     "enum": [
+      "inferred",
+      "confirmed",
+      "rejected"
+     ],
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "name": "atlas_curate_list"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Configuração efetiva do segundo cérebro nesta máquina (brain.py config --json).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "brain_config"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Diagnóstico do segundo cérebro: configuração, vault e sincronização (brain.py doctor --json). Achados de ERRO vêm no relatório, não como erro da tool.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "brain_doctor"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Busca notas do segundo cérebro por texto livre (brain.py search --json). Notas confidenciais ficam de fora.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "context": {
+     "description": "Só notas deste contexto.",
+     "maxLength": 100,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    },
+    "limit": {
+     "description": "Número máximo de resultados.",
+     "maximum": 100,
+     "minimum": 1,
+     "type": "integer"
+    },
+    "query": {
+     "description": "Termos da busca, separados por espaço (tab e quebra de linha contam como espaço).",
+     "maxLength": 500,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    },
+    "tag": {
+     "description": "Só notas com esta tag.",
+     "maxLength": 100,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    },
+    "type": {
+     "description": "Só notas deste tipo.",
+     "maxLength": 50,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    }
+   },
+   "required": [
+    "query"
+   ],
+   "type": "object"
+  },
+  "name": "brain_search"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Notas relacionadas a uma nota (note) ou a um texto (text) no segundo cérebro (brain.py related --json). Exatamente um de note ou text.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "description": "Exatamente um de note ou text.",
+   "properties": {
+    "limit": {
+     "description": "Número máximo de resultados.",
+     "maximum": 100,
+     "minimum": 1,
+     "type": "integer"
+    },
+    "note": {
+     "description": "Título ou caminho da nota de partida.",
+     "maxLength": 500,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    },
+    "text": {
+     "description": "Texto de partida.",
+     "maxLength": 2000,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "name": "brain_related"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Links de saída e backlinks de uma nota do segundo cérebro (brain.py links --json).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "note": {
+     "description": "Título ou caminho da nota.",
+     "maxLength": 500,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    }
+   },
+   "required": [
+    "note"
+   ],
+   "type": "object"
+  },
+  "name": "brain_links"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Contexto do segundo cérebro para uma consulta em texto livre: notas e vizinhas no grafo de links (brain.py context --json). Notas confidenciais ficam de fora.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "context": {
+     "description": "Só notas deste contexto.",
+     "maxLength": 100,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    },
+    "hops": {
+     "description": "Saltos no grafo de links a partir dos resultados.",
+     "maximum": 2,
+     "minimum": 0,
+     "type": "integer"
+    },
+    "limit": {
+     "description": "Número máximo de notas.",
+     "maximum": 50,
+     "minimum": 1,
+     "type": "integer"
+    },
+    "max_chars": {
+     "description": "Tamanho máximo da saída em caracteres.",
+     "maximum": 200000,
+     "minimum": 500,
+     "type": "integer"
+    },
+    "query": {
+     "description": "Termos da consulta, separados por espaço (tab e quebra de linha contam como espaço).",
+     "maxLength": 500,
+     "minLength": 1,
+     "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+     "type": "string"
+    }
+   },
+   "required": [
+    "query"
+   ],
+   "type": "object"
+  },
+  "name": "brain_context"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Itens pendentes na inbox do segundo cérebro (brain.py inbox list --json).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "brain_inbox_list"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Checagens de qualidade do vault do segundo cérebro (brain.py lint --json). Achados de ERRO vêm no relatório, não como erro da tool; segredos e dados pessoais nunca aparecem.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "only": {
+     "description": "Só estas regras do lint (nomes em minúsculas com hífen).",
+     "items": {
+      "pattern": "^[a-z-]+$",
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "name": "brain_lint"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Estado das specs do projeto e o próximo passo de cada uma (spec_graph.py status). Sem ids, todas as specs.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "ids": {
+     "description": "Só estas specs (SPEC-NNNN), até 20.",
+     "items": {
+      "pattern": "^SPEC-[0-9]{4,}$",
+      "type": "string"
+     },
+     "maxItems": 20,
+     "minItems": 0,
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "name": "sdd_status"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Validação das specs e ADRs do projeto (spec_graph.py validate). Achados de ERRO vêm no relatório, não como erro da tool.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "ids": {
+     "description": "Só estas specs ou ADRs (SPEC-NNNN ou ADR-NNNN), até 20.",
+     "items": {
+      "pattern": "^(SPEC|ADR)-[0-9]{4,}$",
+      "type": "string"
+     },
+     "maxItems": 20,
+     "minItems": 0,
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "name": "sdd_validate"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Specs prontas para despachar agora no projeto (spec_graph.py next).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "sdd_next"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Ondas de execução das specs do projeto pelas dependências (spec_graph.py waves).",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "sdd_waves"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Relatório de entrega de uma spec do projeto (spec_graph.py report), sem gravar arquivo.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "description": "A spec (SPEC-NNNN).",
+     "pattern": "^SPEC-[0-9]{4,}$",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id"
+   ],
+   "type": "object"
+  },
+  "name": "sdd_report"
+ },
+ {
+  "annotations": {
+   "readOnlyHint": true
+  },
+  "description": "Novidades do processo SDD desde a última confirmação (spec_graph.py whats-new), sem confirmar a leitura.",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {},
+   "type": "object"
+  },
+  "name": "sdd_whats_new"
+ }
+]

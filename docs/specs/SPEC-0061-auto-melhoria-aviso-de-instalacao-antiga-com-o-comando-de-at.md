@@ -4,14 +4,14 @@ title: "Auto-melhoria: aviso de instalação antiga com o comando de atualizaç�
 tier: full
 type: feature
 user_facing: true
-status: approved
+status: implemented
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0058, SPEC-0060]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [scripts/fermion_doctor.py, hooks/session_start.py, mcp/**, tests/plugin/test_fermion_doctor.py, tests/plugin/test_session_start.py, .claude-plugin/plugin.json, README.md]
+touches: [scripts/fermion_doctor.py, hooks/session_start.py, mcp/**, tests/plugin/test_fermion_doctor.py, tests/plugin/doctor_architecture_rules.py, tests/plugin/test_session_start.py, .claude-plugin/plugin.json, README.md]
 adrs: [ADR-0017, ADR-0019]
 external: []
 size: M
@@ -93,7 +93,8 @@ python3 scripts/fermion_doctor.py [--project PASTA] [--json]
                     → "AVISO old-sdd-block <arquivo> — bloco SDD com o nome antigo (rode: … spec_graph.py vendor --agents)"
     stale-atlas     <projeto>/.org-atlas/skill/scripts/atlas.py com ATLAS_VERSION menor que a do plugin (só existe quando o projeto aberto é o repositório do atlas, modo repo)
                     → "AVISO stale-atlas .org-atlas/skill — <v> < <v plugin> (rode no repositório do atlas: python3 <plugin>/skills/boson-atlas/scripts/atlas.py vendor --ci <github|generic>, o mesmo --ci da instalação)"
-    versão ilegível numa cópia → "AVISO unreadable-version <caminho> — versão não encontrada" (a checagem segue)
+    versão ilegível numa cópia → "AVISO unreadable-version <caminho> — versão não encontrada (<fix>)" (a checagem segue)
+  leitura: só os primeiros 256 KB de cada arquivo (a constante de versão fica no topo); caminhos nos comandos sugeridos com aspas de shell quando precisam
   --json → {"plugin_versions": {"gluon-spec": v, "photon-brain": v, "boson-atlas": v},
             "findings": [{"check": id, "level": "warn", "path": caminho, "detail": texto, "fix": comando ou instrução}]}
   exit: sempre 0; nada é gravado
@@ -103,6 +104,8 @@ hook SessionStart (SPEC-0058) → com achado, bloco depois dos da SPEC-0058:
   sem achado → nenhum bloco
 
 tool MCP fermion_doctor {} (readOnlyHint) → fermion_doctor.py --project <CLAUDE_PROJECT_DIR ou cwd> --json; exit 0 → isError: false com structuredContent
+  exit 0 sem objeto JSON com findings, exit ≠ 0, timeout ou script ausente → isError: true com o stderr
+hook: detail e fix com todo espaço em branco (inclusive quebra de linha) achatado em um espaço, uma linha por achado
 ```
 
 **Design:** N/A — sem interface gráfica.
@@ -170,20 +173,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Doctor do plugin**
+- [x] Red: UT-01 a UT-06 e IT-01 em `tests/plugin/test_fermion_doctor.py` (regras do ADR-0019 em `tests/plugin/`, incluídas no `arch_test` pelo Architect no G1), com a tag `SPEC-0061:<ID>`
+- [x] Green: `scripts/fermion_doctor.py` (stdlib, só leitura, sempre exit 0)
+
+**Fase 2: Hook e tool MCP**
+- [x] Red: UT-07 em `tests/plugin/test_session_start.py` e UT-08 em `mcp/tests/` (regra de arquitetura aceita `scripts/fermion_doctor.py`)
+- [x] Green: bloco "Instalação desatualizada" em `hooks/session_start.py` (dentro do prazo total da SPEC-0058) e tool `fermion_doctor` em `mcp/fermion_mcp.py`
+
+**Fase 3: Jornada E2E**
+- [x] Red: E2E-01 falhando pelo motivo certo
+- [x] Green: aviso aparece com a cópia antiga e some depois de removê-la
+
+**Fase final: Integração, entrega e documentação**
+- [x] Validar: suíte completa + arquitetura (G2/G3); `README.md`, `mcp/README.md` e `version` do `plugin.json`
+- [x] Review independente (G4), com o aviso conferido numa sessão real do Claude Code
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7) e fechamento do épico SPEC-0031
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — c5417ad (árvore suja) | 2026-11-13 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=30)) — d13ef43 | 2026-11-16 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 9230d17 | 2026-11-16 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 2760a51 | 2026-11-16 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2, após Emenda v2: touches, minors corrigidos com teste antes em ecc9ffd/9230d17; mutações sobreviventes da rodada 1 pegas, exceto exit 1 em erro interno). Verificação manual em 2026-11-16 com Claude Code 2.1.322 e --plugin-dir: hook exit 0 com o bloco 'Instalação desatualizada (fermion)' trazendo old-name-copy de sdd-management e second-brain e stale-sdd-tool 2026.11.1 < 2026.11.3; tool fermion_doctor listada. — 3b2a320 | 2026-11-16 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 51ab6a2 | 2026-11-16 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-16 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-16 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — e5b6b48 | 2026-11-16 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -194,39 +214,57 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- `scripts/fermion_doctor.py`: confere, só lendo, se há cópias das skills com o nome antigo, cópias novas mais velhas que o plugin, `tools/sdd` desatualizado, bloco SDD com o nome antigo e atlas vendorizado mais velho; cada achado traz o comando de atualização, e nada é alterado sozinho (ADR-0019).
+- O hook de início de sessão acrescenta o bloco "Instalação desatualizada (fermion)" quando há achado, e o servidor MCP ganhou a tool `fermion_doctor`.
+- `README.md`, `mcp/README.md`; `version` do plugin 2026.11.10.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Script do plugin só com stdlib, sem processo, rede nem escrita, lendo até 256 KB por arquivo e sem seguir link simbólico para fora das pastas; versões como tupla de inteiros; o hook chama o doctor dentro do prazo total da SPEC-0058 e o MCP como as outras CLIs (ADR-0017, ADR-0019).
+- Testes em aa6f4a8 e ecc9ffd; implementação em 7b5ade4 e 9230d17; `arch_test` com as regras do doctor (chore no G1).
+- **Emenda v2** (contrato 2): arquivo de regras no `touches`, sufixo `(<fix>)` no `unreadable-version`, leitura limitada, caminhos com aspas, falha vazia como `isError`, espaço em branco achatado no hook.
+- **Revisão G4:** rodada 1 REJECTED (major: arquivo de regras fora do `touches`; minors: injeção no hook sem teste, falha vazia como sucesso no MCP, caso de exit 1 não isolado, leitura sem limite, regras com brechas); rodada 2 APPROVED.
+- **Verificação manual:** numa sessão real do Claude Code 2.1.322 o hook trouxe os três avisos verdadeiros desta máquina (cópias `sdd-management` e `second-brain` e `tools/sdd` 2026.11.1 < 2026.11.3) e a tool `fermion_doctor` estava listada.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Tudo em dia: só linhas OK, `findings` vazio e as três versões do plugin | PASS | `test_fermion_doctor.py::UpToDateTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | Cópias com nome antigo nas pastas de skills do usuário e do projeto: `old-name-copy` com o nome novo | PASS | `test_fermion_doctor.py::OldNameCopyTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Cópia nova mais velha: `stale-copy` só na menor; versão comparada como tupla | PASS | `test_fermion_doctor.py::StaleCopyTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | Projeto desatualizado: `stale-sdd-tool`, `old-sdd-block` e `stale-atlas` com os comandos (caminhos com aspas de shell) | PASS | `test_fermion_doctor.py::StaleProjectTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-05 | Versão ilegível (inclusive além de 256 KB), pasta sem permissão e link para fora: `unreadable-version` ou ignorado; exit 0 | PASS | `test_fermion_doctor.py::UnreadableTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-06 | Regras do ADR-0019: sem escrita, processo, rede ou carregamento de código; código real sem achado | PASS | `test_fermion_doctor.py::DoctorArchitectureTest (também no `arch_test` do G3)` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-07 | Bloco do hook com os achados, nenhum bloco sem achado, até 1.500 caracteres com `… e mais N`, espaço em branco achatado, falha do doctor só no stderr | PASS | `test_session_start.py::DoctorBlockTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-08 | Tool `fermion_doctor`: schema vazio e fechado, `readOnlyHint`, `--project`, `structuredContent`; falha ou saída sem `findings` como `isError` | PASS | `test_doctor_server.py::DoctorToolListTest, DoctorCallTest; test_architecture.py::DoctorBoundaryTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Doctor como processo real: achados certos, exit 0 em menos de 1 s, nenhum arquivo muda | PASS | `test_fermion_doctor.py::DoctorProcessTest` — CI do PR #35 (run 43916368227, Python 3.9 e 3.15) e suíte local no G5 |
+| E2E-01 | Plugin instalado numa configuração isolada: o aviso `old-name-copy` aparece no contexto e some depois de remover a pasta | PASS | `test_fermion_doctor.py::OldInstallJourneyTest` — local com `claude` 2.1.322 no G2 e no G5 (pulado na CI, sem `claude`); sessão real no G4 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — pasta `scripts/` coberta pelo ADR-0019
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — IT-01 abaixo de 1 s; bloco até 1.500 caracteres; hook dentro dos 20 s
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: distribuído pelo plugin; E2E-01 local e sessão real no G4
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — o próprio aviso e o stderr do hook; rollback = reverter o merge
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `README.md` e `mcp/README.md`; sem CHANGELOG raiz
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs` (fica para a SPEC-0066)
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0066 (dogfooding)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin `fermion` 2026.11.10, PR #35.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- Nits da revisão, sem spec: espaços duplos num caminho são achatados no bloco do hook; cópia com nome antigo instalada por link para fora da pasta não é avisada (um `lstat` permitiria); erro interno do doctor sai com 0 e só stderr.
+- O `.zip` de uma cópia antiga (`second-brain.zip`) não é conferido.
+- Agente mantenedor que propõe a spec de atualização sozinho: SPEC-0066 (ciclo de auto-melhoria).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0061`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-16 | `touches` inclui `tests/plugin/doctor_architecture_rules.py`; `unreadable-version` com o sufixo `(<fix>)`; leitura limitada a 256 KB por arquivo; caminhos com aspas de shell nos comandos; `fermion_doctor` com exit 0 sem JSON de `findings` vira `isError: true`; hook achata espaço em branco do `detail`/`fix` | G4 rodada 1 (major: arquivo de regras fora do `touches`; minors da revisão) | nenhuma | thomas, 2026-11-16 (piloto automático com o recomendado) |
