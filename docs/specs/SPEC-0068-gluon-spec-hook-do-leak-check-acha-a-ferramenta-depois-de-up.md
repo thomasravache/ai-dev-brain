@@ -9,7 +9,7 @@ created: 2026-11-16
 parent:
 depends_on: []
 consumes_contract: []
-touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/assets/hooks/pre-push-leak, skills/gluon-spec/tests/**, skills/gluon-spec/references/private-mode.md, skills/gluon-spec/CHANGELOG.md, tools/sdd/spec_graph.py, .claude-plugin/plugin.json]
+touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/assets/hooks/pre-push-leak, skills/gluon-spec/tests/**, skills/gluon-spec/references/private-mode.md, skills/gluon-spec/CHANGELOG.md, tools/sdd/spec_graph.py, .claude-plugin/plugin.json, scripts/fermion_doctor.py, tests/plugin/**]
 adrs: [ADR-0019]
 external: []
 size: S
@@ -29,7 +29,7 @@ Os repositórios em modo privado têm um `pre-push` do leak-check que grava o ca
 
 ## 3. Mudança Proposta
 - O hook procura a ferramenta, na ordem: o caminho gravado (se existir); a `gluon-spec` do plugin `fermion` instalado, lida de `$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json` (senão `~/.claude/plugins/…`); as cópias de skill do usuário (`gluon-spec`, depois a antiga `sdd-management`); e o `tools/sdd/` não rastreado. Sem nenhuma, a mensagem diz que a ferramenta não foi encontrada (nunca "marcas do SDD encontradas").
-- `private init --refresh-hooks` (e `private hooks --refresh` para todos os repositórios do registro, só os que existem na máquina) regrava só os hooks que o próprio SDD instalou (reconhecidos pelo cabeçalho), nunca um hook de outra origem, mostrando o que mudou.
+- `private hooks --refresh` (no repositório atual; com `--scan PASTA`, em todo repositório git sob a pasta cujo remoto ou caminho está no registro como privado) regrava só os hooks que o próprio SDD instalou (reconhecidos pelo cabeçalho), nunca um hook de outra origem, mostrando o que mudou.
 - O `fermion_doctor` (SPEC-0061) e o `private status` acusam hook do leak-check que aponta para ferramenta inexistente, com o comando de atualização (só avisa, ADR-0019).
 - **Não muda:** o que o leak-check procura, o escape `--no-verify` do git, hooks de gerenciadores do time (`core.hooksPath`, husky, lefthook).
 **Padrão seguido:** busca da ferramenta do template atual (SPEC-0057); leitura só de arquivos e aviso com comando do `fermion_doctor` (SPEC-0061, ADR-0019)
@@ -54,6 +54,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Fase 1 (test-writer): CH-01, UT-01, UT-02, IT-01 em `skills/gluon-spec/tests/test_private_mode.py` e o aviso do doctor em `tests/plugin/test_fermion_doctor.py`, com `CLAUDE_CONFIG_DIR`/`HOME` temporários — commit `test(...)` vermelho
+- [ ] Fase 2 (implementer): busca no template `pre-push-leak`, `private hooks --refresh [--scan]`, aviso em `private status` e check `broken-leak-hook` no `fermion_doctor`; `tools/sdd/` vendorizado, CHANGELOG, `references/private-mode.md`, versão do plugin
+- [ ] Fase 3 (reviewer): G4 independente
+- [ ] Depois do merge: `private hooks --refresh --scan ~/dev/repos` nesta máquina (com o ok do thomas)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -105,3 +109,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| v2 | 2026-11-16 | `touches` ganha `scripts/fermion_doctor.py` e `tests/plugin/**`; o refresh vira `private hooks --refresh` no repositório atual ou `--scan PASTA`, no lugar de "todos os repositórios do registro" | o aviso do doctor mora fora da skill; o registro guarda o remoto normalizado, não a pasta, então só uma varredura acha os repositórios | nenhuma | thomas, 2026-11-16 (piloto automático com o recomendado) |
