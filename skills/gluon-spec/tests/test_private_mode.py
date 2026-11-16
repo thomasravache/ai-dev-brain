@@ -43,7 +43,13 @@ class PrivateEnv:
         self.home = tmp / "home"
         self.config_home = tmp / "config"
         self.home.mkdir()
-        self.env = dict(os.environ, HOME=str(self.home), SDD_CONFIG_HOME=str(self.config_home),
+        # CLAUDE_CONFIG_DIR temporário (SPEC-0068): o hook do leak-check procura a ferramenta no plugin e nas
+        # cópias de skill do usuário; nenhuma variável CLAUDE_* do ambiente real chega aos processos.
+        self.claude_config = tmp / "claude-config"
+        self.claude_config.mkdir()
+        base_env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_")}
+        self.env = dict(base_env, HOME=str(self.home), SDD_CONFIG_HOME=str(self.config_home),
+                        CLAUDE_CONFIG_DIR=str(self.claude_config),
                         XDG_CONFIG_HOME=str(tmp / "xdg-config"), XDG_DATA_HOME=str(tmp / "xdg-data"),
                         GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
                         GIT_COMMITTER_EMAIL="t@t", GIT_CONFIG_NOSYSTEM="1")
@@ -1048,6 +1054,280 @@ class LeakHookToolPathTest(PrivateTestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertNotIn(self.MISSING, out.stderr)
         self.assertNotIn("velha", git(self.bare, "branch", env=self.e.env))
+
+
+
+# Hook do leak-check instalado pelas versões antes da SPEC-0057: chama direto o caminho gravado, sem `find_tool`.
+OLD_LEAK_HOOK = """#!/bin/sh
+# SDD modo privado: recusa o push quando há marcas do SDD (IDs de spec e ADR, tags de teste, seções, caminho do spec_root).
+# Instalado por `spec_graph.py private init` em .git/hooks (não versionado). Escape do próprio git: git push --no-verify
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  "__PYTHON__" "__SDD_TOOL__" leak-check --range "$remote_sha..$local_sha" --branch "${remote_ref#refs/heads/}" || status=1
+done
+[ "$status" -eq 0 ] || echo "pre-push: marcas do SDD encontradas — remova-as antes de enviar ao time" >&2
+exit $status
+"""
+LEAK_HOOK_TEMPLATE = SKILL / "assets" / "hooks" / "pre-push-leak"
+OLD_SKILL_NAME = "sdd-" + "management"  # nome antigo montado por partes (guarda da SPEC-0055)
+PROC_TIMEOUT = 120
+
+
+def hook_text(tool, template=None):
+    """Hook com as substituições do `private init`: o template atual (padrão) ou OLD_LEAK_HOOK."""
+    text = template if template is not None else LEAK_HOOK_TEMPLATE.read_text(encoding="utf-8")
+    return text.replace("__PYTHON__", sys.executable).replace("__SDD_TOOL__", str(tool))
+
+
+def write_hook(repo, text):
+    hook = Path(repo) / ".git" / "hooks" / "pre-push"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text(text, encoding="utf-8")
+    hook.chmod(0o755)
+    return hook
+
+
+def copy_skill(dest):
+    """Cópia da skill gluon-spec (sem testes) em dest; devolve o spec_graph.py da cópia."""
+    shutil.copytree(SKILL, dest, ignore=shutil.ignore_patterns("tests", "__pycache__", "*.pyc"))
+    return Path(dest) / "scripts" / "spec_graph.py"
+
+
+class LeakHookToolLookupTest(PrivateTestCase):
+    """SPEC-0068: o hook do leak-check acha a ferramenta depois de update do plugin ou remoção da cópia.
+
+    Contrato fixado por estes testes (para o implementer):
+
+    - Template `assets/hooks/pre-push-leak`: mantém os marcadores `__PYTHON__` e `__SDD_TOOL__` e a 2ª linha
+      começando com "# SDD modo privado: recusa o push" (é por ela que um hook é reconhecido como do SDD).
+    - Na primeira ref enviada (push que só apaga branch continua sem exigir a ferramenta), o hook procura, na ordem:
+      1. o caminho gravado (`__SDD_TOOL__`), se o arquivo existe;
+      2. para toda chave de `plugins` que começa com "fermion@" em
+         `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/installed_plugins.json` (valor lista de objetos ou um
+         objeto), `<installPath>/skills/gluon-spec/scripts/spec_graph.py`;
+      3. `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/gluon-spec/scripts/spec_graph.py`;
+      4. idem com a skill de nome antigo (`sdd-` + `management`);
+      5. `tools/sdd/spec_graph.py` da worktree, só se NÃO rastreado pelo git.
+      Ao usar uma alternativa (2 a 5) escreve no stderr "pre-push: leak-check com <caminho>" (o caminho como
+      montado: installPath do JSON + sufixo, ou a pasta de configuração + sufixo). Plugin de outra chave nunca é
+      executado. Sem nenhuma: stderr com "ferramenta do leak-check não encontrada", exit != 0, e nunca
+      "marcas do SDD encontradas".
+    - `spec_graph.py private hooks --refresh` (no repositório atual, que precisa estar em modo privado): regrava
+      `.git/hooks/pre-push` com o template atual só quando o hook existente é do SDD (2ª linha reconhecida),
+      exit 0, e diz no stdout o que foi regravado (cita "pre-push"). Hook de outra origem: não é tocado (bytes
+      idênticos), exit 0, aviso iniciado por "⚠" citando "pre-push".
+      `--scan PASTA`: percorre os repositórios git sob PASTA e faz o mesmo só nos que estão no registro como
+      privados (chave pelo remoto normalizado ou pelo caminho); os outros não são tocados.
+    - `private status`: hook do SDD cujo caminho gravado não existe e nenhuma alternativa (2 a 5) disponível →
+      imprime um aviso com "private hooks --refresh"; hook com ferramenta existente → sem esse aviso.
+    """
+
+    MISSING = "ferramenta do leak-check não encontrada"
+    MARKS = "marcas do SDD encontradas"
+
+    def setUp(self):
+        super().setUp()
+        self.e.init()
+        self.bare = self.tmp / "team.git"
+        git(self.tmp, "init", "-q", "--bare", str(self.bare), env=self.e.env)
+        git(self.e.repo, "remote", "add", "team", str(self.bare), env=self.e.env)
+        self.hook = self.e.repo / ".git" / "hooks" / "pre-push"
+        self.missing_tool = self.tmp / "sumiu" / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+
+    def push(self, branch, env=None, repo=None, bare=None):
+        repo = repo or self.e.repo
+        return subprocess.run(["git", "push", "-q", str(bare) if bare else "team", f"HEAD:refs/heads/{branch}"],
+                              cwd=repo, capture_output=True, text=True, env=env or self.e.env, check=False,
+                              timeout=PROC_TIMEOUT)
+
+    def branches(self, bare=None):
+        return git(bare or self.bare, "branch", env=self.e.env)
+
+    def assert_clean_and_dirty(self, env=None, prefix="", used=None):
+        """Push sem marca aceito; com marca recusado pelo leak-check (e, quando `used`, a alternativa citada)."""
+        commit_file(self.e, "src/a.py", f"x = 1  # {prefix}\n", "soma")
+        ok = self.push(f"{prefix}limpa", env)
+        self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+        self.assertNotIn(self.MISSING, ok.stderr)
+        self.assertIn(f"{prefix}limpa", self.branches())
+        if used is not None:
+            self.assertIn(f"pre-push: leak-check com {used}", ok.stderr)
+        commit_file(self.e, "src/a.py", f"x = 2  # {prefix}\n", "corrige\n\nRefs: SPEC-0003")
+        bad = self.push(f"{prefix}suja", env)
+        self.assertNotEqual(bad.returncode, 0, bad.stdout + bad.stderr)
+        self.assertNotIn(self.MISSING, bad.stderr)
+        self.assertIn(self.MARKS, bad.stderr)
+        self.assertIn("SPEC-0003", bad.stdout + bad.stderr)
+        self.assertNotIn(f"{prefix}suja", self.branches())
+        if used is not None:
+            self.assertIn(str(used), bad.stderr)
+
+    # ------------------------------------------------------------ CH-01
+
+    def test_hook_installed_by_init_refuses_marks_and_accepts_clean_pushes(self):
+        """SPEC-0068:CH-01 (caracterização: hook da versão atual instalado pelo `private init`)"""
+        self.assertTrue(self.hook.exists())
+        self.assert_clean_and_dirty()
+
+    # ------------------------------------------------------------ UT-01
+
+    def plugin_registry(self, config, plugins):
+        path = Path(config) / "plugins" / "installed_plugins.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"version": 2, "plugins": plugins}), encoding="utf-8")
+        return path
+
+    def test_missing_recorded_tool_falls_back_to_the_fermion_plugin(self):
+        """SPEC-0068:UT-01 (a: gluon-spec do plugin fermion lido do installed_plugins.json, lista ou objeto)"""
+        write_hook(self.e.repo, hook_text(self.missing_tool))
+        for shape in ("lista", "objeto"):
+            with self.subTest(valor=shape):
+                config = self.tmp / f"claude-{shape}"
+                install = self.tmp / f"cache-{shape}" / "fermion-lab" / "fermion" / "9.9.9"
+                tool = copy_skill(install / "skills" / "gluon-spec")
+                entry = {"scope": "user", "installPath": str(install), "version": "x"}
+                self.plugin_registry(config, {"fermion@fermion-lab": [entry] if shape == "lista" else entry})
+                env = dict(self.e.env, CLAUDE_CONFIG_DIR=str(config))
+                self.assert_clean_and_dirty(env, prefix=f"{shape}-",
+                                            used=str(install / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"))
+                self.assertTrue(tool.exists())
+
+    def test_missing_recorded_tool_falls_back_to_the_user_skill_copy(self):
+        """SPEC-0068:UT-01 (b: sem plugin, cópia de skill do usuário com o nome antigo)"""
+        write_hook(self.e.repo, hook_text(self.missing_tool))
+        config = self.tmp / "claude-copia"
+        tool = copy_skill(config / "skills" / OLD_SKILL_NAME)
+        env = dict(self.e.env, CLAUDE_CONFIG_DIR=str(config))
+        self.assert_clean_and_dirty(env, used=str(tool))
+
+    def test_without_claude_config_dir_the_home_claude_folder_is_used(self):
+        """SPEC-0068:UT-01 (b: sem CLAUDE_CONFIG_DIR, $HOME/.claude/skills/gluon-spec)"""
+        write_hook(self.e.repo, hook_text(self.missing_tool))
+        tool = copy_skill(self.e.home / ".claude" / "skills" / "gluon-spec")
+        env = {k: v for k, v in self.e.env.items() if k != "CLAUDE_CONFIG_DIR"}
+        self.assert_clean_and_dirty(env, used=str(tool))
+
+    def test_nothing_available_says_tool_not_found_and_never_reports_marks(self):
+        """SPEC-0068:UT-01 (c: nenhuma ferramenta; plugin de outra chave nunca é executado)"""
+        write_hook(self.e.repo, hook_text(self.missing_tool))
+        config = self.tmp / "claude-vazio"
+        ran = self.tmp / "plugin-alheio-rodou"
+        other = self.tmp / "cache" / "outro"
+        fake = other / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+        fake.parent.mkdir(parents=True)
+        fake.write_text(f"from pathlib import Path\nPath({str(ran)!r}).write_text('rodou')\nraise SystemExit(0)\n",
+                        encoding="utf-8")
+        self.plugin_registry(config, {"outro@lab": [{"scope": "user", "installPath": str(other), "version": "x"}]})
+        env = dict(self.e.env, CLAUDE_CONFIG_DIR=str(config))
+        commit_file(self.e, "src/a.py", "x = 2\n", "corrige\n\nRefs: SPEC-0003")
+        out = self.push("nada", env)
+        self.assertNotEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn(self.MISSING, out.stderr)
+        self.assertNotIn(self.MARKS, out.stdout + out.stderr)
+        self.assertFalse(ran.exists(), "o hook executou a ferramenta de um plugin que não é o fermion")
+        self.assertNotIn("nada", self.branches())
+
+    # ------------------------------------------------------------ UT-02
+
+    def refresh(self, *extra, cwd=None):
+        return subprocess.run([sys.executable, str(SCRIPT), "private", "hooks", "--refresh", *extra],
+                              cwd=cwd or self.e.repo, capture_output=True, text=True, env=self.e.env, check=False,
+                              timeout=PROC_TIMEOUT)
+
+    def assert_current_hook(self, hook):
+        text = hook.read_text(encoding="utf-8")
+        self.assertIn("find_tool", text)
+        self.assertTrue(text.splitlines()[1].startswith("# SDD modo privado: recusa o push"), text)
+        self.assertNotIn("__PYTHON__", text)
+        self.assertNotIn("__SDD_TOOL__", text)
+        self.assertTrue(os.access(hook, os.X_OK), f"{hook} não é executável")
+
+    def test_refresh_rewrites_the_old_sdd_hook(self):
+        """SPEC-0068:UT-02 (hook antigo do SDD é regravado com o template atual)"""
+        write_hook(self.e.repo, hook_text(self.missing_tool, OLD_LEAK_HOOK))
+        out = self.refresh()
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assert_current_hook(self.hook)
+        self.assertIn("pre-push", out.stdout)
+
+    def test_refresh_never_touches_a_hook_from_another_origin(self):
+        """SPEC-0068:UT-02 (pre-push de outra origem fica igual byte a byte, com aviso)"""
+        foreign = b"#!/bin/sh\necho time\n"
+        self.hook.write_bytes(foreign)
+        out = self.refresh()
+        self.assertEqual(self.hook.read_bytes(), foreign)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("⚠", out.stdout + out.stderr)
+        self.assertIn("pre-push", out.stdout + out.stderr)
+
+    def test_refresh_scan_rewrites_only_registered_private_repositories(self):
+        """SPEC-0068:UT-02 (--scan PASTA: só o repositório registrado como privado é regravado)"""
+        scan = self.tmp / "repos"
+        repos = {}
+        for name in ("Privado", "Livre"):
+            repo = scan / name.lower()
+            repo.mkdir(parents=True)
+            git(repo, "init", "-q", "-b", "main", env=self.e.env)
+            (repo / "README.md").write_text("# time\n", encoding="utf-8")
+            git(repo, "add", "-A", env=self.e.env)
+            git(repo, "commit", "-qm", "init", env=self.e.env)
+            git(repo, "remote", "add", "origin", f"git@github.com:Org/{name}.git", env=self.e.env)
+            repos[name] = repo
+        init = self.e.run("private", "init", "--spec-root", str(self.tmp / "sdd" / "Org" / "Privado"),
+                          cwd=repos["Privado"])
+        self.assertEqual(init.returncode, 0, init.stdout + init.stderr)
+        old = hook_text(self.missing_tool, OLD_LEAK_HOOK).encode("utf-8")
+        hooks = {name: write_hook(repo, old.decode("utf-8")) for name, repo in repos.items()}
+        out = self.refresh("--scan", str(scan), cwd=scan)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assert_current_hook(hooks["Privado"])
+        self.assertEqual(hooks["Livre"].read_bytes(), old, "o hook de um repositório fora do registro foi tocado")
+        self.assertIn("privado", out.stdout)
+
+    # ------------------------------------------------------------ IT-01
+
+    def test_refresh_repairs_a_hook_pointing_to_a_deleted_copy(self):
+        """SPEC-0068:IT-01"""
+        copy = self.e.home / ".claude-antiga" / "skills" / OLD_SKILL_NAME
+        tool = copy_skill(copy)
+        write_hook(self.e.repo, hook_text(tool, OLD_LEAK_HOOK))
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        before = self.push("antes")
+        self.assertEqual(before.returncode, 0, before.stdout + before.stderr)
+        shutil.rmtree(copy)
+        commit_file(self.e, "src/b.py", "y = 1\n", "outra")
+        broken = self.push("quebrado")
+        self.assertNotEqual(broken.returncode, 0, "o hook antigo aceitou o push sem a ferramenta")
+        self.assertNotIn("quebrado", self.branches())
+
+        out = self.refresh()
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assert_current_hook(self.hook)
+        ok = self.push("limpa")
+        self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+        self.assertIn("limpa", self.branches())
+        commit_file(self.e, "src/a.py", "x = 2\n", "corrige\n\nRefs: SPEC-0003")
+        bad = self.push("suja")
+        self.assertNotEqual(bad.returncode, 0, bad.stdout + bad.stderr)
+        self.assertIn(self.MARKS, bad.stderr)
+        self.assertNotIn(self.MISSING, bad.stderr)
+        self.assertNotIn("suja", self.branches())
+
+    # ------------------------------------------------------------ private status
+
+    def test_status_warns_about_a_hook_with_a_missing_tool(self):
+        """SPEC-0068:UT-01 (private status avisa hook do SDD sem ferramenta e manda rodar o refresh)"""
+        healthy = self.e.run("private", "status")
+        self.assertEqual(healthy.returncode, 0, healthy.stdout + healthy.stderr)
+        self.assertNotIn("private hooks --refresh", healthy.stdout + healthy.stderr)
+        for label, template in (("atual", None), ("antigo", OLD_LEAK_HOOK)):
+            with self.subTest(hook=label):
+                write_hook(self.e.repo, hook_text(self.missing_tool, template))
+                out = self.e.run("private", "status")
+                self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+                self.assertIn("private hooks --refresh", out.stdout + out.stderr)
 
 
 if __name__ == "__main__":

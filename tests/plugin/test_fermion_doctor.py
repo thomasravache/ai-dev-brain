@@ -14,7 +14,7 @@ Interface que estes testes exigem de `scripts/fermion_doctor.py` (seção 6 da S
   "path", "detail", "fix"}]}. `path` pode ser absoluto ou relativo ao projeto (tools/sdd/spec_graph.py, AGENTS.md,
   .org-atlas/skill); os testes aceitam a pasta ou o arquivo que denunciou o achado.
 - texto: uma linha "AVISO <check> <caminho> — <detalhe>" por achado; sem achado, uma linha "OK <check> ..." por
-  checagem (old-name-copy, stale-copy, stale-sdd-tool, old-sdd-block, stale-atlas).
+  checagem (old-name-copy, stale-copy, stale-sdd-tool, old-sdd-block, stale-atlas, broken-leak-hook — SPEC-0068).
 - exit sempre 0, nada gravado, nenhum processo, nenhuma rede; link simbólico para fora da pasta conferida não é
   seguido; pasta sem permissão é ignorada; versão ilegível numa cópia vira "unreadable-version".
 
@@ -51,7 +51,7 @@ SKILL_SCRIPTS = {
     "boson-atlas": ("atlas.py", "ATLAS_VERSION"),
 }
 OLD_TO_NEW = {"sdd-management": "gluon-spec", "second-brain": "photon-brain", "org-atlas": "boson-atlas"}
-CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas")
+CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas", "broken-leak-hook")
 WARN_LINE_RE = re.compile(r"^AVISO (\S+) (.+?) — (.+)$")
 IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
 DOCTOR_TIMEOUT = 60
@@ -597,6 +597,91 @@ class DoctorArchitectureTest(unittest.TestCase):
         source = DOCTOR.read_text(encoding="utf-8")
         found = self.rules.all_findings(source, DOCTOR_NAME)
         self.assertEqual(found, [], "\n".join(found))
+
+
+
+# ---------------------------------------------------------------- SPEC-0068: hook do leak-check quebrado
+
+LEAK_HOOK_TEMPLATE = REPO / "skills" / "gluon-spec" / "assets" / "hooks" / "pre-push-leak"
+# Hook das versões antes da SPEC-0057: chama direto o caminho gravado.
+OLD_LEAK_HOOK = """#!/bin/sh
+# SDD modo privado: recusa o push quando há marcas do SDD (IDs de spec e ADR, tags de teste, seções, caminho do spec_root).
+# Instalado por `spec_graph.py private init` em .git/hooks (não versionado). Escape do próprio git: git push --no-verify
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  "__PYTHON__" "__SDD_TOOL__" leak-check --range "$remote_sha..$local_sha" --branch "${remote_ref#refs/heads/}" || status=1
+done
+[ "$status" -eq 0 ] || echo "pre-push: marcas do SDD encontradas — remova-as antes de enviar ao time" >&2
+exit $status
+"""
+
+
+def leak_hook(git_dir, tool, template=None):
+    """<git_dir>/hooks/pre-push com as substituições do `private init` (template atual ou OLD_LEAK_HOOK)."""
+    text = template if template is not None else LEAK_HOOK_TEMPLATE.read_text(encoding="utf-8")
+    return write(Path(git_dir) / "hooks" / "pre-push",
+                 text.replace("__PYTHON__", sys.executable).replace("__SDD_TOOL__", str(tool)))
+
+
+class BrokenLeakHookTest(DoctorTestCase):
+    """SPEC-0068: o doctor acusa o pre-push do leak-check que aponta para ferramenta inexistente (só avisa).
+
+    Contrato: o doctor não roda processos (nem git); lê <projeto>/.git — pasta, ou arquivo "gitdir: <caminho>" de
+    worktree, seguindo o arquivo `commondir` quando existe — e confere <git common dir>/hooks/pre-push. O hook é do
+    SDD quando a 2ª linha começa com "# SDD modo privado: recusa o push". Caminho gravado: o valor de
+    `recorded="..."` (template atual) ou, no hook antigo, o 2º trecho entre aspas da linha que chama `leak-check`.
+    Achado `broken-leak-hook` quando o caminho gravado não existe e nenhuma alternativa da busca do hook existe
+    (plugin fermion do installed_plugins.json, cópias de skill do usuário, tools/sdd/ não rastreado); `path` = o
+    hook (ou a pasta hooks); `fix` contém "private hooks --refresh". Hook de outra origem nunca é achado.
+    """
+
+    def missing_tool(self):
+        return self.sandbox.base / "sumiu" / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+
+    def assert_broken(self, hook):
+        data = run_doctor(self, self.sandbox)
+        findings = by_check(data, "broken-leak-hook")
+        self.assertEqual(len(findings), 1, json.dumps(data, ensure_ascii=False, indent=1))
+        self.assert_path(findings[0], hook, hook.parent)
+        self.assertIn("private hooks --refresh", findings[0]["fix"])
+        lines = warn_lines(run_doctor(self, self.sandbox, as_json=False)).get("broken-leak-hook", [])
+        self.assertEqual(len(lines), 1, lines)
+
+    def assert_nothing(self):
+        data = run_doctor(self, self.sandbox)
+        self.assertEqual(by_check(data, "broken-leak-hook"), [], json.dumps(data, ensure_ascii=False, indent=1))
+
+    def test_sdd_hook_with_a_missing_tool_is_reported(self):
+        """SPEC-0068:UT-01 (doctor: template atual e hook antigo, caminho gravado inexistente, nada no config)"""
+        git_dir = self.sandbox.project / ".git"
+        for label, template in (("atual", None), ("antigo", OLD_LEAK_HOOK)):
+            with self.subTest(hook=label):
+                hook = leak_hook(git_dir, self.missing_tool(), template)
+                self.assert_broken(hook)
+
+    def test_hook_in_the_common_dir_of_a_worktree_is_reported(self):
+        """SPEC-0068:UT-01 (doctor: .git arquivo `gitdir:` de worktree, hooks na pasta comum)"""
+        main_git = self.sandbox.base / "principal" / ".git"
+        worktree_git = main_git / "worktrees" / "projeto"
+        write(worktree_git / "commondir", "../..\n")
+        write(worktree_git / "HEAD", "ref: refs/heads/x\n")
+        write(self.sandbox.project / ".git", f"gitdir: {worktree_git}\n")
+        hook = leak_hook(main_git, self.missing_tool())
+        self.assert_broken(hook)
+
+    def test_existing_tool_or_foreign_hook_is_not_reported(self):
+        """SPEC-0068:UT-01 (doctor: ferramenta gravada existe, ou pre-push de outra origem)"""
+        git_dir = self.sandbox.project / ".git"
+        tool = write(self.sandbox.base / "ferramenta" / "spec_graph.py", version_line("gluon-spec", LOW_VERSION))
+        for label, template in (("atual", None), ("antigo", OLD_LEAK_HOOK)):
+            with self.subTest(hook=label):
+                leak_hook(git_dir, tool, template)
+                self.assert_nothing()
+        with self.subTest(hook="outra origem"):
+            write(git_dir / "hooks" / "pre-push", "#!/bin/sh\necho time\n")
+            self.assert_nothing()
 
 
 # ---------------------------------------------------------------- IT-01
