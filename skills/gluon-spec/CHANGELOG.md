@@ -9,6 +9,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-16
+
+### Fixed
+- O hook pre-push do leak-check acha a ferramenta depois de `claude plugin update` ou da remoção da cópia da skill: além do caminho gravado, procura a `gluon-spec` do plugin `fermion` instalado (`installed_plugins.json` de `$CLAUDE_CONFIG_DIR`, senão `~/.claude`), as cópias de skill do usuário (`gluon-spec`, depois a de nome antigo) e o `tools/sdd/` não rastreado, dizendo no stderr qual usou; sem nenhuma, a mensagem continua 'ferramenta do leak-check não encontrada', nunca 'marcas do SDD encontradas' (SPEC-0068).
+
+### Added
+- `private hooks --refresh` regrava o pre-push do leak-check com o template atual só quando foi o SDD que o instalou (reconhecido pela 2ª linha), avisa e não toca num hook de outra origem nem com gerenciador de hooks do time; `--scan PASTA` faz o mesmo em todo repositório git sob a pasta registrado como privado, de qualquer pasta. `private status` avisa quando o hook do SDD não acha nenhuma ferramenta e manda rodar o `private hooks --refresh`; o `fermion_doctor` do plugin ganha a checagem `broken-leak-hook` (SPEC-0068).
+
 ## [2026.11.4] - 2026-11-16
 
 ### Fixed

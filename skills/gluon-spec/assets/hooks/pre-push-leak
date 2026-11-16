@@ -1,24 +1,62 @@
 #!/bin/sh
 # SDD modo privado: recusa o push quando há marcas do SDD (IDs de spec e ADR, tags de teste, seções, caminho do spec_root).
 # Instalado por `spec_graph.py private init` em .git/hooks (não versionado). Escape do próprio git: git push --no-verify
-# A ferramenta é escolhida quando o hook roda, na primeira ref enviada: o caminho gravado no `private init`, senão
-# tools/sdd/spec_graph.py da worktree desde que NÃO seja rastreado pelo git. Push que só apaga branches não a exige.
+# A ferramenta é escolhida quando o hook roda, na primeira ref enviada (push que só apaga branches não a exige), na
+# ordem: o caminho gravado no `private init`; a gluon-spec do plugin fermion instalado (installed_plugins.json da
+# pasta de configuração do Claude Code: $CLAUDE_CONFIG_DIR, senão ~/.claude); as cópias de skill do usuário
+# (gluon-spec, depois a de nome antigo); tools/sdd/spec_graph.py da worktree desde que NÃO seja rastreado pelo git.
+# Atualize este hook com `spec_graph.py private hooks --refresh` (SPEC-0068).
 recorded="__SDD_TOOL__"
 tool=
+use_tool() {
+  tool=$1
+  echo "pre-push: leak-check com $tool" >&2
+}
 find_tool() {
   if [ -f "$recorded" ]; then
     tool=$recorded
     return 0
   fi
+  config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+  registry="$config/plugins/installed_plugins.json"
+  if [ -f "$registry" ]; then
+    plugin=$("__PYTHON__" -c '
+import json, os, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as stream:
+        plugins = json.load(stream).get("plugins") or {}
+    for key, value in plugins.items():
+        if not str(key).startswith("fermion@"):
+            continue
+        for entry in value if isinstance(value, list) else [value]:
+            if isinstance(entry, dict) and isinstance(entry.get("installPath"), str):
+                path = os.path.join(entry["installPath"], "skills", "gluon-spec", "scripts", "spec_graph.py")
+                if os.path.isfile(path):
+                    print(path)
+                    sys.exit(0)
+except Exception:
+    pass
+' "$registry" 2>/dev/null)
+    if [ -n "$plugin" ] && [ -f "$plugin" ]; then
+      use_tool "$plugin"
+      return 0
+    fi
+  fi
+  for skill in gluon-spec sdd-management; do
+    copy="$config/skills/$skill/scripts/spec_graph.py"
+    if [ -f "$copy" ]; then
+      use_tool "$copy"
+      return 0
+    fi
+  done
   top=$(git rev-parse --show-toplevel 2>/dev/null)
   vendored="$top/tools/sdd/spec_graph.py"
   if [ -n "$top" ] && [ -f "$vendored" ] &&
      ! git -C "$top" ls-files --error-unmatch -- tools/sdd/spec_graph.py >/dev/null 2>&1; then
-    tool=$vendored
-    echo "pre-push: leak-check com a ferramenta do projeto: $tool" >&2
+    use_tool "$vendored"
     return 0
   fi
-  echo "pre-push: ferramenta do leak-check não encontrada — rode \`private init\` de novo (procurado: $recorded e $vendored não rastreado)" >&2
+  echo "pre-push: ferramenta do leak-check não encontrada — instale a gluon-spec e rode \`spec_graph.py private hooks --refresh\` (ou \`private init\`) (procurado: $recorded, o plugin fermion e as skills em $config, $vendored não rastreado)" >&2
   return 1
 }
 zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
