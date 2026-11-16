@@ -4,7 +4,7 @@ title: "photon-brain: regra de processo com alias e imports de nomes"
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-15
 parent:
 depends_on: [SPEC-0046]
@@ -13,8 +13,8 @@ touches: [skills/photon-brain/tests/brain_architecture_rules.py, skills/photon-b
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-16
 ---
 
 # SPEC-0062 — photon-brain: regra de processo com alias e imports de nomes
@@ -51,6 +51,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 em `skills/photon-brain/tests/test_architecture.py` com a tag `SPEC-0062:UT-01`, falhando pelo motivo certo
+- [ ] Green: `subprocess_findings` em `skills/photon-brain/tests/brain_architecture_rules.py` acompanha alias e imports de nomes, como a `boson-atlas` depois da SPEC-0046
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4), integração + CI (G5) e H2, Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
