@@ -6,7 +6,8 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 - nenhum import de skills/gluon-spec (spec_graph, architecture_rules) nem de tools/, nem caminho para elas;
 - nenhuma biblioteca de rede (ADR-0008);
 - processo externo só dentro da função run_processor (ADR-0009), que existe, roda o processo e nunca usa shell
-  (SPEC-0022:UT-04);
+  (SPEC-0022:UT-04), inclusive por import de nome ou alias (from subprocess import run, import subprocess as sp,
+  from os import system) — SPEC-0062:UT-01;
 - nenhum caminho pessoal absoluto em arquivos de skills/photon-brain/ fora de tests/ (placeholders como
   /Users/<nome> são permitidos);
 - remoção de arquivo (os.remove, os.unlink, Path.unlink, os.rmdir, Path.rmdir, shutil.rmtree) só em
@@ -101,6 +102,48 @@ class ProcessRulesTest(unittest.TestCase):
         self.assertIn("scripts/brain.py:6", findings[0])
         self.assertIn("doctor", findings[0])
         self.assertIn("scripts/brain.py:7", findings[1])
+
+    def test_process_imported_by_name_or_alias_outside_run_processor_is_reported(self):
+        """SPEC-0062:UT-01"""
+        source = (
+            "from subprocess import run\n"
+            "import subprocess as sp\n"
+            "from os import system\n"
+            "import os\n"
+            "from os import path\n"
+            "def run_processor(argv):\n"
+            "    sp.Popen(argv)\n"
+            "    return run(argv)\n"
+            "def doctor():\n"
+            "    run(['pdftotext', '-v'])\n"
+            "    sp.check_output(['ls'])\n"
+            "    system('ls')\n"
+            "    return path.exists('x'), os.getcwd()\n"
+        )
+        findings = subprocess_findings(source, "scripts/brain.py", ALLOWED_PROCESS_FUNCTIONS)
+        lines = [int(f.split(":")[1].split(" ")[0]) for f in findings]
+        self.assertEqual(lines, [1, 2, 3, 10, 11, 12], report(findings))
+        for finding, line in zip(findings, (1, 2, 3, 10, 11, 12)):
+            self.assertIn(f"scripts/brain.py:{line} ", finding)
+            self.assertIn("processos externos só em run_processor", finding)
+        for finding in findings[3:]:
+            self.assertIn("doctor", finding)
+
+    def test_process_imported_by_name_or_alias_inside_run_processor_is_not_reported(self):
+        """SPEC-0062:UT-01"""
+        source = (
+            "import os\n"
+            "from os import path\n"
+            "def run_processor(argv):\n"
+            "    from subprocess import run\n"
+            "    import subprocess as sp\n"
+            "    from os import system\n"
+            "    sp.Popen(argv)\n"
+            "    system('ls')\n"
+            "    return run(argv), path.exists('x'), os.getcwd()\n"
+        )
+        findings = subprocess_findings(source, "scripts/brain.py", ALLOWED_PROCESS_FUNCTIONS)
+        self.assertEqual(findings, [], report(findings))
 
     def test_brain_runs_processes_only_in_run_processor(self):
         """SPEC-0017:UT-06 SPEC-0022:UT-04"""
