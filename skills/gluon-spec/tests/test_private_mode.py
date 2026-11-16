@@ -1334,5 +1334,124 @@ class LeakHookToolLookupTest(PrivateTestCase):
                 self.assertIn("private hooks --refresh", out.stdout + out.stderr)
 
 
+
+class LeakHookAmendmentV3Test(PrivateTestCase):
+    """SPEC-0068 Emenda v3 (G4): casos que o `private hooks --refresh` e o hook precisam resolver.
+
+    Contrato adicional:
+    - `private hooks --refresh` no repositório atual regrava hook do SDD também fora do modo privado (hook órfão de
+      `private off`), exit 0; `--scan` continua só nos registrados.
+    - Hook do SDD é regravado mesmo com marcador de gerenciador do time (ex.: `.pre-commit-config.yaml`); só hook
+      de outra origem bloqueia (fica idêntico byte a byte).
+    - O hook usa `python3` do PATH quando o interpretador gravado (`__PYTHON__`) não é executável.
+    - Só diz "marcas do SDD encontradas" quando o leak-check sai 1; outro código N ≠ 0 → stderr com
+      "falha ao rodar o leak-check (exit N)" e push recusado.
+    - Ferramenta num caminho com `"`, `$` ou crase: `private init` e `private hooks --refresh` recusam com erro
+      (exit ≠ 0) e não gravam/alteram o hook.
+    """
+
+    MISSING = LeakHookToolLookupTest.MISSING
+    MARKS = LeakHookToolLookupTest.MARKS
+    push = LeakHookToolLookupTest.push
+    branches = LeakHookToolLookupTest.branches
+    refresh = LeakHookToolLookupTest.refresh
+    assert_current_hook = LeakHookToolLookupTest.assert_current_hook
+
+    def setUp(self):
+        super().setUp()
+        self.e.init()
+        self.bare = self.tmp / "team.git"
+        git(self.tmp, "init", "-q", "--bare", str(self.bare), env=self.e.env)
+        git(self.e.repo, "remote", "add", "team", str(self.bare), env=self.e.env)
+        self.hook = self.e.repo / ".git" / "hooks" / "pre-push"
+        self.missing_tool = self.tmp / "sumiu" / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+
+    def test_refresh_rewrites_the_orphan_hook_left_by_private_off(self):
+        """SPEC-0068:UT-02 (Emenda v3: hook do SDD órfão de `private off` é regravado e o push volta a funcionar)"""
+        write_hook(self.e.repo, hook_text(self.missing_tool))
+        off = self.e.run("private", "off")
+        self.assertEqual(off.returncode, 0, off.stdout + off.stderr)
+        out = self.refresh()
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assert_current_hook(self.hook)
+        self.assertNotIn(str(self.missing_tool), self.hook.read_text(encoding="utf-8"))
+        commit_file(self.e, "src/a.py", "x = 2\n", "corrige\n\nRefs: SPEC-0003")
+        pushed = self.push("modo-completo")
+        self.assertEqual(pushed.returncode, 0, pushed.stdout + pushed.stderr)
+        self.assertNotIn(self.MISSING, pushed.stderr)
+        self.assertIn("modo-completo", self.branches())
+
+    def test_refresh_rewrites_the_sdd_hook_despite_a_team_hook_marker(self):
+        """SPEC-0068:UT-02 (Emenda v3: marcador do time criado depois do init não bloqueia o hook do SDD)"""
+        write_hook(self.e.repo, hook_text(self.missing_tool))
+        (self.e.repo / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+        out = self.refresh()
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assert_current_hook(self.hook)
+        self.assertNotIn(str(self.missing_tool), self.hook.read_text(encoding="utf-8"))
+
+    def test_foreign_hook_with_a_team_hook_marker_is_untouched(self):
+        """SPEC-0068:UT-02 (Emenda v3: hook de outra origem com marcador do time fica igual byte a byte)"""
+        (self.e.repo / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+        foreign = b"#!/bin/sh\necho time\n"
+        self.hook.write_bytes(foreign)
+        out = self.refresh()
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual(self.hook.read_bytes(), foreign)
+
+    def test_missing_recorded_python_falls_back_to_python3_on_path(self):
+        """SPEC-0068:UT-01 (Emenda v3: `__PYTHON__` inexistente → python3 do PATH)"""
+        tool = copy_skill(self.e.claude_config / "skills" / "gluon-spec")
+        text = LEAK_HOOK_TEMPLATE.read_text(encoding="utf-8")
+        write_hook(self.e.repo, text.replace("__PYTHON__", str(self.tmp / "sem-python" / "python3"))
+                   .replace("__SDD_TOOL__", str(self.missing_tool)))
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        ok = self.push("limpa")
+        self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+        self.assertIn("limpa", self.branches())
+        commit_file(self.e, "src/a.py", "x = 2\n", "corrige\n\nRefs: SPEC-0003")
+        bad = self.push("suja")
+        self.assertNotEqual(bad.returncode, 0, bad.stdout + bad.stderr)
+        self.assertIn(self.MARKS, bad.stderr)
+        self.assertIn("SPEC-0003", bad.stdout + bad.stderr)
+        self.assertIn(str(tool), bad.stderr)
+        self.assertNotIn("suja", self.branches())
+
+    def test_leak_check_crash_is_not_reported_as_marks(self):
+        """SPEC-0068:UT-01 (Emenda v3: leak-check com exit 3 → "falha ao rodar o leak-check (exit 3)")"""
+        fake = self.tmp / "falsa" / "spec_graph.py"
+        fake.parent.mkdir()
+        fake.write_text("import sys\nsys.exit(3)\n", encoding="utf-8")
+        write_hook(self.e.repo, hook_text(fake))
+        commit_file(self.e, "src/a.py", "x = 1\n", "soma")
+        out = self.push("quebra")
+        self.assertNotEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("falha ao rodar o leak-check (exit 3)", out.stderr)
+        self.assertNotIn(self.MARKS, out.stdout + out.stderr)
+        self.assertNotIn("quebra", self.branches())
+
+    def test_tool_path_with_shell_characters_is_refused(self):
+        """SPEC-0068:UT-01 (Emenda v3: caminho com aspas, $ ou crase não vai para o hook)"""
+        for i, char in enumerate(('"', "$", "`")):
+            with self.subTest(caractere=char):
+                tool = copy_skill(self.tmp / f"ferr{char}amenta{i}" / "gluon-spec")
+                env = PrivateEnv(self.tmp / f"env{i}", remote_url=f"git@github.com:Org/Shell{i}.git")
+                hook = env.repo / ".git" / "hooks" / "pre-push"
+                init = subprocess.run([sys.executable, str(tool), "private", "init", "--spec-root",
+                                       str(self.tmp / f"sdd{i}")], cwd=env.repo, capture_output=True, text=True,
+                                      env=env.env, check=False, timeout=PROC_TIMEOUT)
+                self.assertNotEqual(init.returncode, 0, init.stdout + init.stderr)
+                self.assertTrue(init.stderr.strip(), "recusa sem mensagem de erro")
+                self.assertFalse(hook.exists(), f"hook gravado com caminho perigoso:\n{hook.read_text()}"
+                                 if hook.exists() else "")
+                old = hook_text(self.missing_tool, OLD_LEAK_HOOK).encode("utf-8")
+                write_hook(self.e.repo, old.decode("utf-8"))
+                refresh = subprocess.run([sys.executable, str(tool), "private", "hooks", "--refresh"],
+                                         cwd=self.e.repo, capture_output=True, text=True, env=self.e.env,
+                                         check=False, timeout=PROC_TIMEOUT)
+                self.assertNotEqual(refresh.returncode, 0, refresh.stdout + refresh.stderr)
+                self.assertEqual(self.hook.read_bytes(), old, "o refresh gravou o hook com caminho perigoso")
+
+
 if __name__ == "__main__":
     unittest.main()

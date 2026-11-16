@@ -684,6 +684,75 @@ class BrokenLeakHookTest(DoctorTestCase):
             self.assert_nothing()
 
 
+
+class BrokenLeakHookIndexTest(DoctorTestCase):
+    """SPEC-0068 Emenda v3: o doctor só aceita tools/sdd/spec_graph.py como alternativa quando NÃO é rastreado,
+    lendo o índice v2/v3 com o nome ancorado na entrada (índice v4, ilegível ou grande: não aceita). Os testes
+    preparam o repositório com git; o doctor em si não roda processos."""
+
+    def setUp(self):
+        super().setUp()
+        self.git_env = dict(self.sandbox.env, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1",
+                            GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+                            GIT_COMMITTER_EMAIL="t@t")
+        self.git("init", "-q", "-b", "main")
+        write(self.sandbox.project / "README.md", "# projeto\n")
+        self.missing = self.sandbox.base / "sumiu" / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+        self.hook = leak_hook(self.sandbox.project / ".git", self.missing)
+
+    def git(self, *args):
+        return subprocess.run(["git", *args], cwd=self.sandbox.project, env=self.git_env, capture_output=True,
+                              text=True, timeout=DOCTOR_TIMEOUT, check=True).stdout
+
+    def commit(self, *paths):
+        self.git("add", "--", *paths)
+        self.git("commit", "-qm", "x")
+
+    def findings(self):
+        data = run_doctor(self, self.sandbox)
+        return by_check(data, "broken-leak-hook"), json.dumps(data, ensure_ascii=False, indent=1)
+
+    def test_tracked_tool_in_an_index_v4_is_not_an_alternative(self):
+        """SPEC-0068:UT-01 (Emenda v3: índice v4 com tools/sdd rastreado → achado)"""
+        write(self.sandbox.project / "tools" / "sdd" / "README.md", "ferramenta\n")
+        write(self.sandbox.project / "tools" / "sdd" / "spec_graph.py", "print('x')\n")
+        self.commit("README.md", "tools")
+        self.git("update-index", "--index-version", "4")
+        self.assertEqual(self.git("update-index", "--show-index-version").strip(), "4")
+        found, data = self.findings()
+        self.assertEqual(len(found), 1, data)
+        self.assert_path(found[0], self.hook, self.hook.parent)
+
+    def test_untracked_tool_with_an_index_v2_is_an_alternative(self):
+        """SPEC-0068:UT-01 (Emenda v3: índice v2, tools/sdd não rastreado → sem achado)"""
+        self.commit("README.md")
+        self.git("update-index", "--index-version", "2")
+        write(self.sandbox.project / "tools" / "sdd" / "spec_graph.py", "print('x')\n")
+        found, data = self.findings()
+        self.assertEqual(found, [], data)
+
+    def test_tracked_path_that_only_ends_with_the_tool_name_is_not_confused(self):
+        """SPEC-0068:UT-01 (Emenda v3: x/tools/sdd rastreado não faz o tools/sdd não rastreado parecer rastreado)"""
+        write(self.sandbox.project / "x" / "tools" / "sdd" / "spec_graph.py", "print('x')\n")
+        self.commit("README.md", "x")
+        self.git("update-index", "--index-version", "2")
+        write(self.sandbox.project / "tools" / "sdd" / "spec_graph.py", "print('x')\n")
+        self.assertEqual(self.git("ls-files").split(), ["README.md", "x/tools/sdd/spec_graph.py"])
+        found, data = self.findings()
+        self.assertEqual(found, [], data)
+
+    def test_valid_fermion_plugin_is_an_alternative(self):
+        """SPEC-0068:UT-01 (plugin fermion válido no installed_plugins.json → sem achado)"""
+        self.commit("README.md")
+        install = self.sandbox.base / "cache" / "fermion" / "9.9.9"
+        write(install / "skills" / "gluon-spec" / "scripts" / "spec_graph.py", version_line("gluon-spec", LOW_VERSION))
+        write(self.sandbox.config / "plugins" / "installed_plugins.json", json.dumps(
+            {"version": 2, "plugins": {"fermion@fermion-lab": [{"scope": "user", "installPath": str(install),
+                                                                "version": "x"}]}}))
+        found, data = self.findings()
+        self.assertEqual(found, [], data)
+
+
 # ---------------------------------------------------------------- IT-01
 
 def snapshot(*roots):
