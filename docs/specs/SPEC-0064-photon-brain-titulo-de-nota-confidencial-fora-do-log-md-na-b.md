@@ -54,10 +54,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01 e IT-01 em `skills/photon-brain/tests/` com a tag `SPEC-0064:<ID>`, falhando pelo motivo certo
-- [ ] Green: `search` e `build_context` leem o `log.md` gerado sem as linhas de notas confidenciais
-- [ ] Validar: suíte completa + arquitetura (G2/G3); `references/`, CHANGELOG, `BRAIN_VERSION` e `version` do plugin
-- [ ] Review independente (G4), integração + CI (G5) e H2, Relatório de Entrega (G7)
+- [x] Red: UT-01 e IT-01 em `skills/photon-brain/tests/` com a tag `SPEC-0064:<ID>`, falhando pelo motivo certo
+- [x] Green: `search` e `build_context` leem o `log.md` gerado sem as linhas de notas confidenciais
+- [x] Validar: suíte completa + arquitetura (G2/G3); `references/`, CHANGELOG, `BRAIN_VERSION` e `version` do plugin
+- [x] Review independente (G4), integração + CI (G5) e H2, Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -68,9 +68,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 20fc1fd | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 7789d5f | 2026-11-16 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2, após Emenda v2: arquivo guardado e inbox-move escondidos, caminho ancorado sem falso positivo por sufixo, custo por linha em conjunto; 2 minors e 1 nit como pendências) — 8e2d233 | 2026-11-16 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — f0fcacd | 2026-11-16 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-16 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-16 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -83,28 +83,39 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+- Sem `--include-confidential`, `search` e `context` da `photon-brain` (e as tools `brain_*` do MCP, que chamam a CLI) leem o `log.md` gerado sem as linhas que citam uma nota confidencial: pelo caminho dela, por um `[[link]]` que resolve para ela, pelo arquivo guardado de uma nota de fonte confidencial (em `<files>/…` e pelo nome original em `inbox/`), inclusive linhas antigas, em outra caixa ou em NFD. O arquivo `log.md` não muda. `BRAIN_VERSION` 2026.11.7; plugin 2026.11.11.
 
 ### Como foi feito
+- `confidential_log_keys` junta num conjunto o que identifica as confidenciais; `log_paths` só lê caminhos onde o `log.md` os escreve (depois do comando, `→ `, `← `, `— `, `nota: `), sem falso positivo por sufixo e com custo por linha que não cresce com o número de confidenciais; `readable_notes` troca só a nota do `log.md` por uma versão filtrada em `search` e `build_context`.
+- Testes em 4f9e9ee, 04cb1c3 (TEST_DEFECT do campo `query`, IMP-01) e f56e650; correção em 780af86 e 20fc1fd.
+- **Emenda v2:** arquivo guardado e `inbox-move`, caminho ancorado, custo por linha e UT-02.
+- **Revisão G4:** rodada 1 REJECTED (blocker: o nome do arquivo de `ingest --move --confidential` vazava pela linha `inbox-move`; major: testes sem `[[link]]`, NFC e caixa; minors: falso positivo por sufixo e custo); rodada 2 APPROVED.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes:** 4f9e9ee vermelho (o snippet do `search` trazia "projects/college/Payments Secret Plan.md — note; confidencial" e o `context` trazia o `log.md` inteiro); f56e650 vermelho (a linha `inbox-move inbox/Contrato Fulano Beltrano.pdf → …` aparecia, e a linha de `Business Plan.md` sumia por causa da confidencial `Plan.md`).
+- **Depois:** 20fc1fd verde; suíte completa em 3.9 e 3.14 e CI do PR #36.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | `search` e `context` sem o título ou o caminho da confidencial pelo `log.md`; com `--include-confidential` a linha volta; arquivo no disco igual | PASS | `test_confidential_log.py::ConfidentialLogUnitTest` — CI do PR #36 (run 43925080798, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | Arquivo guardado (`ingest --move --confidential`), `[[link]]` com apelido, linhas antigas em MAIÚSCULAS, NFD e com `\`, sem falso positivo por sufixo | PASS | `test_confidential_log.py::ConfidentialLogAmendmentTest` — CI do PR #36 (run 43925080798, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | CLI real (`search --json`, `context --json`) sem o título; linha de nota comum encontrável | PASS | `test_confidential_log.py::ConfidentialLogCliTest` — CI do PR #36 (run 43925080798, Python 3.9 e 3.15) e suíte local no G5 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — 4f9e9ee/f56e650 vermelhos, 780af86/20fc1fd verdes
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão existente mantido — `visible_notes` e `confidential_omitted`; ADR-0007 (log só acréscimo) e ADR-0014
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — `references/confidential.md`, CHANGELOG `[2026.11.7]`
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — a linha `inbox-move` entrou pela Emenda v2; nenhuma outra
 
 ### Deploy
+N/A — `BRAIN_VERSION` 2026.11.7, plugin 2026.11.11, PR #36.
 
 ### Pendências
+Minors e nit da revisão, sem spec: o fecho de origens de move não tem teste (redundante no caso real); nenhum teste garante que só o `log.md` é redigido; linha escrita à mão fora do formato do log com o caminho no meio continua visível (fora do contrato).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
