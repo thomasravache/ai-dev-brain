@@ -199,7 +199,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=30)) — d13ef43 | 2026-11-16 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 9230d17 | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 2760a51 | 2026-11-16 |
-| G4 Review | FAIL | Reviewer independente: REJECTED (major: tests/plugin/doctor_architecture_rules.py fora do touches; minors: injeção no hook sem teste, falha interna do doctor vira sucesso vazio no MCP, caso exit 1 do hook não isolado, leitura sem limite, regras do ADR-0019 sem getattr/tempfile/ctypes/sqlite3/shelve/dbm/FileHandler) — Emenda v2 | 2026-11-16 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2, após Emenda v2: touches, minors corrigidos com teste antes em ecc9ffd/9230d17; mutações sobreviventes da rodada 1 pegas, exceto exit 1 em erro interno). Verificação manual em 2026-11-16 com Claude Code 2.1.322 e --plugin-dir: hook exit 0 com o bloco 'Instalação desatualizada (fermion)' trazendo old-name-copy de sdd-management e second-brain e stale-sdd-tool 2026.11.1 < 2026.11.3; tool fermion_doctor listada. — 3b2a320 | 2026-11-16 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
