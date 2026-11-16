@@ -4,7 +4,7 @@ title: "gluon-spec: worktree_dir calculado a partir do checkout principal"
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-16
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, s
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-16
 ---
 
 # SPEC-0063 — gluon-spec: worktree_dir calculado a partir do checkout principal
@@ -54,6 +54,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 e IT-01 em `skills/gluon-spec/tests/` com a tag `SPEC-0063:<ID>`, falhando pelo motivo certo
+- [ ] Green: `worktree_base` a partir do checkout principal (pai do `--git-common-dir`)
+- [ ] Validar: suíte completa + arquitetura (G2/G3); `vendor` em `tools/sdd/`, `SDD_TOOL_VERSION`, CHANGELOG da `gluon-spec` e `version` do plugin
+- [ ] Review independente (G4), integração + CI (G5) e H2, Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
