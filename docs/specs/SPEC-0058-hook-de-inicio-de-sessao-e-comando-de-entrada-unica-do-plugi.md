@@ -4,12 +4,12 @@ title: Hook de início de sessão e comando de entrada única do plugin
 tier: full
 type: feature
 user_facing: true
-status: approved
+status: implemented
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0053, SPEC-0054]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [hooks/**, commands/**, tests/plugin/test_session_start.py, tests/plugin/test_plugin.py, tests/plugin/check_plugin_version.py, tests/plugin/test_plugin_version.py, .claude-plugin/plugin.json, README.md]
 adrs: [ADR-0016, ADR-0017]
@@ -33,7 +33,7 @@ O comando `/fermion:deliver <tarefa>` (`commands/deliver.md`) encadeia o fluxo: 
 **Motivação:** frente 2 do épico SPEC-0031. Hoje o agente só sabe do SDD e do atlas se alguém carregar a skill; depois de um resumo de contexto, o processo depende da memória do modelo. Um hook de início de sessão põe o estado real (o `status`) no contexto todo começo de sessão, que é a regra "rode `status` antes de cada passo" aplicada fora do modelo. O comando de entrada única é atalho: a lógica continua nas skills.
 
 **Objetivos (dentro do escopo):**
-- `hooks/hooks.json` com um hook `SessionStart` (matcher `startup|resume|clear|compact`), forma exec: `python3` com `${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py`.
+- `hooks/hooks.json` com um hook `SessionStart` (matcher `startup|resume|clear|compact|fork`), forma exec: `python3` com `${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py`.
 - `hooks/session_start.py`: lê o JSON do stdin (`cwd`), roda só comandos de leitura das CLIs do próprio plugin e imprime `hookSpecificOutput.additionalContext`.
 - `commands/deliver.md`: comando `/fermion:deliver` com `argument-hint` e o roteiro de encadeamento.
 - A guarda de componentes na raiz (SPEC-0053:UT-02) passa a aceitar exatamente `hooks/hooks.json`, `hooks/session_start.py` e `commands/deliver.md`, e passa a vigiar também `bin/`.
@@ -77,7 +77,7 @@ O comando `/fermion:deliver <tarefa>` (`commands/deliver.md`) encadeia o fluxo: 
 
 ```text
 hooks/hooks.json
-  {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact",
+  {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact|fork",
      "hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py"], "timeout": 30}]}]}}
 
 hooks/session_start.py
@@ -93,6 +93,8 @@ hooks/session_start.py
            → "Segundo cérebro (photon-brain) configurado nesta máquina: para notas e decisões do usuário, use a skill photon-brain."
   stdout: sem bloco → nada (exit 0); com bloco →
     {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "<blocos separados por linha em branco, no máximo 8.000 caracteres>"}}
+  prazo: 10 s por CLI e 20 s no total; cada chamada usa min(10, restante) e, sem tempo, a CLI é pulada com a linha de diagnóstico (Emenda v2)
+  isolamento: falha de uma CLI (inclusive saída que não decodifica) ou do cwd omite só o bloco dela; o rótulo do diagnóstico é o do bloco que falhou (Emenda v2)
   exit: sempre 0. Falha de uma CLI (ausente, timeout de 10 s, exit fora do esperado) → bloco omitido + uma linha "session_start: <bloco> indisponível (<motivo curto>)" no stderr
   `status` com exit diferente de 0 → bloco SDD com a primeira linha do stderr ("status falhou: …"), porque a spec quebrada é informação útil
 
@@ -172,20 +174,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Hook de início de sessão**
+- [x] Red: UT-01 a UT-07 e IT-01 em `tests/plugin/test_session_start.py` com a tag `SPEC-0058:<ID>`, falhando pelo motivo certo
+- [x] Green: `hooks/hooks.json` e `hooks/session_start.py` (stdlib, exec, sempre exit 0)
+
+**Fase 2: Contrato do plugin, comando e versão**
+- [x] Red: UT-08 (forma exec, comando e guarda da raiz com lista exata e `bin/`) e UT-09 (regra de versão para `hooks/`, `commands/`, `mcp/` e `scripts/`)
+- [x] Green: `commands/deliver.md`, `tests/plugin/test_plugin.py` (Emenda v4 da SPEC-0053), `check_plugin_version.py`, `README.md` e `version` do `plugin.json`
+
+**Fase 3: Jornada E2E**
+- [x] Red: E2E-01 falhando pelo motivo certo
+- [x] Green: instalação isolada traz hook e comando, e o hook devolve o `status`
+
+**Fase final: Integração, entrega e documentação**
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4), com a verificação manual do hook numa sessão real do Claude Code
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega, README e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — c5417ad (árvore suja) | 2026-11-13 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=29)) — 7aa7419 | 2026-11-15 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — e24dd9a | 2026-11-15 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — c48043a | 2026-11-15 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 2, após Emenda v2: prazo total de 20 s e matcher com fork). Verificação manual em 2026-11-16 com Claude Code 2.1.322: claude -p --debug --plugin-dir <worktree> --output-format stream-json; debug log: 'SessionStart:startup [python3 .../hooks/session_start.py] (plugin fermion@inline) finished with status 0 (421ms)' e 'provided additionalContext (2560 chars)' começando por '## SDD (gluon-spec)'; init.slash_commands inclui 'fermion:deliver'; plugin fermion 2026.11.7 carregado. — 966903b | 2026-11-16 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — d054d16 | 2026-11-16 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-16 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-16 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 561f945 | 2026-11-16 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -196,39 +215,56 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- **Hook de início de sessão** do plugin `fermion` (`hooks/hooks.json` → `hooks/session_start.py`, matcher `startup|resume|clear|compact|fork`): põe no contexto o `status` da `gluon-spec` quando o projeto tem `docs/specs/sdd-config.yml` e uma linha para o atlas e outra para o segundo cérebro quando estão configurados na máquina. Nunca bloqueia a sessão: sai sempre com 0, e o que falha some do contexto com uma linha no stderr.
+- **Comando `/fermion:deliver <tarefa>`** (`commands/deliver.md`): entrada única que monta o contexto com o atlas, escreve a spec com a `gluon-spec`, para no H1 e segue até o PR, sem aprovar nem fazer merge sozinho.
+- A regra de versão do plugin vale também para `hooks/`, `commands/`, `mcp/` e `scripts/`; a guarda da raiz do plugin vigia todas as pastas de componente; `version` 2026.11.7; README.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Hook só com stdlib, forma exec com `${CLAUDE_PLUGIN_ROOT}`, executor de processo substituível (como o `Server(runner=...)` do `mcp/fermion_mcp.py`), lista de argumentos sem shell e só as três CLIs do plugin; prazo total de 20 s com `min(10, restante)` por CLI.
+- Testes em 7aa7419 e 5d41904; implementação em 0495f9a e e24dd9a; `arch_test` passou a rodar as regras do hook (c22582f).
+- **Emenda v2** (contrato 2): prazo total, `fork` no matcher, isolamento de falha por bloco e guarda da raiz completa.
+- **Revisão G4:** rodada 1 REPROVADO (major: sem prazo global, três CLIs presas levariam 30 s e o Claude Code mataria o hook); rodada 2 APPROVED. Verificação manual numa sessão real do Claude Code 2.1.322 em 2026-11-16: hook com status 0 em 421 ms, 2.560 caracteres de contexto começando por `## SDD (gluon-spec)` e `fermion:deliver` em `slash_commands`.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Projeto com SDD: bloco `## SDD (gluon-spec)` com o `status` rodado na raiz | PASS | `test_session_start.py::SddBlockTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-02 | Sem SDD e sem configuração: stdout vazio, exit 0 | PASS | `test_session_start.py::NothingToSayTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-03 | Atlas e cérebro configurados: as duas linhas fixas, nessa ordem | PASS | `test_session_start.py::ConfiguredLinesTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-04 | Corte do bloco SDD em 6.000 e do total em 8.000 caracteres | PASS | `test_session_start.py::SizeLimitTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-05 | CLI ausente, timeout, exit inesperado, saída que não decodifica e prazo total de 20 s: bloco omitido, stderr, exit 0 | PASS | `test_session_start.py::CliFailureTest, DeadlineTest, UndecodableOutputTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-06 | Stdin inválido, vazio, fechado ou com `cwd` inexistente ou ilegível: exit 0 | PASS | `test_session_start.py::BadStdinTest, UnreadableCwdAndClosedStdinTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-07 | Só stdlib, sem `skills/`, sem shell e só as três CLIs | PASS | `test_session_start.py::HookArchitectureTest (também no `arch_test` do G3)` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-08 | `hooks.json` exato, `deliver.md` com o roteiro e guarda da raiz com a lista exata | PASS | `test_plugin.py::PluginManifestTest, PluginEntryPointsContractTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| UT-09 | Mudança em `hooks/`, `commands/`, `mcp/` ou `scripts/` sem subir a versão gera achado | PASS | `test_plugin_version.py::VersionFindingsTest, CheckAgainstBaseTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| IT-01 | Hook como processo real num projeto criado pela CLI da `gluon-spec`, em menos de 5 s | PASS | `test_session_start.py::HookProcessTest` — CI do PR #32 (run 43875983051, Python 3.9 e 3.15) e suíte local no G5 |
+| E2E-01 | Plugin instalado numa configuração isolada traz hook e comando, e o hook declarado devolve o `status` | PASS | `test_plugin.py::SessionStartInstallJourneyTest` — local com `claude` 2.1.322 no G2 e no G5 (pulado na CI, sem `claude`); verificação manual em sessão real no G4 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — executor substituível e CLIs sem shell, como no `mcp/fermion_mcp.py` (SPEC-0054)
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — IT-01 abaixo de 5 s; 421 ms na sessão real; contexto de 2.560 caracteres (limite 8.000)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: distribuído pelo plugin; E2E-01 local
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — falhas no log de `claude --debug`; rollback = versão anterior do plugin
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README; o repositório não tem CHANGELOG raiz (os das skills não mudam)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin `fermion` 2026.11.7, PR #32.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- Achado da verificação manual, fora do escopo: o `status` da `gluon-spec` rodado de dentro de uma worktree acusa a própria worktree "fora do worktree_dir" e sugere um `git worktree move` para dentro dela mesma (o `{repo}` sai do nome da worktree, não do repositório principal). O hook só repassa o `status`; correção numa spec própria da `gluon-spec`.
+- Ferramenta: o título gerado por `spec_graph.py pr` coube no limite desta vez.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0058`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-15 | Matcher ganha `fork`; prazo total de 20 s com `min(10, restante)` por CLI; falha de uma CLI ou do `cwd` (inclusive saída que não decodifica e `PermissionError`) omite só o bloco dela, com o rótulo certo; stdin ausente usa o cwd; a guarda da raiz vigia também `workflows/`, `themes/`, `monitors/`, `output-styles/`, `.lsp.json` e `.mcp.json`; `deliver.md` confere o atlas pela CLI quando o contexto da sessão não diz | G4 (major): sem prazo global, três CLIs presas levam 30 s e o Claude Code mata o hook; minors da mesma revisão | nenhuma | thomas, 2026-11-15 (piloto automático com o recomendado) |

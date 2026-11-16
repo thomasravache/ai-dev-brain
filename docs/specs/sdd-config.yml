@@ -25,7 +25,7 @@ mutation: ""
 
 # --- Arquitetura e segurança (G3, G5) ---
 # Exemplos: "dotnet test --filter Category=Architecture" | "npx depcruise src" | "lint-imports"
-arch_test: "python3 -m unittest discover -s skills/gluon-spec/tests -p test_architecture.py && python3 -m unittest discover -s skills/photon-brain/tests -p test_architecture.py && python3 -m unittest discover -s skills/boson-atlas/tests -p test_architecture.py && python3 -m unittest discover -s mcp/tests -p test_architecture.py"
+arch_test: "python3 -m unittest discover -s skills/gluon-spec/tests -p test_architecture.py && python3 -m unittest discover -s skills/photon-brain/tests -p test_architecture.py && python3 -m unittest discover -s skills/boson-atlas/tests -p test_architecture.py && python3 -m unittest discover -s mcp/tests -p test_architecture.py && python3 -m unittest discover -s tests/plugin -p test_session_start.py"
 # Auditoria de dependências + segredos. Exemplos: "npm audit --audit-level=high" | "dotnet list package --vulnerable" | "gitleaks detect"
 security_scan: ""
 

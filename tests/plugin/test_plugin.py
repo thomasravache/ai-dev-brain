@@ -11,6 +11,10 @@ E2E-01 roda o Claude Code CLI de verdade (pulado sem ele) com a configuração i
 `CLAUDE_CONFIG_DIR` (documentado em code.claude.com/docs/en/env-vars: "All settings, session history, and plugins
 are stored under this path") e `HOME` temporários, `CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL=1` e cwd
 temporário (menos no `validate .`, que só lê). Nunca toca a configuração real de quem roda.
+
+SPEC-0058 (emenda v4 da SPEC-0053): a guarda da raiz aceita exatamente `hooks/hooks.json`, `hooks/session_start.py` e
+`commands/deliver.md` (e vigia também `bin/`); UT-08 confere o `hooks.json` e o comando `/fermion:deliver`, e o
+SPEC-0058:E2E-01 roda, na cópia instalada, o comando que o `hooks.json` declara.
 """
 import ast
 import json
@@ -36,7 +40,14 @@ KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VERSION_RE = re.compile(r"^(\d{4})\.(\d{1,2})\.(\d+)$")  # AAAA.MM.N (ex.: 2026.11.1)
 MARKETPLACE_KEYS = {"name", "owner", "plugins", "metadata"}
 # Pastas da raiz que o Claude Code carrega por convenção como componentes do plugin (fora skills/).
-ROOT_COMPONENT_DIRS = ("hooks", "agents", "commands", "output-styles", "monitors")
+# SPEC-0058 (emenda v4): bin/ também é vigiada; só os arquivos de ROOT_COMPONENT_FILES entram no contrato.
+# SPEC-0058 (Emenda v2): workflows/, themes/ e .lsp.json também são vigiados.
+ROOT_COMPONENT_DIRS = ("hooks", "agents", "commands", "output-styles", "monitors", "bin", "workflows", "themes")
+ROOT_COMPONENT_ROOT_FILES = (".mcp.json", ".lsp.json")
+ROOT_COMPONENT_FILES = ("commands/deliver.md", "hooks/hooks.json", "hooks/session_start.py")
+HOOKS_CONTRACT = {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact|fork", "hooks": [
+    {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py"],
+     "timeout": 30}]}]}}
 # Campos de plugin.json que declaram caminho de componente (manifest-reference); o contrato não declara nenhum.
 # A exceção é "mcpServers" (emenda v3): só o servidor fermion da SPEC-0054, inline, exatamente como FERMION_MCP.
 COMPONENT_KEYS = ("commands", "agents", "skills", "hooks", "outputStyles", "lspServers", "monitors",
@@ -412,15 +423,99 @@ class PluginManifestTest(unittest.TestCase):
         self.assertIn("mcpServers", plugin, "plugin.json não declara o servidor MCP fermion (SPEC-0054)")
         self.assertEqual(plugin["mcpServers"], FERMION_MCP)
 
-    def test_no_accidental_component_at_repository_root(self):
-        """SPEC-0053:UT-02 (guarda: nenhum componente carregado por convenção na raiz do plugin)
+    def test_root_component_guard_reports_files_outside_the_exact_list(self):
+        """SPEC-0053:UT-02 SPEC-0058:UT-08 (guarda da raiz contra exemplos: lista exata e bin/ vigiada)"""
+        self.assertEqual(root_component_findings(list(ROOT_COMPONENT_FILES) + ["skills/gluon-spec/SKILL.md",
+                                                                               "README.md", "tests/hooks/x.py"]), [])
+        cases = {
+            "arquivo a mais em hooks/": ["hooks/pre_tool_use.py"],
+            "cópia do hooks.json": ["hooks/hooks.json.bak"],
+            "outro comando": ["commands/outro.md"],
+            "agente": ["agents/a.md"],
+            "estilo": ["output-styles/s.md"],
+            "monitor": ["monitors/m.json"],
+            "bin/": ["bin/fermion"],
+            ".mcp.json": [".mcp.json"],
+            "workflows/": ["workflows/w.yml"],
+            "themes/": ["themes/t.json"],
+            ".lsp.json": [".lsp.json"],
+        }
+        for label, extra in cases.items():
+            with self.subTest(case=label):
+                findings = root_component_findings(list(ROOT_COMPONENT_FILES) + extra)
+                self.assertTrue(findings, f"{extra} na raiz deveria ter achado")
+                self.assertTrue(any(extra[0] in f for f in findings), report(findings))
+        for missing in ROOT_COMPONENT_FILES:
+            with self.subTest(missing=missing):
+                findings = root_component_findings([p for p in ROOT_COMPONENT_FILES if p != missing])
+                self.assertTrue(any(missing in f for f in findings), report(findings))
 
-        O repositório é o plugin (ADR-0016): .mcp.json, hooks/, agents/, commands/, output-styles/ ou monitors/ na
-        raiz seriam carregados pelo Claude Code sem estar no contrato. A SPEC-0054 declara o MCP no plugin.json.
+    def test_no_accidental_component_at_repository_root(self):
+        """SPEC-0053:UT-02 SPEC-0058:UT-08 (guarda: só os componentes do contrato na raiz do plugin)
+
+        O repositório é o plugin (ADR-0016): .mcp.json, hooks/, agents/, commands/, output-styles/, monitors/ ou bin/
+        na raiz seriam carregados pelo Claude Code. A SPEC-0054 declara o MCP no plugin.json; a SPEC-0058 (emenda v4)
+        põe no contrato exatamente hooks/hooks.json, hooks/session_start.py e commands/deliver.md.
         """
-        found = sorted({p.split("/")[0] for p in git_files()
-                        if p == ".mcp.json" or p.split("/")[0] in ROOT_COMPONENT_DIRS and "/" in p})
-        self.assertEqual(found, [], "componente na raiz do plugin fora do contrato")
+        findings = root_component_findings(git_files())
+        self.assertEqual(findings, [], "componente na raiz do plugin fora do contrato:\n" + report(findings))
+
+
+# ---------------------------------------------------------------- SPEC-0058:UT-08
+
+def root_component_findings(paths):
+    """Achados da guarda da raiz: arquivo em pasta de componente fora de ROOT_COMPONENT_FILES, .mcp.json, ou
+    arquivo do contrato ausente (paths: caminhos versionados, relativos à raiz)."""
+    paths = set(paths)
+    in_component_dirs = {p for p in paths
+                         if p in ROOT_COMPONENT_ROOT_FILES or p.split("/")[0] in ROOT_COMPONENT_DIRS and "/" in p}
+    findings = [f"root-component: {p} fora do contrato" for p in sorted(in_component_dirs - set(ROOT_COMPONENT_FILES))]
+    findings += [f"root-component-missing: {p} não existe" for p in ROOT_COMPONENT_FILES if p not in paths]
+    return findings
+
+
+def read_repo_file(test, rel):
+    path = REPO / rel
+    if not path.is_file():
+        test.fail(f"{rel} não existe (SPEC-0058)")
+    return path.read_text(encoding="utf-8")
+
+
+def markdown_body(text):
+    """Texto depois do frontmatter (o arquivo inteiro quando não há frontmatter)."""
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+        if end is not None:
+            return "\n".join(lines[end + 1:])
+    return text
+
+
+class PluginEntryPointsContractTest(unittest.TestCase):
+    def test_hooks_json_is_exactly_the_contract(self):
+        """SPEC-0058:UT-08 (hooks/hooks.json: invólucro hooks, matcher, forma exec com ${CLAUDE_PLUGIN_ROOT})"""
+        data = json.loads(read_repo_file(self, "hooks/hooks.json"))
+        self.assertEqual(data, HOOKS_CONTRACT)
+        entry = data["hooks"]["SessionStart"][0]["hooks"][0]
+        script = entry["args"][0].replace("${CLAUDE_PLUGIN_ROOT}", str(REPO))
+        self.assertTrue(Path(script).is_file(), f"o hooks.json aponta para {script}, que não existe")
+
+    def test_deliver_command_has_frontmatter_and_chaining_script(self):
+        """SPEC-0058:UT-08 (commands/deliver.md: description, argument-hint e o roteiro)"""
+        text = read_repo_file(self, "commands/deliver.md")
+        fields = frontmatter(REPO / "commands" / "deliver.md")
+        self.assertTrue(_non_empty_str(fields.get("description")), f"description vazia: {fields}")
+        self.assertNotIn("\n", fields["description"])
+        self.assertEqual(fields.get("argument-hint"), "<tarefa>", fields)
+        body = markdown_body(text)
+        for needle in ("$ARGUMENTS", "boson-atlas", "gluon-spec", "H1"):
+            with self.subTest(cita=needle):
+                self.assertIn(needle, body)
+        self.assertIn("Aprovado", body, "o roteiro tem de parar no H1 pedindo \"Aprovado\"")
+        atlas_lines = [line for line in body.splitlines() if "atlas" in line]
+        self.assertTrue(any(re.search(r"\bconfig\b", line) for line in atlas_lines),
+                        "o roteiro tem de conferir o atlas pela CLI (`atlas.py config --json`) quando o contexto "
+                        "da sessão não diz nada (Emenda v2)")
 
 
 # ---------------------------------------------------------------- UT-03
@@ -671,6 +766,84 @@ class PluginInstallJourneyTest(unittest.TestCase):
             details = ok(claude_run("details", "fermion@fermion-lab"))
             for skill in SKILL_NAMES:
                 self.assertIn(skill, details)
+
+
+def isolated_claude_env(tmp):
+    """(env, home, config, work) com HOME, CLAUDE_CONFIG_DIR e XDG_CONFIG_HOME temporários, como no SPEC-0053:E2E-01."""
+    home, config, work = Path(tmp) / "home", Path(tmp) / "config", Path(tmp) / "work"
+    for folder in (home, config, work):
+        folder.mkdir()
+    env = {k: v for k, v in os.environ.items() if not REDIRECT_ENV_RE.match(k)}
+    isolated = {"HOME": str(home), "CLAUDE_CONFIG_DIR": str(config), "XDG_CONFIG_HOME": str(home / ".config"),
+                "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1",
+                "ATLAS_CONFIG_HOME": str(Path(tmp) / "atlas-config"),
+                "BRAIN_CONFIG_HOME": str(Path(tmp) / "brain-config"),
+                "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    env.update(isolated)
+    real_home = Path(os.environ.get("HOME") or Path.home()).resolve()
+    real_config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or real_home / ".claude").resolve()
+    assert config.resolve() != real_config
+    assert not config.resolve().is_relative_to(real_home), f"{config} dentro do HOME real {real_home}"
+    assert Path(env["HOME"]).resolve() != real_home
+    return env, home, config, work
+
+
+class SessionStartInstallJourneyTest(unittest.TestCase):
+    def test_installed_plugin_brings_hook_and_command_and_hook_returns_status(self):
+        """SPEC-0058:E2E-01 [jornada: início de sessão com o plugin]"""
+        claude = shutil.which("claude")
+        if not claude:
+            self.skipTest("Claude Code CLI (claude) não está no PATH; E2E-01 roda localmente no G4 e no G5")
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp).resolve()
+            env, _, config, work = isolated_claude_env(tmp)
+
+            def claude_run(*args, cwd=work):
+                return subprocess.run([claude, "plugin", *args], cwd=cwd, env=env, capture_output=True, text=True,
+                                      timeout=300, check=False)
+
+            def ok(result):
+                self.assertEqual(result.returncode, 0, f"{result.args}\n{result.stdout}\n{result.stderr}")
+                return result.stdout
+
+            ok(claude_run("validate", ".", cwd=REPO))
+            ok(claude_run("marketplace", "add", str(REPO), "--scope", "user", "--json"))
+            ok(claude_run("install", "fermion@fermion-lab", "--scope", "user", "--json"))
+            installed = {p.get("id"): p for p in json.loads(ok(claude_run("list", "--json")))}
+            self.assertIn("fermion@fermion-lab", installed, report(installed))
+            install_path = Path(installed["fermion@fermion-lab"].get("installPath", ""))
+            self.assertTrue(install_path.resolve().is_relative_to(config.resolve()),
+                            f"cache fora da configuração isolada: {install_path}")
+            for rel in ROOT_COMPONENT_FILES:
+                self.assertTrue((install_path / rel).is_file(), f"a cópia instalada não traz {rel}")
+
+            hooks = json.loads((install_path / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+            entry = hooks["hooks"]["SessionStart"][0]["hooks"][0]
+            command = shutil.which(entry["command"], path=env.get("PATH"))
+            self.assertIsNotNone(command, f"{entry['command']} não está no PATH")
+            args = [a.replace("${CLAUDE_PLUGIN_ROOT}", str(install_path)) for a in entry.get("args", [])]
+
+            project = tmp / "projeto"
+            project.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=project, env=env, check=True, capture_output=True)
+            (project / "docs" / "specs").mkdir(parents=True)
+            shutil.copy(install_path / "skills" / "gluon-spec" / "references" / "sdd-config.template.yml",
+                        project / "docs" / "specs" / "sdd-config.yml")
+            spec_graph = install_path / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+            ok(subprocess.run([sys.executable, str(spec_graph), "new", "--tier", "lite", "--title", "Fixture E2E"],
+                              cwd=project, env=env, capture_output=True, text=True, timeout=60, check=False))
+            status = ok(subprocess.run([sys.executable, str(spec_graph), "status"], cwd=project, env=env,
+                                       capture_output=True, text=True, timeout=60, check=False))
+
+            stdin = json.dumps({"session_id": "e2e-01", "hook_event_name": "SessionStart", "source": "startup",
+                                "cwd": str(project)})
+            hook_env = {**env, "CLAUDE_PLUGIN_ROOT": str(install_path), "CLAUDE_PROJECT_DIR": str(project)}
+            result = subprocess.run([command, *args], input=stdin, cwd=project, env=hook_env, capture_output=True,
+                                    text=True, timeout=entry.get("timeout", 30), check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+            self.assertTrue(context.startswith("## SDD (gluon-spec)"), context)
+            self.assertIn(status.strip(), context)
 
 
 def scanned_skills_in(plugin_root):

@@ -7,7 +7,9 @@ arquivo exige dela:
 
 - `version_findings(changed_paths, base_version, head_version) -> list[str]`: achados (lista vazia = ok). Se algum
   caminho está em `skills/**` e a versão da HEAD não é maior que a da base (comparação de `AAAA.MM.N` como tupla de
-  inteiros), há achado. Sem mudança em `skills/**`, nada é exigido.
+  inteiros), há achado. Sem mudança em `skills/**`, nada é exigido. SPEC-0058:UT-09: a regra vale igual para
+  `hooks/**`, `commands/**`, `mcp/**` e `scripts/**` (sem isso `claude plugin update` não traz hook, comando nem
+  tools novas); `docs/**` e caminhos que só parecem com essas pastas continuam sem exigência.
 - CLI `python3 tests/plugin/check_plugin_version.py --base <ref>`, rodada na raiz do repositório: compara
   `git diff --name-only <base>...HEAD`, a versão de `git show <base>:.claude-plugin/plugin.json` e a do
   `.claude-plugin/plugin.json` da árvore; imprime os achados e sai com 1 quando há achado, 0 quando não há.
@@ -98,6 +100,20 @@ class VersionFindingsTest(unittest.TestCase):
                 self.assertEqual(self.findings(paths, "2026.11.1", "2026.11.1"), [])
 
 
+    def test_hooks_commands_mcp_and_scripts_changes_require_bigger_version(self):
+        """SPEC-0058:UT-09"""
+        for folder in ("hooks/session_start.py", "commands/deliver.md", "mcp/fermion_mcp.py", "scripts/x.sh"):
+            with self.subTest(changed=folder):
+                same = self.findings([folder, "README.md"], "2026.11.1", "2026.11.1")
+                self.assertTrue(same, f"{folder} mudou e a versão ficou igual, mas não houve achado")
+                self.assertTrue(any("2026.11.1" in f for f in same), same)
+                self.assertEqual(self.findings([folder], "2026.11.1", "2026.11.2"), [])
+        for paths in (["docs/specs/SPEC-0058-x.md"], ["docs/hooks/a.md", "tests/mcp/x.py", "hooksfoo/a",
+                                                     "commands.md", "mcpx/a.py", "tests/plugin/scripts/x.py"]):
+            with self.subTest(paths=paths):
+                self.assertEqual(self.findings(paths, "2026.11.1", "2026.11.1"), [])
+
+
 class PluginAuthorTest(unittest.TestCase):
     def test_author_matches_marketplace_owner_without_email(self):
         """SPEC-0056:UT-02"""
@@ -174,6 +190,20 @@ class CheckAgainstBaseTest(unittest.TestCase):
                     self.write("skills/gluon-spec/SKILL.md", f"{label}\n")
                 self.write_plugin(version)
                 self.commit(label)
+                result = self.run_check()
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                if expected:
+                    self.assertIn("2026.11.1", result.stdout + result.stderr)
+
+    def test_check_against_base_for_hooks_commands_mcp_scripts_and_docs(self):
+        """SPEC-0058:UT-09 (repositório temporário, check_plugin_version.py --base)"""
+        cases = (("hooks/session_start.py", 1), ("commands/deliver.md", 1), ("mcp/fermion_mcp.py", 1),
+                 ("scripts/release.sh", 1), ("docs/specs/SPEC-0001-x.md", 0))
+        for rel, expected in cases:
+            with self.subTest(changed=rel):
+                self.git("reset", "-q", "--hard", self.base)
+                self.write(rel, f"mudança em {rel}\n")
+                self.commit(f"muda {rel} sem subir a versão")
                 result = self.run_check()
                 self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
                 if expected:
