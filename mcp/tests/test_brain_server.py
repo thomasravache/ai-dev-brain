@@ -67,6 +67,7 @@ from test_server import (
     tools_by_name,
 )
 
+SURROGATES = ("\ud800 x", "\udc80 zebra")  # surrogate solto: não é Unicode válido
 INCLUDE_CONFIDENTIAL = "--include-confidential"
 CONTROL_SAMPLES = ("a\x00b", "a\x01", "a \x1b[31m", "\x1fa", "a\x7f")
 
@@ -264,6 +265,27 @@ class BrainInvalidArgumentsTest(unittest.TestCase):
                 runner = FakeRunner()
                 error_of(self, new_server(runner).handle(call(name, arguments)), -32602)
                 self.assertEqual(runner.calls, [], f"{label}: a CLI foi chamada")
+
+    def test_lone_surrogates_get_32602_and_open_no_process(self):
+        """SPEC-0059:UT-02 (surrogate solto é Unicode inválido, fora do schema, em qualquer campo string)"""
+        cases = []
+        for bad in SURROGATES:
+            cases += [
+                ("brain_search", {"query": bad}),
+                ("brain_search", {"query": "api", "context": bad}),
+                ("brain_search", {"query": "api", "type": bad}),
+                ("brain_search", {"query": "api", "tag": bad}),
+                ("brain_context", {"query": bad}),
+                ("brain_context", {"query": "api", "context": bad}),
+                ("brain_links", {"note": bad}),
+                ("brain_related", {"note": bad}),
+                ("brain_related", {"text": bad}),
+            ]
+        for name, arguments in cases:
+            with self.subTest(tool=name, arguments=ascii(arguments)):
+                runner = FakeRunner()
+                error_of(self, new_server(runner).handle(call(name, arguments)), -32602)
+                self.assertEqual(runner.calls, [], "a CLI foi chamada")
 
     def test_valid_limits_are_accepted(self):
         """SPEC-0059:UT-02 (as bordas das faixas valem)"""
@@ -492,6 +514,18 @@ class BrainOutputMappingTest(unittest.TestCase):
                 self.assertIn(stderr.strip(), text_of(result))
                 self.assertNotIn("structuredContent", result)
 
+    def test_exit_1_with_a_json_report_outside_doctor_and_lint_is_an_error(self):
+        """SPEC-0059:UT-04 (só brain_doctor e brain_lint tratam exit 1 como relatório)"""
+        stdout = json.dumps({"results": [], "ok": False}) + "\n"
+        stderr = "erro: falhou\n"
+        for name, arguments in (("brain_search", {"query": "api"}), ("brain_links", {"note": "x"}),
+                                ("brain_config", {})):
+            with self.subTest(tool=name):
+                result = self.result(name, FakeRunner(1, stdout, stderr), arguments)
+                self.assertIs(result.get("isError"), True)
+                self.assertIn("erro: falhou", text_of(result))
+                self.assertNotIn("structuredContent", result)
+
     def test_exit_2_is_an_error_with_the_stderr(self):
         """SPEC-0059:UT-04 (lint com regra desconhecida, nota não encontrada, nota confidencial recusada)"""
         cases = [
@@ -708,6 +742,15 @@ class BrainConfidentialTest(BrainServerCase):
                 if name == "brain_links":
                     self.assertNotIn(self.secret_rel, result["structuredContent"]["backlinks"])
 
+    def test_search_and_context_report_the_omitted_confidential_note(self):
+        """SPEC-0059:IT-03 (confidential_omitted >= 1 pelo servidor real)"""
+        server = self.open_server()
+        for index, name in enumerate(("brain_search", "brain_context"), 1):
+            with self.subTest(tool=name):
+                result, _ = self.ask(server, name, {"query": "payments plan"}, index)
+                self.assertIs(result.get("isError"), False, text_of(result))
+                self.assertGreaterEqual((result.get("structuredContent") or {}).get("confidential_omitted", 0), 1)
+
     def test_related_and_links_by_name_are_refused(self):
         """SPEC-0059:IT-03 (recusa da CLI, sem o conteúdo da nota)"""
         server = self.open_server()
@@ -731,6 +774,27 @@ class BrainConfidentialTest(BrainServerCase):
         result, _ = self.ask(server, "brain_links", {"note": "Nota Que Nao Existe"}, 1)
         self.assertIs(result.get("isError"), True)
         self.assertIn(expected.stderr.strip(), text_of(result))
+
+
+class BrainSurrogateTest(BrainServerCase):
+    def test_raw_surrogate_escape_gets_32602(self):
+        """SPEC-0059:UT-02 (servidor real: JSON com o escape \\ud800 cru)"""
+        server = self.open_server()
+        raw = '{"jsonrpc": "2.0", "id": %d, "method": "tools/call", "params": {"name": "%s", "arguments": %s}}'
+        lines = [
+            raw % (1, "brain_search", '{"query": "\\ud800 x"}'),
+            raw % (2, "brain_links", '{"note": "\\udc80 zebra"}'),
+            raw % (3, "brain_context", '{"query": "api", "context": "\\ud800 x"}'),
+        ]
+        for index, line in enumerate(lines, 1):
+            with self.subTest(line=line):
+                self.assertIn("\\ud", line)
+                server.send_line(line)
+                response, _ = server.receive()
+                error_of(self, response, -32602, id=index)
+        server.send(request("ping", id=9))
+        response, _ = server.receive()
+        self.assertEqual(result_of(self, response, id=9), {}, "o servidor parou de responder")
 
 
 if __name__ == "__main__":
