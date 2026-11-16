@@ -9,9 +9,9 @@ created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0058, SPEC-0060]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [scripts/fermion_doctor.py, hooks/session_start.py, mcp/**, tests/plugin/test_fermion_doctor.py, tests/plugin/test_session_start.py, .claude-plugin/plugin.json, README.md]
+touches: [scripts/fermion_doctor.py, hooks/session_start.py, mcp/**, tests/plugin/test_fermion_doctor.py, tests/plugin/doctor_architecture_rules.py, tests/plugin/test_session_start.py, .claude-plugin/plugin.json, README.md]
 adrs: [ADR-0017, ADR-0019]
 external: []
 size: M
@@ -93,7 +93,8 @@ python3 scripts/fermion_doctor.py [--project PASTA] [--json]
                     → "AVISO old-sdd-block <arquivo> — bloco SDD com o nome antigo (rode: … spec_graph.py vendor --agents)"
     stale-atlas     <projeto>/.org-atlas/skill/scripts/atlas.py com ATLAS_VERSION menor que a do plugin (só existe quando o projeto aberto é o repositório do atlas, modo repo)
                     → "AVISO stale-atlas .org-atlas/skill — <v> < <v plugin> (rode no repositório do atlas: python3 <plugin>/skills/boson-atlas/scripts/atlas.py vendor --ci <github|generic>, o mesmo --ci da instalação)"
-    versão ilegível numa cópia → "AVISO unreadable-version <caminho> — versão não encontrada" (a checagem segue)
+    versão ilegível numa cópia → "AVISO unreadable-version <caminho> — versão não encontrada (<fix>)" (a checagem segue)
+  leitura: só os primeiros 256 KB de cada arquivo (a constante de versão fica no topo); caminhos nos comandos sugeridos com aspas de shell quando precisam
   --json → {"plugin_versions": {"gluon-spec": v, "photon-brain": v, "boson-atlas": v},
             "findings": [{"check": id, "level": "warn", "path": caminho, "detail": texto, "fix": comando ou instrução}]}
   exit: sempre 0; nada é gravado
@@ -103,6 +104,8 @@ hook SessionStart (SPEC-0058) → com achado, bloco depois dos da SPEC-0058:
   sem achado → nenhum bloco
 
 tool MCP fermion_doctor {} (readOnlyHint) → fermion_doctor.py --project <CLAUDE_PROJECT_DIR ou cwd> --json; exit 0 → isError: false com structuredContent
+  exit 0 sem objeto JSON com findings, exit ≠ 0, timeout ou script ausente → isError: true com o stderr
+hook: detail e fix com todo espaço em branco (inclusive quebra de linha) achatado em um espaço, uma linha por achado
 ```
 
 **Design:** N/A — sem interface gráfica.
@@ -247,3 +250,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0061`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-16 | `touches` inclui `tests/plugin/doctor_architecture_rules.py`; `unreadable-version` com o sufixo `(<fix>)`; leitura limitada a 256 KB por arquivo; caminhos com aspas de shell nos comandos; `fermion_doctor` com exit 0 sem JSON de `findings` vira `isError: true`; hook achata espaço em branco do `detail`/`fix` | G4 rodada 1 (major: arquivo de regras fora do `touches`; minors da revisão) | nenhuma | thomas, 2026-11-16 (piloto automático com o recomendado) |
