@@ -4,7 +4,7 @@ title: "gluon-spec: hook do leak-check acha a ferramenta depois de update do plu
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-16
 parent:
 depends_on: []
