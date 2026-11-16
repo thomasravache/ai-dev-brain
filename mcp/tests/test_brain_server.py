@@ -12,13 +12,13 @@ Interface que estes testes exigem de mcp/fermion_mcp.py (seção 6 da SPEC-0059)
     timeout=120, e <comando>... exatamente:
         brain_config       config --json
         brain_doctor       doctor --json
-        brain_search       search [--context C] [--type T] [--tag G] [--limit L] --json -- <query.split()>
-        brain_related      related (--note=N | --text=X) [--limit L] --json
+        brain_search       search [--context=C] [--type=T] [--tag=G] [--limit=L] --json -- <query.split()>
+        brain_related      related (--note=N | --text=X) [--limit=L] --json
         brain_links        links --json -- <note>
-        brain_context      context [--context C] [--hops H] [--limit L] [--max-chars M] --json -- <query.split()>
+        brain_context      context [--context=C] [--hops=H] [--limit=L] [--max-chars=M] --json -- <query.split()>
         brain_inbox_list   inbox list --json
-        brain_lint         lint --json [--only a,b]
-    Nunca --include-confidential.
+        brain_lint         lint --json [--only=a,b]
+    Emenda v2: toda opção com valor vai colada (--opção=valor); nunca --include-confidential como argumento próprio.
 
     Saída: exit 0 (e 1 em brain_doctor/brain_lint com stdout JSON objeto) → isError false, texto = stdout,
     structuredContent = stdout se for objeto JSON; exit 3 → BRAIN_NOT_CONFIGURED + stderr; outro exit → código e
@@ -328,7 +328,7 @@ class BrainCommandLineTest(unittest.TestCase):
     def test_related_text_is_glued_to_its_option(self):
         """SPEC-0059:UT-03"""
         args = self.run_tool("brain_related", {"text": "--include-confidential a; 'b'", "limit": 3})
-        self.assertEqual(args, ["related", "--text=--include-confidential a; 'b'", "--limit", "3", "--json"])
+        self.assertEqual(args, ["related", "--text=--include-confidential a; 'b'", "--limit=3", "--json"])
 
     def test_context_never_becomes_context_add(self):
         """SPEC-0059:UT-03 ('context add' cria contexto)"""
@@ -344,12 +344,12 @@ class BrainCommandLineTest(unittest.TestCase):
         cases = [
             ("brain_search", {"query": "api payments", "context": "college", "type": "note", "tag": "api",
                               "limit": 5},
-             ["search", "--context", "college", "--type", "note", "--tag", "api", "--limit", "5", "--json", "--",
-              "api", "payments"]),
+             ["search", "--context=college", "--type=note", "--tag=api", "--limit=5", "--json", "--", "api",
+              "payments"]),
             ("brain_context", {"query": "a\tb\nc\rd", "context": "college", "hops": 2, "limit": 5,
                                "max_chars": 1000},
-             ["context", "--context", "college", "--hops", "2", "--limit", "5", "--max-chars", "1000", "--json",
-              "--", "a", "b", "c", "d"]),
+             ["context", "--context=college", "--hops=2", "--limit=5", "--max-chars=1000", "--json", "--", "a",
+              "b", "c", "d"]),
         ]
         for name, arguments, expected in cases:
             with self.subTest(tool=name):
@@ -362,13 +362,42 @@ class BrainCommandLineTest(unittest.TestCase):
             ("brain_doctor", {}, ["doctor", "--json"]),
             ("brain_inbox_list", {}, ["inbox", "list", "--json"]),
             ("brain_lint", {}, ["lint", "--json"]),
-            ("brain_lint", {"only": ["broken-link", "orphan"]}, ["lint", "--json", "--only", "broken-link,orphan"]),
-            ("brain_related", {"note": "Payments API", "limit": 2}, ["related", "--note=Payments API", "--limit",
-                                                                      "2", "--json"]),
+            ("brain_lint", {"only": ["broken-link", "orphan"]}, ["lint", "--json", "--only=broken-link,orphan"]),
+            ("brain_related", {"note": "Payments API", "limit": 2}, ["related", "--note=Payments API", "--limit=2",
+                                                                      "--json"]),
         ]
         for name, arguments, expected in cases:
             with self.subTest(tool=name, arguments=arguments):
                 self.assertEqual(self.run_tool(name, arguments), expected)
+
+    def test_option_values_are_glued_even_when_they_look_like_options(self):
+        """SPEC-0059:UT-03 (Emenda v2: --opção=valor; um valor nunca vira opção própria)"""
+        cases = [
+            ("brain_search", {"query": "x", "context": "--include-confidential", "type": "-t", "tag": "--json"},
+             ["search", "--context=--include-confidential", "--type=-t", "--tag=--json", "--json", "--", "x"]),
+            ("brain_context", {"query": "x", "context": "--include-confidential"},
+             ["context", "--context=--include-confidential", "--json", "--", "x"]),
+        ]
+        for name, arguments, expected in cases:
+            with self.subTest(tool=name):
+                args = self.run_tool(name, arguments)
+                self.assertEqual(args, expected)
+                self.assertNotIn(INCLUDE_CONFIDENTIAL, args[:args.index("--")])
+
+    def test_every_option_with_a_value_is_glued(self):
+        """SPEC-0059:UT-03 (Emenda v2: nenhum valor de opção vai em argumento separado)"""
+        cases = [
+            ("brain_search", {"query": "x", "context": "c", "type": "note", "tag": "g", "limit": 5}),
+            ("brain_related", {"text": "x", "limit": 5}),
+            ("brain_context", {"query": "x", "context": "c", "hops": 1, "limit": 5, "max_chars": 900}),
+            ("brain_lint", {"only": ["orphan"]}),
+        ]
+        valued = {"--context", "--type", "--tag", "--limit", "--hops", "--max-chars", "--only", "--note", "--text"}
+        for name, arguments in cases:
+            with self.subTest(tool=name):
+                args = self.run_tool(name, arguments)
+                options = args[:args.index("--")] if "--" in args else args
+                self.assertEqual([a for a in options if a in valued], [], args)
 
     def test_no_brain_command_line_asks_for_confidential_notes(self):
         """SPEC-0059:UT-03 (nenhuma linha de comando tem --include-confidential antes do --)"""
@@ -377,6 +406,7 @@ class BrainCommandLineTest(unittest.TestCase):
             ("brain_doctor", {}),
             ("brain_search", {"query": "-rf --include-confidential; x", "context": "college", "type": "note",
                               "tag": "api", "limit": 5}),
+            ("brain_search", {"query": "x", "context": "--include-confidential"}),
             ("brain_related", {"note": "-x"}),
             ("brain_related", {"text": "segredo", "limit": 4}),
             ("brain_links", {"note": "--include-confidential"}),
@@ -567,14 +597,14 @@ class BrainSameResultAsCliTest(BrainServerCase):
     CALLS = (
         ("brain_search", {"query": "payments plan"}, ["search", "--json", "--", "payments", "plan"]),
         ("brain_search", {"query": "payments", "context": "college", "tag": "api", "limit": 5},
-         ["search", "--context", "college", "--tag", "api", "--limit", "5", "--json", "--", "payments"]),
+         ["search", "--context=college", "--tag=api", "--limit=5", "--json", "--", "payments"]),
         ("brain_context", {"query": "payments plan"}, ["context", "--json", "--", "payments", "plan"]),
         ("brain_context", {"query": "billing", "hops": 2, "limit": 3, "max_chars": 5000},
-         ["context", "--hops", "2", "--limit", "3", "--max-chars", "5000", "--json", "--", "billing"]),
+         ["context", "--hops=2", "--limit=3", "--max-chars=5000", "--json", "--", "billing"]),
         ("brain_links", {"note": PUBLIC_NOTE}, ["links", "--json", "--", PUBLIC_NOTE]),
         ("brain_links", {"note": OTHER_NOTE}, ["links", "--json", "--", OTHER_NOTE]),
         ("brain_lint", {}, ["lint", "--json"]),
-        ("brain_lint", {"only": ["broken-link", "orphan"]}, ["lint", "--json", "--only", "broken-link,orphan"]),
+        ("brain_lint", {"only": ["broken-link", "orphan"]}, ["lint", "--json", "--only=broken-link,orphan"]),
     )
 
     def setUp(self):
@@ -633,7 +663,8 @@ class BrainNotConfiguredTest(BrainServerCase):
 
 
 class BrainConfidentialTest(BrainServerCase):
-    """Nota `confidential: true` cujo título e corpo casam com "payments plan" nunca sai pelo MCP."""
+    """Nota `confidential: true` cujo título e corpo casam com "payments plan": o corpo nunca sai pelo MCP e ela
+    nunca vem como resultado (path). O título que a CLI grava no log.md está fora do escopo (Emenda v2, SPEC-0064)."""
 
     def setUp(self):
         super().setUp()
