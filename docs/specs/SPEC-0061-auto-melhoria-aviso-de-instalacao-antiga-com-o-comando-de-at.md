@@ -198,7 +198,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — c5417ad (árvore suja) | 2026-11-13 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=30)) — d13ef43 | 2026-11-16 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 9230d17 | 2026-11-16 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — a965ee1 | 2026-11-16 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 2760a51 | 2026-11-16 |
 | G4 Review | FAIL | Reviewer independente: REJECTED (major: tests/plugin/doctor_architecture_rules.py fora do touches; minors: injeção no hook sem teste, falha interna do doctor vira sucesso vazio no MCP, caso exit 1 do hook não isolado, leitura sem limite, regras do ADR-0019 sem getattr/tempfile/ctypes/sqlite3/shelve/dbm/FileHandler) — Emenda v2 | 2026-11-16 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
