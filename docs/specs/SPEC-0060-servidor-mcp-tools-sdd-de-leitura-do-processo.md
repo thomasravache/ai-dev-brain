@@ -4,7 +4,7 @@ title: "Servidor MCP: tools sdd de leitura do processo"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-13
 parent: SPEC-0031
 depends_on: [SPEC-0054, SPEC-0059]
@@ -119,7 +119,7 @@ tools/call
 - N/A — texto repassado sem interpretar; igualdade com a CLI provada no IT-01.
 
 ### 7.5 Testes E2E
-- N/A — instalação é a jornada do SPEC-0053:E2E-01; protocolo provado com processo real nos IT; conexão conferida no G4 (`/mcp` lista as `sdd_*`).
+- N/A — instalação é a jornada E2E da SPEC-0053; protocolo provado com processo real nos IT; conexão conferida no G4 (`/mcp` lista as `sdd_*`).
 
 ### 7.6 Outros
 - Tempo de resposta no IT-01.
@@ -145,6 +145,23 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Tools, schemas, pasta do projeto e saída**
+- [ ] Red: UT-01 a UT-04 em `mcp/tests/` com a tag `SPEC-0060:<ID>`, falhando pelo motivo certo
+- [ ] Green: as seis `sdd_*` em `TOOLS`, `command_args` (`--root` do ambiente) e `map_output`; `_check` confere `minItems`/`maxItems`
+
+**Fase 2: Fronteira com as CLIs**
+- [ ] Red: UT-05 (processo só para `atlas.py`, `brain.py` e `spec_graph.py`)
+- [ ] Green: regra aceita as três CLIs; código real sem achado
+
+**Fase 3: Servidor real num projeto de fixture**
+- [ ] Red: IT-01 e IT-02 (projeto criado pela CLI da `gluon-spec` em pasta temporária)
+- [ ] Green: resultados iguais aos da CLI; nenhum arquivo muda
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Validar: suíte completa + arquitetura (G2/G3); `mcp/README.md` e `version` do `plugin.json`
+- [ ] Review independente (G4), com as `sdd_*` listadas numa sessão real do Claude Code
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
