@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **4 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, implemented 57
+- Validação (G0): **3 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, implemented 58
 - Impedimentos: **0 aberto(s)**, 28 resolvido(s)
 
 ## Cobertura de Pilares
@@ -132,6 +132,7 @@ flowchart LR
 | [SPEC-0065](SPEC-0065-gluon-spec-seguranca-como-parte-da-spec-e-dos-gates.md) | gluon-spec: segurança como parte da spec e dos gates | epic | feature | proposed | 2026-11-16 | — | — | — |
 | [SPEC-0066](SPEC-0066-dogfooding-o-fermion-valida-e-melhora-o-proprio-repositorio.md) | Dogfooding: o Fermion valida e melhora o próprio repositório | epic | feature | proposed | 2026-11-16 | — | — | — |
 | [SPEC-0067](SPEC-0067-aposentar-os-nomes-tecnicos-antigos-second-brain-org-atlas-s.md) | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | epic | migration | proposed | 2026-11-16 | — | — | — |
+| [SPEC-0068](SPEC-0068-gluon-spec-hook-do-leak-check-acha-a-ferramenta-depois-de-up.md) | gluon-spec: hook do leak-check acha a ferramenta depois de update do plugin ou remoção da cópia | lite | fix | implemented | 2026-11-16 | — | — | — |
 
 ## ADRs
 

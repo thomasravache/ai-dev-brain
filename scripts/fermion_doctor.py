@@ -8,7 +8,12 @@ Confere se há instalação antiga ao lado do plugin e diz como atualizar; nunca
 - stale-copy: cópia de skill com o nome novo mais velha que o plugin;
 - stale-sdd-tool: tools/sdd/ do projeto mais velho que a gluon-spec do plugin;
 - old-sdd-block: bloco sdd:start que ainda manda carregar a skill pelo nome antigo;
-- stale-atlas: atlas vendorizado (.org-atlas/skill/) mais velho que a boson-atlas do plugin.
+- stale-atlas: atlas vendorizado (.org-atlas/skill/) mais velho que a boson-atlas do plugin;
+- broken-leak-hook: pre-push do leak-check instalado pelo SDD (modo privado) cujo caminho gravado não existe e sem
+  nenhuma alternativa da busca do hook (plugin fermion do installed_plugins.json, cópias de skill do usuário,
+  tools/sdd/ não rastreado) — todo push seria recusado (SPEC-0068). O hook é lido de <projeto>/.git (pasta, ou
+  arquivo `gitdir:` de worktree seguindo `commondir`); "não rastreado" é conferido nas entradas do índice do git v2/v3,
+  sem rodar git (índice ausente, v4, ilegível ou grande demais: tools/sdd/ não conta como alternativa).
 Cópia com versão ilegível vira unreadable-version.
 
 Pasta de skills do usuário: $CLAUDE_CONFIG_DIR/skills, senão $HOME/.claude/skills; do projeto:
@@ -38,11 +43,13 @@ OLD_TO_NEW = {"sdd-management": "gluon-spec", "second-brain": "photon-brain", "o
 AGENT_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
 BLOCK_START = "<!-- sdd:start -->"
 BLOCK_END = "<!-- sdd:end -->"
-CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas")
+CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas", "broken-leak-hook")
 UNREADABLE = "unreadable-version"
 VERSION_TEXT_RE = re.compile(r"^\d+(?:\.\d+)*$")
 READ_LIMIT = 256 * 1024  # só os primeiros 256 KB de cada arquivo (Emenda v2)
 USAGE = "uso: fermion_doctor.py [--project PASTA] [--json]"
+LEAK_HOOK_SIGNATURE = "# SDD modo privado: recusa o push"  # 2ª linha do hook do leak-check (SPEC-0068)
+VENDORED_TOOL = "tools/sdd/spec_graph.py"
 
 
 # --------------------------------------------------------------------------- leitura segura
@@ -71,6 +78,17 @@ def read_text(path, root):
     try:
         with path.open("rb") as stream:
             return stream.read(READ_LIMIT).decode("utf-8", errors="replace")
+    except (OSError, ValueError):
+        return None
+
+
+def read_bytes(path, root):
+    """Os primeiros READ_LIMIT bytes do arquivo dentro de root; None quando não existe, sai de root ou não dá para ler."""
+    if not is_file(path, root):
+        return None
+    try:
+        with path.open("rb") as stream:
+            return stream.read(READ_LIMIT)
     except (OSError, ValueError):
         return None
 
@@ -208,6 +226,123 @@ def check_atlas(report, project, versions, plugin_root):
         report.add("stale-atlas", "stale-atlas", relative, f"{version} < {versions['boson-atlas']}", fix)
 
 
+def git_common_dir(project):
+    """Pasta comum do git do projeto: <projeto>/.git, ou o `gitdir:` do arquivo .git seguindo `commondir`; sem git."""
+    dot_git = Path(project) / ".git"
+    try:
+        if dot_git.is_dir():
+            return dot_git
+    except OSError:
+        return None
+    text = read_text(dot_git, real(project))
+    if not text or not text.startswith("gitdir:"):
+        return None
+    value = text[len("gitdir:"):].strip()
+    if not value:
+        return None
+    git_dir = Path(value.splitlines()[0].strip())
+    if not git_dir.is_absolute():
+        git_dir = Path(project) / git_dir
+    common = read_text(git_dir / "commondir", real(git_dir))
+    if common and common.strip():
+        target = Path(common.strip().splitlines()[0])
+        git_dir = target if target.is_absolute() else git_dir / target
+    return Path(os.path.normpath(str(git_dir)))
+
+
+def recorded_tool(text):
+    """Caminho gravado: `recorded="..."` (template atual) ou o 2º trecho entre aspas da linha do leak-check."""
+    match = re.search(r'^recorded="([^"]*)"', text, re.MULTILINE)
+    if match:
+        return match.group(1)
+    for line in text.splitlines():
+        if "leak-check" in line and not line.lstrip().startswith("#"):
+            parts = re.findall(r'"([^"]*)"', line)
+            if len(parts) >= 2:
+                return parts[1]
+    return None
+
+
+def exists(path):
+    try:
+        return Path(path).is_file()
+    except (OSError, ValueError):
+        return False
+
+
+def leak_tool_alternatives(project, env, git_dir):
+    """As alternativas da busca do hook, na mesma ordem: plugin fermion, cópias do usuário, tools/sdd/ não rastreado."""
+    config = Path(env.get("CLAUDE_CONFIG_DIR") or Path(env.get("HOME") or Path.home()) / ".claude")
+    registry = config / "plugins" / "installed_plugins.json"
+    try:
+        plugins = json.loads(read_text(registry, real(registry.parent)) or "{}").get("plugins")
+    except (ValueError, AttributeError):
+        plugins = None
+    for key, value in (plugins.items() if isinstance(plugins, dict) else []):
+        if str(key).startswith("fermion@"):
+            for entry in value if isinstance(value, list) else [value]:
+                if isinstance(entry, dict) and isinstance(entry.get("installPath"), str):
+                    yield Path(entry["installPath"]) / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+    for skill in ("gluon-spec", "sdd-management"):
+        yield config / "skills" / skill / "scripts" / "spec_graph.py"
+    vendored = Path(project) / VENDORED_TOOL
+    if exists(vendored):
+        tracked = index_paths(read_bytes(git_dir / "index", real(git_dir)))
+        if tracked is not None and VENDORED_TOOL.encode("utf-8") not in tracked:
+            yield vendored
+
+
+def index_paths(data):
+    """Caminhos das entradas de um índice do git v2/v3 (Emenda v3); None quando não dá para ter certeza: índice
+    ausente, ilegível, v4 (caminhos comprimidos), truncado ou no limite de leitura (grande demais)."""
+    if data is None or len(data) >= READ_LIMIT or len(data) < 12 or data[:4] != b"DIRC":
+        return None
+    version = int.from_bytes(data[4:8], "big")
+    count = int.from_bytes(data[8:12], "big")
+    if version not in (2, 3):
+        return None
+    paths, offset = set(), 12
+    for _ in range(count):
+        fixed = 62
+        if offset + fixed > len(data):
+            return None
+        flags = int.from_bytes(data[offset + 60:offset + 62], "big")
+        if flags & 0x4000:  # flags estendidas (só v3)
+            if version < 3:
+                return None
+            fixed += 2
+        start = offset + fixed
+        end = data.find(b"\x00", start)
+        if end < 0:
+            return None
+        paths.add(data[start:end])
+        offset += (fixed + (end - start) + 8) & ~7  # entrada com 1 a 8 NULs até múltiplo de 8
+        if offset > len(data):
+            return None
+    return paths
+
+
+def check_leak_hook(report, project, env, plugin_root):
+    git_dir = git_common_dir(project)
+    if git_dir is None:
+        return
+    hook = git_dir / "hooks" / "pre-push"
+    text = read_text(hook, real(hook.parent))
+    lines = (text or "").splitlines()
+    if len(lines) < 2 or not lines[1].startswith(LEAK_HOOK_SIGNATURE):
+        return
+    recorded = recorded_tool(text)
+    if recorded and exists(recorded):
+        return
+    if any(exists(candidate) for candidate in leak_tool_alternatives(project, env, git_dir)):
+        return
+    cli = Path(plugin_root) / "skills" / "gluon-spec" / "scripts" / "spec_graph.py"
+    report.add("broken-leak-hook", "broken-leak-hook", hook,
+               f"o hook do leak-check aponta para {recorded or 'um caminho ilegível'}, que não existe, e não acha "
+               "outra ferramenta: todo push será recusado",
+               f"rode: python3 {quoted(cli)} --root {quoted(project)} private hooks --refresh")
+
+
 def diagnose(project, env, plugin_root=PLUGIN_ROOT):
     versions = plugin_versions(plugin_root)
     report = Report()
@@ -219,6 +354,7 @@ def diagnose(project, env, plugin_root=PLUGIN_ROOT):
     check_sdd_tool(report, project, versions, plugin_root)
     check_sdd_blocks(report, project, plugin_root)
     check_atlas(report, project, versions, plugin_root)
+    check_leak_hook(report, project, env, plugin_root)
     return versions, report
 
 
