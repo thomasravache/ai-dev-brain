@@ -34,7 +34,7 @@ SUPPORTED_VERSIONS = (MODERN_VERSION,) + LEGACY_VERSIONS
 VERSION_KEY = "io.modelcontextprotocol/protocolVersion"
 SERVER_INFO_KEY = "io.modelcontextprotocol/serverInfo"
 CACHE_TTL_MS = 3600000
-CACHE_SCOPE = "private"  # o atlas é dado da organização
+CACHE_SCOPE = "private"  # o atlas é dado da organização e o segundo cérebro traz dados pessoais
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -55,6 +55,8 @@ MAX_DEPTH = 256  # aninhamento máximo de uma mensagem; além disso vira -32700 
 LOG_METHOD_MAX = 64
 # corta o método no log no primeiro caractere de controle (C0, DEL, C1, separadores de linha e parágrafo)
 LOG_UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+# surrogate solto (o json aceita o escape \ud800 cru): não é Unicode válido nem cabe num argv
+LONE_SURROGATE = re.compile("[\ud800-\udfff]")
 READ_ONLY = {"readOnlyHint": True}
 # texto sem caracteres de controle, exceto tab, LF e CR (o mesmo padrão da query da SPEC-0054)
 TEXT_PATTERN = "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$"
@@ -307,6 +309,8 @@ def _check(value, schema, path):
     elif kind == "string":
         if not isinstance(value, str):
             raise ProtocolError(INVALID_PARAMS, f"{path}: precisa ser texto")
+        if LONE_SURROGATE.search(value):
+            raise ProtocolError(INVALID_PARAMS, f"{path}: Unicode inválido (surrogate solto)")
         if not schema.get("minLength", 0) <= len(value) <= schema.get("maxLength", len(value)):
             raise ProtocolError(INVALID_PARAMS, f"{path}: tamanho fora da faixa")
         if "enum" in schema and value not in schema["enum"]:
