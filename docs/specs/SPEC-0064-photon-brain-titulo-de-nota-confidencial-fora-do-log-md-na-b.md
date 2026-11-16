@@ -36,12 +36,13 @@ O título (caminho) de uma nota `confidential: true` aparece em `search` e `cont
 
 **Rollback:** reverter o commit
 
-**Outras ocorrências:** Nenhuma conhecida — a revisão confere `capture`, `ingest` e `inbox done`, que também escrevem no `log.md`
+**Outras ocorrências:** a linha `inbox-move` do `ingest --move` cita o arquivo original e o guardado (em `<files>/…`) sem o caminho da nota; entra nesta spec pela Emenda v2
 
 ## 4. Plano de Testes (TDD)
 <!-- Mínimo: um teste de regressão que reproduz o problema e FALHA antes da correção, no nível em que o defeito aparece (IT para fronteiras de I/O, E2E para jornadas de usuário). Código sem cobertura: primeiro CH-xx fixando o comportamento atual. Tag no código: `SPEC-0064:<ID>`. Modo privado: sem tag no código; aponte o teste no fim da linha com `→ caminho::nome` (ex.: `→ tests/test_soma.py::test_soma`). Categoria sem teste: "N/A — motivo" SEM ID. -->
 - Caracterização: N/A — `search` e `context` já têm suíte; com `--include-confidential` o resultado continua o mesmo (coberto no UT-01)
 - **UT-01** — Dado um vault de teste com uma nota confidencial criada por `new-note --confidential` (título "Payments Secret Plan") e o `log.md` gerado, quando `search` e `context` rodam com uma consulta que casa com o título, então nenhum resultado, snippet ou conteúdo traz o título nem o caminho dela; com `--include-confidential`, o `log.md` volta a trazer a linha.
+- **UT-02** — Dado um vault de teste com uma nota de fonte criada por `ingest --move --confidential` a partir de `inbox/Contrato Fulano Beltrano.pdf`, uma linha `relate … → [[Payments Secret Plan|apelido]]`, linhas antigas em MAIÚSCULAS, em NFD e com `\`, e uma nota comum `Business Plan.md` cujo caminho termina como o de uma confidencial `Plan.md`, quando `search` e `context` rodam, então nenhuma linha que cite a nota confidencial ou o arquivo guardado dela (nome original em `inbox/` ou caminho em `<files>/`) aparece, e as linhas da nota comum continuam encontráveis.
 - **IT-01** — Dado o mesmo vault criado pela CLI real, quando `brain.py search --json` e `brain.py context --json` rodam como processo, então o stdout não contém o título nem o caminho da nota confidencial, e uma linha do `log.md` sobre uma nota comum continua encontrável.
 
 ## 5. Questões em Aberto
@@ -66,7 +67,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8)) — 4f9e9ee | 2026-11-16 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 1268c39 | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — e909fcf | 2026-11-16 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | Reviewer independente: REJECTED (blocker: ingest --move --confidential vaza o nome do arquivo pela linha inbox-move; major: testes não provam [[link]], NFC/caixa e nota comum intacta; minors: falso positivo por sufixo de caminho, custo linhas × confidenciais) — Emenda v2 | 2026-11-16 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -109,3 +110,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-16 | Também ficam fora as linhas que citam o arquivo guardado de uma nota de fonte confidencial (`inbox-move` do `ingest --move`, pelo nome original e pelo caminho em `<files>/`); o caminho só casa com fronteira à esquerda (sem falso positivo por sufixo); a checagem por linha não cresce com o número de confidenciais (regex única ou conjunto); UT-02 novo | G4 rodada 1 (blocker: vazamento pelo `inbox-move`; major e minors da revisão) | nenhuma | thomas, 2026-11-16 (piloto automático com o recomendado) |
