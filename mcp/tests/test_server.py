@@ -140,6 +140,11 @@ def tools_by_name(case, result):
     return {tool["name"]: tool for tool in tools}
 
 
+def atlas_names(tools):
+    """Só as tools atlas_* (Emenda v3 da SPEC-0054: o servidor também tem brain_*, sdd_* e fermion_doctor)."""
+    return sorted(name for name in tools if name.startswith("atlas_"))
+
+
 def accepts(pattern, value):
     return re.search(pattern, value) is not None
 
@@ -151,8 +156,8 @@ class ToolsListTest(unittest.TestCase):
         self.tools = tools_by_name(self, result_of(self, new_server().handle(request("tools/list"))))
 
     def test_exactly_the_five_tools(self):
-        """SPEC-0054:UT-01"""
-        self.assertEqual(sorted(self.tools), sorted(TOOLS))
+        """SPEC-0054:UT-01 (Emenda v3: as cinco atlas_*, conferidas por prefixo)"""
+        self.assertEqual(atlas_names(self.tools), sorted(TOOLS))
 
     def test_every_tool_has_description_closed_object_schema_and_read_only_hint(self):
         """SPEC-0054:UT-01"""
@@ -488,7 +493,7 @@ class LegacyEraTest(unittest.TestCase):
         self.assertIsNone(server.handle(notification("notifications/initialized")))
         self.assertEqual(result_of(self, server.handle(request("ping", id=2)), id=2), {})
         tools = tools_by_name(self, result_of(self, server.handle(request("tools/list", id=3)), id=3))
-        self.assertEqual(sorted(tools), sorted(TOOLS))
+        self.assertEqual(atlas_names(tools), sorted(TOOLS))
 
     def test_tools_are_served_before_initialize(self):
         """SPEC-0054:UT-05 (cliente legado tolerante)"""
@@ -541,7 +546,7 @@ class ModernEraTest(unittest.TestCase):
         self.assertEqual(result.get("resultType"), "complete")
         self.assertEqual(result.get("ttlMs"), 3600000)
         self.assertEqual(result.get("cacheScope"), "private")
-        self.assertEqual(sorted(tools_by_name(self, result)), sorted(TOOLS))
+        self.assertEqual(atlas_names(tools_by_name(self, result)), sorted(TOOLS))
 
     def test_modern_tools_call_has_result_type(self):
         """SPEC-0054:UT-06"""

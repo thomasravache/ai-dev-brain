@@ -1,11 +1,12 @@
-"""Apoio comum da suíte mcp/tests (SPEC-0054): carrega mcp/fermion_mcp.py, cria um atlas de fixture pela CLI da
-boson-atlas e abre o servidor real por stdio.
+"""Apoio comum da suíte mcp/tests (SPEC-0054, SPEC-0059): carrega mcp/fermion_mcp.py, cria um atlas de fixture
+pela CLI da boson-atlas e um vault de fixture pela CLI da photon-brain, e abre o servidor real por stdio.
 
 - `server_module()` importa mcp/fermion_mcp.py pelo caminho (importlib). Ausente ou com erro de import vira uma
   falha clara do teste (AssertionError), não um erro de coleta.
-- `Sandbox` cria um diretório temporário resolvido (macOS: /var -> /private/var) com HOME e ATLAS_CONFIG_HOME
-  próprios; nunca toca ~/.config/org-atlas nem a configuração do Claude Code. Padrão copiado de
-  skills/boson-atlas/tests/helpers.py (sem importar de lá: ADR-0010 e ADR-0017).
+- `Sandbox` cria um diretório temporário resolvido (macOS: /var -> /private/var) com HOME, ATLAS_CONFIG_HOME e
+  BRAIN_CONFIG_HOME próprios; nunca toca ~/.config/org-atlas, ~/.config/second-brain nem a configuração do Claude
+  Code. Padrão copiado de skills/boson-atlas/tests/helpers.py e skills/photon-brain/tests/brain_support.py (sem
+  importar de lá: ADR-0010 e ADR-0017).
 - `ServerProcess` abre `python3 mcp/fermion_mcp.py` com stdin/stdout em pipe, uma mensagem JSON por linha.
 """
 import importlib.util
@@ -25,6 +26,7 @@ MCP = TESTS.parent
 REPO = MCP.parent
 SERVER = MCP / "fermion_mcp.py"
 ATLAS_CLI = REPO / "skills" / "boson-atlas" / "scripts" / "atlas.py"
+BRAIN_CLI = REPO / "skills" / "photon-brain" / "scripts" / "brain.py"
 PLUGIN_JSON = REPO / ".claude-plugin" / "plugin.json"
 FAKE_COLLECTOR = TESTS / "fixtures" / "collector.py"
 SPEC = "SPEC-0054"
@@ -38,6 +40,18 @@ SERVER_INFO_KEY = "io.modelcontextprotocol/serverInfo"
 TOOLS = ("atlas_config", "atlas_doctor", "atlas_context", "atlas_lint", "atlas_curate_list")
 NOT_CONFIGURED = "atlas não configurado nesta máquina — rode a skill boson-atlas (onboarding)"
 TIMEOUT_TEXT = "atlas.py não respondeu em 120 s"
+# SPEC-0059 (seção 6): as oito tools de leitura do segundo cérebro
+BRAIN_TOOLS = ("brain_config", "brain_doctor", "brain_search", "brain_related", "brain_links", "brain_context",
+               "brain_inbox_list", "brain_lint")
+BRAIN_NOT_CONFIGURED = "segundo cérebro não configurado nesta máquina — rode a skill photon-brain (onboarding)"
+BRAIN_TIMEOUT_TEXT = "brain.py não respondeu em 120 s"
+# vault de fixture (IT-01 a IT-03): duas notas públicas e uma confidencial, todas casando com "payments plan"
+BRAIN_CONTEXT = "college"
+PUBLIC_NOTE = "Payments API"
+OTHER_NOTE = "Billing Flow"
+SECRET_NOTE = "Payments Secret Plan"
+SECRET_BODY = "Payments plan rollout code quokka7731 stays offline."
+SECRET_MARKER = "quokka7731"  # só existe no corpo da nota confidencial
 CLI_TIMEOUT = 120
 RESPONSE_TIMEOUT = 5.0  # seção 5: cada resposta do IT-01 em menos de 5 s
 PROCESS_TIMEOUT = 60
@@ -127,15 +141,19 @@ class Sandbox:
         self.home = self.root / "home"
         self.home.mkdir()
         self.config_home = self.root / "config-home"
+        self.brain_config_home = self.root / "brain-config-home"
         self.atlas = self.root / "work" / "acme-atlas"
+        self.vault = self.root / "drive" / "vault"
+        self.files = self.root / "drive" / "files"
 
     def cleanup(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def env(self, config_home=None):
+    def env(self, config_home=None, brain_config_home=None):
         environ = dict(os.environ)
         environ["HOME"] = str(self.home)
         environ["ATLAS_CONFIG_HOME"] = str(config_home or self.config_home)
+        environ["BRAIN_CONFIG_HOME"] = str(brain_config_home or self.brain_config_home)
         return environ
 
     def cli(self, *args, config_home=None):
@@ -155,16 +173,47 @@ class Sandbox:
         out = self.cli("scan")
         assert out.returncode == 0, f"scan falhou ({out.returncode}): {out.stdout}{out.stderr}"
 
+    def brain_cli(self, *args, brain_config_home=None):
+        return subprocess.run([sys.executable, str(BRAIN_CLI), *[str(a) for a in args]], check=False,
+                              cwd=self.root, capture_output=True, text=True,
+                              env=self.env(brain_config_home=brain_config_home), timeout=PROCESS_TIMEOUT)
+
+    def _brain_ok(self, *args):
+        out = self.brain_cli(*args)
+        assert out.returncode == 0, f"brain.py {args[0]} falhou ({out.returncode}): {out.stdout}{out.stderr}"
+        return out
+
+    def _new_note(self, title, body, *extra):
+        out = self._brain_ok("new-note", "--type", "note", "--title", title, "--context", BRAIN_CONTEXT, *extra,
+                             "--json")
+        path = self.vault / json.loads(out.stdout)["path"]
+        with open(path, "a", encoding="utf-8") as handle:  # corpo acrescentado à nota criada pela CLI
+            handle.write("\n" + body + "\n")
+        return path
+
+    def fixture_vault(self):
+        """init (provedor local, contexto college) + três notas por new-note, tudo pela CLI da photon-brain:
+        duas públicas que se linkam e uma `confidential: true` cujo título e corpo casam com "payments plan"."""
+        out = self._brain_ok("init", "--vault", self.vault, "--files", self.files, "--provider", "local",
+                             "--context", f"{BRAIN_CONTEXT}=projects/{BRAIN_CONTEXT}:College")
+        self._new_note(PUBLIC_NOTE, f"Payments plan uses the ledger. See [[{OTHER_NOTE}]].", "--tags",
+                       "api,payments")
+        self._new_note(OTHER_NOTE, f"Billing charges payments monthly. See [[{PUBLIC_NOTE}]] and [[Missing Note]].",
+                       "--tags", "api")
+        self.secret_path = self._new_note(SECRET_NOTE, f"{SECRET_BODY} See [[{PUBLIC_NOTE}]].", "--confidential")
+        return out
+
 
 class ServerProcess:
     """O servidor real (python3 mcp/fermion_mcp.py) por stdio; stderr vai para um arquivo do sandbox."""
 
-    def __init__(self, sandbox, config_home=None):
+    def __init__(self, sandbox, config_home=None, brain_config_home=None):
         if not SERVER.exists():
             raise AssertionError(f"{SERVER} não existe ({SPEC})")
         self.stderr_path = sandbox.root / "server-stderr.txt"
         self._stderr = open(self.stderr_path, "w", encoding="utf-8")  # noqa: SIM115 — fechado em close()
-        self.proc = subprocess.Popen([sys.executable, str(SERVER)], cwd=sandbox.root, env=sandbox.env(config_home),
+        self.proc = subprocess.Popen([sys.executable, str(SERVER)], cwd=sandbox.root,
+                                     env=sandbox.env(config_home, brain_config_home),
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr,
                                      text=True, encoding="utf-8", bufsize=1)
         self.lines = queue.Queue()

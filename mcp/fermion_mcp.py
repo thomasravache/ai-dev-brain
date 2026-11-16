@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Servidor MCP local do plugin fermion (SPEC-0054, ADR-0017): tools de leitura do atlas da organização.
+"""Servidor MCP local do plugin fermion (SPEC-0054, SPEC-0059, ADR-0017): tools de leitura do atlas da organização
+(atlas_*) e do segundo cérebro (brain_*).
 
 JSON-RPC 2.0 sobre stdio, uma mensagem por linha. Atende as duas eras do protocolo MCP:
 - legada: handshake `initialize` (versões 2025-11-25, 2025-06-18, 2025-03-26 e 2024-11-05);
 - moderna (2026-07-28): sem handshake, versão em params._meta, `server/discover` e `resultType` nos resultados.
 
-Cada tool vira uma linha de comando da CLI da boson-atlas (`atlas.py <comando> ... --json`), executada só por
-run_cli: argv em lista, sem shell, com timeout e o ambiente herdado. O servidor não importa código das skills e
-não interpreta a saída da CLI; só expõe leitura (confirmar ou rejeitar convenção é de pessoas, ADR-0012).
+Cada tool vira uma linha de comando da CLI de uma skill (`atlas.py` da boson-atlas, `brain.py` da photon-brain;
+`<comando> ... --json`), executada só por run_cli: argv em lista, sem shell, com timeout e o ambiente herdado. O
+servidor não importa código das skills e não interpreta a saída da CLI; só expõe leitura (confirmar ou rejeitar
+convenção é de pessoas, ADR-0012) e nunca pede notas confidenciais do cérebro (ADR-0014). Toda opção com valor
+das brain_* vai colada (--opção=valor) e o texto livre só depois de `--`.
 
 stdout é reservado ao protocolo; diagnóstico vai para o stderr, sem argumentos nem saída da CLI.
 Só biblioteca padrão, Python 3.9+.
@@ -21,6 +24,7 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SERVER_NAME = "fermion"
 CLI_RELATIVE = ("skills", "boson-atlas", "scripts", "atlas.py")
+BRAIN_CLI_RELATIVE = ("skills", "photon-brain", "scripts", "brain.py")
 CLI_TIMEOUT = 120  # segundos por chamada da CLI
 
 LEGACY_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -30,7 +34,7 @@ SUPPORTED_VERSIONS = (MODERN_VERSION,) + LEGACY_VERSIONS
 VERSION_KEY = "io.modelcontextprotocol/protocolVersion"
 SERVER_INFO_KEY = "io.modelcontextprotocol/serverInfo"
 CACHE_TTL_MS = 3600000
-CACHE_SCOPE = "private"  # o atlas é dado da organização
+CACHE_SCOPE = "private"  # o atlas é dado da organização e o segundo cérebro traz dados pessoais
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -43,19 +47,42 @@ NOT_CONFIGURED = "atlas não configurado nesta máquina — rode a skill boson-a
 TIMEOUT_TEXT = f"atlas.py não respondeu em {CLI_TIMEOUT} s"
 NOT_CONFIGURED_EXIT = 3
 LINT_REPORT_EXIT = 1  # no lint, exit 1 = "há ERRO no relatório", não falha da CLI
+BRAIN_NOT_CONFIGURED = "segundo cérebro não configurado nesta máquina — rode a skill photon-brain (onboarding)"
+BRAIN_TIMEOUT_TEXT = f"brain.py não respondeu em {CLI_TIMEOUT} s"
+BRAIN_REPORT_TOOLS = ("brain_doctor", "brain_lint")  # exit 1 com relatório JSON = "há ERRO no relatório"
 
 MAX_DEPTH = 256  # aninhamento máximo de uma mensagem; além disso vira -32700 (o parser do json é recursivo)
 LOG_METHOD_MAX = 64
 # corta o método no log no primeiro caractere de controle (C0, DEL, C1, separadores de linha e parágrafo)
 LOG_UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+# surrogate solto (o json aceita o escape \ud800 cru): não é Unicode válido nem cabe num argv
+LONE_SURROGATE = re.compile("[\ud800-\udfff]")
 READ_ONLY = {"readOnlyHint": True}
+# texto sem caracteres de controle, exceto tab, LF e CR (o mesmo padrão da query da SPEC-0054)
+TEXT_PATTERN = "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$"
+RULE_NAMES = {"type": "array", "items": {"type": "string", "pattern": "^[a-z-]+$"},
+              "description": "Só estas regras do lint (nomes em minúsculas com hífen)."}
 
 
-def _object(properties=None, required=None):
+def _object(properties=None, required=None, description=None):
     schema = {"type": "object", "properties": properties or {}, "additionalProperties": False}
     if required:
         schema["required"] = list(required)
+    if description:
+        schema["description"] = description
     return schema
+
+
+def _text(low, high, description):
+    return {"type": "string", "minLength": low, "maxLength": high, "pattern": TEXT_PATTERN,
+            "description": description}
+
+
+def _int(low, high, description):
+    return {"type": "integer", "minimum": low, "maximum": high, "description": description}
+
+
+RELATED_ONE_OF = "Exatamente um de note ou text."
 
 
 TOOLS = (
@@ -77,7 +104,7 @@ TOOLS = (
                         "no grafo (atlas.py context --json)."),
         "inputSchema": _object({
             "query": {"type": "string", "minLength": 1, "maxLength": 500,
-                      "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$",
+                      "pattern": TEXT_PATTERN,
                       "description": "Termos da consulta, separados por espaço (tab e quebra de linha contam como espaço)."},
             "hops": {"type": "integer", "minimum": 0, "maximum": 2,
                      "description": "Saltos no grafo a partir dos resultados."},
@@ -93,8 +120,7 @@ TOOLS = (
         "description": ("Checagens de qualidade do atlas (atlas.py lint --json). Achados de ERRO vêm no relatório, "
                         "não como erro da tool."),
         "inputSchema": _object({
-            "only": {"type": "array", "items": {"type": "string", "pattern": "^[a-z-]+$"},
-                     "description": "Só estas regras do lint (nomes em minúsculas com hífen)."},
+            "only": RULE_NAMES,
         }),
         "annotations": READ_ONLY,
     },
@@ -105,6 +131,81 @@ TOOLS = (
         "inputSchema": _object({
             "status": {"type": "string", "enum": ["inferred", "confirmed", "rejected"],
                        "description": "Só convenções neste estado."},
+        }),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_config",
+        "description": "Configuração efetiva do segundo cérebro nesta máquina (brain.py config --json).",
+        "inputSchema": _object(),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_doctor",
+        "description": ("Diagnóstico do segundo cérebro: configuração, vault e sincronização (brain.py doctor --json). "
+                        "Achados de ERRO vêm no relatório, não como erro da tool."),
+        "inputSchema": _object(),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_search",
+        "description": ("Busca notas do segundo cérebro por texto livre (brain.py search --json). Notas "
+                        "confidenciais ficam de fora."),
+        "inputSchema": _object({
+            "query": _text(1, 500, "Termos da busca, separados por espaço (tab e quebra de linha contam como "
+                                   "espaço)."),
+            "context": _text(1, 100, "Só notas deste contexto."),
+            "type": _text(1, 50, "Só notas deste tipo."),
+            "tag": _text(1, 100, "Só notas com esta tag."),
+            "limit": _int(1, 100, "Número máximo de resultados."),
+        }, required=["query"]),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_related",
+        "description": ("Notas relacionadas a uma nota (note) ou a um texto (text) no segundo cérebro "
+                        "(brain.py related --json). " + RELATED_ONE_OF),
+        "inputSchema": _object({
+            "note": _text(1, 500, "Título ou caminho da nota de partida."),
+            "text": _text(1, 2000, "Texto de partida."),
+            "limit": _int(1, 100, "Número máximo de resultados."),
+        }, description=RELATED_ONE_OF),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_links",
+        "description": "Links de saída e backlinks de uma nota do segundo cérebro (brain.py links --json).",
+        "inputSchema": _object({
+            "note": _text(1, 500, "Título ou caminho da nota."),
+        }, required=["note"]),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_context",
+        "description": ("Contexto do segundo cérebro para uma consulta em texto livre: notas e vizinhas no grafo de "
+                        "links (brain.py context --json). Notas confidenciais ficam de fora."),
+        "inputSchema": _object({
+            "query": _text(1, 500, "Termos da consulta, separados por espaço (tab e quebra de linha contam como "
+                                   "espaço)."),
+            "context": _text(1, 100, "Só notas deste contexto."),
+            "hops": _int(0, 2, "Saltos no grafo de links a partir dos resultados."),
+            "limit": _int(1, 50, "Número máximo de notas."),
+            "max_chars": _int(500, 200000, "Tamanho máximo da saída em caracteres."),
+        }, required=["query"]),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_inbox_list",
+        "description": "Itens pendentes na inbox do segundo cérebro (brain.py inbox list --json).",
+        "inputSchema": _object(),
+        "annotations": READ_ONLY,
+    },
+    {
+        "name": "brain_lint",
+        "description": ("Checagens de qualidade do vault do segundo cérebro (brain.py lint --json). Achados de ERRO "
+                        "vêm no relatório, não como erro da tool; segredos e dados pessoais nunca aparecem."),
+        "inputSchema": _object({
+            "only": RULE_NAMES,
         }),
         "annotations": READ_ONLY,
     },
@@ -208,6 +309,8 @@ def _check(value, schema, path):
     elif kind == "string":
         if not isinstance(value, str):
             raise ProtocolError(INVALID_PARAMS, f"{path}: precisa ser texto")
+        if LONE_SURROGATE.search(value):
+            raise ProtocolError(INVALID_PARAMS, f"{path}: Unicode inválido (surrogate solto)")
         if not schema.get("minLength", 0) <= len(value) <= schema.get("maxLength", len(value)):
             raise ProtocolError(INVALID_PARAMS, f"{path}: tamanho fora da faixa")
         if "enum" in schema and value not in schema["enum"]:
@@ -228,8 +331,58 @@ def _check(value, schema, path):
 
 # --------------------------------------------------------------------------- linhas de comando
 
+def _glued(arguments, options):
+    """Opções com valor coladas (--opção=valor): um valor nunca vira argumento próprio (Emenda v2 da SPEC-0059)."""
+    return [f"{flag}={arguments[key]}" for key, flag in options if key in arguments]
+
+
+def _words(arguments, key="query"):
+    """Texto livre dividido em palavras; sem nenhuma palavra vira -32602."""
+    words = arguments[key].split()
+    if not words:
+        raise ProtocolError(INVALID_PARAMS, f"arguments.{key}: precisa ter ao menos uma palavra")
+    return words
+
+
+def check_brain_arguments(name, arguments):
+    """Regras das brain_* que o schema não expressa (seção 6 da SPEC-0059); -32602 antes de abrir processo."""
+    if name == "brain_related" and ("note" in arguments) == ("text" in arguments):
+        raise ProtocolError(INVALID_PARAMS, "arguments: " + RELATED_ONE_OF.lower())
+    if name in ("brain_search", "brain_context"):
+        _words(arguments)
+
+
+def brain_command_args(name, arguments):
+    """Argumentos da CLI (depois de `brain.py`) para uma tool brain_* já validada."""
+    if name == "brain_config":
+        return ["config", "--json"]
+    if name == "brain_doctor":
+        return ["doctor", "--json"]
+    if name == "brain_inbox_list":
+        return ["inbox", "list", "--json"]
+    if name == "brain_search":
+        options = (("context", "--context"), ("type", "--type"), ("tag", "--tag"), ("limit", "--limit"))
+        return ["search"] + _glued(arguments, options) + ["--json", "--"] + _words(arguments)
+    if name == "brain_context":
+        options = (("context", "--context"), ("hops", "--hops"), ("limit", "--limit"), ("max_chars", "--max-chars"))
+        return ["context"] + _glued(arguments, options) + ["--json", "--"] + _words(arguments)
+    if name == "brain_related":
+        options = (("note", "--note"), ("text", "--text"), ("limit", "--limit"))
+        return ["related"] + _glued(arguments, options) + ["--json"]
+    if name == "brain_links":
+        return ["links", "--json", "--", arguments["note"]]
+    if name == "brain_lint":
+        args = ["lint", "--json"]
+        if arguments.get("only"):
+            args.append("--only=" + ",".join(arguments["only"]))
+        return args
+    raise ProtocolError(INVALID_PARAMS, f"tool desconhecida: {name}")
+
+
 def command_args(name, arguments):
-    """Argumentos da CLI (depois de `atlas.py`) para uma tool já validada."""
+    """Argumentos da CLI (depois de `atlas.py` ou `brain.py`) para uma tool já validada."""
+    if name.startswith("brain_"):
+        return brain_command_args(name, arguments)
     if name == "atlas_config":
         return ["config", "--json"]
     if name == "atlas_doctor":
@@ -265,19 +418,29 @@ def _with_stderr(text, stderr):
     return f"{text}\n{detail}" if detail else text
 
 
+def _json_object(stdout):
+    try:
+        parsed = json.loads(stdout)
+    except ValueError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def map_output(name, completed):
-    """CallToolResult a partir do exit code e da saída da CLI (seção 6 da SPEC-0054)."""
+    """CallToolResult a partir do exit code e da saída da CLI (seção 6 da SPEC-0054 e da SPEC-0059)."""
     code = completed.returncode
-    if code == 0 or (name == "atlas_lint" and code == LINT_REPORT_EXIT):
-        stdout = completed.stdout or ""
-        try:
-            parsed = json.loads(stdout)
-        except ValueError:
-            parsed = None
-        return _text_result(stdout, False, parsed if isinstance(parsed, dict) else None)
+    stdout = completed.stdout or ""
+    brain = name.startswith("brain_")
+    if name == "atlas_lint":
+        report = code == LINT_REPORT_EXIT
+    else:
+        report = code == LINT_REPORT_EXIT and name in BRAIN_REPORT_TOOLS and _json_object(stdout) is not None
+    if code == 0 or report:
+        return _text_result(stdout, False, _json_object(stdout))
     if code == NOT_CONFIGURED_EXIT:
-        return _text_result(_with_stderr(NOT_CONFIGURED, completed.stderr), True)
-    return _text_result(_with_stderr(f"atlas.py saiu com o código {code}", completed.stderr), True)
+        return _text_result(_with_stderr(BRAIN_NOT_CONFIGURED if brain else NOT_CONFIGURED, completed.stderr), True)
+    script = "brain.py" if brain else "atlas.py"
+    return _text_result(_with_stderr(f"{script} saiu com o código {code}", completed.stderr), True)
 
 
 # --------------------------------------------------------------------------- servidor
@@ -289,6 +452,7 @@ class Server:
         self.runner = runner
         self.plugin_root = Path(plugin_root)
         self.cli = self.plugin_root.joinpath(*CLI_RELATIVE)
+        self.brain_cli = self.plugin_root.joinpath(*BRAIN_CLI_RELATIVE)
         self.server_info = {"name": SERVER_NAME, "version": plugin_version(self.plugin_root)}
         self.legacy_version = None  # versão negociada no initialize (era legada)
 
@@ -377,18 +541,23 @@ class Server:
         if arguments is None:
             arguments = {}
         _check(arguments, TOOLS_BY_NAME[name]["inputSchema"], "arguments")
+        brain = name.startswith("brain_")
+        if brain:
+            check_brain_arguments(name, arguments)
         args = command_args(name, arguments)
-        if not self.cli.is_file():
-            return _text_result(f"CLI do atlas não encontrada em {self.cli}", True)
-        argv = [python_executable(), str(self.cli)] + args
+        cli = self.brain_cli if brain else self.cli
+        if not cli.is_file():
+            owner = "do segundo cérebro" if brain else "do atlas"
+            return _text_result(f"CLI {owner} não encontrada em {cli}", True)
+        argv = [python_executable(), str(cli)] + args
         try:
             completed = self.runner(argv, CLI_TIMEOUT)
         except subprocess.TimeoutExpired:
             log(f"{name}: timeout da CLI")
-            return _text_result(TIMEOUT_TEXT, True)
+            return _text_result(BRAIN_TIMEOUT_TEXT if brain else TIMEOUT_TEXT, True)
         except OSError as exc:
             log(f"{name}: falha ao abrir a CLI ({type(exc).__name__})")
-            return _text_result(f"não foi possível executar {argv[0]} {self.cli}: {exc.strerror or exc}", True)
+            return _text_result(f"não foi possível executar {argv[0]} {cli}: {exc.strerror or exc}", True)
         return map_output(name, completed)
 
 

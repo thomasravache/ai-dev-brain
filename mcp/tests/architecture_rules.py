@@ -1,4 +1,4 @@
-"""Checadores das regras do ADR-0017, usados por test_architecture.py (SPEC-0054:UT-07).
+"""Checadores das regras do ADR-0017, usados por test_architecture.py (SPEC-0054:UT-07, SPEC-0059:UT-05).
 
 Escritos aqui, sem importar das skills (o padrão é o de skills/boson-atlas/tests/architecture_rules.py, copiado).
 Cada checador recebe o código-fonte e devolve uma linha por violação: "<arquivo>:<linha> — <regra> — <achado>".
@@ -10,8 +10,9 @@ Regras:
 - nenhum shell (shell= diferente de False, os.system, os.popen, create_subprocess_shell, getoutput, também por
   alias ou getattr, e nenhum ** numa chamada de processo);
 - processo externo só dentro da função executora (run_cli), pelo nome literal do módulo (sem alias, sem
-  `from subprocess import run`, sem getattr), e só para a CLI do atlas: nenhum texto aponta para a CLI de
-  outra skill.
+  `from subprocess import run`, sem getattr), e só para as CLIs aceitas (Emenda v3 da SPEC-0054, SPEC-0059):
+  `atlas.py` da boson-atlas e `brain.py` da photon-brain; nenhum texto aponta para a CLI ou a pasta de outra
+  skill, nem cita outro script `.py`.
 """
 import ast
 import importlib.util
@@ -24,7 +25,9 @@ RULE_STDLIB = "só biblioteca padrão"
 RULE_SKILLS = "nenhum import de skills/ nem carregamento de código"
 RULE_SHELL = "processos sem shell"
 RULE_PROCESS = "processo só na função executora"
-RULE_ATLAS_ONLY = "processo só para a CLI do atlas"
+RULE_ATLAS_ONLY = "processo só para as CLIs das skills (atlas.py, brain.py)"
+ALLOWED_SCRIPTS = ("atlas.py", "brain.py")  # SPEC-0059: brain.py entra; spec_graph.py só com a SPEC-0060
+SCRIPT = re.compile(r"[\w.-]*\.py\b")
 
 # módulos das skills (nomes novos e antigos), de tools/ e das suítes de teste
 SKILL_MODULES = ("atlas", "spec_graph", "brain", "brain_support", "tools", "architecture_rules", "helpers",
@@ -46,8 +49,9 @@ PROCESS_CALLS = {
 }
 SHELL_CALLS = {"os.system", "os.popen", "subprocess.getoutput", "subprocess.getstatusoutput",
                "asyncio.create_subprocess_shell"}
-# CLIs e pastas de outras skills (nomes novos e antigos) e tools/sdd/ (métodos MCP como tools/list não contam)
-OTHER_CLI = re.compile(r"spec_graph\.py|brain\.py|gluon-spec|photon-brain|sdd-management|second-brain"
+# CLIs e pastas de outras skills (nomes novos e antigos) e tools/sdd/ (métodos MCP como tools/list não contam);
+# a photon-brain e o brain.py são aceitos desde a SPEC-0059
+OTHER_CLI = re.compile(r"spec_graph\.py|gluon-spec|sdd-management|second-brain"
                        r"|(^|/)tools/sdd(/|$)")
 
 
@@ -261,4 +265,15 @@ def other_cli_findings(source, filename):
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and OTHER_CLI.search(node.value):
             findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_ATLAS_ONLY} — '{node.value}'"))
+    return _sorted(findings)
+
+
+def script_findings(source, filename, allowed=ALLOWED_SCRIPTS):
+    """Textos que citam um script .py fora dos aceitos (atlas.py e brain.py), inclusive em f-strings."""
+    findings = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            for name in SCRIPT.findall(node.value):
+                if name not in allowed:
+                    findings.append((node.lineno, f"{filename}:{node.lineno} — {RULE_ATLAS_ONLY} — '{name}'"))
     return _sorted(findings)
