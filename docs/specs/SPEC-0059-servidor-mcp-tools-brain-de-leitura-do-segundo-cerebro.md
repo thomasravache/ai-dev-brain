@@ -183,7 +183,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=108)) — e5bc324 | 2026-11-16 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 666744d | 2026-11-16 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6e42069 | 2026-11-16 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: Reviewer independente: APPROVED (rodada 1 com 3 minors e 3 nits; minors corrigidos com teste antes em 459a194/666744d e reconferidos: APPROVED). Verificação manual em 2026-11-16 com Claude Code 2.1.322 e --plugin-dir: servidor plugin:fermion:fermion connected, tools 5 atlas_* e 8 brain_* no init. — 58bd047 | 2026-11-16 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
