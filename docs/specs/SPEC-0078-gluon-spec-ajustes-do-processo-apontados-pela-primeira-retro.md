@@ -4,7 +4,7 @@ title: "gluon-spec: ajustes do processo apontados pela primeira retrospectiva"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-17
 parent: SPEC-0066
 depends_on: [SPEC-0074]
@@ -14,8 +14,8 @@ touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, s
 adrs: [ADR-0001, ADR-0002, ADR-0006, ADR-0019]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0078 — gluon-spec: ajustes do processo apontados pela primeira retrospectiva
@@ -227,6 +227,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Fase 1 (test-writer): CH-01, CH-02, UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0078:<ID>`; CH passando e os demais falhando pelo motivo certo
+- [ ] Fase 2 (implementer): histórico de reprovações no `gate`, avisos no `status`/`next`, `sdd_version` no `private init`, `retro` (tool.state, fail_recorded, resíduos), docs, CHANGELOG e versões
+- [ ] Fase 3 (reviewer): G4 independente, com o desempenho do `retro` (7.6)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
