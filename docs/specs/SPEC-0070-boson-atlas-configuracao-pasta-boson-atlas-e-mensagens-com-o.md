@@ -152,19 +152,19 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Configuração e textos**
-- [ ] Red: CH-01 (guarda), UT-01 a UT-04, UT-07, UT-08 e a guarda de nomes da SPEC-0055, com a tag `SPEC-0070:<ID>`
-- [ ] Green: leitura e gravação da configuração, AVISOs do `doctor`, textos e assets
+- [x] Red: CH-01 (guarda), UT-01 a UT-04, UT-07, UT-08 e a guarda de nomes da SPEC-0055, com a tag `SPEC-0070:<ID>`
+- [x] Green: leitura e gravação da configuração, AVISOs do `doctor`, textos e assets
 
 **Fase 2: Pasta do atlas e vendor**
-- [ ] Red: UT-05, UT-06, IT-01, IT-02
-- [ ] Green: `SKILL_COPIES`, escolha de destino no `vendor`, `lint`/`build`/checagem de cópia velha nas duas pastas
-- [ ] Validar: suítes da boson-atlas, tests/plugin e mcp, arquitetura (G2/G3)
+- [x] Red: UT-05, UT-06, IT-01, IT-02
+- [x] Green: `SKILL_COPIES`, escolha de destino no `vendor`, `lint`/`build`/checagem de cópia velha nas duas pastas
+- [x] Validar: suítes da boson-atlas, tests/plugin e mcp, arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e aprovação (H2)
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
-- [ ] Relatório de Entrega, references, SKILL.md, CHANGELOG com a data de remoção, versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Relatório de Entrega, references, SKILL.md, CHANGELOG com a data de remoção, versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -175,9 +175,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ed77282 | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 16665c0 | 2026-11-17 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; M1, M2, m1, m2 e ATLAS.md resolvidos e provados por experimento, inclusive o lint de origin/main na cópia nova; 2 minors — CI que não cita nenhuma pasta conta como migrada, e com dois tipos de CI a cópia nova pode ficar velha — levados para a SPEC-0071; 1 nit) — 1aae634 | 2026-11-17 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 53dd1b7 | 2026-11-17 |
+| H2 Integração aprovada | PASS | aprovado por política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-17 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-17 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -189,37 +189,51 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- A `boson-atlas` usa o próprio nome no que é técnico: configuração em `~/.config/boson-atlas`, ferramenta do atlas em `.boson-atlas/skill`, mensagens, `--version`, `--help`, cabeçalhos, CI gerada e `ATLAS.md` de atlas novo. Máquinas com `~/.config/org-atlas` e atlas com `.org-atlas/` funcionam sem ação; o `vendor` nunca deixa uma CI personalizada rodando cópia velha e só manda apagar `.org-atlas/` quando nenhuma CI a cita; `doctor` e `lint` mostram o passo de migração certo antes e depois. boson-atlas 2026.11.7, plugin 2026.11.16.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Leitura dupla e `local_config_write_path` como na SPEC-0069; `SKILL_COPIES`, `ci_file_state`/`vendor_copies`/`ci_migrated` no `vendor`, `old_config_items`/`old_copy_items` no `doctor`; comentário do padrão `url` reescrito para a cópia da skill não parecer segredo em nenhuma versão.
+- Testes em 2832b68 e 3d81068 (Emenda v2); implementação em cf87b56 e ed77282.
+- **Revisão G4:** rodada 1 CHANGES_REQUESTED (lint da versão anterior acusava segredo falso na cópia nova; CI personalizada podia ficar na cópia velha com a ordem de apagar) → Emenda v2; rodada 2 APPROVED com os experimentos repetidos.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: migration`.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Suíte atual sem outra mudança além de textos e pastas | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-01 | Leitura: só a antiga → antiga; as duas → nova | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-02 | Sem pastas: leitura e gravação na nova; `init` cria só ela | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-03 | `init --join` com só a antiga: configuração completa na nova, antiga idêntica | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-04 | Sobrescrita sem reserva nem aviso | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-05 | `vendor`: casos (a), (b), (c) e, pela Emenda v2, CI com link simbólico, com as duas pastas citadas e de outro tipo | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-06 | Cópias da ferramenta nunca são conteúdo; skill copiada não parece segredo; sugestão depois da migração | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-07 | AVISOs do `doctor`, inclusive depois da migração | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-08 | Textos, assets de CI e `ATLAS.md` dizem `boson-atlas` | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| IT-01 | Máquina e atlas da versão anterior funcionam sem ação | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| IT-02 | `atlas-scan.sh` gerado roda `.boson-atlas/skill` | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0020
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — AVISOs do `doctor`/`lint` e instruções do `vendor`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — CHANGELOG da boson-atlas 2026.11.7; o README entra na SPEC-0072
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não define `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma) — ver Pendências
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin 2026.11.16, PR desta spec.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- Minors da rodada 2, levados à SPEC-0071 (que também mexe em `atlas.py`): CI mantida que não cita nenhuma das duas pastas conta como migrada; com dois tipos de CI, `vendor --ci` de um tipo pode deixar a `.boson-atlas/skill` do outro desatualizada.
+- Nit: atlas sem nenhum arquivo de CI recebe do `lint` a sugestão de `vendor`, que grava só `.boson-atlas/`.
+- Descrições `--help` dos coletores ainda dizem `org-atlas` (SPEC-0071); README (SPEC-0072).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0070`. -->
