@@ -31,8 +31,20 @@ A FAIL is recorded with its reason and sent back to the owner. **Three consecuti
 
 - Every FAIL (`gate --fail "reason"` and a `gate --run` that fails) appends a FAIL line with the date, the evidence written to the table and the short HEAD SHA (`?` outside git). The `--run` evidence already ends in ` — <sha>`; `--fail` appends it to the reason.
 - A PASS or N/A after failures of that gate appends the PASS line with the count; a gate that passes at the first try changes only the table.
-- Consecutive failures = FAIL lines of the gate after its last PASS line. Lines outside the format (hand-edited) are ignored in the count, without an error.
-- That makes the three-FAILs rule checkable: from the 3rd consecutive failure on, `gate` prints `⚠ <n> reprovações seguidas em <G> — registre `impede SPEC-X --type falha` e escale ao humano` (always, even with an impediment open), and `status` (overview, without IDs) shows `⚠ SPEC-X: <n> reprovações seguidas em <G>` for in-progress specs until a `falha` impediment is open or the gate passes. The tool only suggests; the Architect records the impediment.
+- Consecutive failures = FAIL lines of the gate after its last PASS line. Lines outside the format (hand-edited) are ignored in the count, without an error. The subsection title is matched ignoring case and accents, so an edited title is reused instead of duplicated. Line breaks in the evidence (`\n`, `\r\n`, `\r`) become spaces, so the table row and the history line stay one line each.
+- That makes the three-FAILs rule checkable. From the 3rd consecutive failure on, `gate` always prints (even with an impediment open):
+
+  ```text
+  ⚠ <n> reprovações seguidas em <G> — registre `impede SPEC-X --type falha` e escale ao humano
+  ```
+
+  and `status` (overview, without IDs) shows, for in-progress specs whose gate is not PASS or N/A in the table and that have no open `falha` impediment:
+
+  ```text
+  ⚠ SPEC-X: <n> reprovações seguidas em <G> — `impede SPEC-X --type falha`
+  ```
+
+  A PASS written by an older tool or by hand (no PASS line in the history) does not leave the warning stuck. The tool only suggests; the Architect records the impediment.
 - Older vendored tools ignore the subsection: the table, `validate` and `pr-check` read the same as before.
 
 **Delivered without closing.** `status` (overview) warns `⚠ entregue sem fechar: SPEC-X — G5 há <d> dia(s); feche o G7 (Relatório de Entrega)` for every non-epic `approved`/`in-progress` spec with G5 PASS and G7 not PASS, and `next` lists them under "A fechar", so a merged spec is not forgotten before G7.

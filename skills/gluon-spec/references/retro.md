@@ -73,11 +73,11 @@ A rule that fires in **>= 50%** of the analysed projects, and in **at least 2**,
 
 | Rule | Suggested spec |
 |---|---|
-| R1 | gluon-spec: avisar a ferramenta atrasada no status e no hook, com o comando de atualização |
+| R1 | gluon-spec: registrar a versão desconhecida (`whats-new --ack`, `private init`) e atualizar a atrasada no fluxo de atualização do projeto |
 | R2 | gluon-spec: revisão periódica das specs paradas (retomar, fechar ou deprecated) |
-| R3 | gluon-spec: lembrar o fechamento do G7 depois do merge (G5 PASS sem G7) |
+| R3 | gluon-spec: fechar o G7 no fluxo do merge, já que o aviso de entregue sem fechar não bastou |
 | R4 | gluon-spec: reduzir a evidência à mão (comandos do sdd-config prontos e `gate --run` como caminho padrão) |
-| R5 | gluon-spec: guardar o histórico de FAIL no Registro de Gates (o PASS hoje apaga o FAIL) |
+| R5 | gluon-spec: fazer o processo registrar as reprovações (`gate --run`/`--fail` e ferramenta vendorizada atualizada) |
 | R6 | gluon-spec: tratar o N/A recorrente (dispensa de pilar sugerida ou spec da capacidade que falta) |
 | R7 | gluon-spec: aviso de impedimento aberto há muito tempo no status |
 

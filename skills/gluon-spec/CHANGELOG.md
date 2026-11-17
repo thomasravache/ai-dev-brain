@@ -21,6 +21,7 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ### Fixed
 - `retro`: entrada do registro com `spec_root` que não é texto vai para "Ignorados" com "registro inválido", sem traceback; `fail_history` nulo aparece como "sem histórico" (sem git, sem commits ou histórico ilegível); ID de impedimento fora de `IMP-<dígitos>` sai como `IMP-?`, sem o texto da célula; specs sem `id` com o mesmo prefixo aparecem uma vez em paradas e entregues sem fechar (SPEC-0078).
+- Ajustes da revisão (Emenda v3 da SPEC-0078): o aviso de reprovações seguidas do `status` só sai quando o gate na tabela não está PASS nem N/A (um PASS gravado por versão antiga ou à mão não deixa aviso preso); `\r` e `\r\n` na evidência viram espaço, como o `\n`, e a tabela e o histórico continuam uma linha só; o título da subseção é reconhecido sem diferenciar maiúsculas e acentos, sem criar subseção duplicada; o `gate` grava a tabela e o histórico numa única escrita; as sugestões de R1, R3 e R5 em "O que ajustar na skill" passam a apontar a causa que sobra (versão desconhecida, G7 no fluxo do merge, processo que não registra reprovações) (SPEC-0078).
 
 ## [2026.11.6] - 2026-11-17
 

@@ -324,7 +324,7 @@ def find_sub(subs, keyword: str):
 
 
 def md_cell(text: str) -> str:
-    return str(text).replace("|", "\\|").replace("\n", " ")
+    return re.sub(r"\r\n?|\n", " ", str(text).replace("|", "\\|"))
 
 
 # ---------------------------------------------------------------- globs
@@ -2999,6 +2999,12 @@ def head_ref(cwd: Path):
 
 def set_gate_row(doc: Doc, gate: str, status: str, evidence: str):
     lines = doc.text.split("\n")
+    put_gate_row(doc, lines, gate, status, evidence)
+    rewrite_doc(doc, "\n".join(lines))
+
+
+def put_gate_row(doc: Doc, lines, gate: str, status: str, evidence: str):
+    """Troca, em `lines` (em memória), a linha do gate no Registro de Gates."""
     bounds = section_bounds(lines, "Registro de Gates")
     if bounds is None:
         die(f"{doc.id} não tem 'Registro de Gates' — rode `upgrade {doc.id} --apply`")
@@ -3006,7 +3012,6 @@ def set_gate_row(doc: Doc, gate: str, status: str, evidence: str):
         cells = [c.strip() for c in CELL_SPLIT_RE.split(lines[i].strip()[1:-1])] if lines[i].strip().startswith("|") else []
         if cells and cells[0].split() and cells[0].split()[0].upper() == gate:
             lines[i] = f"| {cells[0]} | {status} | {md_cell(evidence)} | {today()} |"
-            rewrite_doc(doc, "\n".join(lines))
             return
     die(f"{doc.id}: linha do gate {gate} não encontrada no Registro de Gates — rode `upgrade {doc.id} --apply`")
 
@@ -3030,7 +3035,8 @@ def history_bounds(lines):
     bounds = section_bounds(lines, "Registro de Gates")
     if bounds is None:
         return None
-    start = next((i for i in range(bounds[0] + 1, bounds[1]) if lines[i].strip() == HISTORY_TITLE), None)
+    title = norm(HISTORY_TITLE)
+    start = next((i for i in range(bounds[0] + 1, bounds[1]) if norm(lines[i].strip()) == title), None)
     if start is None:
         return None
     end = next((i for i in range(start + 1, bounds[1]) if lines[i].startswith("#")), bounds[1])
@@ -3068,16 +3074,20 @@ def gate_history(doc: Doc):
 
 def consecutive_fails(doc: Doc, gate: str) -> int:
     """Reprovações do gate depois da última linha PASS dele no histórico."""
+    return streak_in(gate_history(doc), gate)
+
+
+def streak_in(history, gate: str) -> int:
     count = 0
-    for h in gate_history(doc):
+    for h in history:
         if h["gate"] == gate:
             count = count + 1 if h["status"] == "FAIL" else 0
     return count
 
 
-def append_history(doc: Doc, line: str):
-    """Acrescenta uma linha ao histórico; cria a subseção no fim do Registro de Gates na primeira vez."""
-    lines = doc.text.split("\n")
+def put_history_line(lines, line: str):
+    """Acrescenta, em `lines` (em memória), uma linha ao histórico; cria a subseção no fim do Registro de Gates na
+    primeira vez."""
     bounds = history_bounds(lines)
     if bounds is not None:
         at = bounds[1]
@@ -3095,7 +3105,6 @@ def append_history(doc: Doc, line: str):
         if at == section[1] and at < len(lines):
             block.append("")
         lines[at:at] = block
-    rewrite_doc(doc, "\n".join(lines))
 
 
 def streak_warning(spec_id: str, gate: str, count: int) -> str:
@@ -3107,15 +3116,19 @@ def record_gate(doc: Doc, gate: str, status: str, evidence: str, history_evidenc
     """Linha da tabela + histórico: FAIL acrescenta a reprovação; PASS/N/A depois de reprovações acrescenta o PASS.
     Devolve o aviso das reprovações seguidas ("" quando não há)."""
     before = consecutive_fails(doc, gate)
-    set_gate_row(doc, gate, status, evidence)
+    lines = doc.text.split("\n")
+    put_gate_row(doc, lines, gate, status, evidence)
+    warning = ""
     if status == "FAIL":
         text = md_cell(history_evidence if history_evidence is not None else evidence)
-        append_history(doc, f"- {gate} FAIL {today()} — {text}")
+        put_history_line(lines, f"- {gate} FAIL {today()} — {text}")
+    elif before > 0:
+        put_history_line(lines, f"- {gate} PASS {today()} — depois de {before} reprovação(ões)")
+    rewrite_doc(doc, "\n".join(lines))  # tabela e histórico numa gravação só
+    if status == "FAIL":
         count = consecutive_fails(doc, gate)
-        return streak_warning(doc.id, gate, count) if count >= FAIL_STREAK_LIMIT else ""
-    if before > 0:
-        append_history(doc, f"- {gate} PASS {today()} — depois de {before} reprovação(ões)")
-    return ""
+        warning = streak_warning(doc.id, gate, count) if count >= FAIL_STREAK_LIMIT else ""
+    return warning
 
 
 def pillar_waivers(project: Project) -> dict:
@@ -3466,16 +3479,22 @@ def unclosed_specs(project: Project, today: dt.date):
 
 
 def fail_streaks(project: Project):
-    """(ID, gate, reprovações seguidas) das specs in-progress com >= 3 reprovações seguidas e sem impedimento
-    `falha` aberto."""
+    """(ID, gate, reprovações seguidas) das specs in-progress com >= 3 reprovações seguidas num gate que não está
+    PASS nem N/A na tabela, e sem impedimento `falha` aberto."""
     out = []
     for doc in sorted(project.specs.values(), key=lambda d: d.id):
         if doc.tier == "epic" or doc.status != "in-progress":
             continue
         if any(normalize_imp_type(i["Tipo"]) == "falha" for i in open_impediments(doc)):
             continue
+        history = gate_history(doc)
+        if not history:
+            continue
+        gates = gate_table(doc) or {}
         for gate in GATE_ROWS:
-            count = consecutive_fails(doc, gate)
+            if gate_ok(gates, gate):
+                continue  # PASS gravado por versão antiga ou à mão: sem aviso preso
+            count = streak_in(history, gate)
             if count >= FAIL_STREAK_LIMIT:
                 out.append((doc.id, gate, count))
     return out
@@ -3701,11 +3720,11 @@ RETRO_RULES = {
 }
 # Tabela fixa de sugestões de spec para a própria skill (espelha references/retro.md; nunca vira arquivo).
 RETRO_SUGGESTIONS = {
-    "R1": "gluon-spec: avisar a ferramenta atrasada no status e no hook, com o comando de atualização",
+    "R1": "gluon-spec: registrar a versão desconhecida (`whats-new --ack`, `private init`) e atualizar a atrasada no fluxo de atualização do projeto",
     "R2": "gluon-spec: revisão periódica das specs paradas (retomar, fechar ou deprecated)",
-    "R3": "gluon-spec: lembrar o fechamento do G7 depois do merge (G5 PASS sem G7)",
+    "R3": "gluon-spec: fechar o G7 no fluxo do merge, já que o aviso de entregue sem fechar não bastou",
     "R4": "gluon-spec: reduzir a evidência à mão (comandos do sdd-config prontos e `gate --run` como caminho padrão)",
-    "R5": "gluon-spec: guardar o histórico de FAIL no Registro de Gates (o PASS hoje apaga o FAIL)",
+    "R5": "gluon-spec: fazer o processo registrar as reprovações (`gate --run`/`--fail` e ferramenta vendorizada atualizada)",
     "R6": "gluon-spec: tratar o N/A recorrente (dispensa de pilar sugerida ou spec da capacidade que falta)",
     "R7": "gluon-spec: aviso de impedimento aberto há muito tempo no status",
 }
