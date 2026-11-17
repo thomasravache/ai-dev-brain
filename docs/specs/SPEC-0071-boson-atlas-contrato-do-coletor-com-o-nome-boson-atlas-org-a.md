@@ -4,14 +4,14 @@ title: "boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceit
 tier: full
 type: migration
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: [SPEC-0070]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/collectors/**, skills/boson-atlas/tests/**, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/**, skills/boson-atlas/CHANGELOG.md, mcp/tests/fixtures/collector.py, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/collectors/**, skills/boson-atlas/tests/**, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/**, skills/boson-atlas/CHANGELOG.md, mcp/tests/fixtures/collector.py, .claude-plugin/plugin.json, tests/plugin/test_skill_names.py, skills/boson-atlas/references/modes.md]
 adrs: [ADR-0011, ADR-0020]
 external: []
 size: S
@@ -89,6 +89,9 @@ snapshots gravados com qualquer dos dois nomes → aceitos por build, lint e con
 | Coletores de referência | generic, github, argocd | emitem o nome novo | UT-03 |
 | Snapshots antigos | atlas com snapshots `org-atlas/collector@1` | `build`, `lint` e `context` funcionam sem ação | IT-01 |
 | Mensagens e docs | falha de contrato no `scan` | mensagem cita `boson-atlas/collector@1` | UT-04 |
+| CI que não cita nenhuma pasta (Emenda v2) | arquivo de CI mantido sem `.boson-atlas/skill` nem `.org-atlas/skill`, com `.org-atlas/` no atlas | não conta como migrado: `vendor` atualiza as duas cópias e mostra o passo de migração; `doctor` não manda apagar | UT-05 |
+| Dois tipos de CI (Emenda v2) | workflow do GitHub roda `.boson-atlas/skill`, `ci/atlas-scan.sh` personalizado roda `.org-atlas/skill`, `vendor --ci generic` | as duas cópias ficam atualizadas | UT-06 |
+| Descrição dos coletores (Emenda v2) | `--help` de generic, github e argocd | diz `boson-atlas` | UT-03 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 
@@ -98,8 +101,10 @@ snapshots gravados com qualquer dos dois nomes → aceitos por build, lint e con
 ### 7.2 Testes Unitários
 - **UT-01** — Dadas duas saídas iguais, uma com cada nome de contrato, quando validadas, então as duas são aceitas sem violação.
 - **UT-02** — Dada uma saída com `contract` `boson-atlas/collector@2` ou `outro/collector@1`, quando validada, então há a violação "contract não suportado" e nada é gravado.
-- **UT-03** — Quando os coletores de referência (generic, github, argocd) rodam com os fixtures atuais, então emitem `boson-atlas/collector@1`.
+- **UT-03** — Quando os coletores de referência (generic, github, argocd) rodam com os fixtures atuais, então emitem `boson-atlas/collector@1`, e o `--help` de cada um diz `boson-atlas` e não `org-atlas`; o `KeptIdentifiersTest` (SPEC-0055:UT-04) passa a exigir `CONTRACT == "boson-atlas/collector@1"`.
 - **UT-04** — Dada uma saída fora do contrato, quando o `scan` roda, então a mensagem cita `boson-atlas/collector@1`.
+- **UT-05** — (Emenda v2) Dado um atlas com `.org-atlas/skill` velha e `ci/atlas-scan.sh` mantido que roda a ferramenta por um script intermediário, sem citar nenhuma das duas pastas, quando `vendor --ci generic` e `doctor` rodam, então `.org-atlas/skill` e `.boson-atlas/skill` ficam atualizadas, "pode apagar" não aparece e o `doctor` mostra o passo de migração em vez de "apague com".
+- **UT-06** — (Emenda v2) Dado um atlas com o workflow do GitHub rodando `.boson-atlas/skill` desatualizada e `ci/atlas-scan.sh` personalizado rodando `.org-atlas/skill`, quando `vendor --ci generic` roda, então as duas cópias ficam iguais ao `atlas.py` instalado.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um atlas temporário com snapshots gravados pela versão anterior (`org-atlas/collector@1`) e um coletor de terceiro que ainda emite o nome antigo, quando `scan`, `build`, `lint` e `context` rodam pela CLI, então tudo funciona e o grafo é o mesmo de antes.
@@ -133,6 +138,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Contrato**
+- [ ] Red: CH-01, UT-01 a UT-04, IT-01, CT-01 com a tag `SPEC-0071:<ID>`
+- [ ] Green: `CONTRACT`/`SUPPORTED_CONTRACTS`, coletores de referência, mensagens e references
+
+**Fase 2: Vendor (Emenda v2)**
+- [ ] Red: UT-05, UT-06
+- [ ] Green: estado "desconhecido" da CI e atualização das duas cópias
+- [ ] Validar: suítes da boson-atlas, tests/plugin e mcp, arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [ ] Relatório de Entrega, references, CHANGELOG, versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -193,3 +212,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0071`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| v1 (sem mudança de contrato) | 2026-11-17 | Emenda v2: entram os dois minors do G4 da SPEC-0070 (CI mantida que não cita nenhuma das duas pastas não conta como migrada; com dois tipos de CI, o `vendor` atualiza as duas cópias), a descrição `--help` dos coletores com o nome novo e a guarda de nomes da SPEC-0055 exigindo o contrato novo; `touches` ganha `tests/plugin/test_skill_names.py` e `skills/boson-atlas/references/modes.md`; testes UT-05 e UT-06 | achados da revisão da SPEC-0070 no mesmo `atlas.py`, sem abrir spec nova | nenhuma | thomas, 2026-11-17 (piloto automático com o recomendado) |
