@@ -9,7 +9,7 @@ created: 2026-11-17
 parent: SPEC-0066
 depends_on: [SPEC-0074]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/retro.md, skills/gluon-spec/references/private-mode.md, skills/gluon-spec/SKILL.md, skills/gluon-spec/CHANGELOG.md, README.md, .claude-plugin/plugin.json]
 adrs: [ADR-0001, ADR-0002, ADR-0006, ADR-0019]
 external: []
@@ -136,14 +136,23 @@ retro (contrato da SPEC-0074, retro_version continua 1, só acréscimos)
   R1  dispara para atrasada e desconhecida; ação:
         atrasada     → `whats-new` e `vendor --force` (privado: `whats-new --ack` depois de atualizar)
         desconhecida → `whats-new --ack` (registra a versão)
-  R5  dispara só com fail_history (0 ou null) e fail_recorded == 0 e nenhum FAIL atual,
-      com >= 20 PASS de G1–G5; se fail_history é null e fail_recorded == 0, mantém
-      o comportamento da SPEC-0074 (não dispara)
+  R5  dispara só com fail_history == 0, fail_recorded == 0, nenhum FAIL atual e >= 20 PASS
+      de G1–G5; fail_history null nunca dispara (Emenda v2)
   rótulo Markdown de fail_history null: "sem histórico" (motivo: sem git, sem commits ou ilegível)
-  impedimentos: ID normalizado para IMP-NN (IMP-? quando a célula não segue o formato)
+  impedimentos: ID mantido quando segue IMP-<dígitos>; senão IMP-? (Emenda v2)
   IDs repetidos de specs sem id (mesmo prefixo SPEC-NNNN) aparecem uma vez nas listas
   registro com spec_root que não é texto: entrada ignorada, em "Ignorados" com
   "registro inválido", sem traceback
+
+Esclarecimentos (Emenda v2)
+  - a linha FAIL do histórico usa a evidência gravada na tabela; ela já termina em " — <sha>"
+    no --run, e o --fail acrescenta " — <sha|?>"
+  - N/A depois de reprovações grava a mesma linha PASS "depois de <n> reprovação(ões)"
+  - "entregue sem fechar": specs não épicas em approved ou in-progress
+  - os avisos do topo do status saem no `status` sem IDs (visão geral), como os de worktree
+    e pilares; o aviso do `gate` sai sempre na 3ª reprovação seguida, com ou sem impedimento
+  - testes da SPEC-0074 que fixavam as chaves exatas de `tool` e de `projects[]` e o rótulo
+    "sem git" passam a aceitar as chaves novas e "sem histórico" (o JSON só ganha chaves)
 
 Erros
   linha do histórico fora do formato: ignorada na contagem, sem erro
@@ -290,3 +299,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted {{id}}`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-17 | Esclarecimentos do contrato: R5 com fail_history null nunca dispara; normalização de IMP; SHA no histórico; N/A depois de reprovações; escopo de "entregue sem fechar"; avisos só no `status` sem IDs; ajuste dos testes da SPEC-0074 que fixavam chaves exatas e "sem git" | Ambiguidades apontadas pelo test-writer (fase 1) | SPEC-0074 (testes) | thomas, 2026-11-17 (piloto automático com o recomendado) |
