@@ -296,7 +296,9 @@ class WriteTest(RenameCase):
 
 # ---------------------------------------------------------------- vendor (UT-05)
 
-class VendorTest(RenameCase):
+class VendorCase(RenameCase):
+    """Atlas novo (modo repo, coletor generic) e o apoio dos testes do vendor; sem testes próprios."""
+
     def setUp(self):
         super().setUp()
         self.atlas_dir = self.new_atlas()
@@ -315,6 +317,8 @@ class VendorTest(RenameCase):
             copied = self.atlas_dir / copy / "assets" / "collectors" / name
             self.assertTrue(copied.is_file(), f"{copy}: coletor {name} não foi copiado")
 
+
+class VendorTest(VendorCase):
     def test_atlas_without_ci_gets_the_new_folder_and_a_ci_that_runs_it(self):
         """SPEC-0070:UT-05 (a: atlas sem CI)"""
         for kind, rel in CI_FILES.items():
@@ -615,6 +619,134 @@ class GeneratedCiScriptTest(RenameCase):
         self.commit("scan")
         again = self.run_script()
         self.assertEqual(again.returncode, 0, f"mesma saída do coletor = sem mudança: {output(again)}")
+
+
+# ---------------------------------------------------------------- Emenda v2 (G4 rodada 1)
+
+class SkillFilesAreNotSecretsTest(RenameCase):
+    def test_skill_copied_outside_skill_copies_has_no_secret_leak(self):
+        """SPEC-0070:UT-06 (Emenda v2: a cópia não é segredo para o lint de outra versão)
+
+        Uma máquina numa versão que não conhece a pasta nova lê .boson-atlas/skill como conteúdo comum: nenhum
+        arquivo que o vendor copia (scripts/atlas.py e assets/**) pode ter texto que o lint acuse como segredo.
+        """
+        atlas_dir = self.new_atlas()
+        plant_copy(atlas_dir, "notes/skill")
+        out = self.box.run("lint", "--json", "--only", "secret-leak")
+        self.assertNotIn("Traceback", output(out))
+        findings = json.loads(out.stdout)["findings"]
+        leaks = [x for x in findings if x["rule"] == "secret-leak" and x["path"].startswith("notes/skill/")]
+        self.assertEqual(leaks, [], "arquivo copiado pelo vendor parece segredo para o lint")
+        self.assertEqual(out.returncode, 0, output(out))
+
+
+class VendorKeptCiTest(VendorCase):
+    """Emenda v2: com .<antigo>/skill no atlas, o vendor também a atualiza quando algum arquivo de CI mantido não
+    prova que roda só .boson-atlas/skill; "pode apagar" só sai quando nenhum arquivo de CI cita a pasta antiga."""
+
+    def setUp(self):
+        super().setUp()
+        plant_copy(self.atlas_dir, OLD_SKILL_COPY, outdated=True)
+
+    def assert_old_copy_kept_current(self, out):
+        self.assert_copy_is_current(OLD_SKILL_COPY)
+        self.assertNotIn(CAN_DELETE_OLD, output(out), "a CI ainda pode rodar a cópia antiga")
+
+    def test_customized_ci_citing_both_folders_keeps_the_old_copy_current(self):
+        """SPEC-0070:UT-05 (Emenda v2, e: CI personalizada roda .<antigo>/skill e um comentário cita a nova)"""
+        path = self.atlas_dir / CI_FILES["generic"]
+        path.parent.mkdir(parents=True)
+        path.write_text(custom_ci("generic") + f"# TODO: migrar para {NEW_SKILL_COPY}\n", encoding="utf-8")
+        before = path.read_bytes()
+        out = self.vendor("--ci", "generic")
+        self.assertEqual(path.read_bytes(), before, "CI personalizada mantida sem --force")
+        self.assert_old_copy_kept_current(out)
+
+    def test_ci_file_that_is_a_symlink_keeps_the_old_copy_current(self):
+        """SPEC-0070:UT-05 (Emenda v2, f: ci/atlas-scan.sh é link simbólico para um script que roda a antiga)"""
+        team = self.atlas_dir / "team" / "scan.sh"
+        team.parent.mkdir(parents=True)
+        team.write_text(old_generated_script(), encoding="utf-8")
+        before = team.read_bytes()
+        link = self.atlas_dir / CI_FILES["generic"]
+        link.parent.mkdir(parents=True)
+        os.symlink(os.path.join("..", "team", "scan.sh"), link)
+        out = self.vendor("--ci", "generic")
+        self.assertTrue(link.is_symlink(), "o link simbólico não é trocado")
+        self.assertEqual(team.read_bytes(), before, "o script do time não é tocado")
+        self.assert_old_copy_kept_current(out)
+
+    def test_other_ci_kind_that_runs_the_old_copy_keeps_it_current(self):
+        """SPEC-0070:UT-05 (Emenda v2, h: workflow do GitHub personalizado roda a antiga; vendor --ci generic)"""
+        workflow = self.atlas_dir / CI_FILES["github"]
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text(custom_ci("github"), encoding="utf-8")
+        before = workflow.read_bytes()
+        out = self.vendor("--ci", "generic")
+        script = (self.atlas_dir / CI_FILES["generic"]).read_text(encoding="utf-8")
+        self.assertIn(NEW_CALL, script, "o arquivo de CI novo roda a cópia nova")
+        self.assert_copy_is_current(NEW_SKILL_COPY)
+        self.assertEqual(workflow.read_bytes(), before, "o outro arquivo de CI não é tocado")
+        self.assert_old_copy_kept_current(out)
+
+    def test_regenerated_ci_without_other_ci_citing_the_old_folder_says_it_can_go(self):
+        """SPEC-0070:UT-05 (Emenda v2, contraprova: CI regravada com --force e nenhuma outra cita a antiga)"""
+        path = self.atlas_dir / CI_FILES["generic"]
+        path.parent.mkdir(parents=True)
+        path.write_text(custom_ci("generic"), encoding="utf-8")
+        out = self.vendor("--ci", "generic", "--force")
+        self.assertNotIn(OLD_SKILL_COPY, path.read_text(encoding="utf-8"))
+        self.assert_copy_is_current(NEW_SKILL_COPY)
+        self.assertIn(CAN_DELETE_OLD, output(out))
+
+
+class AfterMigrationTest(RenameCase):
+    """Emenda v2: a CI já roda .boson-atlas/skill, nenhum arquivo de CI cita .<antigo> e sobrou .<antigo>/skill
+    velha: os AVISOs só mandam apagá-la (git rm -r .<antigo>), sem repetir o vendor --force."""
+
+    def setUp(self):
+        super().setUp()
+        self.atlas_dir = self.new_atlas()
+        out = self.box.run("vendor", "--ci", "generic")
+        self.assertExit(out, 0)
+        script = (self.atlas_dir / CI_FILES["generic"]).read_text(encoding="utf-8")
+        self.assertIn(NEW_CALL, script, "fixture: a CI roda a cópia nova")
+        self.assertNotIn(OLD_DIR, script, "fixture: nenhum arquivo de CI cita a pasta antiga")
+        self.assertFalse((self.atlas_dir / CI_FILES["github"]).exists())
+        plant_copy(self.atlas_dir, OLD_SKILL_COPY, outdated=True)
+
+    def test_lint_outdated_old_copy_suggests_only_git_rm(self):
+        """SPEC-0070:UT-06 (Emenda v2: depois da migração)"""
+        out = self.box.run("lint", "--json")
+        self.assertNotIn("Traceback", output(out))
+        tool = f"{OLD_SKILL_COPY}/scripts/atlas.py"
+        warnings = [x for x in json.loads(out.stdout)["findings"] if x["rule"] == "config" and x["path"] == tool]
+        self.assertEqual(len(warnings), 1, out.stdout)
+        text = warnings[0]["detail"] + " " + warnings[0]["suggestion"]
+        self.assertIn(MIGRATION_STEP, text, "o AVISO manda apagar a pasta antiga")
+        self.assertNotIn("atlas.py vendor", text, "a CI já migrou: regravar a cópia antiga não é o passo")
+        self.assertNotIn("--force", text)
+
+    def test_doctor_old_folder_warning_has_only_git_rm(self):
+        """SPEC-0070:UT-07 (Emenda v2: depois da migração)"""
+        for args in (("doctor",), ("doctor", "--json")):
+            with self.subTest(args=args):
+                out = self.box.run(*args)
+                self.assertNotIn("Traceback", output(out))
+                rows = json_rows(out.stdout) if "--json" in args else doctor_lines(out.stdout)
+                found = [line for line in joined(rows) if line.startswith("AVISO ") and MIGRATION_STEP in line]
+                self.assertEqual(len(found), 1, output(out))
+                self.assertNotIn("--force", found[0], "a CI já migrou: sem vendor --force")
+
+
+class NewAtlasPageTest(RenameCase):
+    def test_atlas_md_of_a_new_atlas_says_boson_atlas(self):
+        """SPEC-0070:UT-08 (Emenda v2: assets/pages/ATLAS.md)"""
+        self.box.atlas.mkdir(parents=True)
+        self.assertExit(self.box.init(), 0)
+        page = (self.box.atlas / "ATLAS.md").read_text(encoding="utf-8")
+        self.assertNotIn(OLD_CONFIG_DIR, page)
+        self.assertIn(NEW_CONFIG_DIR, page)
 
 
 if __name__ == "__main__":
