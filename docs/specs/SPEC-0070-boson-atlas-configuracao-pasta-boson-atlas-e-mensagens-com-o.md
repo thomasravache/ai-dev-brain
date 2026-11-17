@@ -172,7 +172,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 3ec7d76 (árvore suja) | 2026-11-16 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=27, errors=7, skipped=1)) — 2832b68 | 2026-11-17 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — cf87b56 | 2026-11-17 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ed77282 | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — c3c314b | 2026-11-17 |
 | G4 Review | FAIL | CHANGES_REQUESTED: 2 major (M1: cópia nova acusada como segredo pelo lint da versão anterior por URL com credencial em comentário; M2: vendor deixa CI com link simbólico, que cita as duas pastas ou de outro tipo rodando .org-atlas e manda apagar) + 3 minor (sugestões do lint e do doctor depois da migração; textos org-atlas fora do touches) + nits | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
