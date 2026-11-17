@@ -82,6 +82,8 @@ Cada projeto ganha dois **documentos vivos** escritos para pessoas — o guia de
 
 O CHANGELOG da `gluon-spec` fica em [`skills/gluon-spec/CHANGELOG.md`](skills/gluon-spec/CHANGELOG.md), dentro da pasta que se copia para as ferramentas, com uma seção por versão (`SDD_TOOL_VERSION`). Depois de atualizar a skill, rode `spec_graph.py whats-new` no projeto: mostra as novidades desde a versão do projeto, as chaves novas do `sdd-config` e os comandos para se atualizar (`whats-new --ack` registra a versão revisada em projetos sem `tools/sdd`). O `status` avisa quando há novidade.
 
+Para ver o que o processo está seguindo de verdade em vários projetos, rode `spec_graph.py retro <pastas> [--registry]`: só lê, mostra números por projeto, achados com o comando que resolve e sugestões de spec para a skill, sem títulos nem textos das specs ([`references/retro.md`](skills/gluon-spec/references/retro.md)).
+
 ## Testes
 
 ```bash

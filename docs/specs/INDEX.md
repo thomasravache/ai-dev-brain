@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 2, implemented 62
+- Validação (G0): **6 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 3, approved 1, implemented 63
 - Impedimentos: **1 aberto(s)**, 29 resolvido(s)
 
 ## Impedimentos Abertos
@@ -31,14 +31,14 @@ Perfil: **minimo**
 
 **Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0074
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 0d) |  |
-| 2 | SPEC-0074 | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
 | 3 | SPEC-0076 | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
+| 4 | SPEC-0078 | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
 
 ## Épicos
 
@@ -50,7 +50,7 @@ Perfil: **minimo**
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | implemented | 8/8 implementadas |
 | SPEC-0065 | gluon-spec: segurança como parte da spec e dos gates | proposed | 0/0 implementadas |
-| SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | approved | 0/1 implementadas |
+| SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | approved | 1/2 implementadas |
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
 | SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | proposed | 0/0 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | proposed | 0/0 implementadas |
@@ -67,7 +67,7 @@ flowchart LR
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0066["SPEC-0066 · Dogfooding: o Fermion valida e melhora o próprio repositório"]
-    S0074["SPEC-0074<br/>gluon-spec: retrospectiva entre projeto…"]:::approved
+    S0078["SPEC-0078<br/>gluon-spec: ajustes do processo apontad…"]:::proposed
   end
   subgraph E0067["SPEC-0067 · Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações"]
     S0069["SPEC-0069<br/>photon-brain: configuração, mensagens e…"]:::implemented
@@ -168,10 +168,11 @@ flowchart LR
 | [SPEC-0071](SPEC-0071-boson-atlas-contrato-do-coletor-com-o-nome-boson-atlas-org-a.md) | boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceito | full | migration | implemented | 2026-11-16 | SPEC-0067 | SPEC-0070 | — |
 | [SPEC-0072](SPEC-0072-fermion-doctor-e-guarda-de-nomes-cobrem-os-nomes-tecnicos-an.md) | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite | feature | implemented | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071 | — |
 | [SPEC-0073](SPEC-0073-remocao-dos-nomes-tecnicos-antigos-na-versao-anunciada.md) | Remoção dos nomes técnicos antigos na versão anunciada | lite | refactor | approved | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071, SPEC-0072 | — |
-| [SPEC-0074](SPEC-0074-gluon-spec-retrospectiva-entre-projetos-spec-graph-py-retro.md) | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | approved | 2026-11-17 | SPEC-0066 | — | — |
+| [SPEC-0074](SPEC-0074-gluon-spec-retrospectiva-entre-projetos-spec-graph-py-retro.md) | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | implemented | 2026-11-17 | SPEC-0066 | — | — |
 | [SPEC-0075](SPEC-0075-boson-atlas-mapa-de-acesso-observabilidade-e-validacao-por-a.md) | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | epic | feature | proposed | 2026-11-17 | — | — | — |
 | [SPEC-0076](SPEC-0076-boson-atlas-coletor-argocd-reconhece-nome-do-servico-sufixos.md) | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite | fix | proposed | 2026-11-17 | — | — | — |
 | [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | proposed | 2026-11-17 | — | — | — |
+| [SPEC-0078](SPEC-0078-gluon-spec-ajustes-do-processo-apontados-pela-primeira-retro.md) | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | lite | fix | proposed | 2026-11-17 | SPEC-0066 | — | — |
 
 ## ADRs
 
