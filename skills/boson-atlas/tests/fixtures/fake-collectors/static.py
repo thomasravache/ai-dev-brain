@@ -1,4 +1,4 @@
-"""Coletor falso (SPEC-0033): imprime uma saída fixa e válida do contrato org-atlas/collector@1.
+"""Coletor falso (SPEC-0033): imprime uma saída fixa e válida do contrato boson-atlas/collector@1.
 
 Uso: python3 static.py <id-do-coletor>
 """
@@ -7,7 +7,7 @@ import sys
 
 collector = sys.argv[1] if len(sys.argv) > 1 else "fake-ok"
 print(json.dumps({
-    "contract": "org-atlas/collector@1",
+    "contract": "boson-atlas/collector@1",
     "collector": collector,
     "category": "code",
     "collected_at": "2026-10-30T12:00:00Z",

@@ -74,7 +74,7 @@ if state == "fail":
     sys.exit(1)
 names = ["a", "b"] if state == "v1" else ["a", "c"]
 print(json.dumps({
-    "contract": "org-atlas/collector@1",
+    "contract": "boson-atlas/collector@1",
     "collector": "fake",
     "category": "code",
     "collected_at": "2026-11-12T06:00:00Z",

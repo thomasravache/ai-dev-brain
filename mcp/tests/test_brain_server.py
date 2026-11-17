@@ -662,6 +662,26 @@ class BrainSameResultAsCliTest(BrainServerCase):
                 self.assertEqual(result.get("structuredContent"), json.loads(expected.stdout))
                 self.assertLess(elapsed, RESPONSE_TIMEOUT)
 
+    def test_read_tools_never_create_or_change_the_default_config_folders(self):
+        """SPEC-0072:UT-04 (as tools brain_* de leitura não criam nem mudam ~/.config/<antigo> nem
+        ~/.config/photon-brain)"""
+        config = self.sandbox.home / ".config"
+        folders = {name: config / name for name in ("second" + "-brain", "photon-brain")}
+
+        def state():
+            return {name: sorted((p.relative_to(f).as_posix(), p.stat().st_mtime_ns)
+                                 for p in f.rglob("*")) if f.exists() else None for name, f in folders.items()}
+
+        before = state()
+        server = self.open_server()
+        for index, (name, arguments, _) in enumerate(self.CALLS, 1):
+            with self.subTest(tool=name, arguments=arguments):
+                result, _ = self.ask(server, name, arguments, index)
+                self.assertIs(result.get("isError"), False, text_of(result))
+        self.assertEqual(state(), before, "uma tool de leitura criou ou mudou a configuração padrão")
+        for name, folder in folders.items():
+            self.assertFalse(folder.exists(), f"~/.config/{name} foi criada")
+
     def test_fixture_has_content_for_each_tool(self):
         """SPEC-0059:IT-01 (a fixture não é vazia: a comparação vale)"""
         search = json.loads(self.sandbox.brain_cli("search", "--json", "--", "payments").stdout)
@@ -693,7 +713,9 @@ class BrainNotConfiguredTest(BrainServerCase):
         self.assertIn(BRAIN_NOT_CONFIGURED, text_of(result))
         self.assertLess(elapsed, RESPONSE_TIMEOUT)
         self.assertEqual(list(empty.iterdir()), [], "o servidor não grava configuração")
-        self.assertFalse((self.sandbox.home / ".config" / "second-brain").exists(), "tocou a configuração do HOME")
+        # SPEC-0072:UT-04 — nem a pasta padrão antiga nem a nova (nome antigo montado por partes)
+        for name in ("second" + "-brain", "photon-brain"):
+            self.assertFalse((self.sandbox.home / ".config" / name).exists(), f"tocou ~/.config/{name}")
 
 
 class BrainConfidentialTest(BrainServerCase):

@@ -284,7 +284,7 @@ class PersonalPathRulesTest(unittest.TestCase):
             "atlas: C:\\Users\\ana\\work\\acme-atlas\n"
             "linux: /home/ana/acme-atlas\n"
             "ok: /Users/<nome>/work/acme-atlas\n"
-            "ok: ~/.config/org-atlas/config.yml\n"
+            "ok: ~/.config/boson-atlas/config.yml\n"
         )
         findings = personal_path_findings(text, "references/config.md")
         self.assertEqual(len(findings), 3, report(findings))

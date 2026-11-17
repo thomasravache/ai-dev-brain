@@ -1,5 +1,5 @@
 """Coletor falso (SPEC-0036): reimprime a saída esperada de um coletor da skill (SPEC-0034, SPEC-0035) com o
-cabeçalho do contrato org-atlas/collector@1.
+cabeçalho do contrato boson-atlas/collector@1.
 
 Uso: python3 replay.py <id-do-coletor> <categoria> <arquivo expected-*.json> [--without kind:id ...]
 --without tira a entidade e toda relação que aponta para ela (serviço que some do scan, IT-03).
@@ -15,7 +15,7 @@ data = json.loads(source.read_text(encoding="utf-8"))
 entities = [e for e in data["entities"] if f"{e['kind']}:{e['id']}" not in without]
 relations = [r for r in data["relations"] if r["from"] not in without and r["to"] not in without]
 output = {
-    "contract": "org-atlas/collector@1",
+    "contract": "boson-atlas/collector@1",
     "collector": collector,
     "category": category,
     "collected_at": "2026-10-30T12:00:00Z",

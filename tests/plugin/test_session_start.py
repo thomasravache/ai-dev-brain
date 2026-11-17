@@ -991,5 +991,56 @@ class HookProcessTest(unittest.TestCase):
                              "o hook gravou na configuração do cérebro")
 
 
+# ---------------------------------------------------------------- SPEC-0072:IT-01
+
+OLD_BRAIN = "second" + "-brain"  # nomes antigos montados por partes (guarda da SPEC-0072)
+OLD_COPY_DIR = "." + "org" + "-atlas"
+
+
+def plugin_version(skill, script, constant):
+    text = (REPO / "skills" / skill / "scripts" / script).read_text(encoding="utf-8")
+    return re.search(rf'^{constant} = "([^"]+)"', text, re.MULTILINE).group(1)
+
+
+class OldNamesHookTest(unittest.TestCase):
+    def test_hook_block_has_one_line_for_the_old_config_and_one_for_the_old_atlas_folder(self):
+        """SPEC-0072:IT-01"""
+        if not HOOK.is_file():
+            self.fail(f"{HOOK_NAME} não existe (SPEC-0058)")
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            env = isolated_env(base / "env")
+            for name in ("ATLAS_CONFIG_HOME", "BRAIN_CONFIG_HOME"):  # a pasta padrão é a do HOME temporário
+                env.pop(name)
+            env["CLAUDE_CONFIG_DIR"] = str(base / "env" / "claude")
+            old_config = Path(env["HOME"]) / ".config" / OLD_BRAIN
+            old_config.mkdir(parents=True)
+            (old_config / "config.yml").write_text("vault: /nao/existe\n", encoding="utf-8")
+            project = base / "projeto"
+            tool = project / OLD_COPY_DIR / "skill" / "scripts" / "atlas.py"
+            tool.parent.mkdir(parents=True)
+            version = plugin_version("boson-atlas", "atlas.py", "ATLAS_VERSION")
+            tool.write_text(f'ATLAS_VERSION = "{version}"\n', encoding="utf-8")  # em dia: só a pasta é antiga
+            elsewhere = base / "outro"
+            elsewhere.mkdir()
+
+            result = subprocess.run([sys.executable, str(HOOK)], input=hook_stdin(project), cwd=elsewhere, env=env,
+                                    capture_output=True, text=True, timeout=30, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(result.stdout.strip(), f"o hook não imprimiu nada: {result.stderr}")
+            context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+            self.assertIn(DOCTOR_HEADER.strip(), context)
+            block = context[context.index(DOCTOR_HEADER.strip()):]
+            self.assertLessEqual(len(block), DOCTOR_LIMIT)
+            lines = [line for line in block.splitlines()[1:] if line.strip()]
+            config_lines = [line for line in lines if OLD_BRAIN in line]
+            folder_lines = [line for line in lines if OLD_COPY_DIR in line and OLD_BRAIN not in line]
+            self.assertEqual(len(config_lines), 1, block)
+            self.assertIn("cp -p", config_lines[0])
+            self.assertEqual(len(folder_lines), 1, block)
+            self.assertIn(f"git rm -r {OLD_COPY_DIR}", folder_lines[0])
+            self.assertEqual(sorted(p.name for p in old_config.iterdir()), ["config.yml"], "o hook só lê")
+
+
 if __name__ == "__main__":
     unittest.main()

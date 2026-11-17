@@ -61,12 +61,12 @@ Chave ausente usa o padrão (origem `padrão` no `config`).
 | Item | OK | AVISO | ERRO |
 |---|---|---|---|
 | `configuração local` | arquivo lido, credenciais só com nomes | — | credencial com valor |
-| `configuração no caminho antigo ~/.config/org-atlas` / `~/.config/org-atlas é ignorada` | — | só a pasta antiga existe (com o comando de cópia) ou as duas existem (vale a nova); nunca com `ATLAS_CONFIG_HOME` | — |
+| `configuração no caminho antigo ~/.config/org-atlas` / `~/.config/org-atlas é ignorada` | — | só a pasta antiga existe (com o comando de cópia para `~/.config/boson-atlas`) ou as duas existem (vale a nova, `~/.config/boson-atlas`); nunca com `ATLAS_CONFIG_HOME` | — |
 | `pasta do atlas` | a pasta existe e pode ser lida | — | `atlas` vazio, caminho relativo, pasta inexistente ou sem permissão de leitura (mostra o caminho) |
 | `atlas-config.yml` | versão, chaves e formato certos | — | ausente, ilegível, `version` diferente de 1, sem `organization`/`mode`, `mode` inválido, caminho absoluto |
 | `estrutura` | todas as pastas e páginas | — | o que falta |
 | `git` | `.git` na pasta do atlas | a pasta não é repositório git | — |
-| `pasta .org-atlas/ no atlas` | — | o atlas ainda tem a cópia da skill no nome antigo: `vendor --ci <ci> --force` e depois `git rm -r .org-atlas` (`references/modes.md`) | — |
+| `pasta .org-atlas/ no atlas` | — | o atlas ainda tem a cópia da skill no nome antigo: `vendor --ci <ci> --force` (grava `.boson-atlas/skill`) e depois `git rm -r .org-atlas` (`references/modes.md`) | — |
 | `coletor <id>` | executável encontrado | — | executável não encontrado ou sem `command` |
 | `credencial <coletor> <NOME>` | `definida` | `não definida` | — |
 

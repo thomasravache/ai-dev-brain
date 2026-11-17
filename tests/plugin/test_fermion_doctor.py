@@ -12,9 +12,10 @@ Interface que estes testes exigem de `scripts/fermion_doctor.py` (seção 6 da S
   <projeto>/.claude/skills; projeto = --project, senão o cwd.
 - --json: {"plugin_versions": {"gluon-spec", "photon-brain", "boson-atlas"}, "findings": [{"check", "level": "warn",
   "path", "detail", "fix"}]}. `path` pode ser absoluto ou relativo ao projeto (tools/sdd/spec_graph.py, AGENTS.md,
-  .org-atlas/skill); os testes aceitam a pasta ou o arquivo que denunciou o achado.
+  .boson-atlas/skill); os testes aceitam a pasta ou o arquivo que denunciou o achado.
 - texto: uma linha "AVISO <check> <caminho> — <detalhe>" por achado; sem achado, uma linha "OK <check> ..." por
-  checagem (old-name-copy, stale-copy, stale-sdd-tool, old-sdd-block, stale-atlas, broken-leak-hook — SPEC-0068).
+  checagem (old-name-copy, stale-copy, stale-sdd-tool, old-sdd-block, stale-atlas, broken-leak-hook — SPEC-0068,
+  old-config e old-atlas-folder — SPEC-0072).
 - exit sempre 0, nada gravado, nenhum processo, nenhuma rede; link simbólico para fora da pasta conferida não é
   seguido; pasta sem permissão é ignorada; versão ilegível numa cópia vira "unreadable-version".
 
@@ -51,7 +52,12 @@ SKILL_SCRIPTS = {
     "boson-atlas": ("atlas.py", "ATLAS_VERSION"),
 }
 OLD_TO_NEW = {"sdd-management": "gluon-spec", "second-brain": "photon-brain", "org-atlas": "boson-atlas"}
-CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas", "broken-leak-hook")
+# SPEC-0072:CH-01 — duas checagens novas, cada uma com a sua linha OK quando não há achado
+CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas", "broken-leak-hook",
+          "old-config", "old-atlas-folder")
+# pasta da cópia da boson-atlas no atlas (SPEC-0070); a antiga é montada por partes (guarda da SPEC-0072)
+NEW_COPY_DIR = ".boson-atlas"
+OLD_COPY_DIR = "." + "org" + "-atlas"
 WARN_LINE_RE = re.compile(r"^AVISO (\S+) (.+?) — (.+)$")
 IS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
 DOCTOR_TIMEOUT = 60
@@ -335,14 +341,14 @@ class StaleCopyTest(DoctorTestCase):
 
 class StaleProjectTest(DoctorTestCase):
     def test_stale_sdd_tool_old_sdd_block_and_stale_atlas_with_commands(self):
-        """SPEC-0061:UT-04"""
+        """SPEC-0061:UT-04 (SPEC-0072:CH-01: o atlas vendorizado na pasta nova, .boson-atlas/skill)"""
         project = self.sandbox.project
         write(project / "tools" / "sdd" / "spec_graph.py", version_line("gluon-spec", LOW_VERSION))
         write(project / "AGENTS.md", sdd_block("sdd-management"))
         write(project / "CLAUDE.md", sdd_block("gluon-spec", "sdd-management"))  # já cita o novo: nada
         write(project / "GEMINI.md", "Antes se chamava sdd-management (fora do bloco).\n")  # sem bloco: nada
-        write(project / ".org-atlas" / "skill" / "scripts" / "atlas.py", version_line("boson-atlas", LOW_VERSION))
-        write(project / ".org-atlas" / "skill" / "SKILL.md", "---\nname: boson-atlas\ndescription: x\n---\n")
+        write(project / NEW_COPY_DIR / "skill" / "scripts" / "atlas.py", version_line("boson-atlas", LOW_VERSION))
+        write(project / NEW_COPY_DIR / "skill" / "SKILL.md", "---\nname: boson-atlas\ndescription: x\n---\n")
 
         data = run_doctor(self, self.sandbox)
         dump = json.dumps(data, ensure_ascii=False, indent=1)
@@ -361,7 +367,7 @@ class StaleProjectTest(DoctorTestCase):
         self.assertIn("spec_graph.py vendor --agents", block["fix"])
 
         atlas = by_check(data, "stale-atlas")[0]
-        self.assert_path(atlas, project / ".org-atlas" / "skill", project / ".org-atlas" / "skill" / "scripts" /
+        self.assert_path(atlas, project / NEW_COPY_DIR / "skill", project / NEW_COPY_DIR / "skill" / "scripts" /
                          "atlas.py")
         self.assertIn(LOW_VERSION, atlas["detail"])
         self.assertIn(self.versions["boson-atlas"], atlas["detail"])
@@ -380,7 +386,7 @@ class StaleProjectTest(DoctorTestCase):
         project = self.sandbox.project
         write(project / "tools" / "sdd" / "spec_graph.py", version_line("gluon-spec", LOW_VERSION))
         write(project / "AGENTS.md", sdd_block("sdd-management"))
-        write(project / ".org-atlas" / "skill" / "scripts" / "atlas.py", version_line("boson-atlas", LOW_VERSION))
+        write(project / NEW_COPY_DIR / "skill" / "scripts" / "atlas.py", version_line("boson-atlas", LOW_VERSION))
         stale = skill_copy(self.sandbox.user_skills, "gluon-spec", LOW_VERSION)
         data = run_doctor(self, self.sandbox, script=plugin / "scripts" / DOCTOR.name)
         dump = json.dumps(data, ensure_ascii=False, indent=1)
@@ -396,11 +402,144 @@ class StaleProjectTest(DoctorTestCase):
         self.assert_path(by_check(data, "stale-copy")[0], stale, stale / "scripts" / "spec_graph.py")
 
     def test_up_to_date_vendored_atlas_and_tools_are_not_reported(self):
-        """SPEC-0061:UT-04 (mesma versão do plugin: nada)"""
+        """SPEC-0061:UT-04 (mesma versão do plugin: nada; SPEC-0072:CH-01: na pasta nova)"""
         self.sandbox.up_to_date_project()
-        write(self.sandbox.project / ".org-atlas" / "skill" / "scripts" / "atlas.py",
+        write(self.sandbox.project / NEW_COPY_DIR / "skill" / "scripts" / "atlas.py",
               version_line("boson-atlas", self.versions["boson-atlas"]))
         self.assertEqual(run_doctor(self, self.sandbox)["findings"], [])
+
+
+# ---------------------------------------------------------------- SPEC-0072 (nomes técnicos antigos)
+
+OLD_BRAIN, NEW_BRAIN = "second" + "-brain", "photon-brain"
+OLD_ATLAS, NEW_ATLAS = "org" + "-atlas", "boson-atlas"
+CHECKS_BEFORE_0072 = CHECKS[:6]
+OVERRIDES = {"brain": "BRAIN_CONFIG_HOME", "atlas": "ATLAS_CONFIG_HOME"}
+
+
+def copy_command(old, new):
+    """O comando de cópia das skills (SPEC-0069 e SPEC-0070)."""
+    return f"mkdir -p ~/.config/{new} && cp -p ~/.config/{old}/config.yml ~/.config/{new}/"
+
+
+class OldNamesCase(DoctorTestCase):
+    def setUp(self):
+        super().setUp()
+        # sem as sobrescritas do ambiente real: a pasta padrão é a do HOME temporário
+        self.env = {k: v for k, v in self.sandbox.env.items() if k not in OVERRIDES.values()}
+
+    def config_dir(self, name):
+        folder = self.sandbox.home / ".config" / name
+        write(folder / "config.yml", "vault: /x\n")
+        return folder
+
+    def text_of(self, finding):
+        return f"{finding['path']} {finding['detail']} {finding['fix']}"
+
+
+class OldNamesGuardTest(OldNamesCase):
+    def test_nothing_old_keeps_todays_output(self):
+        """SPEC-0072:CH-01 (guarda: passa antes da mudança; depois, uma linha OK a mais por checagem nova)"""
+        self.sandbox.up_to_date_project()
+        self.config_dir(NEW_BRAIN)
+        self.config_dir(NEW_ATLAS)
+        data = run_doctor(self, self.sandbox, env=self.env)
+        self.assertEqual(data["findings"], [], json.dumps(data, ensure_ascii=False, indent=1))
+        lines = [line.strip() for line in run_doctor(self, self.sandbox, as_json=False, env=self.env).splitlines()
+                 if line.strip()]
+        for line in lines:
+            self.assertTrue(line.startswith("OK "), line)
+        for check in CHECKS_BEFORE_0072:
+            self.assertEqual(len([line for line in lines if line.startswith(f"OK {check} ")]), 1, lines)
+
+
+class OldConfigTest(OldNamesCase):
+    def check_pair(self, old, new, kind):
+        old_dir = self.config_dir(old)
+        with self.subTest(kind=kind, case="só a antiga"):
+            found = by_check(run_doctor(self, self.sandbox, env=self.env), "old-config")
+            self.assertEqual(len(found), 1, found)
+            self.assertIn(old, found[0]["path"])
+            self.assertIn(copy_command(old, new), self.text_of(found[0]))
+            text = warn_lines(run_doctor(self, self.sandbox, as_json=False, env=self.env))
+            self.assertEqual(len(text.get("old-config", [])), 1, text)
+        self.config_dir(new)
+        with self.subTest(kind=kind, case="as duas"):
+            found = by_check(run_doctor(self, self.sandbox, env=self.env), "old-config")
+            self.assertEqual(len(found), 1, found)
+            self.assertIn("pode apagar", self.text_of(found[0]))
+            self.assertNotIn("cp -p", self.text_of(found[0]))
+        with self.subTest(kind=kind, case="com a sobrescrita"):
+            override = self.sandbox.base / f"{kind}-override"
+            override.mkdir()
+            env = dict(self.env, **{OVERRIDES[kind]: str(override)})
+            self.assertEqual(by_check(run_doctor(self, self.sandbox, env=env), "old-config"), [])
+        self.assertEqual(sorted(p.name for p in old_dir.iterdir()), ["config.yml"], "o doctor só lê")
+
+    def test_old_brain_config(self):
+        """SPEC-0072:UT-01 (photon-brain)"""
+        self.check_pair(OLD_BRAIN, NEW_BRAIN, "brain")
+
+    def test_old_atlas_config(self):
+        """SPEC-0072:UT-01 (boson-atlas)"""
+        self.check_pair(OLD_ATLAS, NEW_ATLAS, "atlas")
+
+    def test_old_folder_as_symlink_outside_home_is_reported(self):
+        """SPEC-0072:UT-01 (Emenda v4: ~/.config/<antigo> como link simbólico para dotfiles fora do HOME temporário
+        também é acusado — o doctor só confere a existência, como as skills)"""
+        for kind, old in (("brain", OLD_BRAIN), ("atlas", OLD_ATLAS)):
+            with self.subTest(kind=kind):
+                dotfiles = self.sandbox.base / "dotfiles" / old
+                write(dotfiles / "config.yml", "vault: /x\n")
+                link = self.sandbox.home / ".config" / old
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(dotfiles, target_is_directory=True)
+                self.assertFalse(dotfiles.resolve().is_relative_to(self.sandbox.home.resolve()))
+                found = [f for f in by_check(run_doctor(self, self.sandbox, env=self.env), "old-config")
+                         if old in f["path"]]
+                self.assertEqual(len(found), 1, found)
+                self.assertTrue(link.is_symlink(), "o doctor só lê")
+
+    def test_override_with_only_the_old_folder_gives_no_finding(self):
+        """SPEC-0072:UT-01 (BRAIN_CONFIG_HOME e ATLAS_CONFIG_HOME definidos: nenhum achado)"""
+        self.config_dir(OLD_BRAIN)
+        self.config_dir(OLD_ATLAS)
+        env = dict(self.env)
+        for kind, name in OVERRIDES.items():
+            override = self.sandbox.base / f"{kind}-override"
+            override.mkdir()
+            env[name] = str(override)
+        self.assertEqual(by_check(run_doctor(self, self.sandbox, env=env), "old-config"), [])
+
+
+class OldAtlasFolderTest(OldNamesCase):
+    def test_stale_atlas_in_both_folders_and_old_folder_only_for_the_old_one(self):
+        """SPEC-0072:UT-02"""
+        projects = {}
+        for folder in (OLD_COPY_DIR, NEW_COPY_DIR):
+            project = self.sandbox.base / f"projeto{folder}"
+            write(project / folder / "skill" / "scripts" / "atlas.py", version_line("boson-atlas", LOW_VERSION))
+            projects[folder] = project
+        for folder, project in projects.items():
+            with self.subTest(folder=folder):
+                data = run_doctor(self, self.sandbox, project=project, env=self.env)
+                stale = by_check(data, "stale-atlas")
+                self.assertEqual(len(stale), 1, data["findings"])
+                self.assert_path_in(stale[0], project, folder)
+                self.assertIn(LOW_VERSION, stale[0]["detail"])
+                old = by_check(data, "old-atlas-folder")
+                if folder == OLD_COPY_DIR:
+                    self.assertEqual(len(old), 1, data["findings"])
+                    self.assert_path_in(old[0], project, folder)
+                    self.assertIn("vendor", self.text_of(old[0]))
+                    self.assertIn(f"git rm -r {OLD_COPY_DIR}", self.text_of(old[0]))
+                else:
+                    self.assertEqual(old, [], data["findings"])
+
+    def assert_path_in(self, finding, project, folder):
+        found = reported(finding["path"], project)
+        self.assertTrue(found == project / folder or (project / folder) in found.parents,
+                        f"{finding['path']} fora de {folder}")
 
 
 # ---------------------------------------------------------------- UT-05

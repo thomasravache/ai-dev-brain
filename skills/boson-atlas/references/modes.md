@@ -54,7 +54,7 @@ Arquivo de CI igual ao modelo: `já atualizado`. Diferente (customizado pelo tim
 `customizado — N linha(s) diferem; use --force para sobrescrever`. Com `--force`: sobrescrito. A cópia da skill é
 atualizada nos dois casos. Depois do `vendor`, faça commit de `.boson-atlas/` (ou `.org-atlas/`) e do arquivo da CI.
 
-### Atlas com a pasta antiga `.org-atlas/`
+### Atlas com a pasta do nome antigo `.org-atlas/`
 
 Antes da versão 2026.11.7 o `vendor` gravava a cópia em `.org-atlas/skill/`. As duas pastas continuam valendo:
 `lint`, `build`, `scan` e a checagem de cópia desatualizada tratam `.org-atlas/skill/` e `.boson-atlas/skill/` do

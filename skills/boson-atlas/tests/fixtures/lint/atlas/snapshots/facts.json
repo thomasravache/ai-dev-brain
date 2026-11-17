@@ -2,7 +2,7 @@
   "category": "delivery",
   "collected_at": "2026-11-02T16:23:26Z",
   "collector": "generic",
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "entities": [
     {
       "attrs": {
