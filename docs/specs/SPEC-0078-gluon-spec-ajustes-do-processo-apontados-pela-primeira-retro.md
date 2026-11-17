@@ -249,7 +249,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [x] Fase 1 (test-writer): CH-01, CH-02, UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0078:<ID>`; CH passando e os demais falhando pelo motivo certo
 - [x] Fase 2 (implementer): histórico de reprovações no `gate`, avisos no `status`/`next`, `sdd_version` no `private init`, `retro` (tool.state, fail_recorded, resíduos), docs, CHANGELOG e versões
 - [x] Emenda v3: test-writer (UT-07) e implementer (ajustes da revisão)
-- [ ] Fase 3 (reviewer): G4 independente, com o desempenho do `retro` (7.6)
+- [x] Fase 3 (reviewer): G4 independente, com o desempenho do `retro` (7.6)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -259,7 +259,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8, skipped=1)) — 57377a7 | 2026-11-17 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 358e32c | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6a6c6e5 | 2026-11-17 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; minors 1–3 e nits 1–4 da rodada 1 resolvidos pela Emenda v3; 220 testes em 3.9 e 3.14; 9 cenários de escrita sem corromper a spec; retro só leitura em 1,7 s) — 8ed04a3 | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
