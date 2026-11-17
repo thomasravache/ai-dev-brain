@@ -704,8 +704,8 @@ REDACTED = "[REDACTED]"
 PRIVATE_KEY_HEADER = r"[A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----"  # PEM (RSA, EC, OPENSSH...) and PGP blocks
 SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and masks only the password
     ("private-key", rf"-----BEGIN {PRIVATE_KEY_HEADER}(?:.*?-----END {PRIVATE_KEY_HEADER}|.*\Z)"),
-    # user may be empty (redis://:pw@host); the password runs up to the last @ before a space, so / and @
-    # inside it are masked too (when in doubt, more is masked, never less)
+    # user may be empty (the scheme and :// followed directly by :password and @host); the password runs up to
+    # the last @ before a space, so / and @ inside it are masked too (when in doubt, more is masked, never less)
     ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]*:)(?:[^\s@]*@)+"),
     # tokens glued to punctuation (_ghp_, =ghp_, token:ghp_) are masked too
     ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),
@@ -2556,6 +2556,8 @@ SPECIAL_SUGGESTION = ("o atlas só tem arquivos e pastas comuns: troque por uma 
 OUTDATED_COPY = "cópia da skill desatualizada — rode `vendor`"
 OUTDATED_SUGGESTION = ("rode `atlas.py vendor` para regravar {copy} com a versão instalada da skill "
                        "(references/modes.md)")
+OLD_COPY_LEFT = "cópia antiga da skill, que nenhum arquivo de CI roda mais"
+OLD_COPY_LEFT_SUGGESTION = "apague a pasta antiga: git rm -r .org-atlas (references/modes.md)"
 PERMISSION_SUGGESTION = "dê permissão de leitura (e de listagem, numa pasta) ou tire da pasta do atlas"
 
 
@@ -2624,7 +2626,11 @@ class _AtlasFiles:
                     copy = self._is_skill_copy(path, self.rel(path))
                     if copy == "outdated":
                         copy_dir = self.rel(path)[:-len("/scripts/atlas.py")]
-                        self.outdated[self.rel(path)] = (OUTDATED_COPY, OUTDATED_SUGGESTION.format(copy=copy_dir))
+                        if copy_dir == OLD_SKILL_COPY and ci_migrated(atlas):  # only removing it is left
+                            self.outdated[self.rel(path)] = (OLD_COPY_LEFT, OLD_COPY_LEFT_SUGGESTION)
+                        else:
+                            self.outdated[self.rel(path)] = (OUTDATED_COPY,
+                                                             OUTDATED_SUGGESTION.format(copy=copy_dir))
                         self.tool_text = self._tool_text()
                     elif copy:
                         continue
@@ -3204,21 +3210,64 @@ def put_file(atlas: Path, rel: str, content: str, force: bool, executable: bool 
     print(f"escrito: {rel}")
 
 
+OLD_COPY_DIR = OLD_SKILL_COPY.split("/")[0]  # .org-atlas
+REMOVE_OLD = f"git rm -r {OLD_COPY_DIR}"
+
+
 def migration_step(ci: str) -> str:
-    old_dir = OLD_SKILL_COPY.split("/")[0]
-    return f"para migrar: vendor --ci {ci} --force e depois git rm -r {old_dir}"
+    return f"para migrar: vendor --ci {ci} --force e depois {REMOVE_OLD}"
 
 
-def vendor_copy(atlas: Path, target: str, content: str, force: bool) -> str:
-    """The copy the CI file effectively written runs (SPEC-0070): a CI file kept (customized, without --force) that
-    runs the old copy and not the new one keeps the old copy; anything else, the new one."""
+def ci_file_state(atlas: Path, rel: str) -> str:
+    """"absent" | "unproven" | "new" for a CI file of CI_TARGETS (SPEC-0070, amendment v2): a symlink, a file that
+    cannot be read as UTF-8 text or one that cites the old folder may still run .org-atlas/skill ("unproven");
+    any other existing file runs only .boson-atlas/skill ("new"). Only reads."""
+    path = atlas / rel
+    if path.is_symlink():
+        return "unproven"
+    if not path.exists():
+        return "absent"
+    try:
+        if not path.is_file():
+            return "unproven"
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return "unproven"
+    return "unproven" if OLD_COPY_DIR in text else "new"
+
+
+def old_ci_kinds(atlas: Path) -> list:
+    """The kinds of CI_TARGETS whose file may still run the old copy (ci_file_state "unproven")."""
+    return [kind for kind, (_, rel) in CI_TARGETS.items() if ci_file_state(atlas, rel) == "unproven"]
+
+
+def ci_migrated(atlas: Path) -> bool:
+    """At least one CI file of CI_TARGETS and none that may still run the old copy: only removing it is left."""
+    states = [ci_file_state(atlas, rel) for _, rel in CI_TARGETS.values()]
+    return "new" in states and "unproven" not in states
+
+
+def vendor_copies(atlas: Path, ci: str, content: str, force: bool) -> list:
+    """The copies vendor writes (SPEC-0070): .boson-atlas/skill unless the CI file of `ci` is kept (customized,
+    without --force) and runs the old copy and not the new one; .org-atlas/skill too when that happens or when it
+    exists and some CI file of any kind that is kept may still run it (symlink, unreadable, cites the old folder)."""
+    target = CI_TARGETS[ci][1]
     dest = atlas / target
-    if force or not dest.is_file() or dest.is_symlink():
-        return SKILL_COPY
-    current = read_text(dest)
-    if current != content and OLD_SKILL_COPY in current and SKILL_COPY not in current:
-        return OLD_SKILL_COPY
-    return SKILL_COPY
+    kept = False
+    if not force and dest.is_file():
+        try:
+            current = dest.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            current = None  # put_file reports it
+        kept = current != content
+        if kept and current is not None and not dest.is_symlink() and OLD_SKILL_COPY in current \
+                and SKILL_COPY not in current:
+            return [OLD_SKILL_COPY]
+    unproven = [kind for kind in old_ci_kinds(atlas) if kind != ci or kept]
+    copies = [SKILL_COPY]
+    if unproven and (atlas / OLD_COPY_DIR).is_dir():
+        copies.append(OLD_SKILL_COPY)
+    return copies
 
 
 def cmd_vendor(args):
@@ -3240,9 +3289,9 @@ def cmd_vendor(args):
         content = render_workflow(ci_env_names(ci), schedule)
     else:
         content = read_text(ASSETS_DIR / "ci" / source)
-    copy = vendor_copy(atlas, target, content, args.force)
-    changed = copy_skill(atlas, copy)
-    print(f"{'atualizado' if changed else 'já atualizado'}: {copy}/ (cópia da skill, {ATLAS_VERSION})")
+    for copy in vendor_copies(atlas, args.ci, content, args.force):
+        changed = copy_skill(atlas, copy)
+        print(f"{'atualizado' if changed else 'já atualizado'}: {copy}/ (cópia da skill, {ATLAS_VERSION})")
     put_file(atlas, target, content, args.force, executable=target.endswith(".sh"))
     if args.ci == "github":
         names = ci_env_names(ci)
@@ -3250,11 +3299,12 @@ def cmd_vendor(args):
     else:
         print(f"Na sua CI: rode `bash {target}` na raiz do atlas com as variáveis de ci.env; "
               "exit 0 sem mudança, 10 com mudança (abra o PR/MR), 1 com falha")
-    new_dir, old_dir = (c.split("/")[0] for c in SKILL_COPIES)
-    if copy == OLD_SKILL_COPY:
-        print(f"a CI ainda roda {OLD_SKILL_COPY} — {migration_step(args.ci)}")
-    elif (atlas / old_dir).is_dir():
-        print(f"pode apagar {old_dir}/ (git rm -r {old_dir}) depois que a CI rodar com {new_dir}/")
+    new_dir, old_dir = SKILL_COPY.split("/")[0], OLD_COPY_DIR
+    still_old = old_ci_kinds(atlas)
+    for kind in still_old:
+        print(f"a CI ainda roda {OLD_SKILL_COPY} — {migration_step(kind)}")
+    if not still_old and (atlas / old_dir).is_dir():
+        print(f"pode apagar {old_dir}/ ({REMOVE_OLD}) depois que a CI rodar com {new_dir}/")
     print(f"Faça commit de {new_dir}/ (ou {old_dir}/) e do arquivo da CI no atlas (o atlas.py não executa o git).")
     return 0
 
@@ -3556,11 +3606,14 @@ def doctor_rows(config_home=None) -> list:
 def old_copy_items(atlas: Path) -> list:
     """doctor AVISO when the atlas still has the folder of the old name (.org-atlas/, written by the vendor of a
     previous version), with the migration step; the doctor only reads the atlas (SPEC-0070)."""
-    old_dir = OLD_SKILL_COPY.split("/")[0]
-    if not (atlas / old_dir).is_dir():
+    if not (atlas / OLD_COPY_DIR).is_dir():
         return []
-    kinds = [kind for kind, (_, target) in CI_TARGETS.items() if (atlas / target).is_file()] or ["github|generic"]
-    return [("AVISO", f"pasta {old_dir}/ no atlas", f"cópia da skill no nome antigo — {migration_step(kinds[0])}")]
+    item = f"pasta {OLD_COPY_DIR}/ no atlas"
+    if ci_migrated(atlas):
+        detail = f"cópia da skill no nome antigo, que a CI não roda mais — apague com: {REMOVE_OLD}"
+        return [("AVISO", item, detail)]
+    kinds = old_ci_kinds(atlas) or [kind for kind, (_, target) in CI_TARGETS.items() if (atlas / target).is_file()]
+    return [("AVISO", item, f"cópia da skill no nome antigo — {migration_step((kinds or ['github|generic'])[0])}")]
 
 
 def cmd_doctor(as_json):

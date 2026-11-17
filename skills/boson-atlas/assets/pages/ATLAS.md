@@ -1,6 +1,6 @@
 # Atlas — {organization}
 
-Mapa de como a organização desenvolve e opera software, mantido pela skill `org-atlas` junto com os agentes.
+Mapa de como a organização desenvolve e opera software, mantido pela skill `boson-atlas` junto com os agentes.
 O texto fora das regiões geradas é de quem mantém o atlas: o `atlas.py` nunca o reescreve.
 
 ## Sobre
