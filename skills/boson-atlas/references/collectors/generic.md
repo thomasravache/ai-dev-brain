@@ -1,6 +1,6 @@
 # Collector `generic`
 
-Turns a hand-written facts file (JSON) into the `org-atlas/collector@1` output (`references/collector-contract.md`, ADR-0011). Use it for anything no other collector covers (a datastore, a queue, an external dependency) and as the template for writing a collector of your own: one stdlib-only script that prints one JSON object and exits 0.
+Turns a hand-written facts file (JSON) into the `boson-atlas/collector@1` output (`references/collector-contract.md`, ADR-0011). Use it for anything no other collector covers (a datastore, a queue, an external dependency) and as the template for writing a collector of your own: one stdlib-only script that prints one JSON object and exits 0.
 
 ## Declare it
 
@@ -45,3 +45,5 @@ collectors:
 | `<file>: entities[<i>]: falta o campo id` (or `kind`) | an entity without `kind` or `id` |
 | `<file>: relations[<i>]: falta o campo from` (or `to`, `type`) | a relation without a required field |
 | `<file>: entities precisa ser uma lista` | `entities` or `relations` is not a list |
+
+Contract name: since 2026.11.8 the collector prints `boson-atlas/collector@1`; the old name `org-atlas/collector@1` is the same contract and is still accepted by `scan`, `build`, `lint` and `context` until its removal, not before 2027-03 (SPEC-0071, SPEC-0073).

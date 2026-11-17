@@ -1,6 +1,6 @@
 # Collector `argocd`
 
-Category `delivery`. Reads the Argo CD Applications, through the `argocd` CLI or through `kubectl`, and prints the `org-atlas/collector@1` output (`references/collector-contract.md`, ADR-0011): what runs where (deployments, services, environments, clusters), which repository each deployment comes from, and its **configuration references** — the names of keys that point to a host or resource (`DB_URL=db.interno`), the raw material the cross-referencing step (SPEC-0036) uses to find who depends on which database, queue or service.
+Category `delivery`. Reads the Argo CD Applications, through the `argocd` CLI or through `kubectl`, and prints the `boson-atlas/collector@1` output (`references/collector-contract.md`, ADR-0011): what runs where (deployments, services, environments, clusters), which repository each deployment comes from, and its **configuration references** — the names of keys that point to a host or resource (`DB_URL=db.interno`), the raw material the cross-referencing step (SPEC-0036) uses to find who depends on which database, queue or service.
 
 ## Setup
 
@@ -120,3 +120,5 @@ With `--input` the collector never calls a CLI.
 - Target: 1,000 Applications mapped in under 10 s after the CLI answers (measured on a generated fixture).
 - Only Argo CD; Flux and other delivery tools come as separate collectors (SPEC-0029).
 - `config_refs` from Helm values are read from the Application only, not from `values.yaml` files in the chart or the GitOps repository.
+
+Contract name: since 2026.11.8 the collector prints `boson-atlas/collector@1`; the old name `org-atlas/collector@1` is the same contract and is still accepted by `scan`, `build`, `lint` and `context` until its removal, not before 2027-03 (SPEC-0071, SPEC-0073).

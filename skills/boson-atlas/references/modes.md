@@ -67,16 +67,21 @@ mesmo jeito (são a ferramenta, nunca conteúdo do atlas), e máquinas em versõ
   atualiza só `.org-atlas/skill/` (para a CI não rodar uma cópia velha).
 - Com `.org-atlas/` no atlas, se **algum** arquivo de CI (`.github/workflows/atlas-scan.yml` ou `ci/atlas-scan.sh`, de
   qualquer tipo, não só o do `--ci` pedido) foi mantido sem prova de que roda só `.boson-atlas/skill` — é um link
-  simbólico, não pode ser lido ou cita `.org-atlas` —, o `vendor` atualiza também `.org-atlas/skill/` e imprime, para
-  cada um, `a CI ainda roda .org-atlas/skill — para migrar: vendor --ci <ci> --force e depois git rm -r .org-atlas`.
+  simbólico, não pode ser lido, cita `.org-atlas` ou não cita nenhuma das duas pastas (estado "desconhecido": pode
+  rodar a ferramenta por outro script) —, o `vendor` atualiza também `.org-atlas/skill/` e imprime, para cada um,
+  `a CI ainda roda .org-atlas/skill — para migrar: vendor --ci <ci> --force e depois git rm -r .org-atlas` (no estado
+  desconhecido, `<arquivo> não cita .boson-atlas/skill e pode ainda rodar .org-atlas/skill — para migrar: …`).
   O link simbólico e o script do time não são tocados.
-- Só quando nenhum arquivo de CI cita a pasta antiga (nem é link ou ilegível) e `.org-atlas/` existe, imprime
+- Com dois tipos de CI, se um arquivo personalizado mantido roda só `.org-atlas/skill` e o outro roda
+  `.boson-atlas/skill` (ou `.boson-atlas/` já existe), o `vendor` atualiza as duas cópias (SPEC-0071).
+- Só quando todo arquivo de CI existente cita `.boson-atlas/skill` e nenhum cita a pasta antiga (nem é link, ilegível ou
+  desconhecido) e `.org-atlas/` existe, imprime
   `pode apagar .org-atlas/ (git rm -r .org-atlas) depois que a CI rodar com .boson-atlas/`.
 
 Para migrar: `vendor --ci <ci> --force` (refaça à mão o que o time tinha personalizado), commit, espere a CI rodar com
 `.boson-atlas/` e então `git rm -r .org-atlas`. O `doctor` mostra um AVISO enquanto o atlas tiver `.org-atlas/`: com
-algum arquivo de CI ainda na pasta antiga (ou sem CI), o passo do `vendor --force`; depois da migração (há CI e
-nenhuma cita `.org-atlas`), só `git rm -r .org-atlas`. Do mesmo jeito, uma `.org-atlas/skill/scripts/atlas.py`
+algum arquivo de CI ainda na pasta antiga ou desconhecido (ou sem CI), o passo do `vendor --force`; depois da
+migração (há CI, toda CI cita `.boson-atlas/skill` e nenhuma cita `.org-atlas`), só `git rm -r .org-atlas`. Do mesmo jeito, uma `.org-atlas/skill/scripts/atlas.py`
 desatualizada depois da migração vira no `lint` o AVISO `cópia antiga da skill, que nenhum arquivo de CI roda mais`,
 com a sugestão de apagar a pasta, em vez de rodar o `vendor`.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """generic collector of the boson-atlas (SPEC-0034): turns a hand-written facts file (JSON) into the
-org-atlas/collector@1 output (ADR-0011). Stdlib only, Python 3.9+. It is also the example of how to write a
+boson-atlas/collector@1 output (ADR-0011). Stdlib only, Python 3.9+. It is also the example of how to write a
 collector of your own (references/collectors/generic.md).
 
 Usage: python3 generic.py --facts FILE --category C [--source NAME]
@@ -16,7 +16,7 @@ import datetime
 import json
 import sys
 
-CONTRACT = "org-atlas/collector@1"
+CONTRACT = "boson-atlas/collector@1"
 COLLECTOR = "generic"
 ENTITY_REQUIRED = ("kind", "id")
 RELATION_REQUIRED = ("from", "to", "type")
@@ -81,7 +81,7 @@ def read_facts(path: str):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="generic.py", description="Coletor generic da org-atlas")
+    parser = argparse.ArgumentParser(prog="generic.py", description="Coletor generic da boson-atlas")
     parser.add_argument("--facts", required=True, help="arquivo de fatos (JSON)")
     parser.add_argument("--category", required=True, help="categoria do contrato (code, delivery, ...)")
     parser.add_argument("--source", default=COLLECTOR, help="valor de source (padrão: generic)")

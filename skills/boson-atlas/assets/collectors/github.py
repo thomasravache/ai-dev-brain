@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """github collector of the boson-atlas (SPEC-0034), category code: repositories, workflows, CODEOWNERS teams and
 pull request signals of an organization, read through the `gh` already authenticated on the machine. Stdlib only,
-Python 3.9+; prints the org-atlas/collector@1 output (ADR-0011).
+Python 3.9+; prints the boson-atlas/collector@1 output (ADR-0011).
 
 Usage: python3 github.py --org ORG [--repos a,b] [--pr-sample N] [--input FOLDER]
 
@@ -24,7 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONTRACT = "org-atlas/collector@1"
+CONTRACT = "boson-atlas/collector@1"
 COLLECTOR = "github"
 CATEGORY = "code"
 DEFAULT_PR_SAMPLE = 100
@@ -424,7 +424,7 @@ def collect(org: str, source, wanted=None, pr_sample: int = DEFAULT_PR_SAMPLE) -
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="github.py", description="Coletor github da org-atlas")
+    parser = argparse.ArgumentParser(prog="github.py", description="Coletor github da boson-atlas")
     parser.add_argument("--org", required=True, help="organização no GitHub")
     parser.add_argument("--repos", default=None, help="só estes repositórios (a,b)")
     parser.add_argument("--pr-sample", type=int, default=DEFAULT_PR_SAMPLE, help="PRs lidos por repositório")
