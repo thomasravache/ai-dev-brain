@@ -5,7 +5,7 @@ Funções de scripts/brain.py que os testes chamam (ausente = falha pelo motivo 
     read_config(config_home) -> values["backup"] = {"keep": int, "warn_days": int, "with_files": bool}; valor
         inválido usa o padrão (10, 7, false) e entra em config["warnings"] com a chave citada ("backup.keep",
         "backup.warn_days"), como inbox_stale_days.
-    backup_name(with_files=False, clock=None) -> "second-brain-AAAA-MM-DD-HHMMSS[-files].zip"
+    backup_name(with_files=False, clock=None) -> "photon-brain-AAAA-MM-DD-HHMMSS[-files].zip" (SPEC-0069)
         (clock: função sem argumento que devolve datetime, como em capture_name; None = datetime.now).
     rotate_backups(folder, keep=N) -> lista dos nomes removidos (ADR-0015): só nomes do padrão, cada tipo
         (com e sem -files) contado separado, os mais velhos além de keep saem; o resto da pasta fica.
@@ -51,8 +51,9 @@ def make_backup_zip(path, entries, with_files=False, manifest_entries=None, cont
     return path
 
 
-def stamp(moment: dt.datetime, suffix="") -> str:
-    return f"second-brain-{moment.strftime('%Y-%m-%d-%H%M%S')}{suffix}.zip"
+def stamp(moment: dt.datetime, suffix="", prefix="photon-brain") -> str:
+    """Nome de backup do padrão; SPEC-0069:CH-01 — o prefixo novo é o padrão (o antigo só nos casos de compatibilidade)."""
+    return f"{prefix}-{moment.strftime('%Y-%m-%d-%H%M%S')}{suffix}.zip"
 
 
 class BackupSettingsTest(unittest.TestCase):
@@ -100,8 +101,9 @@ class BackupNameAndRotationTest(unittest.TestCase):
         """SPEC-0051:UT-02"""
         backup_name = fn("backup_name", SPEC)
         clock = lambda: dt.datetime(2026, 11, 2, 8, 5, 9)
-        self.assertEqual(backup_name(with_files=False, clock=clock), "second-brain-2026-11-02-080509.zip")
-        self.assertEqual(backup_name(with_files=True, clock=clock), "second-brain-2026-11-02-080509-files.zip")
+        # SPEC-0069:CH-01 — nome novo; o resto do comportamento igual
+        self.assertEqual(backup_name(with_files=False, clock=clock), "photon-brain-2026-11-02-080509.zip")
+        self.assertEqual(backup_name(with_files=True, clock=clock), "photon-brain-2026-11-02-080509-files.zip")
 
     def test_rotation_removes_only_the_oldest_pattern_names_beyond_keep(self):
         """SPEC-0051:UT-02"""
