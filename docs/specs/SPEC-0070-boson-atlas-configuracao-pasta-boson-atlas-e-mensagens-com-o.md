@@ -4,14 +4,14 @@ title: "boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome n
 tier: full
 type: migration
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: []
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/references/maintenance.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/assets/ci/**, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/references/maintenance.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/assets/ci/**, skills/boson-atlas/assets/pages/**, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json, tests/plugin/test_skill_names.py]
 adrs: [ADR-0010, ADR-0018, ADR-0019, ADR-0020]
 external: []
 size: M
@@ -28,7 +28,7 @@ A `boson-atlas` passa a usar o próprio nome no que é técnico: a configuraçã
 **Motivação:** depois da SPEC-0055 a skill se chama `boson-atlas`, mas a configuração, a pasta do atlas e as mensagens ainda dizem `org-atlas` (épico SPEC-0067, ADR-0020).
 
 **Objetivos (dentro do escopo):**
-- Configuração local: `--config-home`/`ATLAS_CONFIG_HOME` (sem mudança) → `~/.config/boson-atlas/config.yml` se existir → `~/.config/org-atlas/config.yml` se existir → `~/.config/boson-atlas/config.yml`; gravação (`init`, `init --join`, `config set`) sempre na nova, com o conteúdo completo; a antiga nunca é gravada, movida nem apagada.
+- Configuração local: `--config-home`/`ATLAS_CONFIG_HOME` (sem mudança) → `~/.config/boson-atlas/config.yml` se existir → `~/.config/org-atlas/config.yml` se existir → `~/.config/boson-atlas/config.yml`; gravação (`init`, `init --join`) sempre na nova, com o conteúdo completo; a antiga nunca é gravada, movida nem apagada.
 - Pasta do atlas: `vendor` grava `.boson-atlas/skill/` e arquivos de CI que a usam; `lint`, `build`, `scan` e a checagem de cópia desatualizada tratam `.org-atlas/skill/` e `.boson-atlas/skill/` do mesmo jeito (a cópia da ferramenta nunca é lida como conteúdo do atlas).
 - Atlas com CI personalizada que ainda roda `.org-atlas/skill` (arquivo de CI mantido sem `--force`): o `vendor` continua atualizando `.org-atlas/skill/`, para a CI não rodar uma cópia velha, e avisa como migrar (`vendor --force`, depois `git rm -r .org-atlas`).
 - `doctor` da máquina: AVISO quando só a configuração antiga existe (comando de cópia) e quando as duas existem (a antiga é ignorada); com o atlas configurado, AVISO quando o atlas tem `.org-atlas/` (com o passo de migração).
@@ -94,7 +94,7 @@ Exit codes e formato do --json: sem mudança.
 |---|---|---|---|
 | Máquina antiga sem ação | só `~/.config/org-atlas/config.yml` | todos os comandos leem a antiga e funcionam | UT-01, IT-01 |
 | Máquina nova | nenhuma pasta | `init` grava só na nova; mensagem "boson-atlas não configurado" antes | UT-02 |
-| Gravação com só a antiga | `config set` | configuração completa na nova; antiga idêntica byte a byte | UT-03 |
+| Gravação com só a antiga | `init --join` | configuração completa na nova; antiga idêntica byte a byte | UT-03 |
 | Sobrescrita | `ATLAS_CONFIG_HOME`/`--config-home` | só essa pasta, sem aviso de caminho antigo | UT-04 |
 | vendor em atlas novo ou com CI regravada | `vendor --ci github` (sem CI ou com `--force`) | grava `.boson-atlas/skill/` e CI apontando para ela; avisa que `.org-atlas/` pode sair | UT-05, IT-02 |
 | vendor com CI personalizada antiga | CI mantida que roda `.org-atlas/skill` | atualiza `.org-atlas/skill/` e mostra como migrar | UT-05 |
@@ -110,7 +110,7 @@ Exit codes e formato do --json: sem mudança.
 ### 7.2 Testes Unitários
 - **UT-01** — Dado `HOME` temporário com só a pasta antiga, ou com as duas, quando `local_config_path()` resolve, então devolve a antiga no primeiro caso e a nova no segundo.
 - **UT-02** — Dado `HOME` temporário sem pastas, quando a leitura e a gravação resolvem, então as duas apontam para `~/.config/boson-atlas/config.yml`, e o `init` cria só ela.
-- **UT-03** — Dado só a pasta antiga, quando `config set` grava, então a nova tem a configuração completa com a mudança e a antiga fica idêntica byte a byte.
+- **UT-03** — Dado só a pasta antiga, quando `init --join` grava, então a nova tem a configuração completa com a mudança e a antiga fica idêntica byte a byte.
 - **UT-04** — Dado `ATLAS_CONFIG_HOME` (ou `--config-home`) com as duas pastas padrão presentes, quando lê, grava e roda `doctor`, então só a sobrescrita é usada e não há aviso de caminho antigo.
 - **UT-05** — Dado um atlas (a) sem CI, (b) com `.org-atlas/` e CI gerada pela versão anterior regravada com `--force`, (c) com CI personalizada que roda `.org-atlas/skill` mantida sem `--force`, quando `vendor` roda, então (a) e (b) gravam `.boson-atlas/skill/` com CI apontando para ela e (b) avisa que `.org-atlas/` pode sair, e (c) atualiza `.org-atlas/skill/` e mostra o passo de migração; nunca apaga nada.
 - **UT-06** — Dado um atlas com uma cópia da ferramenta em `.org-atlas/skill/` e outro em `.boson-atlas/skill/`, quando `lint` e `build` rodam, então nenhuma das cópias é tratada como conteúdo, e uma cópia desatualizada é avisada nas duas pastas.
@@ -151,20 +151,34 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Configuração e textos**
+- [x] Red: CH-01 (guarda), UT-01 a UT-04, UT-07, UT-08 e a guarda de nomes da SPEC-0055, com a tag `SPEC-0070:<ID>`
+- [x] Green: leitura e gravação da configuração, AVISOs do `doctor`, textos e assets
+
+**Fase 2: Pasta do atlas e vendor**
+- [x] Red: UT-05, UT-06, IT-01, IT-02
+- [x] Green: `SKILL_COPIES`, escolha de destino no `vendor`, `lint`/`build`/checagem de cópia velha nas duas pastas
+- [x] Validar: suítes da boson-atlas, tests/plugin e mcp, arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Relatório de Entrega, references, SKILL.md, CHANGELOG com a data de remoção, versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 3ec7d76 (árvore suja) | 2026-11-16 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=27, errors=7, skipped=1)) — 2832b68 | 2026-11-17 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ed77282 | 2026-11-17 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 16665c0 | 2026-11-17 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; M1, M2, m1, m2 e ATLAS.md resolvidos e provados por experimento, inclusive o lint de origin/main na cópia nova; 2 minors — CI que não cita nenhuma pasta conta como migrada, e com dois tipos de CI a cópia nova pode ficar velha — levados para a SPEC-0071; 1 nit) — 1aae634 | 2026-11-17 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 53dd1b7 | 2026-11-17 |
+| H2 Integração aprovada | PASS | aprovado por política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-17 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-17 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 30ba867 | 2026-11-17 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -175,39 +189,55 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- A `boson-atlas` usa o próprio nome no que é técnico: configuração em `~/.config/boson-atlas`, ferramenta do atlas em `.boson-atlas/skill`, mensagens, `--version`, `--help`, cabeçalhos, CI gerada e `ATLAS.md` de atlas novo. Máquinas com `~/.config/org-atlas` e atlas com `.org-atlas/` funcionam sem ação; o `vendor` nunca deixa uma CI personalizada rodando cópia velha e só manda apagar `.org-atlas/` quando nenhuma CI a cita; `doctor` e `lint` mostram o passo de migração certo antes e depois. boson-atlas 2026.11.7, plugin 2026.11.16.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Leitura dupla e `local_config_write_path` como na SPEC-0069; `SKILL_COPIES`, `ci_file_state`/`vendor_copies`/`ci_migrated` no `vendor`, `old_config_items`/`old_copy_items` no `doctor`; comentário do padrão `url` reescrito para a cópia da skill não parecer segredo em nenhuma versão.
+- Testes em 2832b68 e 3d81068 (Emenda v2); implementação em cf87b56 e ed77282.
+- **Revisão G4:** rodada 1 CHANGES_REQUESTED (lint da versão anterior acusava segredo falso na cópia nova; CI personalizada podia ficar na cópia velha com a ordem de apagar) → Emenda v2; rodada 2 APPROVED com os experimentos repetidos.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: migration`.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Suíte atual sem outra mudança além de textos e pastas | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-01 | Leitura: só a antiga → antiga; as duas → nova | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-02 | Sem pastas: leitura e gravação na nova; `init` cria só ela | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-03 | `init --join` com só a antiga: configuração completa na nova, antiga idêntica | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-04 | Sobrescrita sem reserva nem aviso | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-05 | `vendor`: casos (a), (b), (c) e, pela Emenda v2, CI com link simbólico, com as duas pastas citadas e de outro tipo | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-06 | Cópias da ferramenta nunca são conteúdo; skill copiada não parece segredo; sugestão depois da migração | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-07 | AVISOs do `doctor`, inclusive depois da migração | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| UT-08 | Textos, assets de CI e `ATLAS.md` dizem `boson-atlas` | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| IT-01 | Máquina e atlas da versão anterior funcionam sem ação | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
+| IT-02 | `atlas-scan.sh` gerado roda `.boson-atlas/skill` | PASS | `skills/boson-atlas/tests/test_rename.py` e suítes da boson-atlas e `tests/plugin` — suíte local no G5 (53dd1b7) e CI do PR |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0020
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — AVISOs do `doctor`/`lint` e instruções do `vendor`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — CHANGELOG da boson-atlas 2026.11.7; o README entra na SPEC-0072
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não define `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma) — ver Pendências
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin 2026.11.16, PR desta spec.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- Minors da rodada 2, levados à SPEC-0071 (que também mexe em `atlas.py`): CI mantida que não cita nenhuma das duas pastas conta como migrada; com dois tipos de CI, `vendor --ci` de um tipo pode deixar a `.boson-atlas/skill` do outro desatualizada.
+- Nit: atlas sem nenhum arquivo de CI recebe do `lint` a sugestão de `vendor`, que grava só `.boson-atlas/`.
+- Descrições `--help` dos coletores ainda dizem `org-atlas` (SPEC-0071); README (SPEC-0072).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0070`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| v1 (sem mudança de contrato) | 2026-11-17 | `touches` ganha `tests/plugin/test_skill_names.py`: o `KeptIdentifiersTest` (SPEC-0055:UT-04) passa a exigir os identificadores novos da `boson-atlas` (pasta padrão, `SKILL_COPY`/`SKILL_COPIES` e `--version`); o `CONTRACT` continua `org-atlas/collector@1` até a SPEC-0071 | o teste da SPEC-0055 fixa os nomes que esta spec troca (mesmo achado da SPEC-0069) | SPEC-0071, SPEC-0072 | thomas, 2026-11-17 (piloto automático com o recomendado) |
+| v1 (sem mudança de contrato) | 2026-11-17 | Emenda v2 (G4 rodada 1): (1) nenhum arquivo copiado pelo `vendor` (`scripts/atlas.py` e `assets/**`) pode conter texto que o `lint` de qualquer versão acuse como segredo — teste novo copia a skill para um caminho fora de `SKILL_COPIES` e exige zero `secret-leak`; (2) o `vendor` também atualiza `.org-atlas/skill` quando ela existe e qualquer arquivo de CI de `CI_TARGETS` (de qualquer tipo) foi mantido e não se prova que roda só `.boson-atlas/skill` — link simbólico, arquivo ilegível ou que cita a pasta antiga; "pode apagar .org-atlas/" só sai quando nenhum arquivo de CI cita a pasta antiga; testes dos casos com link simbólico, com as duas pastas citadas e com outro tipo de CI; (3) depois da migração (nenhuma CI cita a pasta antiga), o AVISO de cópia velha do `lint` e o do `doctor` sugerem só `git rm -r .org-atlas`, sem repetir o `--force`; (4) `touches` ganha `skills/boson-atlas/assets/pages/**` (o `ATLAS.md` de atlas novo diz `boson-atlas`); (5) texto: `config set` (que o `atlas.py` não tem) trocado por `init --join` | G4 da SPEC-0070 (CHANGES_REQUESTED): máquina na versão anterior acusava segredo falso na cópia nova; CI personalizada podia ficar na cópia velha com a ordem de apagar | SPEC-0071 (descrição dos coletores), SPEC-0072 (README) | thomas, 2026-11-17 (piloto automático com o recomendado) |

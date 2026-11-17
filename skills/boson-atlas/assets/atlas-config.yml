@@ -1,4 +1,4 @@
-# org-atlas — configuração compartilhada padrão (copiada para <atlas>/atlas-config.yml pelo init).
+# boson-atlas — configuração compartilhada padrão (copiada para <atlas>/atlas-config.yml pelo init).
 # Vai junto com o atlas: nunca guarde segredo nem caminho absoluto aqui (ADR-0010). Detalhes: references/config.md
 # Credenciais ficam na configuração local de cada máquina, só pelo nome da variável ou do profile.
 version: 1                # versão do schema deste arquivo

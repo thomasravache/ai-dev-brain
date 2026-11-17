@@ -15,7 +15,8 @@ Contrato esperado de scripts/atlas.py (o Implementer segue estes testes):
 
 IT-01 e IT-02 são guardas (passam antes da mudança): erro de sistema de arquivos sem traceback e com exit 1,
 backups .bak e .bak.1, init --join recusando --org/--mode/--force, ERRO para atlas relativo e mensagem própria para
-profile com espaço. Tudo roda em Sandbox (HOME e ATLAS_CONFIG_HOME temporários); nunca toca ~/.config/org-atlas.
+profile com espaço. Tudo roda em Sandbox (HOME e ATLAS_CONFIG_HOME temporários); nunca toca ~/.config/boson-atlas
+nem ~/.config/org-atlas.
 """
 import json
 import os

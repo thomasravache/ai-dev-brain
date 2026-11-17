@@ -26,7 +26,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.6"
+ATLAS_VERSION = "2026.11.7"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -44,9 +44,13 @@ STRUCTURE_PAGES = ("ATLAS.md", "glossary.md")  # copied from assets/pages/
 KEEP_FILE = ".gitkeep"  # keeps the empty folders in a git repository (mode repo)
 IGNORED_IN_EMPTY = (".git", ".DS_Store", "Thumbs.db", "desktop.ini")  # an "empty" folder may have them
 ORIGIN_LOCAL, ORIGIN_ATLAS, ORIGIN_DEFAULT = "local", "atlas", "padrão"
-NOT_CONFIGURED = "org-atlas não configurado nesta máquina — rode init (ou init --join)"
-LOCAL_HEADER = ("# org-atlas — configuração local desta máquina (references/config.md). Não vai para o atlas.\n"
+NOT_CONFIGURED = "boson-atlas não configurado nesta máquina — rode init (ou init --join)"
+LOCAL_HEADER = ("# boson-atlas — configuração local desta máquina (references/config.md). Não vai para o atlas.\n"
                 "# credentials: só NOMES de variável de ambiente e de profile, nunca valores.\n")
+# Local configuration folders under ~/.config (SPEC-0070, ADR-0020): the new one is read first and is the only one
+# written; the old one is read as a fallback until its removal (SPEC-0073) and is never written, moved nor deleted.
+CONFIG_DIR = "boson-atlas"
+OLD_CONFIG_DIR = "org-atlas"
 ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*\Z")  # \Z: "NAME\n" is not a name
 KEY_RE = re.compile(r"^([^\s'\"#{}\[\],:][^:]*?)\s*:(?:\s+(.*))?$")
 NEEDS_QUOTES_RE = re.compile(r":\s|:$|\s#|^[\[\]{}&*!|>'\"%@`,#?:-]|^\s|\s$|\"|\\")
@@ -260,15 +264,50 @@ def read_yaml(path: Path) -> dict:
 
 # ---------------------------------------------------------------- paths
 
-def local_config_path(config_home=None) -> Path:
-    """$ATLAS_CONFIG_HOME/config.yml (default ~/.config/org-atlas/config.yml); config_home wins over both."""
+def config_override(config_home=None):
+    """config_home, else $ATLAS_CONFIG_HOME, as a Path; None when neither is given (the default folders apply)."""
     if config_home:
-        base = Path(config_home)
-    elif os.environ.get("ATLAS_CONFIG_HOME"):
-        base = Path(os.environ["ATLAS_CONFIG_HOME"])
-    else:
-        base = Path.home() / ".config" / "org-atlas"
-    return base / "config.yml"
+        return Path(config_home)
+    if os.environ.get("ATLAS_CONFIG_HOME"):
+        return Path(os.environ["ATLAS_CONFIG_HOME"])
+    return None
+
+
+def default_config_path(name: str = CONFIG_DIR) -> Path:
+    return Path.home() / ".config" / name / "config.yml"
+
+
+def local_config_path(config_home=None) -> Path:
+    """Where the local configuration is read (SPEC-0070): config_home or $ATLAS_CONFIG_HOME (no fallback), else the
+    first existing of ~/.config/boson-atlas/config.yml and ~/.config/org-atlas/config.yml (fallback until
+    SPEC-0073), else ~/.config/boson-atlas/config.yml (not configured)."""
+    override = config_override(config_home)
+    if override is not None:
+        return override / "config.yml"
+    for name in (CONFIG_DIR, OLD_CONFIG_DIR):
+        path = default_config_path(name)
+        if path.is_file():
+            return path
+    return default_config_path()
+
+
+def local_config_write_path(config_home=None) -> Path:
+    """Where the local configuration is written: config_home or $ATLAS_CONFIG_HOME, else always
+    ~/.config/boson-atlas/config.yml; the old folder is never written (SPEC-0070, ADR-0020)."""
+    override = config_override(config_home)
+    return override / "config.yml" if override is not None else default_config_path()
+
+
+def old_config_items(config_home=None) -> list:
+    """doctor AVISO about the old default folder (none with an override): only the old one exists -> the copy
+    command; both exist -> the old one is ignored (SPEC-0070)."""
+    if config_override(config_home) is not None or not default_config_path(OLD_CONFIG_DIR).is_file():
+        return []
+    old, new = f"~/.config/{OLD_CONFIG_DIR}", f"~/.config/{CONFIG_DIR}"
+    if default_config_path().is_file():
+        return [("AVISO", f"{old} é ignorada (vale {new})", "pode apagá-la")]
+    return [("AVISO", f"configuração no caminho antigo {old}",
+             f"copie com: mkdir -p {new} && cp -p {old}/config.yml {new}/")]
 
 
 def absolute(path) -> str:
@@ -665,8 +704,8 @@ REDACTED = "[REDACTED]"
 PRIVATE_KEY_HEADER = r"[A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----"  # PEM (RSA, EC, OPENSSH...) and PGP blocks
 SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and masks only the password
     ("private-key", rf"-----BEGIN {PRIVATE_KEY_HEADER}(?:.*?-----END {PRIVATE_KEY_HEADER}|.*\Z)"),
-    # user may be empty (redis://:pw@host); the password runs up to the last @ before a space, so / and @
-    # inside it are masked too (when in doubt, more is masked, never less)
+    # user may be empty (the scheme and :// followed directly by :password and @host); the password runs up to
+    # the last @ before a space, so / and @ inside it are masked too (when in doubt, more is masked, never less)
     ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]*:)(?:[^\s@]*@)+"),
     # tokens glued to punctuation (_ghp_, =ghp_, token:ghp_) are masked too
     ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),
@@ -2515,8 +2554,10 @@ GENERATED_SUGGESTION = "arquivo gerado com formato inesperado: rode `atlas.py sc
 SPECIAL_SUGGESTION = ("o atlas só tem arquivos e pastas comuns: troque por uma cópia do conteúdo ou tire da pasta do "
                       "atlas")
 OUTDATED_COPY = "cópia da skill desatualizada — rode `vendor`"
-OUTDATED_SUGGESTION = ("rode `atlas.py vendor` para regravar .org-atlas/skill com a versão instalada da skill "
+OUTDATED_SUGGESTION = ("rode `atlas.py vendor` para regravar {copy} com a versão instalada da skill "
                        "(references/modes.md)")
+OLD_COPY_LEFT = "cópia antiga da skill, que nenhum arquivo de CI roda mais"
+OLD_COPY_LEFT_SUGGESTION = "apague a pasta antiga: git rm -r .org-atlas (references/modes.md)"
 PERMISSION_SUGGESTION = "dê permissão de leitura (e de listagem, numa pasta) ou tire da pasta do atlas"
 
 
@@ -2550,7 +2591,8 @@ def _special_kind(mode) -> str:
 
 
 class _AtlasFiles:
-    """Every regular file of the atlas (VCS folders skipped, and .org-atlas/skill/scripts/atlas.py, the tool written
+    """Every regular file of the atlas (VCS folders skipped, and <copy>/scripts/atlas.py of each of SKILL_COPIES
+    (.boson-atlas/skill and .org-atlas/skill), the tool written
     by vendor, when identical to this atlas.py: its own patterns look like secrets), read once. A copy that differs
     is an outdated copy: a config warning in `outdated`, and it is still read and scanned (secret-leak drops only the
     matches whose text is also in this atlas.py, `tool_text`). Symlinks, FIFOs, sockets and devices are
@@ -2561,7 +2603,7 @@ class _AtlasFiles:
         self.atlas, self.texts, self.lossy, self.names, self.problems, self._json = atlas, {}, {}, [], {}, {}
         self.outdated = {}  # rel -> (detail, suggestion): config warnings
         self.tool_text = ""  # this atlas.py, when a copy is outdated: its own regexes and examples are not secrets
-        self._copy_tool = f"{SKILL_COPY}/scripts/atlas.py"
+        self._copy_tools = {f"{copy}/scripts/atlas.py" for copy in SKILL_COPIES}
         for root, dirs, files in os.walk(atlas, onerror=self._walk_error):
             kept = []
             for name in sorted(d for d in dirs if d not in VCS_DIRS):
@@ -2583,7 +2625,12 @@ class _AtlasFiles:
                     path = os.path.join(root, name)
                     copy = self._is_skill_copy(path, self.rel(path))
                     if copy == "outdated":
-                        self.outdated[self.rel(path)] = (OUTDATED_COPY, OUTDATED_SUGGESTION)
+                        copy_dir = self.rel(path)[:-len("/scripts/atlas.py")]
+                        if copy_dir == OLD_SKILL_COPY and ci_migrated(atlas):  # only removing it is left
+                            self.outdated[self.rel(path)] = (OLD_COPY_LEFT, OLD_COPY_LEFT_SUGGESTION)
+                        else:
+                            self.outdated[self.rel(path)] = (OUTDATED_COPY,
+                                                             OUTDATED_SUGGESTION.format(copy=copy_dir))
                         self.tool_text = self._tool_text()
                     elif copy:
                         continue
@@ -2598,12 +2645,12 @@ class _AtlasFiles:
         return rel or "."
 
     def _is_skill_copy(self, path, rel):
-        """.org-atlas/skill/scripts/atlas.py written by vendor: "same" when identical to this atlas.py or, when the
-        lint runs from the copy itself (nothing else to compare with), that same file; "outdated" when it is a
-        regular file that differs (another version of the skill, or edited: still read and scanned); False for any
-        other path, or when it is not a regular file or cannot be read (read as any file). Limitation: when the lint
-        runs from the copy itself there is nothing to compare with, and an edit to it is not scanned."""
-        if rel != self._copy_tool:
+        """<copy>/scripts/atlas.py (any of SKILL_COPIES) written by vendor: "same" when identical to this atlas.py
+        or, when the lint runs from the copy itself (nothing else to compare with), that same file; "outdated" when
+        it is a regular file that differs (another version of the skill, or edited: still read and scanned); False
+        for any other path, or when it is not a regular file or cannot be read (read as any file). Limitation: when
+        the lint runs from the copy itself there is nothing to compare with, and an edit to it is not scanned."""
+        if rel not in self._copy_tools:
             return False
         source = Path(__file__).resolve()
         try:
@@ -2705,8 +2752,8 @@ def _name_patterns(name, patterns) -> list:
 def _lint_secrets(files: _AtlasFiles, extras) -> list:
     """secret-leak: each match of a redaction pattern (built-in and extra_patterns) in any file, by file:line and
     pattern name, and each file or folder whose name matches one; never the value. In an outdated copy of the tool
-    (.org-atlas/skill/scripts/atlas.py) a match whose text is also in the installed atlas.py (its own regexes and
-    examples) is not a secret; any other match is."""
+    (<copy>/scripts/atlas.py of any of SKILL_COPIES) a match whose text is also in the installed atlas.py (its own
+    regexes and examples) is not a secret; any other match is."""
     findings, seen = [], set()
     patterns = _lint_patterns(extras)
     for rel, name in files.names:
@@ -3086,7 +3133,11 @@ def cmd_lint(args):
 
 CI_TARGETS = {"github": ("github-atlas-scan.yml", ".github/workflows/atlas-scan.yml"),
               "generic": ("atlas-scan.sh", "ci/atlas-scan.sh")}
-SKILL_COPY = ".org-atlas/skill"  # the tool the CI runs: python3 .org-atlas/skill/scripts/atlas.py
+# The copy of the skill the CI runs (python3 <copy>/scripts/atlas.py), SPEC-0070: vendor writes the first one; the
+# second, of the old name, is still a copy of the tool for lint, build, scan and doctor, and vendor keeps it updated
+# while a customized CI file still runs it. Nothing here deletes it (ADR-0019).
+SKILL_COPIES = (".boson-atlas/skill", ".org-atlas/skill")
+SKILL_COPY, OLD_SKILL_COPY = SKILL_COPIES
 DEFAULT_SCHEDULE = "0 6 * * 1"
 LOCAL_ONLY = "vendor --ci é do modo repo — veja references/modes.md"
 COPY_SKIPPED = ("__pycache__",)
@@ -3105,12 +3156,12 @@ def skill_files() -> list:
     return files
 
 
-def copy_skill(atlas: Path) -> int:
-    """Copy the skill into <atlas>/.org-atlas/skill/, always overwritten (the CI runs this copy, never a customized
-    one); returns how many files changed."""
+def copy_skill(atlas: Path, copy: str = SKILL_COPY) -> int:
+    """Copy the skill into <atlas>/<copy>/ (.boson-atlas/skill by default), always overwritten (the CI runs this
+    copy, never a customized one); returns how many files changed."""
     changed = 0
     for rel, source in skill_files():
-        data, dest = source.read_bytes(), atlas / SKILL_COPY / rel
+        data, dest = source.read_bytes(), atlas / copy / rel
         if dest.is_file() and not dest.is_symlink() and dest.read_bytes() == data:
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -3159,6 +3210,66 @@ def put_file(atlas: Path, rel: str, content: str, force: bool, executable: bool 
     print(f"escrito: {rel}")
 
 
+OLD_COPY_DIR = OLD_SKILL_COPY.split("/")[0]  # .org-atlas
+REMOVE_OLD = f"git rm -r {OLD_COPY_DIR}"
+
+
+def migration_step(ci: str) -> str:
+    return f"para migrar: vendor --ci {ci} --force e depois {REMOVE_OLD}"
+
+
+def ci_file_state(atlas: Path, rel: str) -> str:
+    """"absent" | "unproven" | "new" for a CI file of CI_TARGETS (SPEC-0070, amendment v2): a symlink, a file that
+    cannot be read as UTF-8 text or one that cites the old folder may still run .org-atlas/skill ("unproven");
+    any other existing file runs only .boson-atlas/skill ("new"). Only reads."""
+    path = atlas / rel
+    if path.is_symlink():
+        return "unproven"
+    if not path.exists():
+        return "absent"
+    try:
+        if not path.is_file():
+            return "unproven"
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return "unproven"
+    return "unproven" if OLD_COPY_DIR in text else "new"
+
+
+def old_ci_kinds(atlas: Path) -> list:
+    """The kinds of CI_TARGETS whose file may still run the old copy (ci_file_state "unproven")."""
+    return [kind for kind, (_, rel) in CI_TARGETS.items() if ci_file_state(atlas, rel) == "unproven"]
+
+
+def ci_migrated(atlas: Path) -> bool:
+    """At least one CI file of CI_TARGETS and none that may still run the old copy: only removing it is left."""
+    states = [ci_file_state(atlas, rel) for _, rel in CI_TARGETS.values()]
+    return "new" in states and "unproven" not in states
+
+
+def vendor_copies(atlas: Path, ci: str, content: str, force: bool) -> list:
+    """The copies vendor writes (SPEC-0070): .boson-atlas/skill unless the CI file of `ci` is kept (customized,
+    without --force) and runs the old copy and not the new one; .org-atlas/skill too when that happens or when it
+    exists and some CI file of any kind that is kept may still run it (symlink, unreadable, cites the old folder)."""
+    target = CI_TARGETS[ci][1]
+    dest = atlas / target
+    kept = False
+    if not force and dest.is_file():
+        try:
+            current = dest.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            current = None  # put_file reports it
+        kept = current != content
+        if kept and current is not None and not dest.is_symlink() and OLD_SKILL_COPY in current \
+                and SKILL_COPY not in current:
+            return [OLD_SKILL_COPY]
+    unproven = [kind for kind in old_ci_kinds(atlas) if kind != ci or kept]
+    copies = [SKILL_COPY]
+    if unproven and (atlas / OLD_COPY_DIR).is_dir():
+        copies.append(OLD_SKILL_COPY)
+    return copies
+
+
 def cmd_vendor(args):
     """vendor --ci github|generic [--schedule CRON] [--force] (SPEC-0040): writes the CI files of the atlas of this
     machine and the copy of the skill they run; never runs git nor a platform CLI (ADR-0010). Everything is
@@ -3178,8 +3289,9 @@ def cmd_vendor(args):
         content = render_workflow(ci_env_names(ci), schedule)
     else:
         content = read_text(ASSETS_DIR / "ci" / source)
-    changed = copy_skill(atlas)
-    print(f"{'atualizado' if changed else 'já atualizado'}: {SKILL_COPY}/ (cópia da skill, {ATLAS_VERSION})")
+    for copy in vendor_copies(atlas, args.ci, content, args.force):
+        changed = copy_skill(atlas, copy)
+        print(f"{'atualizado' if changed else 'já atualizado'}: {copy}/ (cópia da skill, {ATLAS_VERSION})")
     put_file(atlas, target, content, args.force, executable=target.endswith(".sh"))
     if args.ci == "github":
         names = ci_env_names(ci)
@@ -3187,7 +3299,13 @@ def cmd_vendor(args):
     else:
         print(f"Na sua CI: rode `bash {target}` na raiz do atlas com as variáveis de ci.env; "
               "exit 0 sem mudança, 10 com mudança (abra o PR/MR), 1 com falha")
-    print("Faça commit de .org-atlas/ e do arquivo da CI no atlas (o atlas.py não executa o git).")
+    new_dir, old_dir = SKILL_COPY.split("/")[0], OLD_COPY_DIR
+    still_old = old_ci_kinds(atlas)
+    for kind in still_old:
+        print(f"a CI ainda roda {OLD_SKILL_COPY} — {migration_step(kind)}")
+    if not still_old and (atlas / old_dir).is_dir():
+        print(f"pode apagar {old_dir}/ ({REMOVE_OLD}) depois que a CI rodar com {new_dir}/")
+    print(f"Faça commit de {new_dir}/ (ou {old_dir}/) e do arquivo da CI no atlas (o atlas.py não executa o git).")
     return 0
 
 
@@ -3232,7 +3350,7 @@ def join_atlas(atlas_path: str, local_path: Path) -> int:
     if not shared.is_file():
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared}", 2)
     data = read_yaml(shared)
-    credentials = existing_credentials(local_path)
+    credentials = existing_credentials(local_config_path())  # full configuration, maybe from the old folder
     write_local_config(local_path, render_local_config(atlas_path, credentials))
     print(f"Máquina ligada ao atlas em {atlas_path} ({data.get('organization', '')}, modo {data.get('mode', '')})")
     print(f"Configuração local: {local_path}")
@@ -3243,7 +3361,7 @@ def cmd_init(args):
     """init (new atlas, same configuration again, --force with .bak) or init --join (only the local layer).
     Everything is validated before the first write; credentials already declared on this machine are kept."""
     atlas_path = absolute(args.atlas)
-    local_path = local_config_path()
+    local_path = local_config_write_path()  # always the new folder (SPEC-0070); credentials come from the read path
     if args.join:
         extra = [flag for flag, given in (("--org", args.org), ("--mode", args.mode), ("--force", args.force))
                  if given]
@@ -3254,7 +3372,7 @@ def cmd_init(args):
     if not args.org or not args.mode:
         raise AtlasError("init precisa de --org NOME e --mode repo|local (ou --join para um atlas existente)", 2)
     shared_text = render_atlas_config(args.org, args.mode)
-    credentials = existing_credentials(local_path)
+    credentials = existing_credentials(local_config_path())
     atlas = Path(atlas_path)
     shared = atlas / SHARED_FILE
     if atlas.exists() and not atlas.is_dir():
@@ -3304,7 +3422,7 @@ def cmd_config(as_json):
         print(json.dumps(config, ensure_ascii=False, indent=2))
         return 0
     values, origins = config["values"], config["origins"]
-    print(f"org-atlas {ATLAS_VERSION} — configuração local: {local_config_path()}")
+    print(f"boson-atlas {ATLAS_VERSION} — configuração local: {local_config_path()}")
     for key in LOCAL_KEYS + SHARED_KEYS:
         if key == "credentials" and values[key]:
             print(f"credentials: ({origins[key]})")
@@ -3481,12 +3599,26 @@ def doctor_rows(config_home=None) -> list:
         rows.append(("ERRO", "pasta do atlas", f"não consegui ler {atlas}: {e.strerror or e}"))
         return rows + credential_checks(credentials)
     rows.append(("OK", "pasta do atlas", atlas))
-    rows += found + collector_checks((shared or {}).get("collectors"))
+    rows += found + old_copy_items(Path(atlas)) + collector_checks((shared or {}).get("collectors"))
     return rows + credential_checks(credentials)
+
+
+def old_copy_items(atlas: Path) -> list:
+    """doctor AVISO when the atlas still has the folder of the old name (.org-atlas/, written by the vendor of a
+    previous version), with the migration step; the doctor only reads the atlas (SPEC-0070)."""
+    if not (atlas / OLD_COPY_DIR).is_dir():
+        return []
+    item = f"pasta {OLD_COPY_DIR}/ no atlas"
+    if ci_migrated(atlas):
+        detail = f"cópia da skill no nome antigo, que a CI não roda mais — apague com: {REMOVE_OLD}"
+        return [("AVISO", item, detail)]
+    kinds = old_ci_kinds(atlas) or [kind for kind, (_, target) in CI_TARGETS.items() if (atlas / target).is_file()]
+    return [("AVISO", item, f"cópia da skill no nome antigo — {migration_step((kinds or ['github|generic'])[0])}")]
 
 
 def cmd_doctor(as_json):
     rows = doctor_rows()
+    rows[1:1] = old_config_items()
     has_error = any(status == "ERRO" for status, _, _ in rows)
     if as_json:
         checks = [{"status": s, "item": i, "detail": d} for s, i, d in rows]
@@ -3499,8 +3631,8 @@ def cmd_doctor(as_json):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="atlas.py", description="Ferramentas determinísticas do org-atlas.")
-    parser.add_argument("--version", action="version", version=f"org-atlas {ATLAS_VERSION}")
+    parser = argparse.ArgumentParser(prog="atlas.py", description="Ferramentas determinísticas da boson-atlas.")
+    parser.add_argument("--version", action="version", version=f"boson-atlas {ATLAS_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("init", help="cria um atlas novo ou só liga esta máquina (--join)")
     p.add_argument("--atlas", required=True, help="pasta do atlas")

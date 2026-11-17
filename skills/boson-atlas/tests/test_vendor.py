@@ -14,8 +14,8 @@ Contrato da seção 6 que estes testes conferem (pela CLI; o Implementer escolhe
                  vira `NOME: ${{ secrets.NOME }}`; permissões só contents: write e pull-requests: write; toda ação
                  fixada por SHA de 40 caracteres.
         generic: ci/atlas-scan.sh — scan e lint; exit 0 sem mudança, 10 com mudança, 1 com falha.
-        Nos dois: cópia da skill em .org-atlas/skill/ (scripts/atlas.py, assets/collectors/ e o que o scan usa),
-                 sempre sobrescrita; workflow e script rodam python3 .org-atlas/skill/scripts/atlas.py; no CI,
+        Nos dois: cópia da skill em .boson-atlas/skill/ (scripts/atlas.py, assets/collectors/ e o que o scan usa),
+                 sempre sobrescrita; workflow e script rodam python3 .boson-atlas/skill/scripts/atlas.py; no CI,
                  init --join --atlas "$PWD" com ATLAS_CONFIG_HOME temporário (mantém o que já vier definido);
                  "mudança" = git status --porcelain não vazio depois do scan.
         Agenda: --schedule, senão ci.schedule, senão "0 6 * * 1".
@@ -36,14 +36,23 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import SCRIPT, SKILL, Sandbox, doctor_lines, output
+from helpers import (
+    NEW_SKILL_COPY,
+    OLD_SKILL_COPY,
+    SCRIPT,
+    SKILL,
+    Sandbox,
+    doctor_lines,
+    output,
+)
 
 SPEC = "SPEC-0040"
 WORKFLOW = Path(".github/workflows/atlas-scan.yml")
 GENERIC = Path("ci/atlas-scan.sh")
-COPY = Path(".org-atlas/skill")
+# SPEC-0070:CH-01 — num atlas novo o vendor grava a cópia em .boson-atlas/skill e a CI roda essa cópia
+COPY = Path(NEW_SKILL_COPY)
 COPY_SCRIPT = COPY / "scripts" / "atlas.py"
-COPY_CALL = "python3 .org-atlas/skill/scripts/atlas.py"
+COPY_CALL = f"python3 {NEW_SKILL_COPY}/scripts/atlas.py"
 DEFAULT_SCHEDULE = "0 6 * * 1"
 LOCAL_MESSAGE = "vendor --ci é do modo repo — veja references/modes.md"
 CI_BLOCK = 'ci:\n  env: [GH_TOKEN, ARGOCD_AUTH_TOKEN]\n  schedule: "{schedule}"\n'
@@ -129,7 +138,8 @@ class VendorCase(unittest.TestCase):
         return self.read(WORKFLOW)
 
     def assert_nothing_written(self):
-        for rel in (".github", "ci", ".org-atlas"):
+        # SPEC-0070:CH-01 — nenhuma das duas pastas da cópia
+        for rel in (".github", "ci", Path(NEW_SKILL_COPY).parent.name, Path(OLD_SKILL_COPY).parent.name):
             self.assertFalse((self.atlas / rel).exists(), f"{rel} não devia existir")
 
 
@@ -283,11 +293,11 @@ class SkillCopyTest(VendorCase):
                 self.assertNotEqual(out.returncode, 0, f"lint não acusou o segredo na cópia: {output(out)}")
                 self.assertEqual(out.returncode, 1, output(out))
                 self.assertIn("secret-leak", output(out))
-                self.assertIn(".org-atlas/skill/notes.txt", output(out))
+                self.assertIn(f"{NEW_SKILL_COPY}/notes.txt", output(out))  # SPEC-0070:CH-01
                 self.assertNotIn(token, output(out), "o lint repete o valor do segredo")
 
     def run_copy(self, *args):
-        """python3 .org-atlas/skill/scripts/atlas.py ... a partir da pasta do atlas, como no CI, com a mesma
+        """python3 .boson-atlas/skill/scripts/atlas.py ... a partir da pasta do atlas, como no CI, com a mesma
         configuração local isolada do Sandbox."""
         env = dict(os.environ, HOME=str(self.box.home), ATLAS_CONFIG_HOME=str(self.box.config_home))
         return subprocess.run([sys.executable, str(COPY_SCRIPT), *args], cwd=self.atlas, capture_output=True,
@@ -425,7 +435,7 @@ class GenericScriptTest(VendorCase):
         self.assert_vendor_ran(out)
         script = self.read(GENERIC)
         self.assertIn(COPY_CALL, script)
-        # o coletor falso só existe na cópia: {skill} precisa apontar para .org-atlas/skill/
+        # o coletor falso só existe na cópia: {skill} precisa apontar para .boson-atlas/skill/ (SPEC-0070:CH-01)
         (self.atlas / COPY / "assets" / "collectors" / "fake_ci.py").write_text(FAKE_COLLECTOR, encoding="utf-8")
         self.git("init", "-q")
         self.commit("atlas")

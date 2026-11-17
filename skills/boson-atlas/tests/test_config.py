@@ -28,7 +28,8 @@ Contrato esperado das funções puras de scripts/atlas.py (o Implementer segue e
 
     load_config(config_home: Path | str | None = None) -> dict
         Lê <config_home>/config.yml (local: atlas, credentials; None = $ATLAS_CONFIG_HOME ou
-        ~/.config/org-atlas) e <atlas>/atlas-config.yml, completa com os padrões do contrato e devolve
+        ~/.config/boson-atlas, com ~/.config/org-atlas como reserva de leitura — SPEC-0070) e
+        <atlas>/atlas-config.yml, completa com os padrões do contrato e devolve
         {"values": {...}, "origins": {...}}:
           values  : atlas, credentials, version, organization, mode, language, stale_days, categories,
                     collectors, redaction.
@@ -43,7 +44,7 @@ Saídas da CLI que os testes conferem (contrato da seção 6; mensagens de erro 
     pasta ocupada                  exit 2, "pasta não está vazia — escolha outra pasta"
     --mode inválido                exit 2, mensagem com repo e local
     init --join sem config         exit 2, "atlas sem atlas-config.yml — rode init"
-    config / doctor sem local      exit 3, "org-atlas não configurado nesta máquina — rode init (ou init --join)"
+    config / doctor sem local      exit 3, "boson-atlas não configurado nesta máquina — rode init (ou init --join)"
     credentials com valor          exit 2, "credentials aceita só nomes de variável: <coletor>"
     doctor                         linhas "OK|AVISO|ERRO <item> — <detalhe>", itens começando por
                                    "configuração local", "pasta do atlas", "atlas-config.yml", "estrutura", "git";
@@ -66,7 +67,9 @@ from unittest import mock
 from helpers import (
     ASSET_CONFIG,
     DEFAULTS,
+    NEW_CONFIG_DIR,
     NOT_CONFIGURED,
+    OLD_CONFIG_DIR,
     SCRIPT,
     SHARED_KEYS,
     STRUCTURE_DIRS,
@@ -361,7 +364,8 @@ class NewAtlasTest(CliTestCase):
         local = self.box.config_home / "config.yml"
         self.assertTrue(local.is_file(), "configuração local não foi gravada em $ATLAS_CONFIG_HOME")
         self.assertIn(str(atlas), local.read_text(encoding="utf-8"))
-        self.assertFalse((self.box.home / ".config" / "org-atlas").exists(), "ignorou ATLAS_CONFIG_HOME")
+        for name in (NEW_CONFIG_DIR, OLD_CONFIG_DIR):  # SPEC-0070:CH-01 — nenhuma das pastas padrão
+            self.assertFalse((self.box.home / ".config" / name).exists(), "ignorou ATLAS_CONFIG_HOME")
 
         config = self.box.config_json()
         values, origins = normalize(config["values"]), config["origins"]
