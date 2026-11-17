@@ -11,7 +11,7 @@ depends_on: [SPEC-0070]
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/collectors/**, skills/boson-atlas/tests/**, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/**, skills/boson-atlas/CHANGELOG.md, mcp/tests/fixtures/collector.py, .claude-plugin/plugin.json, tests/plugin/test_skill_names.py, skills/boson-atlas/references/modes.md]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/collectors/**, skills/boson-atlas/tests/**, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/**, skills/boson-atlas/CHANGELOG.md, mcp/tests/fixtures/collector.py, .claude-plugin/plugin.json, tests/plugin/test_skill_names.py, skills/boson-atlas/references/modes.md, skills/boson-atlas/SKILL.md]
 adrs: [ADR-0011, ADR-0020]
 external: []
 size: S
@@ -88,6 +88,7 @@ snapshots gravados com qualquer dos dois nomes → aceitos por build, lint e con
 | Contrato desconhecido | `contract` com outro valor (ex.: `boson-atlas/collector@2`) | violação "contract não suportado", saída descartada | UT-02 |
 | Coletores de referência | generic, github, argocd | emitem o nome novo | UT-03 |
 | Snapshots antigos | atlas com snapshots `org-atlas/collector@1` | `build`, `lint` e `context` funcionam sem ação | IT-01 |
+| Máquina na versão anterior (Emenda v3) | snapshot gravado pelo `scan` desta versão com o coletor de referência | o snapshot traz `org-atlas/collector@1`; o `build` da versão anterior gera o mesmo grafo | IT-02 |
 | Mensagens e docs | falha de contrato no `scan` | mensagem cita `boson-atlas/collector@1` | UT-04 |
 | CI que não cita nenhuma pasta (Emenda v2) | arquivo de CI mantido sem `.boson-atlas/skill` nem `.org-atlas/skill`, com `.org-atlas/` no atlas | não conta como migrado: `vendor` atualiza as duas cópias e mostra o passo de migração; `doctor` não manda apagar | UT-05 |
 | Dois tipos de CI (Emenda v2) | workflow do GitHub roda `.boson-atlas/skill`, `ci/atlas-scan.sh` personalizado roda `.org-atlas/skill`, `vendor --ci generic` | as duas cópias ficam atualizadas | UT-06 |
@@ -109,6 +110,8 @@ snapshots gravados com qualquer dos dois nomes → aceitos por build, lint e con
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um atlas temporário com snapshots gravados pela versão anterior (`org-atlas/collector@1`) e um coletor de terceiro que ainda emite o nome antigo, quando `scan`, `build`, `lint` e `context` rodam pela CLI, então tudo funciona e o grafo é o mesmo de antes.
 
+- **IT-02** — (Emenda v3) Dado um atlas temporário e o coletor generic de referência (que emite o nome novo), quando o `scan` desta versão grava o snapshot e o `build` da versão anterior (o `atlas.py` de `origin/main` no momento da emenda, copiado como fixture `fixtures/previous/atlas.py`) roda no mesmo atlas, então o snapshot traz `org-atlas/collector@1` e o grafo tem os mesmos nós e arestas do `build` desta versão.
+
 ### 7.4 Testes de Contrato
 - **CT-01** — Dados os fixtures de contrato da skill e o fixture de coletor do MCP, quando validados com `validate_output`, então os válidos com qualquer dos dois nomes passam e os inválidos falham pelas mesmas violações.
 
@@ -124,7 +127,7 @@ snapshots gravados com qualquer dos dois nomes → aceitos por build, lint e con
 
 ## 8. Plano de Rollout
 - **Estratégia:** deploy direto pelo plugin e pela cópia da skill (e pelo `vendor` nos atlas).
-- **Dados/schema:** snapshots não são reescritos; o próximo `scan` grava o nome novo.
+- **Dados/schema:** (Emenda v3) até a SPEC-0073 o `scan` grava os snapshots com `org-atlas/collector@1`, qualquer que seja o nome emitido pelo coletor, para que máquinas na versão anterior continuem lendo o atlas; a SPEC-0073 passa a gravar o nome novo.
 - **Compatibilidade:** coletores de terceiros com o nome antigo aceitos até a SPEC-0073; máquina com versão antiga lendo snapshot com o nome novo rejeitaria a saída de um coletor novo — por isso o CHANGELOG pede atualizar a skill em todas as máquinas e o `vendor` do atlas antes de trocar coletores próprios.
 - **Observabilidade:** mensagens do `scan`.
 - **Rollback:** reverter a versão e rodar o próximo `scan` com os coletores antigos.
@@ -161,7 +164,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=31, skipped=1)) — 9e2d9da | 2026-11-17 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 63c14b6 | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 43d1083 | 2026-11-17 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | CHANGES_REQUESTED: 1 major (M1: snapshot gravado com o nome novo esvazia grafo e páginas no build de máquina na versão anterior, e o CHANGELOG não avisa) + 2 minor (SKILL.md com o nome antigo; exemplos e fixtures do contrato com o nome antigo) + 2 nits | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -213,3 +216,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | v1 (sem mudança de contrato) | 2026-11-17 | Emenda v2: entram os dois minors do G4 da SPEC-0070 (CI mantida que não cita nenhuma das duas pastas não conta como migrada; com dois tipos de CI, o `vendor` atualiza as duas cópias), a descrição `--help` dos coletores com o nome novo e a guarda de nomes da SPEC-0055 exigindo o contrato novo; `touches` ganha `tests/plugin/test_skill_names.py` e `skills/boson-atlas/references/modes.md`; testes UT-05 e UT-06 | achados da revisão da SPEC-0070 no mesmo `atlas.py`, sem abrir spec nova | nenhuma | thomas, 2026-11-17 (piloto automático com o recomendado) |
+| v1 (sem mudança de contrato) | 2026-11-17 | Emenda v3 (G4 rodada 1): o `scan` grava os snapshots com `org-atlas/collector@1` até a SPEC-0073 (coletores emitem o nome novo; os dois são aceitos), com teste IT-02 que roda o `build` da versão anterior num snapshot gravado por esta; `SKILL.md` entra no `touches` e passa a citar o nome novo; exemplos de `collector-contract.md` e os fixtures de `tests/fixtures/contract/` migram para o nome novo, com um fixture explícito do nome antigo (e `boson-atlas/collector@9` no lugar de `org-atlas/collector@9`); o aviso do caso "desconhecido" também sugere trocar o script para `.boson-atlas/skill`; CHANGELOG e referência descrevem a gravação no nome antigo | G4 da SPEC-0071: o primeiro `scan` de uma máquina atualizada gravava o nome novo e o `build` de uma máquina na versão anterior esvaziava grafo e páginas, contra o ADR-0020 | SPEC-0073 (passa a gravar o nome novo) | thomas, 2026-11-17 (piloto automático com o recomendado) |
