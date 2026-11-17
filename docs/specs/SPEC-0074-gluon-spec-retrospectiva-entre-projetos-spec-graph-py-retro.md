@@ -235,8 +235,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 - [x] Fase 1 (test-writer): UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0074:<ID>`, falhando pelo motivo certo
 - [x] Fase 2 (implementer): `cmd_retro` e métricas em `spec_graph.py`, `references/retro.md`, linha na `SKILL.md`, README, CHANGELOGs e versões da skill e do plugin
-- [ ] Emenda v2: test-writer (UT-04 ampliado, UT-07, UT-08 e R5 com FAIL atual) e implementer (resiliência, histórico ilegível, R5, ID sem slug)
-- [ ] Fase 3 (reviewer): G4 independente, com o desempenho e a comparação com o levantamento manual (7.6)
+- [x] Emenda v2: test-writer (UT-04 ampliado, UT-07, UT-08 e R5 com FAIL atual) e implementer (resiliência, histórico ilegível, R5, ID sem slug)
+- [x] Fase 3 (reviewer): G4 independente, com o desempenho e a comparação com o levantamento manual (7.6)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -246,7 +246,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8, skipped=1)) — 8fddd6f | 2026-11-17 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 10b8a7f | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6fd76b8 | 2026-11-17 |
-| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED — major: spec malformada/ilegível derruba o relatório (RNF de resiliência); minors: fail_history com arquivo não UTF-8, R5 ignora FAIL atual, slug do título vaza em spec sem id; lacunas de teste | 2026-11-17 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; achados 1–8 resolvidos, provados em 3.9 e 3.14; rodada real só leitura com estado idêntico antes/depois; minor A e nits B–D viram pendência) — 540f4f1 | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
