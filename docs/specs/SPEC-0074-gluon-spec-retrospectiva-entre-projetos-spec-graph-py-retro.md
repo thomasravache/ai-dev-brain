@@ -227,6 +227,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Fase 1 (test-writer): UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0074:<ID>`, falhando pelo motivo certo
+- [ ] Fase 2 (implementer): `cmd_retro` e métricas em `spec_graph.py`, `references/retro.md`, linha na `SKILL.md`, README, CHANGELOGs e versões da skill e do plugin
+- [ ] Fase 3 (reviewer): G4 independente, com o desempenho e a comparação com o levantamento manual (7.6)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
