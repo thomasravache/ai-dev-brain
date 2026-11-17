@@ -9,7 +9,7 @@ created: 2026-11-17
 parent: SPEC-0066
 depends_on: [SPEC-0074]
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/retro.md, skills/gluon-spec/references/private-mode.md, skills/gluon-spec/SKILL.md, skills/gluon-spec/CHANGELOG.md, README.md, .claude-plugin/plugin.json]
 adrs: [ADR-0001, ADR-0002, ADR-0006, ADR-0019]
 external: []
@@ -154,6 +154,14 @@ Esclarecimentos (Emenda v2)
   - testes da SPEC-0074 que fixavam as chaves exatas de `tool` e de `projects[]` e o rótulo
     "sem git" passam a aceitar as chaves novas e "sem histórico" (o JSON só ganha chaves)
 
+Ajustes da revisão (Emenda v3)
+  - aviso de reprovações seguidas só quando o gate na tabela não está PASS nem N/A
+    (PASS gravado por versão antiga ou à mão não deixa aviso preso)
+  - evidência com \r ou \r\n vira espaço (tabela e histórico continuam uma linha só)
+  - título da subseção reconhecido sem diferenciar maiúsculas e acentos (sem subseção duplicada)
+  - sugestões de R1, R3 e R5 em "O que ajustar na skill" reescritas para a causa que sobra
+    depois desta versão (texto, sem mudar regras nem limites)
+
 Erros
   linha do histórico fora do formato: ignorada na contagem, sem erro
 ```
@@ -178,6 +186,7 @@ Erros
 | Versão desconhecida × atrasada no retro | projeto sem versão e projeto atrasado | `tool.state` e ações distintas na R1 | UT-05 |
 | Reprovações registradas no retro | specs com histórico | `fail_recorded` conta as linhas FAIL; R5 não dispara com `fail_recorded` > 0; nenhuma evidência na saída | UT-05 |
 | Resíduos do retro | `spec_root` numérico no registro; histórico nulo; ID de impedimento livre; specs sem id repetidas | "registro inválido" em Ignorados; "sem histórico"; `IMP-?`; ID uma vez só | UT-06 |
+| Ajustes da revisão (Emenda v3) | PASS na tabela sem linha PASS no histórico; `\r` na evidência; título editado; sugestões | sem aviso preso; tabela e histórico íntegros; sem subseção duplicada; sugestões atuais | UT-07 |
 | Ferramentas antigas | spec com histórico lida pelo parser da tabela | `gate_table`, `validate` e `pr-check` como antes | CH-02 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
@@ -196,6 +205,7 @@ Erros
   - a R5 não dispara com `fail_recorded` > 0;
   - o marcador não aparece no Markdown nem no JSON.
 - **UT-06** — Dados um registro com `spec_root: 5`, um projeto com `fail_history` null, um impedimento com ID "texto livre" aberto há mais de N dias e duas specs sem `id` com o mesmo prefixo, quando o `retro` roda, então: exit 0 sem traceback, "registro inválido" em Ignorados, "sem histórico" no Markdown, `IMP-?` no achado R7 e o ID uma vez só em `stale`.
+- **UT-07** — (Emenda v3) Dado um histórico com 3 FAILs de G2 e a tabela com G2 PASS sem linha PASS no histórico, quando o `status` roda, então não há aviso de reprovações seguidas. Dado `gate --fail` com `\r\n` na evidência, então a tabela segue legível por `gate_table` e o histórico conta a reprovação. Dada a subseção com o título editado ("### Histórico de Reprovações"), então a próxima reprovação entra nela, sem criar outra, e a contagem inclui as antigas. As sugestões de R1, R3 e R5 não citam o que esta versão já entrega.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dado um repositório git temporário com uma spec aprovada, quando a CLI roda `gate SPEC-X G2 --fail` três vezes (com commit entre elas) e depois `gate --run` com o comando de teste do `sdd-config` verde, então:
@@ -238,6 +248,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 - [x] Fase 1 (test-writer): CH-01, CH-02, UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0078:<ID>`; CH passando e os demais falhando pelo motivo certo
 - [x] Fase 2 (implementer): histórico de reprovações no `gate`, avisos no `status`/`next`, `sdd_version` no `private init`, `retro` (tool.state, fail_recorded, resíduos), docs, CHANGELOG e versões
+- [ ] Emenda v3: test-writer (UT-07) e implementer (ajustes da revisão)
 - [ ] Fase 3 (reviewer): G4 independente, com o desempenho do `retro` (7.6)
 
 ## 12. Registro de Gates
@@ -300,3 +311,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-11-17 | Esclarecimentos do contrato: R5 com fail_history null nunca dispara; normalização de IMP; SHA no histórico; N/A depois de reprovações; escopo de "entregue sem fechar"; avisos só no `status` sem IDs; ajuste dos testes da SPEC-0074 que fixavam chaves exatas e "sem git" | Ambiguidades apontadas pelo test-writer (fase 1) | SPEC-0074 (testes) | thomas, 2026-11-17 (piloto automático com o recomendado) |
+| 3 | 2026-11-17 | Ajustes da revisão G4: aviso de reprovações seguidas respeita o status da tabela; \r na evidência; título da subseção tolerante; sugestões R1/R3/R5 atualizadas; UT-07 | Revisão independente (APPROVED com minors 1–3 e nit 1) | — | thomas, 2026-11-17 (piloto automático com o recomendado) |
