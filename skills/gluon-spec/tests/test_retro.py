@@ -612,6 +612,156 @@ class StaleDaysTest(TempTest):
             self.assertNotIn("invalid choice", res.stderr, value)
 
 
+class SlugPrivacyTest(TempTest):
+    def test_spec_without_id_does_not_leak_the_file_slug(self):
+        """SPEC-0074:UT-04 (Emenda v2) — spec sem `id`: o slug do nome do arquivo não sai; aparece só como SPEC-NNNN."""
+        marker = "marcadorslugsecreto"
+        root = self.tmp / "sem-id"
+        specs = root / "docs" / "specs"
+        specs.mkdir(parents=True)
+        (specs / "sdd-config.yml").write_text("base_branch: main\n", encoding="utf-8")
+        text = spec_md("SPEC-0009", "approved", created="2020-01-01", approved_at="2020-01-02",
+                       gates={"G0": ("PASS", GEN["G0"], "2020-01-02")})
+        text = text.replace("id: SPEC-0009\n", "", 1)
+        (specs / f"SPEC-0009-{marker}.md").write_text(text, encoding="utf-8")
+        env = isolated_env(self.tmp)
+        md = run_retro(env, self.tmp, str(root))
+        js = run_retro(env, self.tmp, str(root), "--json")
+        for label, res in (("Markdown", md), ("JSON", js)):
+            self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+            self.assertNotIn(marker, res.stdout + res.stderr, f"slug do arquivo vazou na saída {label}")
+        self.assertIn("SPEC-0009", md.stdout)
+        report = json.loads(js.stdout)
+        self.assertEqual(report["projects"][0]["stale"], ["SPEC-0009"])
+        r2 = [f for f in report["findings"] if f["rule"] == "R2"]
+        self.assertTrue(r2 and "SPEC-0009" in str(r2[0]["value"]), r2)
+
+
+@unittest.skipUnless(hasattr(os, "geteuid") and os.geteuid() != 0, "chmod 000 não bloqueia leitura como root")
+class UnreadableTest(TempTest):
+    def lock(self, path: Path):
+        """chmod 000, restaurado antes da limpeza do diretório temporário (addCleanup é LIFO)."""
+        mode = path.stat().st_mode
+        path.chmod(0)
+        self.addCleanup(path.chmod, mode)
+
+    def test_unreadable_projects_are_ignored_with_reason(self):
+        """SPEC-0074:UT-07 (Emenda v2) — spec não UTF-8, arquivo e pasta de specs sem leitura: Ignorados, sem traceback."""
+        env = isolated_env(self.tmp)
+        valid = self.tmp / "valido"
+        ut01_project(valid)
+
+        not_utf8 = self.tmp / "nao-utf8"
+        ut01_project(not_utf8)
+        (not_utf8 / "docs" / "specs" / "SPEC-0010-binaria.md").write_bytes(b"\xff")
+
+        locked_file = self.tmp / "arquivo-bloqueado"
+        ut01_project(locked_file)
+        self.lock(locked_file / "docs" / "specs" / "SPEC-0002-funcionalidade.md")
+
+        locked_dir = self.tmp / "pasta-bloqueada"
+        ut01_project(locked_dir)
+        self.lock(locked_dir / "docs" / "specs")
+
+        bad = ("nao-utf8", "arquivo-bloqueado", "pasta-bloqueada")
+        args = [str(valid)] + [str(self.tmp / name) for name in bad]
+        md = run_retro(env, self.tmp, *args)
+        self.assertEqual(md.returncode, 0, md.stdout + md.stderr)
+        self.assertNotIn("Traceback", md.stderr)
+        self.assertIn("valido", section(md.stdout, "Projetos"), md.stdout)
+        ignored_md = section(md.stdout, "Ignorados")
+        for name in bad:
+            self.assertIn(name, ignored_md, md.stdout)
+
+        js = run_retro(env, self.tmp, *args, "--json")
+        self.assertEqual(js.returncode, 0, js.stdout + js.stderr)
+        self.assertNotIn("Traceback", js.stderr)
+        report = json.loads(js.stdout)
+        self.assertEqual([p["name"] for p in report["projects"]], ["valido"])
+        reasons = {Path(item["path"]).name: item["reason"] for item in report["ignored"]}
+        self.assertEqual(set(reasons), set(bad), report["ignored"])
+        for name in bad:
+            self.assertTrue(str(reasons[name]).strip(), f"{name} sem motivo")
+
+    def test_non_utf8_history_only_nulls_fail_history(self):
+        """SPEC-0074:UT-07 (Emenda v2) — arquivo latin-1 commitado na pasta de specs: só fail_history null."""
+        env = isolated_env(self.tmp)
+        root = self.tmp / "historico-latin1"
+        specs = ut01_project(root)
+        attachment = specs / "anexo.txt"
+        attachment.write_bytes("versão inicial\n".encode("latin-1"))
+        git_init(root, env)
+        attachment.write_bytes("revisão com acentuação\n".encode("latin-1"))
+        git(root, env, "add", "-A")
+        git(root, env, "commit", "-qm", "anexo latin-1")
+
+        with mock.patch.dict(os.environ, env):
+            try:
+                history = fn("retro_fail_history")(specs)
+            except UnicodeDecodeError as e:
+                self.fail(f"retro_fail_history caiu com histórico não UTF-8: {e}")
+        self.assertIsNone(history)
+        res = run_retro(env, self.tmp, str(root), "--json")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertNotIn("Traceback", res.stderr)
+        report = json.loads(res.stdout)
+        self.assertEqual(report["ignored"], [])
+        project = report["projects"][0]
+        self.assertEqual(project["name"], "historico-latin1")
+        self.assertIsNone(project["fail_history"])
+        self.assertEqual(project["specs"]["total"], 7)
+        self.assertEqual(project["unclosed"], ["SPEC-0003"])
+        self.assertEqual(project["evidence"], {"gerada": 19, "manual": 2, "humana": 1, "a_mao": 1})
+        self.assertEqual(project["gates"]["G1"], {"PASS": 4, "FAIL": 1, "N/A": 0})
+
+
+class CurrentFailTest(unittest.TestCase):
+    def test_r5_quiet_with_current_fail(self):
+        """SPEC-0074:UT-07 (Emenda v2) — R5 não dispara com FAIL atual na tabela, mesmo com fail_history 0."""
+        retro_findings = fn("retro_findings")
+        m = neutral_metrics()
+        for g in ("G1", "G2", "G3", "G4", "G5"):
+            m["gates"][g]["PASS"] = 4
+        m["fail_history"] = 0
+        self.assertIn("R5", [f["rule"] for f in retro_findings([m])], "base: R5 dispara sem FAIL atual")
+        m["gates"]["G2"]["FAIL"] = 1
+        self.assertNotIn("R5", [f["rule"] for f in retro_findings([m])], "FAIL atual em G2: houve reprovação")
+
+
+class RepoShapeTest(TempTest):
+    def test_worktree_of_private_project_and_repo_without_remote(self):
+        """SPEC-0074:UT-08 (Emenda v2) — worktree de projeto privado conta uma vez como privado; sem remoto, público.
+        (guarda: passa antes da mudança)
+        """
+        priv = PrivateEnv(self.tmp / "priv")
+        env = isolated_env(self.tmp, base=priv.env)
+        env.update(HOME=priv.env["HOME"], SDD_CONFIG_HOME=priv.env["SDD_CONFIG_HOME"])
+        priv.env = env
+        priv.init()
+        write_spec(priv.spec_root / "specs", "SPEC-0001",
+                   spec_md("SPEC-0001", "approved", created="2020-01-01", approved_at="2020-01-02",
+                           gates={"G0": ("PASS", GEN["G0"], "2020-01-02")}))
+        git(priv.spec_root, env, "add", "-A")
+        git(priv.spec_root, env, "commit", "-qm", "sdd: spec")
+        worktree = self.tmp / "wt"
+        git(priv.repo, env, "worktree", "add", "-q", "-b", "feature", str(worktree))
+
+        res = run_retro(env, self.tmp, str(worktree), "--registry", "--json")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        report = json.loads(res.stdout)
+        self.assertEqual([(p["name"], p["private"]) for p in report["projects"]], [(PRIVATE_KEY, True)],
+                         report["projects"])
+        self.assertEqual(report["ignored"], [])
+
+        bare = self.tmp / "sem-remoto"
+        ut01_project(bare)
+        git_init(bare, env)
+        res = run_retro(env, self.tmp, str(bare), "--json")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        project = json.loads(res.stdout)["projects"][0]
+        self.assertEqual((project["name"], project["private"]), ("sem-remoto", False))
+
+
 # --------------------------------------------------------------------------- testes de integração
 
 class IntegrationTest(unittest.TestCase):
