@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 2, approved 1, implemented 64
 - Impedimentos: **1 aberto(s)**, 29 resolvido(s)
 
@@ -49,7 +49,7 @@ Perfil: **minimo**
 | SPEC-0030 | org-atlas: probes — consultas ao vivo na infraestrutura | proposed | 0/0 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | implemented | 8/8 implementadas |
 | SPEC-0065 | gluon-spec: segurança como parte da spec e dos gates | proposed | 0/0 implementadas |
-| SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | approved | 2/2 implementadas |
+| SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | implemented | 2/2 implementadas |
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
 | SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | proposed | 0/0 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | proposed | 0/0 implementadas |
@@ -156,7 +156,7 @@ flowchart LR
 | [SPEC-0063](SPEC-0063-gluon-spec-worktree-dir-calculado-a-partir-do-checkout-princ.md) | gluon-spec: worktree_dir calculado a partir do checkout principal | lite | fix | implemented | 2026-11-16 | — | — | — |
 | [SPEC-0064](SPEC-0064-photon-brain-titulo-de-nota-confidencial-fora-do-log-md-na-b.md) | photon-brain: título de nota confidencial fora do log.md na busca e no contexto | lite | fix | implemented | 2026-11-16 | — | — | — |
 | [SPEC-0065](SPEC-0065-gluon-spec-seguranca-como-parte-da-spec-e-dos-gates.md) | gluon-spec: segurança como parte da spec e dos gates | epic | feature | proposed | 2026-11-16 | — | — | — |
-| [SPEC-0066](SPEC-0066-dogfooding-o-fermion-valida-e-melhora-o-proprio-repositorio.md) | Dogfooding: o Fermion valida e melhora o próprio repositório | epic | feature | approved | 2026-11-16 | — | — | — |
+| [SPEC-0066](SPEC-0066-dogfooding-o-fermion-valida-e-melhora-o-proprio-repositorio.md) | Dogfooding: o Fermion valida e melhora o próprio repositório | epic | feature | implemented | 2026-11-16 | — | — | — |
 | [SPEC-0067](SPEC-0067-aposentar-os-nomes-tecnicos-antigos-second-brain-org-atlas-s.md) | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | epic | migration | approved | 2026-11-16 | — | — | — |
 | [SPEC-0068](SPEC-0068-gluon-spec-hook-do-leak-check-acha-a-ferramenta-depois-de-up.md) | gluon-spec: hook do leak-check acha a ferramenta depois de update do plugin ou remoção da cópia | lite | fix | implemented | 2026-11-16 | — | — | — |
 | [SPEC-0069](SPEC-0069-photon-brain-configuracao-mensagens-e-backups-com-o-nome-nov.md) | photon-brain: configuração, mensagens e backups com o nome novo e leitura dupla | full | migration | implemented | 2026-11-16 | SPEC-0067 | — | — |

@@ -3,7 +3,7 @@ id: SPEC-0066
 title: "Dogfooding: o Fermion valida e melhora o próprio repositório"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-11-16
 depends_on: []
 adrs: [ADR-0019]
@@ -75,9 +75,9 @@ As filhas seguintes consomem o relatório, não um contrato de código.
 - **Alterar um projeto lido sem querer:** o comando só lê, o git roda só com `log` e sem lock, e o estado é comparado antes e depois (SPEC-0074:IT-01).
 
 ## 7. Critérios de Aceite do Épico
-- [ ] A retrospectiva roda nos projetos públicos e privados sem alterar nenhum deles — SPEC-0074:IT-01
-- [ ] Os achados e as sugestões para a skill seguem as regras documentadas — SPEC-0074:UT-03
-- [ ] O relatório não expõe títulos nem textos dos projetos — SPEC-0074:UT-04
+- [x] A retrospectiva roda nos projetos públicos e privados sem alterar nenhum deles — SPEC-0074:IT-01
+- [x] Os achados e as sugestões para a skill seguem as regras documentadas — SPEC-0074:UT-03
+- [x] O relatório não expõe títulos nem textos dos projetos — SPEC-0074:UT-04
 
 ## 8. Questões em Aberto
 - [x] Qual frente começa? — a retrospectiva (frente 6), para chegar à SPEC-0065 e às demais frentes com dados (thomas, 2026-11-17)
@@ -93,6 +93,47 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico: o que foi entregue, como (ondas e deploys com versão/data), resultado dos critérios de aceite com os testes que os provam, métricas pós-release, pendências como novas specs. `spec_graph.py report SPEC-0066` ajuda a montar. -->
+
+### O que foi entregue
+- **SPEC-0074 (PR #50, plugin 2026.11.19):** comando só de leitura `spec_graph.py retro`, a retrospectiva entre projetos públicos e privados. Ele traz métricas de fluxo, rigor dos gates, origem da evidência, N/A, emendas e impedimentos, os achados R1 a R7 com a ação de cada um e as sugestões para a skill.
+- **SPEC-0078 (PR #51, plugin 2026.11.20):** corrige o que a primeira retrospectiva mostrou.
+  - O histórico de reprovações fica na própria spec, e a regra dos 3 FAILs passa a ser conferível.
+  - O `status` e o `next` avisam das specs entregues sem fechar.
+  - O `private init` grava `sdd_version`.
+  - O `retro` separa a versão desconhecida da atrasada.
+
+### Como
+- **Onda 1:** SPEC-0074. A primeira rodada real, em 25 projetos e 2,6 s, confirmou a hipótese do radar: 1 FAIL na tabela atual contra 183 no histórico do git.
+- **Onda 2:** SPEC-0078, com os achados da onda 1 como entrada.
+- Cada filha passou por test-writer, implementer e reviewer independentes, com emendas registradas: a v2 da SPEC-0074 e as v2 e v3 da SPEC-0078.
+- Distribuição pelo plugin, sem deploy (G6 N/A).
+
+### Critérios de aceite
+| Critério | Prova | Resultado |
+|---|---|---|
+| A retrospectiva roda nos projetos públicos e privados sem alterar nenhum deles | SPEC-0074:IT-01, mais a rodada real com o estado do git igual antes e depois (G4 da SPEC-0074 e da SPEC-0078) | PASS |
+| Os achados e as sugestões seguem as regras documentadas | SPEC-0074:UT-03, mais SPEC-0078:UT-05 e UT-07 | PASS |
+| O relatório não expõe títulos nem textos | SPEC-0074:UT-04, mais SPEC-0078:UT-05 (evidência do histórico) | PASS |
+
+### Métricas pós-release
+Na primeira retrospectiva, 25 projetos foram analisados sem nenhum ignorado. As regras que mais apareceram:
+
+| Regra | Projetos |
+|---|---|
+| R1 (versão desconhecida ou atrasada) | 25 |
+| R3 (entregue sem fechar) | 14 |
+| R4 (evidência à mão) | 12 |
+
+A métrica de sucesso do épico ("pelo menos uma spec decidida pelo thomas a partir do relatório") foi cumprida pela SPEC-0078, aprovada em 2026-11-17. A próxima retrospectiva mostra se R1, R3 e R5 caem com a versão 2026.11.20.
+
+### Pendências
+- As frentes do radar que ficaram fora deste épico entram como épico novo quando forem priorizadas:
+  - o plugin e a `gluon-spec` atuais no próprio desenvolvimento;
+  - pilares no perfil padrão e documentos vivos;
+  - métricas de qualidade no CI;
+  - atlas do próprio repositório;
+  - ciclo de auto-melhoria agendado.
+- A ideia está registrada neste épico (seção 2 e radar). Nenhuma spec foi criada ainda, por decisão do thomas em 2026-11-17 ("fechar o épico").
 
 ## 12. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
