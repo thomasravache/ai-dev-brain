@@ -20,6 +20,8 @@ ATLAS_CONFIG_HOME temporários); sem rede. O coletor de terceiro antigo é fixtu
 """
 import copy
 import json
+import os
+import shutil
 import subprocess
 import sys
 import unittest
@@ -57,11 +59,12 @@ MCP_COLLECTOR = SKILL.parents[1] / "mcp" / "tests" / "fixtures" / "collector.py"
 COLLECTORS = SKILL / "assets" / "collectors"
 OUT_OF_CONTRACT = f"saída fora do contrato {NEW_CONTRACT} (1 violação(ões))"
 
-# CH-01: violações de hoje de cada fixture de contrato, como está no repositório (guarda)
+# CH-01: violações de cada fixture de contrato (guarda). Emenda v3: os fixtures usam o nome novo, com um único
+# fixture válido explícito com o nome antigo (valid/old-contract-name.json) e boson-atlas/collector@9 no inválido
 CURRENT_VIOLATIONS = {
     "invalid/attrs-not-scalar.json": ["entities[0]: attrs.owner não é escalar"],
     "invalid/category-unknown.json": ["category desconhecida: billing"],
-    "invalid/contract-version.json": ["contract não suportado: " + "org" + "-atlas/collector@9"],
+    "invalid/contract-version.json": ["contract não suportado: boson-atlas/collector@9"],
     "invalid/duplicate-key.json": ["entities[2]: chave repetida: repository:acme/api"],
     "invalid/from-format.json": ["relations[0]: from fora do formato kind:id: acme/api/ci"],
     "invalid/kind-unknown.json": ["entities[2]: kind desconhecido: widget"],
@@ -70,7 +73,9 @@ CURRENT_VIOLATIONS = {
     "invalid/type-unknown.json": ["relations[0]: type desconhecido: calls"],
     "valid/code-github.json": [],
     "valid/delivery-argocd.json": [],
+    "valid/old-contract-name.json": [],
 }
+OLD_NAME_FIXTURE = "valid/old-contract-name.json"
 
 EMITTER = '''"""Coletor de teste (SPEC-0071): a saída do contrato com o `contract` e o `kind` passados."""
 import json
@@ -159,10 +164,16 @@ class CharacterizationTest(unittest.TestCase):
                 _, violations, dropped = validate(fixture(rel))
                 self.assertEqual(violations, expected)
                 self.assertEqual(dropped, [])
-        for rel in ("valid/code-github.json", "valid/delivery-argocd.json"):
-            with self.subTest(old_name=rel):
-                self.assertEqual(fixture(rel)["contract"], OLD_CONTRACT,
-                                 "os fixtures válidos com o nome antigo são a prova de compatibilidade")
+        for rel in CURRENT_VIOLATIONS:
+            with self.subTest(name=rel):
+                contract = fixture(rel).get("contract", "")
+                if rel == OLD_NAME_FIXTURE:
+                    self.assertEqual(contract, OLD_CONTRACT, "o fixture explícito do nome antigo (compatibilidade)")
+                else:
+                    self.assertTrue(contract.startswith("boson-atlas/collector@"), f"{rel}: {contract}")
+        old_named = fixture(OLD_NAME_FIXTURE)
+        self.assertEqual(dict(old_named, contract=NEW_CONTRACT), fixture("valid/code-github.json"),
+                         "o fixture do nome antigo só difere no contract")
 
 
 # ---------------------------------------------------------------- unitários (UT-01 a UT-04)
@@ -262,6 +273,12 @@ class CiWithoutFolderTest(VendorCase):
         self.assert_copy_is_current(OLD_SKILL_COPY)
         self.assert_copy_is_current(NEW_SKILL_COPY)
         self.assertNotIn(CAN_DELETE_OLD, output(out), "nada prova que a CI parou de rodar a cópia antiga")
+        # Emenda v3: o aviso do caso "desconhecido" também sugere trocar o script para rodar a cópia nova
+        warning = [line for line in out.stdout.splitlines() if line.startswith(CI_FILES["generic"].as_posix())]
+        self.assertEqual(len(warning), 1, out.stdout)
+        self.assertIn("troque", warning[0], "sugere trocar o script")
+        self.assertIn(f"rodar {NEW_SKILL_COPY}", warning[0])
+        self.assertIn(MIGRATION_STEP, warning[0])
 
         for args in (("doctor",), ("doctor", "--json")):
             with self.subTest(args=args):
@@ -350,6 +367,66 @@ class ContractFixturesTest(unittest.TestCase):
                 _, violations, dropped = validate(data)
                 self.assertEqual(violations, [])
                 self.assertEqual(dropped, [])
+
+
+# ---------------------------------------------------------------- Emenda v3 (IT-02 e SKILL.md)
+
+PREVIOUS_ATLAS = TESTS / "fixtures" / "previous" / "atlas.py"
+
+
+class PreviousVersionBuildTest(AtlasCase):
+    def run_previous(self, *args):
+        """O atlas.py da versão anterior (fixtures/previous) rodando como skill instalada: scripts/atlas.py e os
+        assets/ numa pasta temporária, com a mesma configuração isolada do Sandbox."""
+        skill = self.box.root / "previous-skill"
+        if not skill.exists():
+            (skill / "scripts").mkdir(parents=True)
+            shutil.copy(PREVIOUS_ATLAS, skill / "scripts" / "atlas.py")
+            shutil.copytree(SKILL / "assets", skill / "assets", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        env = dict(os.environ, HOME=str(self.box.home), XDG_CONFIG_HOME=str(self.box.home / ".config"),
+                   ATLAS_CONFIG_HOME=str(self.box.config_home))
+        out = subprocess.run([sys.executable, str(skill / "scripts" / "atlas.py"), *args], cwd=self.box.root,
+                             capture_output=True, text=True, env=env, check=False)
+        self.assertNotIn("Traceback", output(out))
+        return out
+
+    def test_previous_version_builds_the_same_graph_from_a_snapshot_written_now(self):
+        """SPEC-0071:IT-02 (Emenda v3)"""
+        self.assertTrue(PREVIOUS_ATLAS.is_file(), f"{PREVIOUS_ATLAS} não existe")
+        version = self.run_previous("--version")
+        self.assertEqual(version.stdout.strip(), "boson-atlas 2026.11.7", "fixture: a versão anterior")
+        facts = self.atlas / "facts" / "services.json"
+        facts.parent.mkdir()
+        facts.write_text(json.dumps({
+            "entities": [{"kind": "service", "id": "billing", "name": "billing", "attrs": {}},
+                         {"kind": "service", "id": "api", "name": "api", "attrs": {}},
+                         {"kind": "datastore", "id": "payments-db", "name": "payments-db", "attrs": {}}],
+            "relations": [{"from": "service:billing", "to": "service:api", "type": "depends_on"},
+                          {"from": "service:api", "to": "datastore:payments-db", "type": "writes"}]}),
+            encoding="utf-8")
+        self.configure([("facts", ["python3", "{skill}/assets/collectors/generic.py", "--facts",
+                                   "{atlas}/facts/services.json", "--category", "code", "--source", "facts"])])
+        self.run_cli("scan")
+        written = json.loads((self.snapshots / "facts.json").read_text(encoding="utf-8"))
+        self.assertEqual(written["contract"], OLD_CONTRACT,
+                         "até a SPEC-0073 o scan grava o nome antigo, que a versão anterior lê")
+
+        self.run_cli("build")
+        current = self.graph()
+        self.assertTrue(current[0], "o build desta versão tem nós")
+        previous_build = self.run_previous("build")
+        self.assertEqual(previous_build.returncode, 0, output(previous_build))
+        self.assertNotIn("fora do contrato", output(previous_build), "a versão anterior aceita o snapshot")
+        self.assertEqual(self.graph(), current, "o build da versão anterior gera os mesmos nós e arestas")
+
+
+class SkillDocTest(unittest.TestCase):
+    def test_skill_md_names_the_new_contract(self):
+        """SPEC-0071:UT-03 (Emenda v3: SKILL.md cita o contrato novo; o antigo só como compatibilidade)"""
+        text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn(NEW_CONTRACT, text)
+        lines = [line for line in text.splitlines() if OLD_CONTRACT in line and NEW_CONTRACT not in line]
+        self.assertEqual(lines, [], "SKILL.md descreve o contrato com o nome antigo")
 
 
 if __name__ == "__main__":
