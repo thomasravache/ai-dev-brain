@@ -484,6 +484,22 @@ class OldConfigTest(OldNamesCase):
         """SPEC-0072:UT-01 (boson-atlas)"""
         self.check_pair(OLD_ATLAS, NEW_ATLAS, "atlas")
 
+    def test_old_folder_as_symlink_outside_home_is_reported(self):
+        """SPEC-0072:UT-01 (Emenda v4: ~/.config/<antigo> como link simbólico para dotfiles fora do HOME temporário
+        também é acusado — o doctor só confere a existência, como as skills)"""
+        for kind, old in (("brain", OLD_BRAIN), ("atlas", OLD_ATLAS)):
+            with self.subTest(kind=kind):
+                dotfiles = self.sandbox.base / "dotfiles" / old
+                write(dotfiles / "config.yml", "vault: /x\n")
+                link = self.sandbox.home / ".config" / old
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(dotfiles, target_is_directory=True)
+                self.assertFalse(dotfiles.resolve().is_relative_to(self.sandbox.home.resolve()))
+                found = [f for f in by_check(run_doctor(self, self.sandbox, env=self.env), "old-config")
+                         if old in f["path"]]
+                self.assertEqual(len(found), 1, found)
+                self.assertTrue(link.is_symlink(), "o doctor só lê")
+
     def test_override_with_only_the_old_folder_gives_no_finding(self):
         """SPEC-0072:UT-01 (BRAIN_CONFIG_HOME e ATLAS_CONFIG_HOME definidos: nenhum achado)"""
         self.config_dir(OLD_BRAIN)
