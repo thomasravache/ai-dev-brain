@@ -314,7 +314,7 @@ class BackupNamesTest(unittest.TestCase):
     def test_backup_name_uses_the_new_prefix(self):
         """SPEC-0069:UT-07"""
         backup_name = fn("backup_name", SPEC)
-        clock = lambda: dt.datetime(2026, 11, 17, 9, 8, 7)  # noqa: E731
+        clock = lambda: dt.datetime(2026, 11, 17, 9, 8, 7)
         self.assertEqual(backup_name(with_files=False, clock=clock), f"{NEW_PREFIX}-2026-11-17-090807.zip")
         self.assertEqual(backup_name(with_files=True, clock=clock), f"{NEW_PREFIX}-2026-11-17-090807-files.zip")
 
@@ -331,7 +331,7 @@ class BackupNamesTest(unittest.TestCase):
     def test_rotation_counts_both_prefixes_together_by_the_date_of_the_name(self):
         """SPEC-0069:UT-08"""
         rotate_backups, backup_names = fn("rotate_backups", SPEC), fn("backup_names", SPEC)
-        day = lambda d: dt.datetime(2026, 11, d, 8, 0, 0)  # noqa: E731
+        day = lambda d: dt.datetime(2026, 11, d, 8, 0, 0)
         plain = [stamp(day(d), prefix=OLD_PREFIX if d % 2 else NEW_PREFIX) for d in range(1, 7)]  # 1..6, alternados
         with_files = [stamp(day(d), "-files", prefix=OLD_PREFIX if d % 2 else NEW_PREFIX) for d in range(7, 11)]
         aliens = ["notas.zip", f"{OLD_PREFIX}-x.zip", f"{NEW_PREFIX}-x.zip", "other-brain-2026-11-01-080000.zip",
