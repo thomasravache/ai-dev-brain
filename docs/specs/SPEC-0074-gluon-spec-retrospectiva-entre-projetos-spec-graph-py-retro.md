@@ -244,7 +244,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 2e2f265 | 2026-11-17 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8, skipped=1)) — 8fddd6f | 2026-11-17 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 10d8d22 | 2026-11-17 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 10b8a7f | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ef9f735 | 2026-11-17 |
 | G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED — major: spec malformada/ilegível derruba o relatório (RNF de resiliência); minors: fail_history com arquivo não UTF-8, R5 ignora FAIL atual, slug do título vaza em spec sem id; lacunas de teste | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
