@@ -3,13 +3,13 @@ id: SPEC-0066
 title: "Dogfooding: o Fermion valida e melhora o próprio repositório"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-11-16
 depends_on: []
 adrs: [ADR-0019]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0066 — Dogfooding: o Fermion valida e melhora o próprio repositório (Épico)

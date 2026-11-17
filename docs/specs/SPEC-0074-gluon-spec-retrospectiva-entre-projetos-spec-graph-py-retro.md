@@ -4,7 +4,7 @@ title: "gluon-spec: retrospectiva entre projetos (spec_graph.py retro)"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-17
 parent: SPEC-0066
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, s
 adrs: [ADR-0001, ADR-0002, ADR-0006, ADR-0019]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0074 — gluon-spec: retrospectiva entre projetos (spec_graph.py retro)
