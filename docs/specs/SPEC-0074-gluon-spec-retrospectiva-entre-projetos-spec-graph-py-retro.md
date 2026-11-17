@@ -9,7 +9,7 @@ created: 2026-11-17
 parent: SPEC-0066
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/SKILL.md, skills/gluon-spec/CHANGELOG.md, skills/gluon-spec/references/retro.md, README.md, CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0001, ADR-0002, ADR-0006, ADR-0019]
@@ -26,7 +26,7 @@ approved_at: 2026-11-17
 Novo comando só de leitura `spec_graph.py retro`, que lê os projetos feitos com o Fermion (pastas informadas e os `spec_root` do modo privado) e mostra o que o processo está seguindo e o que não está. O relatório traz números por projeto, achados com o que fazer e sugestões de spec para a própria skill. Nada é alterado nos projetos e nenhuma spec é criada sozinha (ADR-0019).
 
 ## 2. Motivação & Escopo
-**Motivação:** o thomas pediu, em 2026-11-16, para medir o que é seguido de verdade nos projetos reais. Um levantamento manual em 2026-11-17 cobriu 25 projetos com specs: 8 pessoais, 16 da bingaodobrasil em modo privado e o smart-admin-ai. Os sinais:
+**Motivação:** o thomas pediu, em 2026-11-16, para medir o que é seguido de verdade nos projetos reais. Um levantamento manual em 2026-11-17 cobriu 25 projetos com specs: 8 pessoais e 17 em modo privado de organizações de terceiros. Os sinais:
 - **Uma reprovação em cerca de 2.100 gates registrados.** A causa está na ferramenta: `gate` sobrescreve a linha, então o PASS apaga o FAIL anterior. O rigor real só aparece no histórico do git.
 - **Specs paradas:** juker tem 23 de 28 em `approved` e o crash-games-provider 25 de 51. Vários projetos privados têm specs em `in-progress` com gates até o G5 e sem G7.
 - **Evidência escrita à mão:**
@@ -127,7 +127,8 @@ Achados (regras fixas; cada um: regra, projeto, valor, ação)
   R3 entregue sem fechar   unclosed não vazio → fechar o G7 (Relatório de Entrega)
   R4 evidência à mão       (manual + a_mao) / G0–G5 PASS > 30%, com >= 10 PASS
                            → `gate <G> --run`; revisar os comandos do sdd-config
-  R5 nenhuma reprovação    >= 20 PASS de G1–G5 e fail_history == 0
+  R5 nenhuma reprovação    >= 20 PASS de G1–G5, fail_history == 0 e nenhum FAIL atual
+                           (Emenda v2)
                            → conferir se os gates rodam (`--run`) e se reprovações
                              são registradas com `gate --fail`
   R6 N/A recorrente        gate com N/A em >= 50% das specs que o registram (mín. 5)
@@ -169,7 +170,10 @@ Erros
 | Sem git | pasta de specs fora de repositório git | fail_history null, "sem git", resto calculado | UT-02 |
 | Regras R1–R7 | valores no limite e logo abaixo | dispara no limite, não dispara abaixo; ação correta | UT-03 |
 | Sugestão para a skill | regra em >= 50% dos projetos (mín. 2) | linha em "O que ajustar na skill"; nenhum arquivo criado | UT-03, IT-01 |
-| Privacidade | títulos, evidências, motivos de N/A e impedimentos com marcadores | nenhum marcador na saída Markdown nem JSON | UT-04 |
+| Privacidade | títulos, evidências, motivos de N/A, impedimentos e slug do nome do arquivo com marcadores | nenhum marcador na saída Markdown nem JSON; spec sem `id` aparece só como `SPEC-NNNN` | UT-04 |
+| Projeto ilegível (Emenda v2) | spec não UTF-8, arquivo ou pasta de specs sem permissão de leitura, ao lado de um projeto válido | exit 0; o projeto ilegível em "Ignorados" com o motivo; o válido no relatório | UT-07 |
+| Histórico ilegível (Emenda v2) | arquivo não UTF-8 commitado na pasta de specs | só `fail_history` null; o resto do projeto calculado | UT-07 |
+| Pasta em worktree ou sem remoto (Emenda v2) | PASTA numa worktree de projeto privado; repositório sem remoto | worktree resolvida pelo `commondir` para o mesmo projeto do registro, contado uma vez; sem remoto, projeto público pelo caminho | UT-08 |
 | Modo privado | `--registry` com spec_root registrado | projeto privado incluído uma vez, com private: true | IT-01 |
 | Só leitura | relatório sobre projetos reais temporários | arquivos, HEAD e status do git idênticos antes e depois | IT-01 |
 | Saída JSON e arquivo | `--json --out` | JSON válido com as chaves do contrato; só o arquivo de saída é criado | IT-02 |
@@ -186,9 +190,11 @@ Erros
 - **UT-01** — Dado um projeto temporário com specs `proposed`, `approved` (uma parada há 40 dias, outra com G5 PASS sem G7), `in-progress` e `implemented` (`approved_at` e G7 com datas conhecidas), gates com evidência gerada, `MANUAL:`, `aprovado por` e à mão, N/A em G3 e G6, emendas e um impedimento aberto, quando as métricas são calculadas com `--stale-days 30`, então inventário, `stale`, `unclosed`, lead time (mediana e p90), gates, origem da evidência, `na_by_gate`, emendas e impedimentos batem com os valores esperados.
 - **UT-02** — Dado um repositório git temporário em que uma spec teve G2 FAIL num commit e PASS no seguinte, quando o histórico é lido, então `fail_history` = 1 e a contagem atual de FAIL = 0; dada a mesma pasta copiada para fora de um repositório git, então `fail_history` é null e o projeto aparece com "sem git".
 - **UT-03** — Dadas métricas sintéticas no limite de cada regra e logo abaixo, quando os achados são calculados, então cada uma de R1 a R7 dispara no limite com a ação do contrato e não dispara abaixo. Com 4 projetos e uma regra em 2 deles, ela aparece em "O que ajustar na skill"; em 1 deles, não aparece.
-- **UT-04** — Dado um projeto com marcadores únicos em títulos, evidências, motivos de N/A e descrições de impedimento, quando o relatório sai em Markdown e em JSON, então nenhum marcador aparece.
+- **UT-04** — (Emenda v2: inclui spec sem `id` com marcador no slug do nome do arquivo, que sai só como `SPEC-NNNN`) Dado um projeto com marcadores únicos em títulos, evidências, motivos de N/A e descrições de impedimento, quando o relatório sai em Markdown e em JSON, então nenhum marcador aparece.
 - **UT-05** — Dada uma pasta inexistente, quando `retro` roda, então exit 2 com "pasta não encontrada". Dadas uma pasta válida, uma sem specs e uma em layout legado, então exit 0 e as duas últimas em "Ignorados" com o motivo. Dadas só as duas últimas, então exit 2 com "nenhum projeto SDD encontrado".
 - **UT-06** — Dado `--stale-days` igual a 0, -3 ou "abc", quando `retro` roda, então exit 2 com mensagem de uso.
+- **UT-07** — (Emenda v2) Dado um projeto válido ao lado de outro com uma spec não UTF-8, de outro com um arquivo de spec sem permissão de leitura e de outro com a pasta de specs sem permissão, quando `retro` roda, então exit 0, o válido no relatório e cada ilegível em "Ignorados" com o motivo, sem traceback; dado um arquivo não UTF-8 commitado na pasta de specs de um projeto válido, então só `fail_history` é null e o resto é calculado. R5 não dispara com FAIL atual na tabela.
+- **UT-08** — (Emenda v2) Dada a PASTA numa worktree git de um projeto privado registrado, quando `retro <worktree> --registry` roda, então o projeto aparece uma vez, como privado; dado um repositório sem remoto, então é tratado como projeto público pelo caminho.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Dados dois repositórios git temporários reais, um com `docs/specs` e outro em modo privado com `spec_root` registrado num `SDD_CONFIG_HOME` temporário, quando o script roda como processo com `retro <projeto público> --registry`, então:
@@ -227,8 +233,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Fase 1 (test-writer): UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0074:<ID>`, falhando pelo motivo certo
-- [ ] Fase 2 (implementer): `cmd_retro` e métricas em `spec_graph.py`, `references/retro.md`, linha na `SKILL.md`, README, CHANGELOGs e versões da skill e do plugin
+- [x] Fase 1 (test-writer): UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0074:<ID>`, falhando pelo motivo certo
+- [x] Fase 2 (implementer): `cmd_retro` e métricas em `spec_graph.py`, `references/retro.md`, linha na `SKILL.md`, README, CHANGELOGs e versões da skill e do plugin
+- [ ] Emenda v2: test-writer (UT-04 ampliado, UT-07, UT-08 e R5 com FAIL atual) e implementer (resiliência, histórico ilegível, R5, ID sem slug)
 - [ ] Fase 3 (reviewer): G4 independente, com o desempenho e a comparação com o levantamento manual (7.6)
 
 ## 12. Registro de Gates
@@ -239,7 +246,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8, skipped=1)) — 8fddd6f | 2026-11-17 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 10d8d22 | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ef9f735 | 2026-11-17 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED — major: spec malformada/ilegível derruba o relatório (RNF de resiliência); minors: fail_history com arquivo não UTF-8, R5 ignora FAIL atual, slug do título vaza em spec sem id; lacunas de teste | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -290,3 +297,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0074`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-17 | R5 também exige nenhum FAIL atual; UT-04 ampliado (slug do arquivo); UT-07 (projeto e histórico ilegíveis) e UT-08 (worktree e sem remoto); texto da Motivação sem nome de organização | G4 da revisão independente: relatório caía com spec ilegível, R5 dizia "nenhuma reprovação" com FAIL em aberto, slug do título vazava; repositório público | — | thomas, 2026-11-17 (piloto automático com o recomendado) |
