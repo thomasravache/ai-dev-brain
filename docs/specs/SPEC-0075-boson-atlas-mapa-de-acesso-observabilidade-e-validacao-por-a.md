@@ -85,6 +85,38 @@ approved_at:
 >     - quais campos o agente teve de descobrir sozinho.
 >
 >     O `lint` e o `doctor` usam isso para sugerir a atualização da configuração (ex.: "a última verificação descobriu o log group à mão: confirmar no atlas?"), sempre como proposta, no estilo da curadoria (ADR-0012).
+> - **Ordem revista e melhorias de mercado (Architect, 2026-11-17, a validar no DISCOVER).** A rotina real fica como base; muda a ordem e entram práticas de verificação de deploy (análise de canário como Kayenta, Flagger e Argo Rollouts; golden signals e RED do SRE; quality gates do Keptn; DORA). Tudo descrito por capacidade, sem ferramenta fixa:
+>   0. **Pré-voo: o que mudou e o que verificar.**
+>      - Ler o diff do PR: código, configuração, migration, contrato de mensagem e flags.
+>      - Com o grafo do atlas, escolher só as verificações que importam (serviço alterado e vizinhos). "Onde mora a configuração" sai do fim e vira insumo daqui.
+>      - Tirar a foto de base (linha de base dos sinais, não só o estado) e confirmar que o rollback é conhecido. A decisão de executá-lo fica com a pessoa.
+>   1. **Entrega:** a CI gerou o artefato, o GitOps sincronizou e o rollout concluiu. A versão é conferida pelo digest da imagem (a tag pode ser reaproveitada) e pela revisão do repositório de IaC.
+>   2. **Saúde do runtime:**
+>      - réplicas prontas, restarts, eventos (OOMKilled, CrashLoop, probes falhando) e uso contra limites;
+>      - a variável nova presente, só pelo nome;
+>      - o estado da feature flag, quando houver.
+>   3. **Sinais contra a linha de base,** numa janela de observação configurável (soak, ex.: 10 a 30 min):
+>      - taxa de erro, latência (p95/p99), tráfego e saturação, pelas métricas quando existirem, com os logs como apoio;
+>      - erros novos contra antigos por assinatura (mensagem normalizada mais origem) e pelos arquivos tocados no PR;
+>      - a mensagem esperada da mudança presente;
+>      - traces correlacionados pela versão, quando houver.
+>   4. **Dependências e dados:** só as que o diff ou o grafo indicam.
+>      - migration aplicada e estado das tabelas, sempre com usuário só de leitura;
+>      - fila e DLQ (profundidade, idade da mensagem mais antiga, lag de consumidor), assinaturas e filtros;
+>      - permissões por simulação, levando a política do recurso.
+>   5. **Funcional:** smoke com navegador ou suíte e2e, só em ambiente `test`. Em `production`, só verificações passivas: sinais, logs e health. Nunca navegador.
+>   6. **Veredito e registro:**
+>      - veredito `passou | degradou | inconclusivo` com a evidência de cada verificação, e "não verificado" com o motivo;
+>      - em `degradou`, sugere rollback e não executa;
+>      - registro no Relatório de Entrega (G6/G7) e, opcionalmente, no board;
+>      - métricas DORA derivadas (lead time do commit ao deploy, taxa de falha de mudança, tempo de recuperação).
+>
+>   **Garantias transversais:**
+>   - Cada adaptador declara uma lista permitida de verbos só de leitura (`get`, `list`, `describe`, `logs`, `select`, `simulate`), e a skill recusa qualquer outro.
+>   - Timeouts e janelas são configuráveis por ambiente.
+>   - Tudo é idempotente, e o resultado é comparável entre execuções.
+>   - Segredos só por referência, com a saída mascarada.
+>   - Os limites (ex.: aumento de taxa de erro tolerado) ficam na configuração, com padrões conservadores, e são ajustados pelas métricas de uso (proposta, nunca automático).
 > - **Coletor `aws` oficial:** um coletor local do usuário (AWS CLI, só leitura: caches serverless, RDS, SQS, SNS e assinaturas SNS→SQS, cruzados com as env das Applications) serve de referência. Ele fica fora deste repositório.
 
 <!-- type: feature | migration | foundation (produto novo: ver references/greenfield.md). O épico não é executado: define visão, decisões, decomposição e entrega. Quem executa são as specs filhas (tier full ou lite, tamanho S/M, `parent: SPEC-0075`). A ordem de execução é calculada a partir do frontmatter das filhas (`spec_graph.py waves`). -->
