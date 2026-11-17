@@ -60,7 +60,9 @@ Contrato esperado das funções puras de scripts/spec_graph.py (o Implementer se
         Nunca cria arquivo.
 
 Markdown (padrão): seções com cabeçalho Markdown cujos títulos contêm "Resumo", "Projetos" (tabela, uma linha por
-projeto), "N/A por gate", "Achados", "O que ajustar na skill" e "Ignorados". Projeto sem git mostra "sem git".
+projeto), "N/A por gate", "Achados", "O que ajustar na skill" e "Ignorados". Projeto sem git mostra "sem git" ou,
+desde a Emenda v2 da SPEC-0078, "sem histórico". Chaves a mais em `tool` e em `projects[]` são aceitas (o JSON só
+ganha chaves).
 JSON: {"retro_version": 1, "generated_at", "installed_tool", "stale_days", "projects", "findings",
 "skill_suggestions", "ignored": [{"path", "reason"}]}.
 
@@ -357,7 +359,7 @@ class MetricsTest(TempTest):
         self.assertEqual(m["specs"], {"total": 7, "by_status": {"proposed": 1, "approved": 2, "in-progress": 1,
                                                                 "implemented": 3},
                                       "by_tier": {"lite": 1, "full": 6}})
-        self.assertEqual(m["tool"], {"project": "2026.10.8", "installed": VERSION})
+        self.assertEqual((m["tool"]["project"], m["tool"]["installed"]), ("2026.10.8", VERSION))
         self.assertEqual(m["last_activity"], "2026-11-12")
         # SPEC-0002: 40 dias sem atividade; SPEC-0004: exatamente 30 dias (não conta); SPEC-0001 é proposed
         self.assertEqual(m["stale"], ["SPEC-0002"])
@@ -426,7 +428,8 @@ class FailHistoryTest(TempTest):
         self.assertIsNone(retro_metrics(sg.Project(copy), TODAY, 30)["fail_history"])
         res = run_retro(env, self.tmp, str(copy))
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
-        self.assertIn("sem git", section(res.stdout, "Projetos"), res.stdout)
+        projects_md = section(res.stdout, "Projetos")
+        self.assertTrue("sem git" in projects_md or "sem histórico" in projects_md, res.stdout)
         res = run_retro(env, self.tmp, str(copy), "--json")
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
         project = json.loads(res.stdout)["projects"][0]
@@ -854,7 +857,7 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual(len(report["projects"]), 2, [p["name"] for p in report["projects"]])
         self.assertEqual(sorted(p["private"] for p in report["projects"]), [False, True])
         for project in report["projects"]:
-            self.assertEqual(set(project), PROJECT_KEYS, project["name"])
+            self.assertTrue(PROJECT_KEYS <= set(project), (project["name"], PROJECT_KEYS - set(project)))
         self.assertTrue(report["findings"])
         for finding in report["findings"]:
             self.assertEqual(set(finding), {"rule", "project", "value", "action"})

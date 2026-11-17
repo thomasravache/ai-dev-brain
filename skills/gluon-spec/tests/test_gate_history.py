@@ -11,8 +11,9 @@ Histórico de reprovações — subseção dentro da seção "Registro de Gates"
 
     Escrita só pelo `gate`, com a data de `today()` (a mesma função que data a linha da tabela); criada na primeira
     reprovação; linhas antigas nunca são reescritas. <sha> é o SHA curto do HEAD (`head_ref`), ou "?" fora do git.
-    Para `gate --run` que reprova, <evidência> é o texto gravado na tabela (que já termina em " — <sha>"); a linha
-    termina em " — <sha>" de qualquer forma.
+    (Emenda v2) A linha FAIL usa a evidência gravada na tabela: no `gate --run` ela já termina em " — <sha>" e entra
+    como está, sem repetir o sha ("- G2 FAIL <data> — <evidência da tabela>"); o `--fail` acrescenta " — <sha|?>"
+    ao motivo ("- G2 FAIL <data> — <motivo> — <sha|?>").
 
     gate_history(doc: Doc) -> list[dict]
         Linhas válidas da subseção, na ordem do arquivo. Sem subseção: [].
@@ -28,17 +29,18 @@ Histórico de reprovações — subseção dentro da seção "Registro de Gates"
     gate SPEC-X <G> --fail "motivo" | --run que reprova
         tabela como hoje + linha FAIL no histórico. Com consecutive_fails >= 3, imprime no stdout:
         "⚠ <n> reprovações seguidas em <G> — registre `impede SPEC-X --type falha` e escale ao humano"
+        O aviso sai sempre na 3ª reprovação seguida ou depois, com ou sem impedimento `falha` aberto (Emenda v2).
     gate SPEC-X <G> (PASS ou N/A) com consecutive_fails(G) > 0
         acrescenta "- <G> PASS <data> — depois de <n> reprovação(ões)"; sem reprovações antes, a spec só muda na tabela.
 
 Entregue sem fechar e avisos do `status`/`next`:
 
     unclosed_specs(project: Project, today: datetime.date) -> list[tuple[str, int | None]]
-        (ID, dias desde a data do G5) das specs não épicas com status em OPEN, G5 = PASS e G7 != PASS, ordenadas por
+        (ID, dias desde a data do G5) das specs não épicas em approved ou in-progress, G5 = PASS e G7 != PASS, ordenadas por
         ID; dias = None quando a data do G5 é inválida.
 
     status_body(project, ids, today: datetime.date | None = None)    (None = dt.date.today())
-        Sem IDs, antes da lista das specs abertas (junto dos outros avisos "⚠"):
+        Só sem IDs (com IDs, nenhum desses avisos), antes da lista das specs abertas (junto dos outros avisos "⚠"):
         "⚠ entregue sem fechar: SPEC-X — G5 há <d> dia(s); feche o G7 (Relatório de Entrega)"
         e, para cada spec in-progress com consecutive_fails >= 3 num gate e sem impedimento `falha` aberto:
         "⚠ SPEC-X: <n> reprovações seguidas em <G> — `impede SPEC-X --type falha`"
@@ -56,10 +58,11 @@ um sdd-config.yml que já existe mantém o seu sdd_version.
     retro_metrics(...)["tool"]["state"]   "atual" | "atrasada" | "desconhecida"
     retro_metrics(...)["fail_recorded"]   int: linhas FAIL válidas (gate_history) somadas em todas as specs
     retro_findings: R1 para atrasada (action cita "whats-new" e "vendor --force"; privado: "whats-new --ack") e
-        desconhecida (action cita "whats-new --ack" e não cita "vendor --force"); R5 não dispara com
-        fail_recorded > 0 nem com fail_history None.
+        desconhecida (action cita "whats-new --ack" e não cita "vendor --force"); R5 dispara só com
+        fail_history == 0, fail_recorded == 0, nenhum FAIL atual e >= 20 PASS de G1–G5 (None nunca dispara).
     Markdown: fail_history None aparece como "sem histórico" na tabela de Projetos (sem git, sem commits, ilegível).
-    impediments.old e R7: ID fora do formato IMP-NN aparece como "IMP-?" (o texto da célula nunca sai).
+    impediments.old e R7: ID no formato IMP-<dígitos> é mantido como está; fora dele aparece como "IMP-?" (o texto
+    da célula nunca sai).
     stale/unclosed: IDs repetidos (specs sem `id` com o mesmo prefixo SPEC-NNNN) aparecem uma vez.
     Registro com spec_root que não é texto: entrada em "Ignorados" com motivo "registro inválido", exit 0.
     A evidência do histórico nunca sai no Markdown nem no JSON.
@@ -336,7 +339,8 @@ class OldReadersTest(TempTest):
 class HistoryWriteTest(TempTest):
     def test_fail_red_run_and_green_run_build_the_history(self):
         """SPEC-0078:UT-01 — G2 `--fail`, `--run` vermelho e `--run` verde: tabela em PASS; histórico com 2 FAIL
-        (data, evidência e SHA) e o PASS "depois de 2 reprovação(ões)", na ordem."""
+        (data, evidência e SHA) e o PASS "depois de 2 reprovação(ões)", na ordem. Emenda v2: o `--run` usa a evidência
+        da tabela sem repetir o sha, o `--fail` acrescenta " — <sha>", e N/A depois de reprovação grava a linha PASS."""
         root = self.tmp / "proj"
         (root / "docs" / "specs").mkdir(parents=True)
         (root / "docs/specs/sdd-config.yml").write_text('base_branch: main\ntest: "python3 check.py"\n',
@@ -349,6 +353,8 @@ class HistoryWriteTest(TempTest):
         write_spec(root / "docs" / "specs", "SPEC-0001", spec_md(
             "SPEC-0001", "in-progress", created="2026-11-01", approved_at="2026-11-02",
             gates=pass_all("2026-11-14", upto=("G0", "G1"))))
+        (root / "docs/specs/SPEC-0002-arquitetura.md").write_text(spec_md(
+            "SPEC-0002", "approved", created="2026-11-01", approved_at="2026-11-02"), encoding="utf-8")
         git_init(root, self.env)
 
         sha1 = short_head(root, self.env)
@@ -360,30 +366,46 @@ class HistoryWriteTest(TempTest):
         with mock.patch.object(sg, "today", return_value="2026-11-16"):
             code, out, err = call("--root", str(root), "gate", "SPEC-0001", "G2", "--run")
         self.assertEqual(code, 1, out + err)
+        run_evidence = sg.gate_table(load(root, "SPEC-0001"))["G2"]["evidence"]
+        self.assertTrue(run_evidence.endswith(f" — {sha2}"), run_evidence)
         commit_all(root, self.env, "docs: G2 FAIL (run)")
         (root / "green.flag").write_text("ok\n", encoding="utf-8")
         with mock.patch.object(sg, "today", return_value="2026-11-17"):
             code, out, err = call("--root", str(root), "gate", "SPEC-0001", "G2", "--run")
         self.assertEqual(code, 0, out + err)
+        commit_all(root, self.env, "docs: G2 PASS")
+        sha3 = short_head(root, self.env)
+        with mock.patch.object(sg, "today", return_value="2026-11-17"):
+            code, out, err = call("--root", str(root), "gate", "SPEC-0001", "G3", "--fail", "regra de camadas violada")
+            self.assertEqual(code, 0, out + err)
+            code, out, err = call("--root", str(root), "gate", "SPEC-0001", "G3", "--na",
+                                  "suíte de arquitetura será criada na SPEC-0002")
+            self.assertEqual(code, 0, out + err)
 
         doc = load(root, "SPEC-0001")
         self.assertEqual(sg.gate_table(doc)["G2"]["status"], "PASS")
+        self.assertEqual(sg.gate_table(doc)["G3"]["status"], "N/A")
         section_text = gates_section(doc.text)
         self.assertIn(HISTORY_TITLE, section_text, "a subseção fica dentro do Registro de Gates")
         lines = [line for line in section_text.split(HISTORY_TITLE, 1)[1].splitlines() if line.startswith("- ")]
-        self.assertEqual(len(lines), 3, lines)
-        self.assertRegex(lines[0], rf"^- G2 FAIL 2026-11-15 — .*testes de borda quebrados.* — {sha1}$")
-        self.assertRegex(lines[1], rf"^- G2 FAIL 2026-11-16 — .*test exit 1.* — {sha2}$")
+        self.assertEqual(len(lines), 5, lines)
+        self.assertEqual(lines[0], f"- G2 FAIL 2026-11-15 — testes de borda quebrados — {sha1}")
+        self.assertEqual(lines[1], f"- G2 FAIL 2026-11-16 — {run_evidence}", "evidência da tabela, sem repetir o sha")
+        self.assertEqual(lines[1].count(sha2), 1, lines[1])
         self.assertEqual(lines[2], "- G2 PASS 2026-11-17 — depois de 2 reprovação(ões)")
+        self.assertEqual(lines[3], f"- G3 FAIL 2026-11-17 — regra de camadas violada — {sha3}")
+        self.assertEqual(lines[4], "- G3 PASS 2026-11-17 — depois de 1 reprovação(ões)", "N/A depois de reprovação")
 
         history = fn("gate_history")(doc)
         self.assertEqual([(h["gate"], h["status"], h["date"]) for h in history],
-                         [("G2", "FAIL", "2026-11-15"), ("G2", "FAIL", "2026-11-16"), ("G2", "PASS", "2026-11-17")])
+                         [("G2", "FAIL", "2026-11-15"), ("G2", "FAIL", "2026-11-16"), ("G2", "PASS", "2026-11-17"),
+                          ("G3", "FAIL", "2026-11-17"), ("G3", "PASS", "2026-11-17")])
         self.assertIn("testes de borda quebrados", history[0]["evidence"])
         self.assertEqual((history[0]["sha"], history[1]["sha"]), (sha1, sha2))
         self.assertIn("test exit 1", history[1]["evidence"])
         self.assertEqual(history[2]["after"], 2)
         self.assertEqual(fn("consecutive_fails")(doc, "G2"), 0)
+        self.assertEqual(fn("consecutive_fails")(doc, "G3"), 0)
 
 
 UT02_SPEC1_HISTORY = [
@@ -413,7 +435,8 @@ UT02_SPEC2_HISTORY = [
 class StreakTest(TempTest):
     def test_three_consecutive_fails_warn_in_gate_and_status(self):
         """SPEC-0078:UT-02 — 3º FAIL seguido de G4: aviso no `gate` e no `status` com `impede --type falha`; some com
-        impedimento `falha` aberto; PASS no meio recomeça a contagem; linhas fora do formato não contam."""
+        impedimento `falha` aberto; PASS no meio recomeça a contagem; linhas fora do formato não contam.
+        Emenda v2: o aviso do `status` sai só sem IDs; o do `gate` sai mesmo com impedimento `falha` aberto."""
         root = self.tmp / "proj"
         specs = root / "docs" / "specs"
         specs.mkdir(parents=True)
@@ -465,6 +488,9 @@ class StreakTest(TempTest):
         self.assertIn("⚠ SPEC-0001: 3 reprovações seguidas em G4 — `impede SPEC-0001 --type falha`", out)
         self.assertNotIn("em G2", out)
         self.assertNotIn("SPEC-0002: ", out.split("\nSPEC-0001 ")[0], "SPEC-0002 tem 1 FAIL depois do PASS")
+        code, out, err = call("--root", str(root), "status", "SPEC-0001")
+        self.assertEqual(code, 0, out + err)
+        self.assertNotIn("reprovações seguidas", out, "com IDs, o `status` não mostra os avisos do topo")
 
         code, out, err = call("--root", str(root), "impede", "SPEC-0001", "--type", "falha", "--reason",
                               "diagnóstico do G4 pendente", "--owner", "thomas", "--phase", "G4")
@@ -472,6 +498,14 @@ class StreakTest(TempTest):
         code, out, err = call("--root", str(root), "status")
         self.assertEqual(code, 0, out + err)
         self.assertNotIn("reprovações seguidas", out, "impedimento `falha` aberto: o aviso some")
+
+        code, out, err = call("--root", str(root), "gate", "SPEC-0001", "G4", "--fail", "quarta reprovação")
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("⚠ 4 reprovações seguidas em G4 — registre `impede SPEC-0001 --type falha` e escale ao humano",
+                      out, "o aviso do `gate` sai mesmo com impedimento `falha` aberto")
+        code, out, err = call("--root", str(root), "status")
+        self.assertEqual(code, 0, out + err)
+        self.assertNotIn("reprovações seguidas", out)
 
 
 class UnclosedTest(TempTest):
@@ -492,14 +526,24 @@ class UnclosedTest(TempTest):
         (specs / "SPEC-0003-sem-g5.md").write_text(spec_md(
             "SPEC-0003", "in-progress", created="2026-10-01", approved_at="2026-10-02",
             gates=pass_all("2026-11-01", upto=("G0", "G1", "G2"))), encoding="utf-8")
+        # Emenda v2: approved também conta; proposed e épico não
+        (specs / "SPEC-0004-aprovada.md").write_text(spec_md(
+            "SPEC-0004", "approved", created="2026-10-01", approved_at="2026-10-02",
+            gates=pass_all("2026-11-12")), encoding="utf-8")
+        (specs / "SPEC-0005-proposta.md").write_text(spec_md(
+            "SPEC-0005", "proposed", created="2026-10-01", gates=pass_all("2026-11-08")), encoding="utf-8")
+        (specs / "SPEC-0006-epico.md").write_text(spec_md(
+            "SPEC-0006", "in-progress", created="2026-10-01", approved_at="2026-10-02", tier="epic",
+            gates=pass_all("2026-11-08")), encoding="utf-8")
         return root
 
     def test_delivered_without_g7_is_flagged_with_its_age(self):
         """SPEC-0078:UT-03 — G5 PASS há 9 dias e G7 pendente: aviso no topo do `status` e seção "A fechar" no `next`;
-        a spec com G7 PASS e a sem G5 não aparecem."""
+        a spec com G7 PASS e a sem G5 não aparecem. Emenda v2: approved (há 5 dias) também aparece; proposed e épico
+        não; com IDs, o `status` não mostra o aviso."""
         root = self.project()
         project = sg.Project(root)
-        self.assertEqual(fn("unclosed_specs")(project, TODAY), [("SPEC-0001", 9)])
+        self.assertEqual(fn("unclosed_specs")(project, TODAY), [("SPEC-0001", 9), ("SPEC-0004", 5)])
 
         out = capture(fn("status_body", "today"), project, [], today=TODAY)
         warning = "⚠ entregue sem fechar: SPEC-0001 — G5 há 9 dia(s); feche o G7 (Relatório de Entrega)"
@@ -507,8 +551,11 @@ class UnclosedTest(TempTest):
         lines = out.splitlines()
         first_spec = next(i for i, line in enumerate(lines) if line.startswith("SPEC-"))
         self.assertLess(lines.index(warning), first_spec, "o aviso vem no topo, antes da lista")
+        self.assertIn("⚠ entregue sem fechar: SPEC-0004 — G5 há 5 dia(s); feche o G7 (Relatório de Entrega)", lines)
         flagged = [line for line in lines if "entregue sem fechar" in line]
-        self.assertEqual(len(flagged), 1, flagged)
+        self.assertEqual(len(flagged), 2, flagged)
+        out = capture(sg.status_body, project, ["SPEC-0001"], today=TODAY)
+        self.assertNotIn("entregue sem fechar", out, "com IDs, nenhum aviso do topo")
 
         out = capture(fn("print_next", "today"), project, sg.require_plan(project), today=TODAY)
         lines = out.splitlines()
@@ -519,9 +566,11 @@ class UnclosedTest(TempTest):
             if not line.startswith("  "):
                 break
             items.append(line)
-        self.assertEqual(len(items), 1, out)
+        self.assertEqual(len(items), 2, out)
         self.assertIn("SPEC-0001", items[0])
         self.assertIn("9 dia(s)", items[0])
+        self.assertIn("SPEC-0004", items[1])
+        self.assertIn("5 dia(s)", items[1])
 
 
 class PrivateInitVersionTest(unittest.TestCase):
@@ -609,7 +658,7 @@ class RetroStateTest(TempTest):
 
         self.assertIn("R5", self.rules(r5_metrics(0, 0)), "base: nenhum FAIL no git nem na spec")
         self.assertNotIn("R5", self.rules(r5_metrics(0, 1)), "FAIL registrado na spec: houve reprovação")
-        self.assertNotIn("R5", self.rules(r5_metrics(None, 0)), "sem histórico do git: comportamento da SPEC-0074")
+        self.assertNotIn("R5", self.rules(r5_metrics(None, 0)), "Emenda v2: fail_history None nunca dispara")
         self.assertNotIn("R5", self.rules(r5_metrics(None, 2)))
 
         folders = [str(self.tmp / name) for name in projects]
@@ -628,7 +677,8 @@ class RetroStateTest(TempTest):
 class RetroResiduesTest(TempTest):
     def test_registry_type_history_label_impediment_id_and_duplicate_ids(self):
         """SPEC-0078:UT-06 — spec_root numérico no registro, fail_history null, ID de impedimento livre e specs sem id
-        repetidas: exit 0 sem traceback, "registro inválido", "sem histórico", IMP-? na R7 e o ID uma vez em stale."""
+        repetidas: exit 0 sem traceback, "registro inválido", "sem histórico", IMP-? na R7 e o ID uma vez em stale.
+        Emenda v2: IMP-<dígitos> é mantido (IMP-3 não vira IMP-03 nem IMP-?)."""
         (self.tmp / "config" / "projects.json").write_text(json.dumps({"projects": {
             "github.com/Org/Quebrado": {"mode": "private", "spec_root": 5, "sync": "none"}}}), encoding="utf-8")
 
@@ -640,7 +690,8 @@ class RetroResiduesTest(TempTest):
             "SPEC-0001", "in-progress", created="2020-01-01", approved_at="2020-01-02",
             gates={"G0": ("PASS", GEN["G0"], "2020-01-02")},
             impediments=[("texto livre", "2020-01-03", "aguardando acesso", "", ""),
-                         ("IMP-02", "2020-01-04", "ambiente fora", "", "")]))
+                         ("IMP-02", "2020-01-04", "ambiente fora", "", ""),
+                         ("IMP-3", "2020-01-05", "chave expirada", "", "")]))
         for slug in ("alfa", "beta"):
             text = spec_md("SPEC-0009", "approved", created="2020-01-01", approved_at="2020-01-02",
                            gates=pass_all("2020-01-05"))
@@ -668,7 +719,8 @@ class RetroResiduesTest(TempTest):
 
         project = next(p for p in report["projects"] if p["name"] == "residuos")
         self.assertIsNone(project["fail_history"])
-        self.assertEqual(project["impediments"]["old"], ["SPEC-0001/IMP-02", "SPEC-0001/IMP-?"])
+        self.assertEqual(project["impediments"]["old"], ["SPEC-0001/IMP-02", "SPEC-0001/IMP-3", "SPEC-0001/IMP-?"],
+                         "IMP-<dígitos> fica como está; fora do formato vira IMP-?")
         r7 = [f for f in report["findings"] if f["rule"] == "R7" and f["project"] == "residuos"]
         self.assertTrue(r7 and "SPEC-0001/IMP-?" in str(r7[0]["value"]), r7)
         self.assertIn("SPEC-0001/IMP-?", section(md.stdout, "Achados"))
