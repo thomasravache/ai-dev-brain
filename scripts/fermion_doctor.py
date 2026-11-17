@@ -26,8 +26,9 @@ Pasta de skills do usuário: $CLAUDE_CONFIG_DIR/skills, senão $HOME/.claude/ski
 <projeto>/.claude/skills; projeto: --project, senão o cwd. Versões lidas por expressão regular (os scripts das skills
 nunca são importados) e comparadas como tupla de inteiros (AAAA, MM, N).
 
-Só leitura: nunca grava, apaga nem move arquivo, nunca abre processo, nunca usa rede, não segue link simbólico para
-fora da pasta conferida e mostra caminho e versão, nunca conteúdo de arquivo. Sempre sai com 0. Só stdlib, 3.9+.
+Só leitura: nunca grava, apaga nem move arquivo, nunca abre processo, nunca usa rede, não lê arquivo por link
+simbólico para fora da pasta conferida (old-config só confere a existência do config.yml, mesmo por link, como as
+skills: Emenda v4) e mostra caminho e versão, nunca conteúdo de arquivo. Sempre sai com 0. Só stdlib, 3.9+.
 """
 import json
 import os
@@ -257,15 +258,23 @@ def check_old_atlas_folder(report, project, plugin_root):
                f"--force e depois {remove} (se a CI já roda .boson-atlas/skill, só {remove})")
 
 
+def config_exists(path):
+    """True quando o config.yml existe, mesmo por link simbólico (pasta de dotfiles): só a existência é conferida,
+    nunca o conteúdo, como nas skills (Emenda v4)."""
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def check_old_config(report, env):
     """Configuração da máquina na pasta antiga (SPEC-0069, SPEC-0070): o mesmo critério do doctor de cada skill."""
     config = Path(env.get("HOME") or Path.home()) / ".config"
-    root = real(config)
     for old, (new, override) in OLD_CONFIG_DIRS.items():
-        if env.get(override) or not is_file(config / old / "config.yml", root):
+        if env.get(override) or not config_exists(config / old / "config.yml"):
             continue
         old_text, new_text = f"~/.config/{old}", f"~/.config/{new}"
-        if is_file(config / new / "config.yml", root):
+        if config_exists(config / new / "config.yml"):
             report.add("old-config", "old-config", config / old, f"{old_text} é ignorada (vale {new_text})",
                        "pode apagar a pasta antiga")
         else:
