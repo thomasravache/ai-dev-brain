@@ -11,7 +11,7 @@ depends_on: []
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, skills/photon-brain/references/**, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, skills/photon-brain/references/**, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, .claude-plugin/plugin.json, tests/plugin/test_skill_names.py]
 adrs: [ADR-0008, ADR-0018, ADR-0019, ADR-0020]
 external: []
 size: M
@@ -228,3 +228,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0069`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| v1 (sem mudança de contrato) | 2026-11-17 | `touches` ganha `tests/plugin/test_skill_names.py`: o `KeptIdentifiersTest` (SPEC-0055:UT-04) passa a exigir os identificadores novos da `photon-brain` (pasta padrão sem nenhuma configuração e `--version`), mantendo a checagem de `BACKUP_NAME_RE` com o prefixo antigo | o teste da SPEC-0055 fixava os nomes que esta spec troca; achado pelo test-writer no G1 | SPEC-0070 (mesmo ajuste para a `boson-atlas`), SPEC-0072 | thomas, 2026-11-17 (piloto automático com o recomendado) |
