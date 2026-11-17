@@ -4,7 +4,7 @@ title: "gluon-spec: retrospectiva entre projetos (spec_graph.py retro)"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-17
 parent: SPEC-0066
 depends_on: []
