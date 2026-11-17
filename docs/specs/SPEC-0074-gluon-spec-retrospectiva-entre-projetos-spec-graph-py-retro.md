@@ -261,37 +261,71 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- Comando novo e só de leitura `spec_graph.py retro [PASTA ...] [--registry] [--stale-days N] [--json] [--out ARQUIVO]`. Ele lê projetos com `docs/specs`, projetos em modo privado pelo registro e `spec_root` passados direto.
+- **Métricas por projeto:**
+  - inventário e versão da ferramenta;
+  - specs paradas e entregues sem G7;
+  - lead time do H1 ao G7;
+  - gates atuais e reprovações no histórico do git;
+  - origem da evidência e N/A por gate;
+  - emendas e impedimentos.
+- **Achados R1 a R7** com a ação de cada um, e a seção "O que ajustar na skill" quando uma regra aparece em pelo menos metade dos projetos.
+- Saída em Markdown e em JSON (`retro_version` 1). O relatório traz só nomes de pasta ou chaves do registro, IDs `SPEC-NNNN` e números.
+- `gluon-spec` 2026.11.6, plugin 2026.11.19.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **Código:** `cmd_retro` e as funções `evidence_origin`, `retro_metrics`, `retro_fail_history`, `retro_findings`, `retro_skill_suggestions`, `retro_id` e o render ficam em `spec_graph.py`, reutilizando `Project`, `gate_table` (agora com a data), `open_impediments` e `is_older`.
+- **Git só de leitura:** só `git log -p` da pasta de specs, com `GIT_OPTIONAL_LOCKS=0`. O modo privado é lido de `.git/config`, `gitdir` e `commondir`, sem `rev-parse` nem `remote`.
+- **Mudanças retrocompatíveis em código que já existia:** `Project(root, mode="auto")` e `run_git(..., env=None)`. O JSON do `export` ficou igual.
+- **Documentação:** `references/retro.md` (regras, limites, privacidade, sugestões), linha na `SKILL.md`, README e CHANGELOG da skill. Não existe `CHANGELOG.md` na raiz, e a entrada ficou no da skill.
+- **Commits:**
+  - testes: 6be6f91 e d0af284 (Emenda v2);
+  - implementação: 10d8d22 e b254f9b (Emenda v2).
+- **Revisão G4:**
+  - rodada 1, CHANGES_REQUESTED: projeto ilegível derrubava o relatório, R5 ignorava FAIL atual e o slug do título vazava; tudo foi para a Emenda v2;
+  - rodada 2, APPROVED.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Métricas de um projeto (inventário, paradas, sem G7, lead time, gates, evidência, N/A, emendas, impedimentos) | PASS | `skills/gluon-spec/tests/test_retro.py::MetricsTest` — G5 e CI do PR |
+| UT-02 | Reprovações no histórico do git e projeto sem git | PASS | `skills/gluon-spec/tests/test_retro.py::FailHistoryTest` — G5 e CI do PR |
+| UT-03 | Regras R1–R7 no limite e abaixo, e sugestões para a skill | PASS | `skills/gluon-spec/tests/test_retro.py::FindingsTest` — G5 e CI do PR |
+| UT-04 | Nenhum título, evidência, motivo de N/A, impedimento ou slug na saída | PASS | `skills/gluon-spec/tests/test_retro.py::PrivacyTest` e `SlugPrivacyTest` — G5 e CI do PR |
+| UT-05 | Pasta inexistente, ignorados e nada analisável | PASS | `skills/gluon-spec/tests/test_retro.py::FoldersTest` — G5 e CI do PR |
+| UT-06 | `--stale-days` inválido | PASS | `skills/gluon-spec/tests/test_retro.py::StaleDaysTest` — G5 e CI do PR |
+| UT-07 | Projeto e histórico ilegíveis sem derrubar o relatório; R5 com FAIL atual | PASS | `skills/gluon-spec/tests/test_retro.py::UnreadableTest` e `CurrentFailTest` — G5 e CI do PR |
+| UT-08 | Worktree de projeto privado contada uma vez; repositório sem remoto como público | PASS | `skills/gluon-spec/tests/test_retro.py::RepoShapeTest` — G5 e CI do PR |
+| IT-01 | Projetos público e privado pela CLI, com o estado dos repositórios idêntico antes e depois | PASS | `skills/gluon-spec/tests/test_retro.py::IntegrationTest` — G5 e CI do PR |
+| IT-02 | `--json --out` grava só o arquivo de saída, com duplicata contada uma vez | PASS | `skills/gluon-spec/tests/test_retro.py::IntegrationTest` — G5 e CI do PR |
+
+**RNF de desempenho (7.6):** os 25 projetos desta máquina rodaram em 2,6 s (o limite era 15 s), com exit 0, sem nenhum ignorado e com o estado dos repositórios idêntico antes e depois (revisão G4). Os números batem com o levantamento manual e confirmam a hipótese: 1 FAIL na tabela atual contra 183 no histórico do git.
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — comandos de leitura `export`, `pillars` e `whats-new` (ADR-0001)
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — desempenho em 2,6 s; só leitura e privacidade provadas por IT-01 e UT-04
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: plugin e cópias, sem deploy
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — o próprio relatório; rollback por `git revert`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — README, `SKILL.md`, `references/retro.md` e CHANGELOG da skill
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` neste projeto
+- [x] Pendências registradas como novas specs (ou nenhuma) — SPEC-0078
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin 2026.11.19, no PR desta spec.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **SPEC-0078 (radar):**
+  - preservar no Registro de Gates o histórico de FAIL que o `gate` apaga;
+  - apontar as specs entregues sem G7;
+  - separar versão "desconhecida" de "desatualizada";
+  - os resíduos da revisão: `spec_root` com tipo errado, rótulo "sem git", ID de impedimento não normalizado e duplicata de spec sem `id`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0074`. -->
