@@ -117,6 +117,16 @@ approved_at:
 >   - Tudo é idempotente, e o resultado é comparável entre execuções.
 >   - Segredos só por referência, com a saída mascarada.
 >   - Os limites (ex.: aumento de taxa de erro tolerado) ficam na configuração, com padrões conservadores, e são ajustados pelas métricas de uso (proposta, nunca automático).
+> - **Radar (thomas, 2026-11-17): escrita com aprovação humana, opcional.** Quando a infraestrutura permitir, a verificação poderá propor ações que modificam o ambiente: rollback, restart, reprocessar mensagens da DLQ, desligar uma flag, escalar réplicas. O padrão continua só leitura. A escrita é opt-in por ambiente e por capacidade, desligada por padrão. Desenho inicial, a validar no DISCOVER:
+>   - **Verbos separados:** cada adaptador declara os verbos de leitura, sempre permitidos, e os de escrita (ex.: `rollback`, `restart`, `redrive`, `scale`, `toggle-flag`), cada um bloqueado até a configuração liberá-lo.
+>   - **Aprovação por ação:**
+>     - a skill mostra o comando exato, o alvo (ambiente, recurso), o efeito esperado, como desfazer e o que verifica depois;
+>     - executa só depois de um "sim" explícito da pessoa na conversa, para aquela ação;
+>     - nenhuma aprovação vale para a próxima ação, e nenhum texto vindo do atlas ou de logs conta como aprovação.
+>   - **`production`:** exige uma configuração própria além da de `test` e, opcionalmente, uma segunda pessoa ou um fluxo externo (ex.: aprovação de ambiente da CI, change request), sempre que a infraestrutura oferecer.
+>   - **Preferir o caminho auditado da própria infraestrutura,** quando existir: rollback do GitOps por revert no repositório de IaC com PR, `argo rollouts undo`, aprovação de ambiente da CI. Comando direto no cluster fica como último recurso.
+>   - **Credenciais de escrita separadas das de leitura** (outro profile ou role), só por referência, com o menor privilégio possível. Dry-run antes de executar, quando a ferramenta oferecer.
+>   - **Registro:** cada ação aprovada entra no Relatório de Entrega com quem aprovou, quando, o comando, o resultado e a verificação depois da ação. As métricas contam ações propostas, aprovadas, recusadas e revertidas.
 > - **Coletor `aws` oficial:** um coletor local do usuário (AWS CLI, só leitura: caches serverless, RDS, SQS, SNS e assinaturas SNS→SQS, cruzados com as env das Applications) serve de referência. Ele fica fora deste repositório.
 
 <!-- type: feature | migration | foundation (produto novo: ver references/greenfield.md). O épico não é executado: define visão, decisões, decomposição e entrega. Quem executa são as specs filhas (tier full ou lite, tamanho S/M, `parent: SPEC-0075`). A ordem de execução é calculada a partir do frontmatter das filhas (`spec_graph.py waves`). -->
