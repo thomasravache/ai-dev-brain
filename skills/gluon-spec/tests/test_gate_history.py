@@ -67,6 +67,16 @@ um sdd-config.yml que já existe mantém o seu sdd_version.
     Registro com spec_root que não é texto: entrada em "Ignorados" com motivo "registro inválido", exit 0.
     A evidência do histórico nunca sai no Markdown nem no JSON.
 
+Ajustes da revisão (Emenda v3):
+
+    - aviso de reprovações seguidas (`status`) só quando o gate na tabela não está PASS nem N/A: um PASS gravado por
+      versão antiga ou à mão, sem linha PASS no histórico, não deixa aviso preso;
+    - evidência com \\r ou \\r\\n vira espaço (tabela e histórico continuam uma linha só, mesmo relidos do disco);
+    - o título da subseção é reconhecido sem diferenciar maiúsculas e acentos ("### Histórico de Reprovações"): a
+      próxima reprovação entra nela, sem subseção duplicada, e conta as antigas;
+    - RETRO_SUGGESTIONS de R1 (cita a versão desconhecida), R3 (não só "lembrar" o G7) e R5 (não diz que o PASS apaga
+      o FAIL nem pede para guardar o histórico) apontam a causa que sobra depois desta versão.
+
 Isolamento: diretórios temporários resolvidos; HOME, SDD_CONFIG_HOME, XDG_* e CLAUDE_CONFIG_DIR temporários e
 GIT_CEILING_DIRECTORIES no diretório temporário. A data de hoje é fixa por parâmetro (ou por `today()` simulado)
 sempre que o resultado depende dela.
@@ -81,6 +91,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -731,6 +742,123 @@ class RetroResiduesTest(TempTest):
         self.assertEqual(project["unclosed"], ["SPEC-0009"])
         r2 = next(f for f in report["findings"] if f["rule"] == "R2" and f["project"] == "residuos")
         self.assertEqual(str(r2["value"]).count("SPEC-0009"), 1, r2)
+
+
+EDITED_TITLE = "### Histórico de Reprovações"
+THREE_G2_FAILS = [
+    f"- G2 FAIL 2026-11-01 — build exit 1 (a) — {SHA}",
+    f"- G2 FAIL 2026-11-02 — build exit 1 (b) — {SHA}",
+    "- G2 FAIL 2026-11-03 — build exit 1 (c) — ?",
+]
+
+
+def plain(text: str) -> str:
+    """Minúsculas e sem acentos, para comparar títulos e sugestões sem depender da grafia exata."""
+    text = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in text if not unicodedata.combining(c)).lower()
+
+
+def history_titles(text: str) -> list:
+    """Cabeçalhos '###' do Registro de Gates que são o histórico de reprovações (qualquer caixa ou acento)."""
+    return [line for line in gates_section(text).splitlines()
+            if line.startswith("###") and plain(line[3:]).strip() == "historico de reprovacoes"]
+
+
+class ReviewAdjustmentsTest(TempTest):
+    """Ajustes da revisão (Emenda v3): aviso preso, quebra de linha na evidência, título editado e sugestões."""
+
+    def specs_dir(self) -> Path:
+        root = self.tmp / "proj"
+        specs = root / "docs" / "specs"
+        specs.mkdir(parents=True)
+        (specs / "sdd-config.yml").write_text("base_branch: main\n", encoding="utf-8")
+        return specs
+
+    def test_pass_in_table_without_pass_line_leaves_no_stuck_warning(self):
+        """SPEC-0078:UT-07 (Emenda v3) — 3 FAILs de G2 no histórico e G2 PASS na tabela, sem linha PASS (versão antiga
+        ou edição à mão): o `status` sem IDs não mostra o aviso; com a tabela em FAIL (controle), o aviso aparece."""
+        specs = self.specs_dir()
+        passed = pass_all("2026-11-04", upto=("G0", "G1", "G2"))
+        write_spec(specs, "SPEC-0001", with_history(spec_md(
+            "SPEC-0001", "in-progress", created="2026-10-01", approved_at="2026-10-02", gates=passed),
+            THREE_G2_FAILS))
+        failing = pass_all("2026-11-03", upto=("G0", "G1"))
+        failing["G2"] = ("FAIL", "build exit 1 (c)", "2026-11-03")
+        (specs / "SPEC-0002-controle.md").write_text(with_history(spec_md(
+            "SPEC-0002", "in-progress", created="2026-10-01", approved_at="2026-10-02", gates=failing),
+            THREE_G2_FAILS), encoding="utf-8")
+        root = specs.parent.parent
+        self.assertEqual(sg.gate_table(load(root, "SPEC-0001"))["G2"]["status"], "PASS")
+        self.assertNotIn("G2 PASS", load(root, "SPEC-0001").text, "sem linha PASS no histórico")
+
+        code, out, err = call("--root", str(root), "status")
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("⚠ SPEC-0002: 3 reprovações seguidas em G2 — `impede SPEC-0002 --type falha`", out,
+                      "controle: com a tabela em FAIL, o aviso aparece")
+        self.assertNotIn("SPEC-0001: 3 reprovações seguidas", out,
+                         "G2 PASS na tabela: o aviso não fica preso pela falta da linha PASS")
+
+    def test_carriage_return_in_evidence_keeps_table_and_history_intact(self):
+        """SPEC-0078:UT-07 (Emenda v3) — `gate G2 --fail` com "a\\r\\nb" e com "a\\rb": a tabela segue legível por
+        gate_table (G2 em FAIL) e cada chamada conta mais uma reprovação no histórico."""
+        specs = self.specs_dir()
+        write_spec(specs, "SPEC-0001", spec_md(
+            "SPEC-0001", "in-progress", created="2026-10-01", approved_at="2026-10-02",
+            gates=pass_all("2026-11-10", upto=("G0", "G1"))))
+        root = specs.parent.parent
+        consecutive_fails = fn("consecutive_fails")
+        self.assertEqual(consecutive_fails(load(root, "SPEC-0001"), "G2"), 0)
+
+        for count, evidence in enumerate(("a\r\nb", "a\rb"), start=1):
+            with mock.patch.object(sg, "today", return_value="2026-11-17"):
+                code, out, err = call("--root", str(root), "gate", "SPEC-0001", "G2", "--fail", evidence)
+            self.assertEqual(code, 0, out + err)
+            raw = load(root, "SPEC-0001").path.read_bytes()
+            self.assertNotIn(b"\r", raw, f"{evidence!r}: a spec não guarda \\r")
+            doc = load(root, "SPEC-0001")  # relido do disco, como qualquer outro comando
+            row = sg.gate_table(doc).get("G2")
+            self.assertIsNotNone(row, f"{evidence!r}: G2 sumiu da tabela")
+            self.assertEqual(row["status"], "FAIL", evidence)
+            self.assertRegex(row["evidence"], r"^a\s+b$", f"{evidence!r}: evidência numa linha só")
+            self.assertEqual(row["date"], "2026-11-17", f"{evidence!r}: a linha da tabela continua inteira")
+            self.assertEqual(consecutive_fails(doc, "G2"), count, f"{evidence!r}: a reprovação entra no histórico")
+            last = fn("gate_history")(doc)[-1]
+            self.assertEqual((last["gate"], last["status"], last["sha"]), ("G2", "FAIL", "?"))
+            self.assertRegex(last["evidence"], r"^a\s+b$")
+
+    def test_edited_history_title_is_reused(self):
+        """SPEC-0078:UT-07 (Emenda v3) — subseção com o título editado ("### Histórico de Reprovações") e 2 FAILs de G2:
+        o próximo `--fail` entra nela, sem criar outra subseção; a contagem é 3 e o aviso sai."""
+        specs = self.specs_dir()
+        failing = pass_all("2026-11-02", upto=("G0", "G1"))
+        failing["G2"] = ("FAIL", "build exit 1 (b)", "2026-11-02")
+        text = with_history(spec_md(
+            "SPEC-0001", "in-progress", created="2026-10-01", approved_at="2026-10-02", gates=failing),
+            THREE_G2_FAILS[:2])
+        write_spec(specs, "SPEC-0001", text.replace(HISTORY_TITLE, EDITED_TITLE))
+        root = specs.parent.parent
+        self.assertEqual(history_titles(load(root, "SPEC-0001").text), [EDITED_TITLE])
+
+        code, out, err = call("--root", str(root), "gate", "SPEC-0001", "G2", "--fail", "terceira reprovação")
+        self.assertEqual(code, 0, out + err)
+        doc = load(root, "SPEC-0001")
+        self.assertEqual(len(history_titles(doc.text)), 1, f"subseção duplicada:\n{gates_section(doc.text)}")
+        self.assertEqual(fn("consecutive_fails")(doc, "G2"), 3, "a contagem inclui as reprovações antigas")
+        self.assertIn("⚠ 3 reprovações seguidas em G2 — registre `impede SPEC-0001 --type falha` e escale ao humano",
+                      out)
+        for line in THREE_G2_FAILS[:2]:
+            self.assertIn(line, doc.text)
+
+    def test_retro_suggestions_point_to_what_is_left(self):
+        """SPEC-0078:UT-07 (Emenda v3) — as sugestões de R1, R3 e R5 não pedem o que esta versão já entrega: R5 não diz
+        que o PASS apaga o FAIL nem pede para guardar o histórico; R3 não pede só para lembrar o G7; R1 cita a versão
+        desconhecida."""
+        suggestions = {rule: plain(text) for rule, text in sg.RETRO_SUGGESTIONS.items()}
+        self.assertTrue({"R1", "R3", "R5"} <= set(suggestions), sorted(suggestions))
+        self.assertNotIn("apaga", suggestions["R5"], sg.RETRO_SUGGESTIONS["R5"])
+        self.assertNotIn("guardar o historico", suggestions["R5"], sg.RETRO_SUGGESTIONS["R5"])
+        self.assertNotRegex(suggestions["R3"], r"\blembr", sg.RETRO_SUGGESTIONS["R3"])
+        self.assertIn("desconhecid", suggestions["R1"], sg.RETRO_SUGGESTIONS["R1"])
 
 
 # --------------------------------------------------------------------------- testes de integração
