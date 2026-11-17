@@ -4,9 +4,15 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **3 erro(s), 22 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 1, approved 1, implemented 62
-- Impedimentos: **0 aberto(s)**, 29 resolvido(s)
+- Impedimentos: **1 aberto(s)**, 29 resolvido(s)
+
+## Impedimentos Abertos
+
+| Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
+|---|---|---|---|---|---|---|---|
+| SPEC-0073 | IMP-01 | externo | — | thomas (data) | 2026-11-17 | 0d | remoção anunciada: não antes de 2027-03 (três versões mensais depois das SPEC-0069 a 0071, CHANGELOGs da photon-brain 2026.11.8 e da boson-atlas 2026.11.7/2026.11.8) |
 
 ## Cobertura de Pilares
 
@@ -25,11 +31,11 @@ Perfil: **minimo**
 
 **Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0073
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ✅ pronta |  |
+| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 0d) |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
 
 ## Épicos
