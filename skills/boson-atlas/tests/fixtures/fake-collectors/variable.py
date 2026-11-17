@@ -35,7 +35,7 @@ else:  # v2-shuffled
     relations = list(reversed(relations))
 
 print(json.dumps({
-    "contract": "org-atlas/collector@1",
+    "contract": "boson-atlas/collector@1",
     "collector": collector,
     "category": "code",
     "collected_at": "2026-10-30T12:00:00Z",

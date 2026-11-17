@@ -14,7 +14,7 @@ attrs = {"description": "deploy usa " + token + " no CI",
          "clone_url": "https://bot:" + password + "@git.acme.example/acme/api.git",
          "default_branch": "main"}
 output = {
-    "contract": "org-atlas/collector@1",
+    "contract": "boson-atlas/collector@1",
     "collector": collector,
     "category": "code",
     "collected_at": "2026-10-30T12:00:00Z",

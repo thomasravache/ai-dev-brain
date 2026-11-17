@@ -5,7 +5,7 @@ gluon-spec, e abre o servidor real por stdio.
 - `server_module()` importa mcp/fermion_mcp.py pelo caminho (importlib). Ausente ou com erro de import vira uma
   falha clara do teste (AssertionError), não um erro de coleta.
 - `Sandbox` cria um diretório temporário resolvido (macOS: /var -> /private/var) com HOME, ATLAS_CONFIG_HOME e
-  BRAIN_CONFIG_HOME próprios; nunca toca ~/.config/org-atlas, ~/.config/second-brain nem a configuração do Claude
+  BRAIN_CONFIG_HOME próprios; nunca toca as pastas de configuração do atlas e do cérebro em ~/.config (nomes novos e antigos) nem a configuração do Claude
   Code. `Sandbox.sdd_env()` acrescenta SDD_CONFIG_HOME e XDG_* temporários e CLAUDE_PROJECT_DIR apontando para o
   projeto de fixture (nunca o valor do ambiente real). Padrão copiado de skills/boson-atlas/tests/helpers.py e skills/photon-brain/tests/brain_support.py (sem
   importar de lá: ADR-0010 e ADR-0017).

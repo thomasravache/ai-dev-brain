@@ -10,7 +10,7 @@ import sys
 collector = sys.argv[1] if len(sys.argv) > 1 else "fake-bad-types"
 value = "hunter" + "2"
 print(json.dumps({
-    "contract": "org-atlas/collector@1",
+    "contract": "boson-atlas/collector@1",
     "collector": collector,
     "category": "code",
     "collected_at": "2026-10-30T12:00:00Z",

@@ -80,7 +80,7 @@ def expected(name):
     """Saída esperada de um coletor da skill (SPEC-0034, SPEC-0035), como snapshot normalizado."""
     data = json.loads((FIXTURES / name / "expected-acme.json").read_text(encoding="utf-8"))
     category = {"github": "code", "argocd": "delivery"}[name]
-    return {"contract": "org-atlas/collector@1", "collector": name, "category": category,
+    return {"contract": "boson-atlas/collector@1", "collector": name, "category": category,
             "collected_at": f"{DAY}T12:00:00Z", "entities": data["entities"], "relations": data["relations"]}
 
 
@@ -93,7 +93,7 @@ def rel(src, rtype, dst, source="x"):
 
 
 def snap(cid, entities, relations=(), category="code"):
-    return {"contract": "org-atlas/collector@1", "collector": cid, "category": category,
+    return {"contract": "boson-atlas/collector@1", "collector": cid, "category": category,
             "collected_at": f"{DAY}T12:00:00Z", "entities": list(entities), "relations": list(relations)}
 
 

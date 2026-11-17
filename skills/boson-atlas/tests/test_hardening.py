@@ -16,7 +16,7 @@ Contrato esperado de scripts/atlas.py (o Implementer segue estes testes):
 IT-01 e IT-02 são guardas (passam antes da mudança): erro de sistema de arquivos sem traceback e com exit 1,
 backups .bak e .bak.1, init --join recusando --org/--mode/--force, ERRO para atlas relativo e mensagem própria para
 profile com espaço. Tudo roda em Sandbox (HOME e ATLAS_CONFIG_HOME temporários); nunca toca ~/.config/boson-atlas
-nem ~/.config/org-atlas.
+nem a pasta antiga.
 """
 import json
 import os
@@ -42,7 +42,7 @@ def f(name):
 
 def output_with(attrs):
     return {
-        "contract": "org-atlas/collector@1",
+        "contract": "boson-atlas/collector@1",
         "collector": "github",
         "category": "code",
         "collected_at": "2026-10-30T12:00:00Z",

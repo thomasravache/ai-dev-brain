@@ -254,7 +254,7 @@ class PersonalPathRulesTest(unittest.TestCase):
             "files: C:\\Users\\ana\\OneDrive\\files\n"
             "linux: /home/ana/vault\n"
             "ok: /Users/<nome>/Library/CloudStorage\n"
-            "ok: ~/.config/second-brain/config.yml\n"
+            "ok: ~/.config/photon-brain/config.yml\n"
         )
         findings = personal_path_findings(text, "references/config.md")
         self.assertEqual(len(findings), 3, report(findings))

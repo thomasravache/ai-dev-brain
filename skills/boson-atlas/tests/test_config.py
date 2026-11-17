@@ -28,7 +28,7 @@ Contrato esperado das funções puras de scripts/atlas.py (o Implementer segue e
 
     load_config(config_home: Path | str | None = None) -> dict
         Lê <config_home>/config.yml (local: atlas, credentials; None = $ATLAS_CONFIG_HOME ou
-        ~/.config/boson-atlas, com ~/.config/org-atlas como reserva de leitura — SPEC-0070) e
+        ~/.config/boson-atlas, com a pasta antiga como reserva de leitura — SPEC-0070) e
         <atlas>/atlas-config.yml, completa com os padrões do contrato e devolve
         {"values": {...}, "origins": {...}}:
           values  : atlas, credentials, version, organization, mode, language, stale_days, categories,
