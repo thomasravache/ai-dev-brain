@@ -248,8 +248,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6fd76b8 | 2026-11-17 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; achados 1–8 resolvidos, provados em 3.9 e 3.14; rodada real só leitura com estado idêntico antes/depois; minor A e nits B–D viram pendência) — 540f4f1 | 2026-11-17 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — e8dc753 | 2026-11-17 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-17 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-17 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
