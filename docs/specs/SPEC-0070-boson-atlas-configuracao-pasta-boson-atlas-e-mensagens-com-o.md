@@ -4,14 +4,14 @@ title: "boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome n
 tier: full
 type: migration
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: []
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/references/maintenance.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/assets/ci/**, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/references/maintenance.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/assets/ci/**, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json, tests/plugin/test_skill_names.py]
 adrs: [ADR-0010, ADR-0018, ADR-0019, ADR-0020]
 external: []
 size: M
@@ -151,6 +151,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Configuração e textos**
+- [ ] Red: CH-01 (guarda), UT-01 a UT-04, UT-07, UT-08 e a guarda de nomes da SPEC-0055, com a tag `SPEC-0070:<ID>`
+- [ ] Green: leitura e gravação da configuração, AVISOs do `doctor`, textos e assets
+
+**Fase 2: Pasta do atlas e vendor**
+- [ ] Red: UT-05, UT-06, IT-01, IT-02
+- [ ] Green: `SKILL_COPIES`, escolha de destino no `vendor`, `lint`/`build`/checagem de cópia velha nas duas pastas
+- [ ] Validar: suítes da boson-atlas, tests/plugin e mcp, arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [ ] Relatório de Entrega, references, SKILL.md, CHANGELOG com a data de remoção, versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -211,3 +225,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0070`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| v1 (sem mudança de contrato) | 2026-11-17 | `touches` ganha `tests/plugin/test_skill_names.py`: o `KeptIdentifiersTest` (SPEC-0055:UT-04) passa a exigir os identificadores novos da `boson-atlas` (pasta padrão, `SKILL_COPY`/`SKILL_COPIES` e `--version`); o `CONTRACT` continua `org-atlas/collector@1` até a SPEC-0071 | o teste da SPEC-0055 fixa os nomes que esta spec troca (mesmo achado da SPEC-0069) | SPEC-0071, SPEC-0072 | thomas, 2026-11-17 (piloto automático com o recomendado) |
