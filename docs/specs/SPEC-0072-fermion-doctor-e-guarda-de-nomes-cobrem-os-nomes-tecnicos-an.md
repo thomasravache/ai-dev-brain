@@ -67,7 +67,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=12)) — 089d8a3 | 2026-11-17 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — b75f949 | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 18dfd31 | 2026-11-17 |
-| G4 Review | FAIL | CHANGES_REQUESTED: 1 blocker (guarda de nomes quebra no Python 3.12+ — f-strings não são lidas pelo tokenize, CI 3.15 vermelha) + 5 minor (padrões folder/backup com lacunas, output alcança poucos arquivos, old-config não segue link simbólico como as skills, arquivo não UTF-8 pulado) + 2 nits (exceções E6b/E6d largas; docs) | 2026-11-17 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; blocker do Python 3.12+ e minors 2–8 resolvidos, provados em 3.9 e 3.14; guarda sem falso positivo nos arquivos reais; 2 nits aceitos) — 6b6bf41 | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
