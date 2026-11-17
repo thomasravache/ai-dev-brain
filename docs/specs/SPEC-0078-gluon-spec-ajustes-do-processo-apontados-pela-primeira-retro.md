@@ -236,7 +236,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Fase 1 (test-writer): CH-01, CH-02, UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0078:<ID>`; CH passando e os demais falhando pelo motivo certo
+- [x] Fase 1 (test-writer): CH-01, CH-02, UT-01 a UT-06, IT-01 e IT-02 com a tag `SPEC-0078:<ID>`; CH passando e os demais falhando pelo motivo certo
 - [ ] Fase 2 (implementer): histórico de reprovações no `gate`, avisos no `status`/`next`, `sdd_version` no `private init`, `retro` (tool.state, fail_recorded, resíduos), docs, CHANGELOG e versões
 - [ ] Fase 3 (reviewer): G4 independente, com o desempenho do `retro` (7.6)
 
@@ -245,7 +245,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 1eb26e7 | 2026-11-17 |
-| G1 Red | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8, skipped=1)) — 57377a7 | 2026-11-17 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
