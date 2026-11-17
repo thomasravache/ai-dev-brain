@@ -19,6 +19,7 @@ python3 <skill-dir>/scripts/spec_graph.py private hooks --refresh --scan FOLDER 
 - Default `spec_root`: `<default_root>/<org>/<repo>`; `default_root` comes from the registry, else `$XDG_DATA_HOME/sdd`.
 - `init` refuses a repository that already versions `docs/specs` (that one uses full mode) and stops on an unreadable registry instead of falling back to full mode.
 - `init` also detects the team's conventions and installs the local leak-check hook when it is safe (see below).
+- When `init` creates `<spec_root>/sdd-config.yml`, it records `sdd_version` with the skill version, so `status`, `whats-new` and `retro` know which version the project follows. An existing `sdd-config.yml` is left as it is (update it with `whats-new --ack`).
 
 ## Where things live
 

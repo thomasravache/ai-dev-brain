@@ -9,6 +9,19 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.7] - 2026-11-17
+
+### Added
+- Histórico de reprovações na própria spec: todo FAIL registrado pelo `gate` (`--fail` ou `--run` que reprova) acrescenta `- <G> FAIL <data> — <evidência> — <sha|?>` na subseção `### Histórico de reprovações`, criada abaixo da tabela do Registro de Gates na primeira reprovação; o PASS ou N/A seguinte acrescenta `- <G> PASS <data> — depois de <n> reprovação(ões)`. Linhas antigas nunca são reescritas, linhas fora do formato não contam, e as ferramentas antigas ignoram a subseção (a tabela não muda). A partir da 3ª reprovação seguida no mesmo gate, o `gate` avisa e o `status` (sem IDs) mostra a parada sugerida (`impede SPEC-X --type falha`) até haver impedimento `falha` aberto ou o PASS (SPEC-0078).
+- Entregue sem fechar em destaque: o `status` (sem IDs) avisa `⚠ entregue sem fechar: SPEC-X — G5 há <d> dia(s)` para as specs não épicas em `approved`/`in-progress` com G5 PASS e G7 não PASS, e o `next` as lista na seção "A fechar" (SPEC-0078).
+- `retro`: `projects[].tool.state` (`atual`, `atrasada` ou `desconhecida`), com ação própria na R1 (desconhecida: `whats-new --ack`; atrasada: `whats-new` e `vendor --force`), e `projects[].fail_recorded`, as linhas FAIL do histórico das specs (nunca a evidência), que também calam a R5. O JSON só ganha chaves (`retro_version` 1) (SPEC-0078).
+
+### Changed
+- `private init` grava `sdd_version` com a versão da skill no `sdd-config.yml` que ele cria; um config que já existe não muda (SPEC-0078).
+
+### Fixed
+- `retro`: entrada do registro com `spec_root` que não é texto vai para "Ignorados" com "registro inválido", sem traceback; `fail_history` nulo aparece como "sem histórico" (sem git, sem commits ou histórico ilegível); ID de impedimento fora de `IMP-<dígitos>` sai como `IMP-?`, sem o texto da célula; specs sem `id` com o mesmo prefixo aparecem uma vez em paradas e entregues sem fechar (SPEC-0078).
+
 ## [2026.11.6] - 2026-11-17
 
 ### Added

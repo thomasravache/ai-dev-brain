@@ -21,6 +21,22 @@ Gate commands come from `docs/specs/sdd-config.yml`. Every agent runs the same c
 
 A FAIL is recorded with its reason and sent back to the owner. **Three consecutive FAILs on the same gate for the same spec → stop, record `impede --type falha` and escalate to the human** with a diagnosis: what fails, what was tried, and the hypothesis (spec defect, environment, or approach).
 
+**Failure history.** The gate row is overwritten (a PASS replaces the FAIL), so `gate` also keeps a history in the subsection `### Histórico de reprovações`, inside *Registro de Gates*, below the table. It is written only by the tool, created at the first failure, and old lines are never rewritten:
+
+```text
+### Histórico de reprovações
+- G2 FAIL 2026-11-17 — <evidence> — <sha|?>
+- G2 PASS 2026-11-18 — depois de 2 reprovação(ões)
+```
+
+- Every FAIL (`gate --fail "reason"` and a `gate --run` that fails) appends a FAIL line with the date, the evidence written to the table and the short HEAD SHA (`?` outside git). The `--run` evidence already ends in ` — <sha>`; `--fail` appends it to the reason.
+- A PASS or N/A after failures of that gate appends the PASS line with the count; a gate that passes at the first try changes only the table.
+- Consecutive failures = FAIL lines of the gate after its last PASS line. Lines outside the format (hand-edited) are ignored in the count, without an error.
+- That makes the three-FAILs rule checkable: from the 3rd consecutive failure on, `gate` prints `⚠ <n> reprovações seguidas em <G> — registre `impede SPEC-X --type falha` e escale ao humano` (always, even with an impediment open), and `status` (overview, without IDs) shows `⚠ SPEC-X: <n> reprovações seguidas em <G>` for in-progress specs until a `falha` impediment is open or the gate passes. The tool only suggests; the Architect records the impediment.
+- Older vendored tools ignore the subsection: the table, `validate` and `pr-check` read the same as before.
+
+**Delivered without closing.** `status` (overview) warns `⚠ entregue sem fechar: SPEC-X — G5 há <d> dia(s); feche o G7 (Relatório de Entrega)` for every non-epic `approved`/`in-progress` spec with G5 PASS and G7 not PASS, and `next` lists them under "A fechar", so a merged spec is not forgotten before G7.
+
 A spec with an open impediment (Registro de Impedimentos) cannot pass G7 or become `implemented`; every impediment closes with a resolution that points to its evidence (Emenda, answer/ADR, SPEC-NNNN, action).
 
 ---
