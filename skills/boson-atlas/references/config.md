@@ -4,7 +4,7 @@ A boson-atlas separa o que é de cada máquina do que é do atlas (ADR-0010). `a
 
 ## Camada local — `config.yml`
 
-Fica em `$ATLAS_CONFIG_HOME/config.yml`; sem a variável, em `~/.config/org-atlas/config.yml`. Nunca vai para o atlas nem para um repositório. Guarda o caminho do atlas nesta máquina e as credenciais **só pelo nome**:
+Fica em `$ATLAS_CONFIG_HOME/config.yml`; sem a variável, em `~/.config/boson-atlas/config.yml`. Nunca vai para o atlas nem para um repositório. Guarda o caminho do atlas nesta máquina e as credenciais **só pelo nome**:
 
 ```yaml
 atlas: /Users/<nome>/acme-atlas      # caminho absoluto do atlas nesta máquina
@@ -19,6 +19,8 @@ credentials:                          # só NOMES; nunca valores
 - O `atlas.py` nunca lê o valor de uma variável: o `doctor` só confere se o nome existe no ambiente (`definida` ou `não definida`) e mostra o nome do profile sem verificá-lo.
 
 É escrita pelo `atlas.py init` (e pelo `init --join` numa máquina nova, que não aceita `--org`, `--mode` nem `--force`), que mantém as `credentials` já declaradas. `ATLAS_CONFIG_HOME` troca a pasta, útil para testes ou para mais de um atlas.
+
+**Compatibilidade com o nome antigo:** uma máquina configurada antes da versão 2026.11.7 tem a configuração em `~/.config/org-atlas/config.yml`. Sem `ATLAS_CONFIG_HOME`, o `atlas.py` lê `~/.config/boson-atlas/config.yml` se existir; se não, lê a pasta antiga como reserva, até a remoção anunciada no `CHANGELOG.md` (não antes de 2027-03, SPEC-0073). Toda gravação (`init`, `init --join`) vai só para a pasta nova, com a configuração completa (as `credentials` já declaradas na antiga vêm junto); a pasta antiga nunca é gravada, movida nem apagada, e os comandos que só leem não criam a pasta nova. O `doctor` mostra um AVISO com o comando de cópia (`mkdir -p ~/.config/boson-atlas && cp -p ~/.config/org-atlas/config.yml ~/.config/boson-atlas/`) quando só a antiga existe, e outro dizendo que ela é ignorada (e pode ser apagada) quando as duas existem. Com `ATLAS_CONFIG_HOME` vale só essa pasta, sem reserva nem aviso (SPEC-0070, ADR-0020).
 
 ## Camada compartilhada — `atlas-config.yml`
 
@@ -59,10 +61,12 @@ Chave ausente usa o padrão (origem `padrão` no `config`).
 | Item | OK | AVISO | ERRO |
 |---|---|---|---|
 | `configuração local` | arquivo lido, credenciais só com nomes | — | credencial com valor |
+| `configuração no caminho antigo ~/.config/org-atlas` / `~/.config/org-atlas é ignorada` | — | só a pasta antiga existe (com o comando de cópia) ou as duas existem (vale a nova); nunca com `ATLAS_CONFIG_HOME` | — |
 | `pasta do atlas` | a pasta existe e pode ser lida | — | `atlas` vazio, caminho relativo, pasta inexistente ou sem permissão de leitura (mostra o caminho) |
 | `atlas-config.yml` | versão, chaves e formato certos | — | ausente, ilegível, `version` diferente de 1, sem `organization`/`mode`, `mode` inválido, caminho absoluto |
 | `estrutura` | todas as pastas e páginas | — | o que falta |
 | `git` | `.git` na pasta do atlas | a pasta não é repositório git | — |
+| `pasta .org-atlas/ no atlas` | — | o atlas ainda tem a cópia da skill no nome antigo: `vendor --ci <ci> --force` e depois `git rm -r .org-atlas` (`references/modes.md`) | — |
 | `coletor <id>` | executável encontrado | — | executável não encontrado ou sem `command` |
 | `credencial <coletor> <NOME>` | `definida` | `não definida` | — |
 

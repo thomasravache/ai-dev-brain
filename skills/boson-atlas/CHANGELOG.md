@@ -9,6 +9,17 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.7] - 2026-11-17
+
+### Changed
+- A configuração local desta máquina passa para `~/.config/boson-atlas/config.yml`. Sem `ATLAS_CONFIG_HOME`, a leitura usa a pasta nova se existir e, se não, a antiga `~/.config/org-atlas/config.yml` como reserva; toda gravação (`init`, `init --join`) vai só para a pasta nova, com a configuração completa, e a antiga nunca é gravada, movida nem apagada. O `doctor` mostra um AVISO com o comando de cópia (`mkdir -p ~/.config/boson-atlas && cp -p ~/.config/org-atlas/config.yml ~/.config/boson-atlas/`) quando só a antiga existe, e outro dizendo que ela é ignorada quando as duas existem; exit code e formato do `--json` não mudam (SPEC-0070, ADR-0020).
+- `vendor` grava a cópia da skill em `.boson-atlas/skill/` e os arquivos de CI gerados rodam `python3 .boson-atlas/skill/scripts/atlas.py` (o workflow usa `$RUNNER_TEMP/boson-atlas`). Com `.org-atlas/` no atlas, avisa que ela pode sair (`git rm -r .org-atlas`) depois que a CI rodar com a nova; com um arquivo de CI personalizado, mantido sem `--force`, que ainda roda `.org-atlas/skill`, atualiza `.org-atlas/skill/` e mostra o passo de migração. Nunca apaga nada. `lint`, `build`, `scan` e a checagem de cópia desatualizada tratam as duas pastas do mesmo jeito; o `doctor` mostra um AVISO quando o atlas ainda tem `.org-atlas/` (SPEC-0070).
+- Mensagens com o nome novo: `boson-atlas não configurado nesta máquina — rode init (ou init --join)`, `--version` (`boson-atlas <versão>`), a descrição do `--help`, a primeira linha do `config`, o cabeçalho do `config.yml` local e o do `atlas-config.yml` de atlas novos (`assets/atlas-config.yml`; atlas existentes não mudam). O contrato `org-atlas/collector@1` não muda (SPEC-0071) (SPEC-0070).
+- **Rollback:** voltar para a versão anterior funciona sem ação para a configuração (a pasta antiga nunca foi tocada); um atlas que já migrou a CI para `.boson-atlas/` precisa do `vendor --force` da versão anterior para a CI voltar a `.org-atlas/` (SPEC-0070).
+
+### Deprecated
+- A leitura de `~/.config/org-atlas/config.yml` como reserva será removida numa versão futura, não antes de 2027-03 (três versões mensais depois desta, SPEC-0073). Copie a configuração com o comando do `doctor` antes disso, e migre a CI do atlas para `.boson-atlas/` (`vendor --ci <ci> --force` e depois `git rm -r .org-atlas`) (SPEC-0070).
+
 ## [2026.11.6] - 2026-11-15
 
 ### Fixed

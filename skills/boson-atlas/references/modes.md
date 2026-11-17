@@ -24,8 +24,8 @@ roda git e abre o PR é o workflow (ADR-0010).
 
 ### O que é escrito
 
-- **`.org-atlas/skill/`** — cópia da skill (`scripts/atlas.py` e `assets/`: coletores, páginas, modelos), **sempre
-  sobrescrita** pelo `vendor`. O workflow e o script rodam `python3 .org-atlas/skill/scripts/atlas.py`, e `{skill}`
+- **`.boson-atlas/skill/`** — cópia da skill (`scripts/atlas.py` e `assets/`: coletores, páginas, modelos), **sempre
+  sobrescrita** pelo `vendor`. O workflow e o script rodam `python3 .boson-atlas/skill/scripts/atlas.py`, e `{skill}`
   nos `command` dos coletores aponta para essa cópia. Não edite a cópia: rode o `vendor` de novo depois de atualizar a
   skill. O `scripts/atlas.py` da cópia idêntico ao `atlas.py` da skill que roda o lint (ou o próprio arquivo, quando o
   lint roda da cópia, como na CI) é pulado sem achado: as regex dele parecem segredo. Diferente (a skill foi
@@ -52,7 +52,24 @@ roda git e abre o PR é o workflow (ADR-0010).
 
 Arquivo de CI igual ao modelo: `já atualizado`. Diferente (customizado pelo time): mantido, com
 `customizado — N linha(s) diferem; use --force para sobrescrever`. Com `--force`: sobrescrito. A cópia da skill é
-atualizada nos dois casos. Depois do `vendor`, faça commit de `.org-atlas/` e do arquivo da CI.
+atualizada nos dois casos. Depois do `vendor`, faça commit de `.boson-atlas/` (ou `.org-atlas/`) e do arquivo da CI.
+
+### Atlas com a pasta antiga `.org-atlas/`
+
+Antes da versão 2026.11.7 o `vendor` gravava a cópia em `.org-atlas/skill/`. As duas pastas continuam valendo:
+`lint`, `build`, `scan` e a checagem de cópia desatualizada tratam `.org-atlas/skill/` e `.boson-atlas/skill/` do
+mesmo jeito (são a ferramenta, nunca conteúdo do atlas), e máquinas em versões diferentes podem usar o mesmo atlas
+(SPEC-0070, ADR-0020). O `vendor` nunca apaga nada e escolhe o destino pelo arquivo de CI:
+
+- Arquivo de CI ausente, igual ao modelo ou regravado com `--force` → grava `.boson-atlas/skill/` e a CI passa a
+  rodá-la; se o atlas ainda tem `.org-atlas/`, imprime
+  `pode apagar .org-atlas/ (git rm -r .org-atlas) depois que a CI rodar com .boson-atlas/`.
+- Arquivo de CI personalizado, mantido sem `--force`, que ainda roda `.org-atlas/skill` → atualiza
+  `.org-atlas/skill/` (para a CI não rodar uma cópia velha) e imprime
+  `a CI ainda roda .org-atlas/skill — para migrar: vendor --ci <ci> --force e depois git rm -r .org-atlas`.
+
+Para migrar: `vendor --ci <ci> --force` (refaça à mão o que o time tinha personalizado), commit, espere a CI rodar com
+`.boson-atlas/` e então `git rm -r .org-atlas`. O `doctor` mostra um AVISO enquanto o atlas tiver `.org-atlas/`.
 
 ### Chave `ci` do `atlas-config.yml`
 
@@ -109,6 +126,6 @@ Revise o diff (`git diff`) e faça commit na pasta do atlas.
 2. Na pasta do atlas: `git remote add origin <url>` e envie a branch principal (`git push -u origin main`).
 3. Troque `mode: local` por `mode: repo` no `atlas-config.yml` (é uma linha; não há comando para mudar de modo).
 4. Declare `ci.env` (só nomes) e crie os secrets com os mesmos nomes na plataforma.
-5. Rode `atlas.py vendor --ci github` (ou `generic`), faça commit de `.org-atlas/` e do arquivo da CI e envie.
+5. Rode `atlas.py vendor --ci github` (ou `generic`), faça commit de `.boson-atlas/` e do arquivo da CI e envie.
 6. Nas outras máquinas: clone o repositório e rode `atlas.py init --join --atlas <pasta>`.
 7. Remova o agendamento local (cron ou `/schedule`) para não haver dois scans.
