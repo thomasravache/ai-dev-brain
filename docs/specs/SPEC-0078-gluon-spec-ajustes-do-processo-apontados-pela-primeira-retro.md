@@ -274,37 +274,76 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- **Histórico de reprovações na própria spec.**
+  - O `gate` acrescenta uma linha na subseção `### Histórico de reprovações` a cada FAIL, e uma linha PASS quando o gate passa depois de reprovações. A tabela não muda de formato.
+  - A partir da 3ª reprovação seguida, o `gate` e o `status` sugerem `impede --type falha`. Assim, a regra dos 3 FAILs passa a ser conferível.
+- **Specs entregues sem fechar:** o `status` mostra o aviso "entregue sem fechar" com os dias desde o G5, e o `next` ganha a seção "A fechar".
+- **Modo privado:** o `private init` grava `sdd_version`.
+- **`retro`:**
+  - `tool.state` com os valores `atual | atrasada | desconhecida`, e a ação de cada um;
+  - `fail_recorded`;
+  - R5 com o histórico;
+  - sugestões atualizadas;
+  - os resíduos da revisão da SPEC-0074: registro inválido, "sem histórico", `IMP-?` e IDs sem duplicata.
+- `gluon-spec` 2026.11.7, plugin 2026.11.20.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **Funções novas em `spec_graph.py`:**
+  - `gate_history`, `consecutive_fails`, `fail_streaks` e `unclosed_specs`;
+  - `record_gate`, que grava a tabela e o histórico numa gravação única, com `put_gate_row` e `put_history_line`.
+- **Mudanças em funções existentes:**
+  - `status_body` e `print_next` recebem `today`;
+  - `md_cell` troca `\r` e `\n` por espaço;
+  - o título da subseção é comparado com `norm()`.
+- **Documentação:** `references/gates.md`, `retro.md`, `private-mode.md`, `SKILL.md` e o CHANGELOG da skill.
+- **Commits:**
+  - testes: 6227a4e, 57377a7 (Emenda v2) e 5891966 (Emenda v3);
+  - implementação: b4bbd94 e 358e32c (Emenda v3).
+- **Emendas:**
+  - v2: esclarecimentos que o test-writer levantou;
+  - v3: minors da revisão.
+- **Revisão G4:**
+  - rodada 1: APPROVED com 3 minors e 5 nits;
+  - rodada 2: APPROVED, sem achados.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | PASS na primeira tentativa não cria a subseção | PASS | `skills/gluon-spec/tests/test_gate_history.py::FirstTryTest` — G5 e CI do PR |
+| CH-02 | `gate_table`, `validate` e `pr-check` ignoram a subseção | PASS | `skills/gluon-spec/tests/test_gate_history.py::OldReadersTest` — G5 e CI do PR |
+| UT-01 | Linhas FAIL e PASS no histórico, criando a subseção | PASS | `skills/gluon-spec/tests/test_gate_history.py::HistoryWriteTest` — G5 e CI do PR |
+| UT-02 | 3 reprovações seguidas: aviso no `gate` e no `status`; impedimento, recomeço e linhas fora do formato | PASS | `skills/gluon-spec/tests/test_gate_history.py::StreakTest` — G5 e CI do PR |
+| UT-03 | "Entregue sem fechar" no `status` e "A fechar" no `next` | PASS | `skills/gluon-spec/tests/test_gate_history.py::UnclosedTest` — G5 e CI do PR |
+| UT-04 | `private init` grava `sdd_version` só ao criar o config | PASS | `skills/gluon-spec/tests/test_gate_history.py::PrivateInitVersionTest` — G5 e CI do PR |
+| UT-05 | `retro`: `tool.state`, `fail_recorded`, R1 por estado, R5 e privacidade | PASS | `skills/gluon-spec/tests/test_gate_history.py::RetroStateTest` — G5 e CI do PR |
+| UT-06 | Resíduos do `retro`: registro inválido, "sem histórico", `IMP-?` e IDs | PASS | `skills/gluon-spec/tests/test_gate_history.py::RetroResiduesTest` — G5 e CI do PR |
+| UT-07 | Ajustes da revisão: aviso não fica preso, `\r` na evidência, título editado e sugestões | PASS | `skills/gluon-spec/tests/test_gate_history.py::ReviewAdjustmentsTest` — G5 e CI do PR |
+| IT-01 | CLI: três reprovações até o PASS, com aviso e histórico completo | PASS | `skills/gluon-spec/tests/test_gate_history.py::StreakIntegrationTest` — G5 e CI do PR |
+| IT-02 | CLI: "entregue sem fechar" aparece e some com o G7 | PASS | `skills/gluon-spec/tests/test_gate_history.py::UnclosedIntegrationTest` — G5 e CI do PR |
+
+**RNF de desempenho (7.6):** `retro` só de leitura em 21 projetos, 1,7 s no Markdown e 0,8 s no JSON, com o `git status` igual antes e depois. `status` em 0,16 s, contra 0,21 s na main (revisão G4).
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — `set_gate_row`/`status_body`/`retro` (ADR-0001)
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — desempenho; compatibilidade com as versões antigas (CH-02); privacidade (UT-05)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: plugin e cópias, sem deploy
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — avisos do `status` e próxima retrospectiva; rollback por `git revert`
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `references/*`, `SKILL.md` e CHANGELOG da skill
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: sem `living_docs` neste projeto
+- [x] Pendências registradas como novas specs (ou nenhuma) — nenhuma
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin 2026.11.20, no PR desta spec.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma. Os cenários de borda de escrita (Registro de Gates como última seção, outra `###` depois do histórico, CRLF) foram conferidos à mão na revisão e não têm teste automatizado.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted {{id}}`. -->
