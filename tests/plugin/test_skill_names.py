@@ -50,8 +50,8 @@ BASELINE = {
 #      quem usa, fora do repositório; o README orienta apagá-la (§2 e §8 da spec). Só esses dois prefixos exatos:
 #      ".claude/skills/<nome antigo>" sem "~/" ou "$HOME/" (ex.: uma pasta .claude/ versionada num repositório) é
 #      acusado.
-#   4. Identificadores mantidos pelo contrato ("org-atlas/collector@1", ".org-atlas/", "~/.config/org-atlas",
-#      "~/.config/second-brain") não precisam de exceção: o padrão exige "skills/" logo antes do nome, sem letra,
+#   4. Identificadores técnicos antigos (contrato do coletor, pasta da cópia no atlas, pastas de configuração;
+#      guardados pela SPEC-0072 em test_old_technical_names.py) não precisam de exceção: o padrão exige "skills/" logo antes do nome, sem letra,
 #      dígito, "_" ou "-" antes de "skills", e nenhum desses caracteres depois do nome. O teste de exemplo garante
 #      que eles não são acusados.
 #   5. Arquivos que não são UTF-8 (binários) não são lidos.
@@ -273,8 +273,9 @@ class OldReferenceSearchTest(unittest.TestCase):
             files = {
                 "README.md": (f"cp -R {old_path} ~/.claude/skills/\n"
                               "rm -rf ~/.claude/skills/" + "second-brain\n"
-                              "contrato org-atlas/collector@1 e pasta .org-atlas/skill\n"
-                              "config em ~/.config/org-atlas e ~/.config/second-brain\n"
+                              # SPEC-0072:UT-03 — nomes técnicos antigos montados por partes
+                              "contrato " + "org" + "-atlas/collector@1 e pasta ." + "org" + "-atlas/skill\n"
+                              "config em ~/.config/" + "org" + "-atlas e ~/.config/" + "second" + "-brain\n"
                               "skills/" + "org-atlas-v2 e myskills/" + "org-atlas não são o caminho velho\n"
                               "rm -rf $HOME/.claude/skills/" + "org-atlas\n"
                               "versionado no repositório: .claude/skills/" + "second-brain/SKILL.md\n"
@@ -340,9 +341,10 @@ class KeptIdentifiersTest(unittest.TestCase):
                 self.assertEqual(atlas.local_config_path(), Path(home) / "a" / "config.yml")
 
         self.assertEqual(atlas.CONTRACT, "boson-atlas/collector@1")  # SPEC-0071:UT-03
-        # SPEC-0070:CH-01 — a cópia da skill grava .boson-atlas/skill; .org-atlas/skill segue aceita na leitura
+        # SPEC-0070:CH-01 — a cópia da skill grava .boson-atlas/skill; a pasta antiga segue aceita na leitura
         with self.subTest(skill_copy="boson-atlas"):
-            self.assertEqual(getattr(atlas, "SKILL_COPIES", None), (".boson-atlas/skill", ".org-atlas/skill"),
+            old_copy = "." + "org" + "-atlas/skill"  # SPEC-0072:UT-03 — montado por partes
+            self.assertEqual(getattr(atlas, "SKILL_COPIES", None), (".boson-atlas/skill", old_copy),
                              "atlas.SKILL_COPIES (SPEC-0070)")
         # SPEC-0069:CH-01 — backups com o prefixo antigo seguem reconhecidos (rotação e restore)
         old_backup = "second" + "-brain-2026-11-12-101010.zip"
