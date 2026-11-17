@@ -325,19 +325,25 @@ class KeptIdentifiersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             env = {k: v for k, v in os.environ.items() if k not in ("BRAIN_CONFIG_HOME", "ATLAS_CONFIG_HOME")}
             env["HOME"] = home
+            env["XDG_CONFIG_HOME"] = f"{home}/.config"
             with mock.patch.dict(os.environ, env, clear=True):
                 # SPEC-0069:CH-01 — sem nenhuma pasta, a photon-brain lê (e grava) em ~/.config/photon-brain
                 with self.subTest(default_config="photon-brain"):
                     self.assertEqual(brain.local_config_path(),
                                      Path(home) / ".config" / "photon-brain" / "config.yml")
-                self.assertEqual(atlas.local_config_path(),
-                                 Path(home) / ".config" / "org-atlas" / "config.yml")
+                # SPEC-0070:CH-01 — sem nenhuma pasta, a boson-atlas lê (e grava) em ~/.config/boson-atlas
+                with self.subTest(default_config="boson-atlas"):
+                    self.assertEqual(atlas.local_config_path(),
+                                     Path(home) / ".config" / "boson-atlas" / "config.yml")
             with mock.patch.dict(os.environ, {"BRAIN_CONFIG_HOME": f"{home}/b", "ATLAS_CONFIG_HOME": f"{home}/a"}):
                 self.assertEqual(brain.local_config_path(), Path(home) / "b" / "config.yml")
                 self.assertEqual(atlas.local_config_path(), Path(home) / "a" / "config.yml")
 
-        self.assertEqual(atlas.CONTRACT, "org-atlas/collector@1")
-        self.assertEqual(atlas.SKILL_COPY, ".org-atlas/skill")
+        self.assertEqual(atlas.CONTRACT, "org-atlas/collector@1")  # muda só na SPEC-0071
+        # SPEC-0070:CH-01 — a cópia da skill grava .boson-atlas/skill; .org-atlas/skill segue aceita na leitura
+        with self.subTest(skill_copy="boson-atlas"):
+            self.assertEqual(getattr(atlas, "SKILL_COPIES", None), (".boson-atlas/skill", ".org-atlas/skill"),
+                             "atlas.SKILL_COPIES (SPEC-0070)")
         # SPEC-0069:CH-01 — backups com o prefixo antigo seguem reconhecidos (rotação e restore)
         old_backup = "second" + "-brain-2026-11-12-101010.zip"
         self.assertTrue(brain.BACKUP_NAME_RE.match(old_backup),
@@ -347,9 +353,9 @@ class KeptIdentifiersTest(unittest.TestCase):
         self.assertIn("sdd-config.yml", (SKILLS / "gluon-spec" / "scripts" / "spec_graph.py").read_text(
             encoding="utf-8"))
 
-        # SPEC-0069:CH-01 — a --version da photon-brain diz o nome novo
+        # SPEC-0069:CH-01 e SPEC-0070:CH-01 — a --version da photon-brain e a da boson-atlas dizem o nome novo
         for skill, script, prefix in (("photon-brain", "brain.py", "photon-brain "),
-                                      ("boson-atlas", "atlas.py", "org-atlas ")):
+                                      ("boson-atlas", "atlas.py", "boson-atlas ")):
             with self.subTest(version_output=skill):
                 out = subprocess.run([sys.executable, str(SKILLS / skill / "scripts" / script), "--version"],
                                      capture_output=True, text=True, timeout=60, check=False)

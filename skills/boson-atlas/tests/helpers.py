@@ -2,8 +2,9 @@
 
 - `load_atlas()` importa scripts/atlas.py pelo caminho (importlib), sem sys.path de outra skill (ADR-0010).
   Ausente ou com erro de import = None; `atlas()` e `fn(nome)` transformam isso em falha clara do teste.
-- `Sandbox` cria um diretório temporário resolvido (macOS: /var -> /private/var) com HOME e ATLAS_CONFIG_HOME
-  próprios e roda `python3 scripts/atlas.py ...` como subprocesso.
+- `Sandbox` cria um diretório temporário resolvido (macOS: /var -> /private/var) com HOME, XDG_CONFIG_HOME e
+  ATLAS_CONFIG_HOME próprios e roda `python3 scripts/atlas.py ...` como subprocesso; `run_default` roda sem
+  ATLAS_CONFIG_HOME, com a configuração local na pasta padrão sob o HOME temporário (SPEC-0070).
 """
 import importlib.util
 import json
@@ -19,7 +20,12 @@ TESTS = Path(__file__).resolve().parent
 SKILL = TESTS.parent
 SCRIPT = SKILL / "scripts" / "atlas.py"
 ASSET_CONFIG = SKILL / "assets" / "atlas-config.yml"
-NOT_CONFIGURED = "org-atlas não configurado nesta máquina — rode init (ou init --join)"
+# SPEC-0070:CH-01 — nome novo nas pastas e nos textos; o antigo, montado por partes, só como reserva de leitura
+NEW_CONFIG_DIR = "boson-atlas"
+OLD_CONFIG_DIR = "org" + "-atlas"
+NEW_SKILL_COPY = f".{NEW_CONFIG_DIR}/skill"
+OLD_SKILL_COPY = f".{OLD_CONFIG_DIR}/skill"
+NOT_CONFIGURED = f"{NEW_CONFIG_DIR} não configurado nesta máquina — rode init (ou init --join)"
 DOCTOR_LINE = re.compile(r"^(OK|AVISO|ERRO) (.+?) — (.*)$")
 # valor absoluto: /x, ~, C:\ ou C:/, \\servidor
 ABSOLUTE = re.compile(r"^(/|~|[A-Za-z]:[\\/]|\\\\)")
@@ -113,12 +119,21 @@ class Sandbox:
     def run(self, *args, config_home=None, env=None, unset=()):
         environ = dict(os.environ)
         environ["HOME"] = str(self.home)
+        environ["XDG_CONFIG_HOME"] = str(self.home / ".config")
         environ["ATLAS_CONFIG_HOME"] = str(config_home or self.config_home)
         environ.update(env or {})
         for name in unset:
             environ.pop(name, None)
         return subprocess.run([sys.executable, str(SCRIPT), *[str(a) for a in args]], check=False,
                               cwd=self.root, capture_output=True, text=True, env=environ)
+
+    def run_default(self, *args, env=None):
+        """Sem ATLAS_CONFIG_HOME: a configuração local vem da pasta padrão sob o HOME temporário (SPEC-0070)."""
+        return self.run(*args, env=env, unset=("ATLAS_CONFIG_HOME",))
+
+    def default_dir(self, name: str) -> Path:
+        """<HOME temporário>/.config/<name> (NEW_CONFIG_DIR ou OLD_CONFIG_DIR)."""
+        return self.home / ".config" / name
 
     def init(self, *extra, atlas=None, org="Acme", mode="repo", config_home=None):
         return self.run("init", "--atlas", atlas or self.atlas, "--org", org, "--mode", mode, *extra,
