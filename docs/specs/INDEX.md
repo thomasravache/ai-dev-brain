@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 2, approved 2, implemented 62
+- Specs: proposed 2, approved 1, in-progress 1, implemented 62
 - Impedimentos: **1 aberto(s)**, 29 resolvido(s)
 
 ## Impedimentos Abertos
@@ -29,15 +29,15 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0074  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0074
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 0d) |  |
-| 2 | SPEC-0074 | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 1 | SPEC-0074 | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full/M | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 0d) | saiu da onda 1: arquivos em comum com SPEC-0074 |
 | 3 | SPEC-0076 | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
 
 ## Épicos
@@ -67,7 +67,7 @@ flowchart LR
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0066["SPEC-0066 · Dogfooding: o Fermion valida e melhora o próprio repositório"]
-    S0074["SPEC-0074<br/>gluon-spec: retrospectiva entre projeto…"]:::approved
+    S0074["SPEC-0074<br/>gluon-spec: retrospectiva entre projeto…"]:::inprogress
   end
   subgraph E0067["SPEC-0067 · Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações"]
     S0069["SPEC-0069<br/>photon-brain: configuração, mensagens e…"]:::implemented
@@ -168,7 +168,7 @@ flowchart LR
 | [SPEC-0071](SPEC-0071-boson-atlas-contrato-do-coletor-com-o-nome-boson-atlas-org-a.md) | boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceito | full | migration | implemented | 2026-11-16 | SPEC-0067 | SPEC-0070 | — |
 | [SPEC-0072](SPEC-0072-fermion-doctor-e-guarda-de-nomes-cobrem-os-nomes-tecnicos-an.md) | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite | feature | implemented | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071 | — |
 | [SPEC-0073](SPEC-0073-remocao-dos-nomes-tecnicos-antigos-na-versao-anunciada.md) | Remoção dos nomes técnicos antigos na versão anunciada | lite | refactor | approved | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071, SPEC-0072 | — |
-| [SPEC-0074](SPEC-0074-gluon-spec-retrospectiva-entre-projetos-spec-graph-py-retro.md) | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | approved | 2026-11-17 | SPEC-0066 | — | — |
+| [SPEC-0074](SPEC-0074-gluon-spec-retrospectiva-entre-projetos-spec-graph-py-retro.md) | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | in-progress | 2026-11-17 | SPEC-0066 | — | — |
 | [SPEC-0075](SPEC-0075-boson-atlas-mapa-de-acesso-observabilidade-e-validacao-por-a.md) | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | epic | feature | proposed | 2026-11-17 | — | — | — |
 | [SPEC-0076](SPEC-0076-boson-atlas-coletor-argocd-reconhece-nome-do-servico-sufixos.md) | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite | fix | proposed | 2026-11-17 | — | — | — |
 | [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | proposed | 2026-11-17 | — | — | — |
