@@ -3,13 +3,13 @@ id: SPEC-0066
 title: "Dogfooding: o Fermion valida e melhora o próprio repositório"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-11-16
 depends_on: []
-adrs: []
+adrs: [ADR-0019]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0066 — Dogfooding: o Fermion valida e melhora o próprio repositório (Épico)
@@ -25,47 +25,62 @@ approved_at:
 > Filhas candidatas: (1) usar o plugin e a `gluon-spec` atuais no próprio desenvolvimento; (2) pilares no perfil padrão, revisão das dispensas e documentos vivos; (3) métricas de qualidade no CI (cobertura, complexidade, orçamento de tamanho) e ADR avaliando a divisão dos scripts sem perder a instalação por cópia; (4) atlas do próprio repositório; (5) ciclo de auto-melhoria agendado; (6) retrospectiva entre projetos: um comando só de leitura (ex.: `spec_graph.py retro <pastas>`, inclusive `spec_root` do modo privado) com as métricas acima e um relatório com o que ajustar no processo e na skill (doctor, `whats-new`, `validate`, `pillars`) que propõe specs, sem aplicar nada sozinho (ADR-0019).
 
 ## 1. Visão
-{{Resultado de negócio e técnico esperado ao final do épico.}}
+O Fermion passa a se medir com as próprias ferramentas. Ele mostra o que o processo SDD está seguindo de verdade nos projetos que o usam e usa isso para melhorar a skill e este repositório. O resultado técnico é um ciclo repetível: medir, achar o que não é seguido, propor specs e o humano decidir. Nada é alterado sozinho (ADR-0019).
 
 ## 2. Escopo
 **Objetivos (dentro do escopo):**
-- {{O que o épico entrega}}
+- **Retrospectiva entre projetos (SPEC-0074):** comando só de leitura com métricas de fluxo, rigor dos gates, evidência, N/A, emendas e impedimentos, mais achados com o que fazer. É a primeira filha porque dá os dados para priorizar as outras e a SPEC-0065.
+- As demais frentes do radar entram como filhas depois do primeiro relatório real, cada uma com H1 próprio:
+  1. Usar o plugin e a `gluon-spec` atuais no próprio desenvolvimento.
+  2. Pilares no perfil padrão e documentos vivos.
+  3. Métricas de qualidade no CI.
+  4. Atlas do próprio repositório.
+  5. Ciclo agendado.
 
 **Não-objetivos (fora do escopo):**
-- {{O que fica explicitamente de fora}}
+- Corrigir os projetos analisados. Cada projeto decide o que fazer com o relatório.
+- Mudar o comportamento do `gate`, por exemplo para guardar o histórico de FAIL, antes que a retrospectiva confirme o problema com dados.
+- Atualização automática de qualquer coisa (ADR-0019).
 
 ## 3. Arquitetura Alvo
-**Contexto:** {{Projeto existente: arquitetura atual (ADRs as-is) e o que muda — se muda, type: migration | Projeto novo: stack e arquitetura definidas nos ADRs de fundação}}
+**Contexto:** projeto existente. Três skills de um script cada, stdlib, instaláveis por cópia (ADR-0001), plugin `fermion` com MCP fino sobre as CLIs (ADR-0016, ADR-0017) e auto-melhoria que só lê e avisa (ADR-0019). Não muda arquitetura: type feature.
 
-{{Como o sistema fica ao final: módulos, fronteiras, fluxos principais, contratos entre as filhas. Diagrama se ajudar.}}
+O ciclo funciona assim:
+1. A `gluon-spec` ganha `retro`, que lê `docs/specs` e os `spec_root` do modo privado e gera um relatório em Markdown ou JSON.
+2. O relatório aponta o que ajustar na skill.
+3. O humano transforma as sugestões em specs pelo fluxo normal.
 
-**Decisões (ADRs):** {{ADR-NNNN — decisão. Toda decisão transversal vira ADR (liste também no frontmatter `adrs`) | N/A}}
+As filhas seguintes consomem o relatório, não um contrato de código.
 
-**Regras de arquitetura a garantir (G3):** {{ex: Domain não referencia Infrastructure; módulos só se comunicam por contratos públicos — cada regra com o teste de arquitetura que a garante}}
+**Decisões (ADRs):** ADR-0019 — auto-melhoria só lê e avisa; o relatório sugere specs e nunca as cria
+
+**Regras de arquitetura a garantir (G3):** as regras atuais de `skills/gluon-spec/tests/architecture_rules.py` (script único, stdlib, Python 3.9+); a SPEC-0074 prova por teste de integração que o `retro` não altera os projetos lidos
 
 ## 4. Decomposição
-<!-- Uma linha por spec filha. As colunas de dependência são informativas: a fonte da verdade é o frontmatter de cada filha. -->
 | Spec | Título | Tier | Tipo | Tamanho | Depende de | Consome contrato de |
 |---|---|---|---|---|---|---|
-| {{SPEC-NNNN}} | {{título}} | {{full}} | {{feature}} | {{M}} | {{—}} | {{—}} |
+| SPEC-0074 | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | M | — | — |
 
 ## 5. Estratégia de Entrega
-- **Ambientes:** {{ex: staging automático a cada merge; produção via pipeline com aprovação}}
-- **Entrega por onda:** {{o que vai para produção ao fim de cada onda e o que fica atrás de feature flag}}
-- **Feature flags:** {{nome — o que controla — critério para ligar e para remover | N/A}}
-- **Rollback:** {{como reverter cada onda}}
-- **Métricas de sucesso pós-release:** {{o que observar e por quanto tempo}}
+- **Ambientes:** N/A — skills distribuídas por cópia e pelo plugin, sem deploy
+- **Entrega por onda:** onda 1: SPEC-0074 no plugin. Depois do merge, a primeira execução real nos projetos desta máquina alimenta as próximas filhas.
+- **Feature flags:** N/A — comando novo e opt-in
+- **Rollback:** `git revert` do merge de cada filha
+- **Métricas de sucesso pós-release:** a primeira retrospectiva real roda sem erro nos 25 projetos e gera pelo menos uma spec decidida pelo thomas.
 
 ## 6. Riscos & Mitigações
-- {{risco — mitigação | N/A}}
+- **Expor conteúdo de projetos privados de terceiros:** o relatório traz só nomes, IDs e números, provado por teste (SPEC-0074:UT-04).
+- **Métrica enganosa,** por exemplo FAIL apagado pelo PASS: o histórico de reprovações vem do git (SPEC-0074:UT-02), e os limites das regras são revisados com dados reais por emenda.
+- **Alterar um projeto lido sem querer:** o comando só lê, o git roda só com `log` e sem lock, e o estado é comparado antes e depois (SPEC-0074:IT-01).
 
 ## 7. Critérios de Aceite do Épico
-<!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-- [ ] {{critério verificável — SPEC-NNNN:E2E-01}}
+- [ ] A retrospectiva roda nos projetos públicos e privados sem alterar nenhum deles — SPEC-0074:IT-01
+- [ ] Os achados e as sugestões para a skill seguem as regras documentadas — SPEC-0074:UT-03
+- [ ] O relatório não expõe títulos nem textos dos projetos — SPEC-0074:UT-04
 
 ## 8. Questões em Aberto
-<!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
-{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}
+- [x] Qual frente começa? — a retrospectiva (frente 6), para chegar à SPEC-0065 e às demais frentes com dados (thomas, 2026-11-17)
+- [x] As outras frentes entram agora? — não: entram como filhas depois do primeiro relatório real, cada uma com H1 próprio (thomas, 2026-11-17, piloto automático com o recomendado)
 
 ## 9. Aprovação (H1)
 Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com ele. Registrada no frontmatter (`approved_by`, `approved_at`) do épico e de cada filha.
