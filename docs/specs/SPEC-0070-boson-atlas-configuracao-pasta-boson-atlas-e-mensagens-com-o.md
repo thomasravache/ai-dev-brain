@@ -174,7 +174,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=27, errors=7, skipped=1)) — 2832b68 | 2026-11-17 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — ed77282 | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 16665c0 | 2026-11-17 |
-| G4 Review | FAIL | CHANGES_REQUESTED: 2 major (M1: cópia nova acusada como segredo pelo lint da versão anterior por URL com credencial em comentário; M2: vendor deixa CI com link simbólico, que cita as duas pastas ou de outro tipo rodando .org-atlas e manda apagar) + 3 minor (sugestões do lint e do doctor depois da migração; textos org-atlas fora do touches) + nits | 2026-11-17 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; M1, M2, m1, m2 e ATLAS.md resolvidos e provados por experimento, inclusive o lint de origin/main na cópia nova; 2 minors — CI que não cita nenhuma pasta conta como migrada, e com dois tipos de CI a cópia nova pode ficar velha — levados para a SPEC-0071; 1 nit) — 1aae634 | 2026-11-17 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
