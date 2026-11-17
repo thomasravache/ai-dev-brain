@@ -1,5 +1,5 @@
 {
-  "invalid/contract-version.json": "contract não suportado: org-atlas/collector@9",
+  "invalid/contract-version.json": "contract não suportado: boson-atlas/collector@9",
   "invalid/missing-field.json": "faltam campos: collected_at",
   "invalid/category-unknown.json": "category desconhecida: billing",
   "invalid/kind-unknown.json": "entities[2]: kind desconhecido: widget",

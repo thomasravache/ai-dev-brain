@@ -9,6 +9,17 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.8] - 2026-11-17
+
+### Changed
+- O contrato dos coletores passa a se chamar `boson-atlas/collector@1`. O formato e as regras não mudam, por isso a versão continua `@1`: o `scan` aceita os dois nomes, `build`, `lint` e `context` aceitam snapshots gravados com qualquer um, e a mensagem de falha passa a ser `saída fora do contrato boson-atlas/collector@1 (N violação(ões))`. Os coletores de referência (`generic`, `github`, `argocd`) emitem o nome novo e o `--help` deles diz `boson-atlas`. Até a remoção do nome antigo (SPEC-0073), o `scan` grava `snapshots/<id>.json` sempre com `org-atlas/collector@1`, qualquer que seja o nome impresso pelo coletor; snapshots existentes não mudam (SPEC-0071, ADR-0011, ADR-0020).
+- `vendor` e `doctor`: um arquivo de CI mantido que não cita nenhuma das duas pastas (roda a ferramenta por outro script) não conta mais como migrado — o `vendor` atualiza `.boson-atlas/skill/` e também `.org-atlas/skill/` (quando existe), não diz que ela pode ser apagada, e o `doctor` mostra o passo `vendor --ci <ci> --force` em vez de "apague com". Com dois tipos de CI, um rodando `.boson-atlas/skill` e outro personalizado rodando só `.org-atlas/skill`, o `vendor` atualiza as duas cópias (SPEC-0071).
+- **Compatibilidade com máquinas na versão anterior:** como os snapshots continuam com o nome antigo, uma máquina em 2026.11.7 que use o mesmo atlas faz `build`, `lint` e `context` com o mesmo grafo e as mesmas páginas. Só o `scan` dela recusa a saída de um coletor que imprima o nome novo: atualize a skill em todas as máquinas e rode o `vendor` no atlas antes de trocar `contract` nos coletores próprios (SPEC-0071).
+- **Rollback:** voltar para 2026.11.7 não exige ação nos snapshots (continuam com o nome antigo) nem nos coletores da skill (os daquela versão imprimem o nome antigo); só um coletor próprio já trocado para `boson-atlas/collector@1` precisa voltar ao nome antigo, porque o `scan` de 2026.11.7 o recusa (SPEC-0071).
+
+### Deprecated
+- O nome antigo do contrato, `org-atlas/collector@1`, será recusado numa versão futura, não antes de 2027-03 (SPEC-0073). Troque `contract` nos coletores próprios para `boson-atlas/collector@1` (SPEC-0071).
+
 ## [2026.11.7] - 2026-11-17
 
 ### Changed

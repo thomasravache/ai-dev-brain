@@ -4,7 +4,7 @@ Contrato esperado de assets/collectors/generic.py (o Implementer segue estes tes
 
     generic.py --facts ARQUIVO --category C [--source NOME]
         ARQUIVO (JSON): {"entities": [{"kind", "id", "name", "attrs"}], "relations": [{"from", "to", "type"}]}
-        stdout: um objeto org-atlas/collector@1 com collector "generic", category C, collected_at ISO 8601 UTC
+        stdout: um objeto boson-atlas/collector@1 com collector "generic", category C, collected_at ISO 8601 UTC
         (AAAA-MM-DDTHH:MM:SSZ) e source NOME (padrão "generic") em cada entidade e relação; exit 0.
         Arquivo inexistente ou JSON inválido: exit 1 "<arquivo>: <motivo>" (o caminho como foi passado).
         Entidade sem kind ou sem id: exit 1 com o índice (entities[<i>]) e o campo que falta. Nunca traceback.
@@ -24,7 +24,7 @@ import unittest
 from helpers import SKILL, TESTS, fn, output
 
 SPEC = "SPEC-0034"
-CONTRACT = "org-atlas/collector@1"
+CONTRACT = "boson-atlas/collector@1"  # SPEC-0071:CH-01 SPEC-0071:UT-03 — o coletor emite o nome novo
 GENERIC = SKILL / "assets" / "collectors" / "generic.py"
 FIXTURES = TESTS / "fixtures" / "generic"
 FACTS = FIXTURES / "facts.json"

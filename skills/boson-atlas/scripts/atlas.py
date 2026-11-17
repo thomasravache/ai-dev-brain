@@ -26,7 +26,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.7"
+ATLAS_VERSION = "2026.11.8"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -490,8 +490,14 @@ def existing_credentials(path: Path) -> dict:
 
 # ---------------------------------------------------------------- collector contract (ADR-0011)
 
-CONTRACT = "org-atlas/collector@1"
-SUPPORTED_CONTRACTS = (CONTRACT,)  # a breaking @2 keeps accepting the previous version (ADR-0011)
+CONTRACT = "boson-atlas/collector@1"
+OLD_CONTRACT = "org-atlas/collector@1"  # same contract under the old name, accepted until SPEC-0073 (SPEC-0071)
+# a breaking @2 keeps accepting the previous version (ADR-0011); the old name is an alias, not another version
+SUPPORTED_CONTRACTS = (CONTRACT, OLD_CONTRACT)
+# The name written in snapshots/<id>.json, whatever name the collector printed (SPEC-0071, amendment v3): the old one,
+# so a machine still on the previous version (which knows only the old name) keeps building the same graph from a
+# snapshot written here (ADR-0020). SPEC-0073, which removes the old name, switches this to CONTRACT.
+SNAPSHOT_CONTRACT = OLD_CONTRACT
 CATEGORIES = ("code", "ci", "delivery", "runtime", "data", "messaging", "observability", "tracker", "docs",
               "secrets")
 KINDS = ("repository", "service", "environment", "deployment", "cluster", "datastore", "queue", "topic", "bucket",
@@ -655,7 +661,7 @@ def _check_signal(index: int, signal, violations: list, dropped: list):
 
 
 def validate_collector_output(data) -> tuple:
-    """(clean, violations, dropped) of a collector output against org-atlas/collector@1 (ADR-0011).
+    """(clean, violations, dropped) of a collector output against boson-atlas/collector@1 (ADR-0011).
 
     violations empty = valid. A relation to an entity of another collector is valid (only the kind:id format is
     checked; dangling references are a lint warning, SPEC-0039). Only the contract's fields stay in `clean`
@@ -1032,7 +1038,7 @@ def _without_collected_at(snapshot) -> dict:
 
 def identity_violations(data, collector: dict) -> list:
     """category of the output that differs from the category declared in atlas-config.yml (SPEC-0046, Emenda v2;
-    an addition to org-atlas/collector@1). `collector` is the name of whoever produced the output and may differ
+    an addition to boson-atlas/collector@1). `collector` is the name of whoever produced the output and may differ
     from the declared id (generic declared as db-facts): it is not checked, and the snapshot always goes by the
     declared id. A missing or non-text category is already a violation of validate_collector_output."""
     if not isinstance(data, dict):
@@ -1067,6 +1073,7 @@ def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
         report["reason"] = f"saída fora do contrato {CONTRACT} ({len(violations)} violação(ões))"
         report["violations"] = [_redact_text(v, extras)[0] for v in violations]
         return report
+    clean["contract"] = SNAPSHOT_CONTRACT  # until SPEC-0073: the old name, readable by the previous version
     snapshot, count = redact(clean, extras)
     text = normalize(snapshot)
     snapshot = json.loads(text)
@@ -3219,9 +3226,10 @@ def migration_step(ci: str) -> str:
 
 
 def ci_file_state(atlas: Path, rel: str) -> str:
-    """"absent" | "unproven" | "new" for a CI file of CI_TARGETS (SPEC-0070, amendment v2): a symlink, a file that
-    cannot be read as UTF-8 text or one that cites the old folder may still run .org-atlas/skill ("unproven");
-    any other existing file runs only .boson-atlas/skill ("new"). Only reads."""
+    """"absent" | "unproven" | "unknown" | "new" for a CI file of CI_TARGETS (SPEC-0070 and SPEC-0071, amendments
+    v2): a symlink, a file that cannot be read as UTF-8 text or one that cites the old folder may still run
+    .org-atlas/skill ("unproven"); one that cites neither folder (it may run the tool through another script) is
+    "unknown"; one that cites .boson-atlas/skill and not the old folder runs only the new copy ("new"). Only reads."""
     path = atlas / rel
     if path.is_symlink():
         return "unproven"
@@ -3233,24 +3241,35 @@ def ci_file_state(atlas: Path, rel: str) -> str:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return "unproven"
-    return "unproven" if OLD_COPY_DIR in text else "new"
+    if OLD_COPY_DIR in text:
+        return "unproven"
+    return "new" if SKILL_COPY in text else "unknown"
+
+
+MAY_RUN_OLD = ("unproven", "unknown")  # ci_file_state values that do not prove the CI left .org-atlas/skill
 
 
 def old_ci_kinds(atlas: Path) -> list:
-    """The kinds of CI_TARGETS whose file may still run the old copy (ci_file_state "unproven")."""
-    return [kind for kind, (_, rel) in CI_TARGETS.items() if ci_file_state(atlas, rel) == "unproven"]
+    """The kinds of CI_TARGETS whose file may still run the old copy (ci_file_state "unproven" or "unknown")."""
+    return [kind for kind, (_, rel) in CI_TARGETS.items() if ci_file_state(atlas, rel) in MAY_RUN_OLD]
+
+
+def new_ci_kinds(atlas: Path) -> list:
+    """The kinds of CI_TARGETS whose file runs .boson-atlas/skill and not the old copy (ci_file_state "new")."""
+    return [kind for kind, (_, rel) in CI_TARGETS.items() if ci_file_state(atlas, rel) == "new"]
 
 
 def ci_migrated(atlas: Path) -> bool:
     """At least one CI file of CI_TARGETS and none that may still run the old copy: only removing it is left."""
     states = [ci_file_state(atlas, rel) for _, rel in CI_TARGETS.values()]
-    return "new" in states and "unproven" not in states
+    return "new" in states and not any(state in MAY_RUN_OLD for state in states)
 
 
 def vendor_copies(atlas: Path, ci: str, content: str, force: bool) -> list:
-    """The copies vendor writes (SPEC-0070): .boson-atlas/skill unless the CI file of `ci` is kept (customized,
-    without --force) and runs the old copy and not the new one; .org-atlas/skill too when that happens or when it
-    exists and some CI file of any kind that is kept may still run it (symlink, unreadable, cites the old folder)."""
+    """The copies vendor writes (SPEC-0070, SPEC-0071): .boson-atlas/skill unless the CI file of `ci` is kept
+    (customized, without --force) and runs the old copy and not the new one, and no other CI file runs the new one
+    nor .boson-atlas/ exists; .org-atlas/skill too when that happens or when it exists and some CI file of any kind
+    that is kept may still run it (symlink, unreadable, cites the old folder or cites neither folder)."""
     target = CI_TARGETS[ci][1]
     dest = atlas / target
     kept = False
@@ -3262,7 +3281,9 @@ def vendor_copies(atlas: Path, ci: str, content: str, force: bool) -> list:
         kept = current != content
         if kept and current is not None and not dest.is_symlink() and OLD_SKILL_COPY in current \
                 and SKILL_COPY not in current:
-            return [OLD_SKILL_COPY]
+            new_elsewhere = (atlas / SKILL_COPY.split("/")[0]).is_dir() or \
+                any(kind != ci for kind in new_ci_kinds(atlas))
+            return [SKILL_COPY, OLD_SKILL_COPY] if new_elsewhere else [OLD_SKILL_COPY]
     unproven = [kind for kind in old_ci_kinds(atlas) if kind != ci or kept]
     copies = [SKILL_COPY]
     if unproven and (atlas / OLD_COPY_DIR).is_dir():
@@ -3301,8 +3322,12 @@ def cmd_vendor(args):
               "exit 0 sem mudança, 10 com mudança (abra o PR/MR), 1 com falha")
     new_dir, old_dir = SKILL_COPY.split("/")[0], OLD_COPY_DIR
     still_old = old_ci_kinds(atlas)
-    for kind in still_old:
-        print(f"a CI ainda roda {OLD_SKILL_COPY} — {migration_step(kind)}")
+    for kind in still_old if (atlas / old_dir).is_dir() else ():
+        if ci_file_state(atlas, CI_TARGETS[kind][1]) == "unknown":
+            print(f"{CI_TARGETS[kind][1]} não cita {SKILL_COPY} e pode ainda rodar {OLD_SKILL_COPY} — troque o "
+                  f"script do time para rodar {SKILL_COPY}, ou {migration_step(kind)}")
+        else:
+            print(f"a CI ainda roda {OLD_SKILL_COPY} — {migration_step(kind)}")
     if not still_old and (atlas / old_dir).is_dir():
         print(f"pode apagar {old_dir}/ ({REMOVE_OLD}) depois que a CI rodar com {new_dir}/")
     print(f"Faça commit de {new_dir}/ (ou {old_dir}/) e do arquivo da CI no atlas (o atlas.py não executa o git).")

@@ -29,7 +29,8 @@ Compatibilidade temporária do ADR-0020 (leitura dupla com remoção anunciada);
 
 ## 3. Mudança Proposta
 - `photon-brain`: a leitura da configuração deixa de cair em `~/.config/second-brain`. Com só a pasta antiga, o comando responde "não configurado" e mostra o comando de cópia; a rotação e o `restore` continuam aceitando backups `second-brain-…zip` (são arquivos da pessoa, sem custo de manter).
-- `boson-atlas`: a configuração deixa de cair em `~/.config/org-atlas` (mesma mensagem com o comando de cópia); `org-atlas/collector@1` deixa de ser aceito em saídas novas de coletor, mas snapshots antigos continuam lidos pelo `build`; `.org-atlas/skill` continua tratada como ferramenta (nunca como conteúdo) e o `vendor` passa a sempre gravar `.boson-atlas/skill`, avisando que a CI personalizada precisa migrar.
+- `boson-atlas`: a configuração deixa de cair em `~/.config/org-atlas` (mesma mensagem com o comando de cópia); `org-atlas/collector@1` deixa de ser aceito em saídas novas de coletor, o `scan` passa a gravar os snapshots com `boson-atlas/collector@1` (até aqui grava o nome antigo, SPEC-0071 Emenda v3), e snapshots antigos continuam lidos pelo `build`; `.org-atlas/skill` continua tratada como ferramenta (nunca como conteúdo) e o `vendor` passa a sempre gravar `.boson-atlas/skill`, avisando que a CI personalizada precisa migrar.
+- Ao passar a gravar snapshots com o nome novo, o CHANGELOG anuncia a versão mínima da `boson-atlas` (2026.11.8) para máquinas que compartilham o atlas, porque versões anteriores ignorariam esses snapshots no `build`; e os fixtures de comportamento que ainda emitem o nome antigo (`fake-collectors/*`, `curate/signals.py`, `build/replay.py`, snapshots de `lint/atlas/`) migram para o nome novo, ficando só os de compatibilidade nomeados como tal (achados da revisão da SPEC-0071).
 - `fermion_doctor` e a guarda de nomes: as exceções de compatibilidade saem; os avisos de migração ficam por mais um ciclo.
 - README e CHANGELOGs: registro da remoção.
 - **Não muda:** nada é apagado na máquina ou no atlas da pessoa (ADR-0019); backups antigos continuam restauráveis.
@@ -42,7 +43,7 @@ Compatibilidade temporária do ADR-0020 (leitura dupla com remoção anunciada);
 
 ## 4. Plano de Testes (TDD)
 - **UT-01** — Dada uma máquina simulada com só `~/.config/second-brain` (e outra com só `~/.config/org-atlas`), quando um comando que precisa de configuração roda, então sai "não configurado" com o comando de cópia, sem ler a pasta antiga.
-- **UT-02** — Dada uma saída de coletor com `org-atlas/collector@1`, quando validada, então há a violação "contract não suportado" com a dica do nome novo; e dado um atlas com snapshots antigos, quando `build` roda, então funciona.
+- **UT-02** — Dada uma saída de coletor com `org-atlas/collector@1`, quando validada, então há a violação "contract não suportado" com a dica do nome novo; quando o `scan` grava uma saída válida, então o snapshot traz `boson-atlas/collector@1`; e dado um atlas com snapshots antigos, quando `build` roda, então funciona.
 - **UT-03** — Dado um destino com backups `second-brain-…zip`, quando a rotação e o `restore` rodam, então continuam funcionando.
 - **UT-04** — Dado um atlas com CI personalizada que roda `.org-atlas/skill`, quando `vendor` roda, então grava só `.boson-atlas/skill` e avisa que a CI precisa migrar.
 - **UT-05** — Quando a guarda de nomes roda nos arquivos versionados reais, então nenhuma exceção de compatibilidade de leitura é mais necessária.

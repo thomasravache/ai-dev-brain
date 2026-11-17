@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """argocd collector of the boson-atlas (SPEC-0035), category delivery: deployments, services, environments, clusters,
 the source repository of each deployment and its configuration references, read from the Argo CD Applications.
-Stdlib only, Python 3.9+; prints the org-atlas/collector@1 output (ADR-0011).
+Stdlib only, Python 3.9+; prints the boson-atlas/collector@1 output (ADR-0011).
 
 Usage: python3 argocd.py --from argocd|kubectl [--env-label KEY] [--service-label KEY]
                          [--ref-suffixes _HOST,_URL,...] [--input FILE]
@@ -25,7 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONTRACT = "org-atlas/collector@1"
+CONTRACT = "boson-atlas/collector@1"
 COLLECTOR = "argocd"
 CATEGORY = "delivery"
 DEFAULT_ENV_LABEL = "env"
@@ -405,7 +405,7 @@ def parse_suffixes(text: str) -> tuple:
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="argocd.py", description="Coletor argocd da org-atlas")
+    parser = argparse.ArgumentParser(prog="argocd.py", description="Coletor argocd da boson-atlas")
     parser.add_argument("--from", dest="source", required=True, choices=("argocd", "kubectl"),
                         help="CLI que lê as Applications")
     parser.add_argument("--env-label", default=DEFAULT_ENV_LABEL, help="label do ambiente")

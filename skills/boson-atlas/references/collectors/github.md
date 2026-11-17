@@ -1,6 +1,6 @@
 # Collector `github`
 
-Category `code`. Reads, through the `gh` CLI already authenticated on the machine, the repositories of a GitHub organization, their Actions workflows, the teams in CODEOWNERS and a sample of pull requests, and prints the `org-atlas/collector@1` output (`references/collector-contract.md`, ADR-0011). The PR sample becomes signals for curation (title and branch patterns); the repository settings give the allowed merge methods and whether a PR template exists.
+Category `code`. Reads, through the `gh` CLI already authenticated on the machine, the repositories of a GitHub organization, their Actions workflows, the teams in CODEOWNERS and a sample of pull requests, and prints the `boson-atlas/collector@1` output (`references/collector-contract.md`, ADR-0011). The PR sample becomes signals for curation (title and branch patterns); the repository settings give the allowed merge methods and whether a PR template exists.
 
 ## Setup
 
@@ -90,3 +90,5 @@ Only `repos.json` is required; a missing file means "absent" and a CODEOWNERS th
 - Large organizations: the target is about 300 repositories with `--pr-sample 200` within 5 minutes of `gh` calls (not yet measured on a real organization); raise the collector `timeout` accordingly and use `--repos` to narrow it.
 - Calls count against the token's rate limit (5,000 requests/hour for a user token).
 - Only GitHub; GitLab and other providers come as separate collectors.
+
+Contract name: since 2026.11.8 the collector prints `boson-atlas/collector@1`; the old name `org-atlas/collector@1` is the same contract and is still accepted by `scan`, `build`, `lint` and `context` until its removal, not before 2027-03 (SPEC-0071, SPEC-0073). Until then `scan` writes `snapshots/<id>.json` with the old name, whatever the collector printed, so machines still on the previous version keep reading them.

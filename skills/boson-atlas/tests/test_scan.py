@@ -14,7 +14,7 @@ Contrato esperado das funções de scripts/atlas.py (o Implementer segue estes t
         Troca os marcadores {skill} (pasta da skill) e {atlas} (pasta do atlas) em cada argumento.
 
     validate_collector_output(data: dict) -> (clean: dict, violations: list[str], dropped: list[str])
-        Confere a saída de um coletor contra org-atlas/collector@1 (ADR-0011). `violations` vazia = válida; cada
+        Confere a saída de um coletor contra boson-atlas/collector@1 (ADR-0011). `violations` vazia = válida; cada
         violação é um texto. Mensagens (CT-01 e references/collector-contract.md; o texto contém exatamente):
             contract não suportado: <valor>
             faltam campos: <campo>[, <campo>...]
@@ -75,7 +75,8 @@ from pathlib import Path
 from helpers import SKILL, TESTS, Sandbox, fn, output, snapshot
 
 SPEC = "SPEC-0033"
-CONTRACT = "org-atlas/collector@1"
+# SPEC-0071:CH-01 — nome do contrato publicado (references/collector-contract.md); o antigo segue aceito
+CONTRACT = "boson-atlas/collector@1"
 FIXTURES = TESTS / "fixtures"
 CONTRACT_FIXTURES = FIXTURES / "contract"
 FAKES = "{skill}/tests/fixtures/fake-collectors"
@@ -196,8 +197,9 @@ class ValidateCollectorOutputTest(unittest.TestCase):
     def test_each_violation_is_reported_with_the_right_reason(self):
         """SPEC-0033:UT-02"""
         cases = {
-            "contrato @9": (lambda d: d.update(contract="org-atlas/collector@9"),
-                            "contract não suportado: org-atlas/collector@9"),
+            # SPEC-0071:CH-01 — Emenda v3: o @9 com o nome novo, como no fixture invalid/contract-version.json
+            "contrato @9": (lambda d: d.update(contract="boson-atlas/collector@9"),
+                            "contract não suportado: boson-atlas/collector@9"),
             "kind desconhecido": (lambda d: d["entities"].append(
                 {"kind": "widget", "id": "acme/w", "name": "w", "attrs": {}, "source": "github"}),
                                   "entities[3]: kind desconhecido: widget"),
