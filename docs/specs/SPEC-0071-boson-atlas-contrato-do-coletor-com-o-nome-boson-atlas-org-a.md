@@ -142,19 +142,19 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato**
-- [ ] Red: CH-01, UT-01 a UT-04, IT-01, CT-01 com a tag `SPEC-0071:<ID>`
-- [ ] Green: `CONTRACT`/`SUPPORTED_CONTRACTS`, coletores de referência, mensagens e references
+- [x] Red: CH-01, UT-01 a UT-04, IT-01, CT-01 com a tag `SPEC-0071:<ID>`
+- [x] Green: `CONTRACT`/`SUPPORTED_CONTRACTS`, coletores de referência, mensagens e references
 
 **Fase 2: Vendor (Emenda v2)**
-- [ ] Red: UT-05, UT-06
-- [ ] Green: estado "desconhecido" da CI e atualização das duas cópias
-- [ ] Validar: suítes da boson-atlas, tests/plugin e mcp, arquitetura (G2/G3)
+- [x] Red: UT-05, UT-06
+- [x] Green: estado "desconhecido" da CI e atualização das duas cópias
+- [x] Validar: suítes da boson-atlas, tests/plugin e mcp, arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e aprovação (H2)
-- [ ] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
-- [ ] Relatório de Entrega, references, CHANGELOG, versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Relatório de Entrega, references, CHANGELOG, versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -165,9 +165,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 98cfe6a | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — b071fbc | 2026-11-17 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; M1 resolvido e provado com build/lint/context de origin/main sobre snapshot gravado pelo HEAD; m1, m2 e n1 resolvidos; fixture da versão anterior aceito; 2 nits levados à SPEC-0073) — ca481e4 | 2026-11-17 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 788cec3 | 2026-11-17 |
+| H2 Integração aprovada | PASS | aprovado por política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-17 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-17 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
@@ -179,37 +179,48 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- Contrato dos coletores com o nome `boson-atlas/collector@1` (mesmo formato); `org-atlas/collector@1` continua aceito, e o `scan` grava os snapshots com o nome antigo até a SPEC-0073, para máquinas na versão anterior seguirem lendo o atlas. Coletores de referência, `--help`, `SKILL.md`, referência e fixtures com o nome novo. No `vendor`, CI que não cita nenhuma das pastas não conta como migrada, e com dois tipos de CI as duas cópias são atualizadas. boson-atlas 2026.11.8, plugin 2026.11.17.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `CONTRACT`/`OLD_CONTRACT`/`SUPPORTED_CONTRACTS` e `SNAPSHOT_CONTRACT` em `atlas.py`; estado "unknown" em `ci_file_state` e `new_ci_kinds` no `vendor`; fixture `tests/fixtures/previous/atlas.py` (versão 2026.11.7) para provar a compatibilidade.
+- Testes em 9e2d9da e 6b8823e; implementação em 63c14b6 e 98cfe6a.
+- **Revisão G4:** rodada 1 CHANGES_REQUESTED (snapshot com o nome novo esvaziava grafo e páginas no `build` da versão anterior) → Emenda v3; rodada 2 APPROVED com o experimento repetido.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: migration`.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Violações dos fixtures de contrato congeladas | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| UT-01 | Os dois nomes aceitos | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| UT-02 | Outros valores recusados | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| UT-03 | Coletores de referência e `--help` com o nome novo; guarda da SPEC-0055 | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| UT-04 | Mensagem do scan com o nome novo | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| UT-05 | CI que não cita nenhuma pasta não conta como migrada (Emenda v2) | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| UT-06 | Dois tipos de CI: as duas cópias atualizadas (Emenda v2) | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| IT-01 | Snapshots e coletor de terceiro com o nome antigo funcionam | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| IT-02 | Snapshot gravado por esta versão é lido pelo `build` da versão anterior com o mesmo grafo (Emenda v3) | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
+| CT-01 | Fixtures da skill e do MCP com os dois nomes | PASS | `skills/boson-atlas/tests/test_contract_rename.py` e suítes da boson-atlas, `tests/plugin` e `mcp` — suíte local no G5 (788cec3) e CI do PR |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0011 e ADR-0020
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — CHANGELOG da boson-atlas 2026.11.8; o README entra na SPEC-0072
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não define `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma) — na SPEC-0073
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin 2026.11.17, PR desta spec.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- Registradas na SPEC-0073: versão mínima 2026.11.8 ao passar a gravar o nome novo; migração dos fixtures de comportamento que ainda emitem o nome antigo; remoção de `tests/fixtures/previous/atlas.py`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0071`. -->
