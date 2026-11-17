@@ -1,5 +1,6 @@
-"""Coletor falso do IT-01 (SPEC-0054): imprime uma saída fixa do contrato org-atlas/collector@1, com dois serviços,
-um banco, as relações entre eles e sinais de PR que viram convenções inferidas no curate.
+"""Coletor falso do IT-01 (SPEC-0054): imprime uma saída fixa do contrato boson-atlas/collector@1 (SPEC-0071), com
+dois serviços, um banco, as relações entre eles e sinais de PR que viram convenções inferidas no curate. O nome
+antigo do contrato fica coberto pelo fixture legacy_contract.py da suíte da boson-atlas.
 
 Uso: python3 collector.py <id-do-coletor>
 """
@@ -27,7 +28,7 @@ relations = [
     {"from": "service:api", "to": "datastore:payments-db", "type": "depends_on", "source": collector},
 ]
 print(json.dumps({
-    "contract": "org-atlas/collector@1",
+    "contract": "boson-atlas/collector@1",
     "collector": collector,
     "category": "code",
     "collected_at": "2026-10-30T12:00:00Z",

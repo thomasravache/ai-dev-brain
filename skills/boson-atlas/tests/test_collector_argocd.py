@@ -5,7 +5,7 @@ Contrato esperado de assets/collectors/argocd.py (o Implementer segue estes test
     argocd.py --from argocd|kubectl [--env-label CHAVE (padrão env)]
               [--service-label CHAVE (padrão app.kubernetes.io/part-of)]
               [--ref-suffixes _HOST,_URL,_DSN,_ADDR,_QUEUE,_TOPIC,_BUCKET (padrão)] [--input ARQUIVO]
-        stdout: um objeto org-atlas/collector@1 com collector "argocd", category "delivery", collected_at ISO 8601
+        stdout: um objeto boson-atlas/collector@1 com collector "argocd", category "delivery", collected_at ISO 8601
         UTC e source "argocd" em cada entidade e relação; exit 0.
         entidades: deployment:<metadata.name> {project, namespace (de destino), sync_status, health_status,
                        config_refs} (só esses), name = nome da Application
@@ -68,7 +68,7 @@ from pathlib import Path
 from helpers import SKILL, TESTS, Sandbox, fn, output
 
 SPEC = "SPEC-0035"
-CONTRACT = "org-atlas/collector@1"
+CONTRACT = "boson-atlas/collector@1"  # SPEC-0071:CH-01 SPEC-0071:UT-03 — o coletor emite o nome novo
 ARGOCD = SKILL / "assets" / "collectors" / "argocd.py"
 FIXTURES = TESTS / "fixtures" / "argocd"
 ACME = FIXTURES / "acme"

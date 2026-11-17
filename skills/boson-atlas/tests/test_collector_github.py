@@ -3,7 +3,7 @@
 Contrato esperado de assets/collectors/github.py (o Implementer segue estes testes):
 
     github.py --org ORG [--repos a,b] [--pr-sample N (padrão 100)] [--input PASTA]
-        stdout: um objeto org-atlas/collector@1 com collector "github", category "code", collected_at ISO 8601
+        stdout: um objeto boson-atlas/collector@1 com collector "github", category "code", collected_at ISO 8601
         UTC e source "github" em cada entidade e relação; exit 0.
         entidades: repository:<org>/<nome> {language, default_branch, topics, archived, visibility} (só esses)
                    pipeline:<org>/<repo>/<arquivo do workflow sem extensão>, name = name do workflow, {file: path}
@@ -55,7 +55,7 @@ from pathlib import Path
 from helpers import SKILL, TESTS, Sandbox, fn, output
 
 SPEC = "SPEC-0034"
-CONTRACT = "org-atlas/collector@1"
+CONTRACT = "boson-atlas/collector@1"  # SPEC-0071:CH-01 SPEC-0071:UT-03 — o coletor emite o nome novo
 GITHUB = SKILL / "assets" / "collectors" / "github.py"
 FIXTURES = TESTS / "fixtures" / "github"
 ACME = FIXTURES / "acme"

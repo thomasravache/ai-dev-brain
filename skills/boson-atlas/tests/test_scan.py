@@ -75,7 +75,8 @@ from pathlib import Path
 from helpers import SKILL, TESTS, Sandbox, fn, output, snapshot
 
 SPEC = "SPEC-0033"
-CONTRACT = "org-atlas/collector@1"
+# SPEC-0071:CH-01 — nome do contrato publicado (references/collector-contract.md); o antigo segue aceito
+CONTRACT = "boson-atlas/collector@1"
 FIXTURES = TESTS / "fixtures"
 CONTRACT_FIXTURES = FIXTURES / "contract"
 FAKES = "{skill}/tests/fixtures/fake-collectors"

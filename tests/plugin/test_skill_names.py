@@ -339,7 +339,7 @@ class KeptIdentifiersTest(unittest.TestCase):
                 self.assertEqual(brain.local_config_path(), Path(home) / "b" / "config.yml")
                 self.assertEqual(atlas.local_config_path(), Path(home) / "a" / "config.yml")
 
-        self.assertEqual(atlas.CONTRACT, "org-atlas/collector@1")  # muda só na SPEC-0071
+        self.assertEqual(atlas.CONTRACT, "boson-atlas/collector@1")  # SPEC-0071:UT-03
         # SPEC-0070:CH-01 — a cópia da skill grava .boson-atlas/skill; .org-atlas/skill segue aceita na leitura
         with self.subTest(skill_copy="boson-atlas"):
             self.assertEqual(getattr(atlas, "SKILL_COPIES", None), (".boson-atlas/skill", ".org-atlas/skill"),
