@@ -4,7 +4,7 @@ title: "photon-brain: configuração, mensagens e backups com o nome novo e leit
 tier: full
 type: migration
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: []
@@ -154,6 +154,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Configuração e textos**
+- [ ] Red: CH-01 (guarda), UT-01 a UT-06, IT-01, IT-02 com a tag `SPEC-0069:<ID>`, falhando pelo motivo certo
+- [ ] Green: `local_config_path`/`local_config_write_path`, avisos do `doctor`, textos e `assets/brain-config.yml`
+
+**Fase 2: Backups**
+- [ ] Red: UT-07 a UT-09
+- [ ] Green: `backup_name`, `BACKUP_NAME_RE` com os dois prefixos e retenção conjunta
+- [ ] Validar: suítes da photon-brain, tests/plugin e mcp, arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e aprovação (H2)
+- [ ] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [ ] Relatório de Entrega, references, SKILL.md, CHANGELOG com a data de remoção, versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
