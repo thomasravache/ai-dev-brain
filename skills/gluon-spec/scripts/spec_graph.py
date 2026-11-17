@@ -2025,6 +2025,12 @@ def validate_contract_map(doc: Doc, defined, add):
                 add("ERROR", sid, f"comportamento '{label}' referencia teste ausente do plano: {', '.join(missing)}")
 
 
+def gate_status(cell: str) -> str:
+    """Status de uma célula do Registro de Gates (PASS, FAIL, N/A, PENDING; o texto em maiúsculas se nenhum)."""
+    cell = (cell or "").strip().upper()
+    return next((s for s in GATE_STATUSES if s in cell), cell)
+
+
 def gate_table(doc: Doc):
     content = doc.section("Registro de Gates")
     if content is None:
@@ -2035,9 +2041,9 @@ def gate_table(doc: Doc):
             words = row[0].split() if row else []
             key = words[0].upper() if words else ""
             if key in GATE_ROWS:
-                cell = (row[1] if len(row) > 1 else "").strip().upper()
-                status = next((s for s in GATE_STATUSES if s in cell), cell)
-                gates[key] = {"status": status, "evidence": (row[2] if len(row) > 2 else "").strip()}
+                gates[key] = {"status": gate_status(row[1] if len(row) > 1 else ""),
+                              "evidence": (row[2] if len(row) > 2 else "").strip(),
+                              "date": (row[3] if len(row) > 3 else "").strip()}
     return gates
 
 
@@ -3569,18 +3575,10 @@ def evidence_origin(evidence: str) -> str:
     return "a_mao"
 
 
-def gate_dates(doc: Doc) -> dict:
-    """Data (válida) de cada linha do Registro de Gates: {gate: "AAAA-MM-DD"}."""
-    content = doc.section("Registro de Gates")
-    out = {}
-    for _, rows in parse_tables(COMMENT_RE.sub("", content or "")):
-        for row in rows:
-            words = row[0].split() if row else []
-            key = words[0].upper() if words else ""
-            date = row[3].strip() if len(row) > 3 else ""
-            if key in GATE_ROWS and valid_date(date):
-                out[key] = date
-    return out
+def retro_id(key: str) -> str:
+    """ID que o retro mostra: só o prefixo SPEC-NNNN (a chave pode vir do nome do arquivo, com o slug do título)."""
+    m = re.match(r"SPEC-\d{4,}", key or "")
+    return m.group(0) if m else "SPEC-?"
 
 
 def _date(value: str):
@@ -3594,7 +3592,7 @@ def retro_fail_history(specs_dir: Path):
     try:
         code, out, _ = run_git(Path(specs_dir), "log", "-p", "-U0", "--no-color", "--no-ext-diff", "--no-textconv",
                                "--format=", "--", ".", env=RETRO_GIT_ENV)
-    except OSError:  # git fora do PATH
+    except (OSError, UnicodeDecodeError):  # git fora do PATH; histórico não UTF-8 anula só esta métrica
         return None
     if code != 0:
         return None
@@ -3609,8 +3607,7 @@ def retro_fail_history(specs_dir: Path):
         words = cells[0].split() if cells else []
         if not words or words[0].upper() not in GATE_ROWS or len(cells) < 2:
             continue
-        cell = cells[1].upper()
-        if next((s for s in GATE_STATUSES if s in cell), cell) == "FAIL":
+        if gate_status(cells[1]) == "FAIL":
             count += 1
     return count
 
@@ -3627,12 +3624,12 @@ def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) 
     evidence = {o: 0 for o in RETRO_ORIGINS}
     stale, unclosed, leads, activity = [], [], [], []
     amendments, imp_total, imp_open, imp_old = {}, 0, 0, []
-    for sid in sorted(project.specs):
-        doc = project.specs[sid]
+    for key in sorted(project.specs):
+        doc, sid = project.specs[key], retro_id(key)
         by_status[doc.status or "?"] += 1
         by_tier[doc.tier or "?"] += 1
         table = gate_table(doc) or {}
-        dates = gate_dates(doc)
+        dates = {g: row["date"] for g, row in table.items() if valid_date(row["date"])}
         for g, row in table.items():
             if row["status"] in gates[g]:
                 gates[g][row["status"]] += 1
@@ -3653,7 +3650,7 @@ def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) 
         content = doc.section("Emendas")
         rows = [r for _, rs in parse_tables(COMMENT_RE.sub("", content or "")) for r in rs if any(c.strip() for c in r)]
         if rows:
-            amendments[sid] = len(rows)
+            amendments[sid] = amendments.get(sid, 0) + len(rows)
         for item in impediments(doc):
             imp_total += 1
             if item["Fechado em"]:
@@ -3688,10 +3685,8 @@ def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) 
 
 
 def _tool_behind(tool: dict) -> bool:
-    project, installed = tool.get("project") or "", tool.get("installed") or SDD_TOOL_VERSION
-    if not VERSION_RE.match(project):
-        return True
-    return version_key(project) < version_key(installed)
+    project = tool.get("project") or ""
+    return not VERSION_RE.match(project) or is_older(project)
 
 
 def _finding(m: dict, rule: str, value, action: str) -> dict:
@@ -3718,7 +3713,8 @@ def retro_findings(projects: list) -> list:
             out.append(_finding(m, "R4", f"{round(100 * hand / total)}% ({hand}/{total})",
                                 "registre os gates com `gate <ID> <G> --run`; revise os comandos do sdd-config"))
         passes = sum(m["gates"][g]["PASS"] for g in RETRO_RIGOR_GATES)
-        if passes >= RETRO_NO_FAIL_MIN and m["fail_history"] == 0:
+        current_fails = sum(c["FAIL"] for c in m["gates"].values())
+        if passes >= RETRO_NO_FAIL_MIN and m["fail_history"] == 0 and current_fails == 0:
             out.append(_finding(m, "R5", f"{passes} PASS, 0 FAIL no histórico",
                                 "confira se os gates rodam com `--run` e se reprovações são registradas com "
                                 "`gate --fail`"))
@@ -3773,7 +3769,7 @@ def retro_repo_keys(folder: Path) -> list:
             if line.strip().startswith("["):
                 inside = bool(GIT_REMOTE_RE.match(line))
                 continue
-            m = re.match(r"^\s*url\s*=\s*(.+?)\s*$", line)
+            m = re.match(r"^\s*url\s*=\s*(.+?)\s*$", line, re.IGNORECASE)
             if inside and m:
                 keys.append(normalize_remote(m.group(1)))
                 break
@@ -3789,54 +3785,65 @@ def _registry_private(entry) -> bool:
     return isinstance(entry, dict) and entry.get("mode") == "private" and bool(entry.get("spec_root"))
 
 
+def _retro_folder_project(path: Path, privates: dict, by_root: dict):
+    """(nome, Project | None, motivo) de uma pasta informada; lê os arquivos do git, não roda git."""
+    key = by_root.get(str(path))
+    if (path / "specs").is_dir() and (path / "sdd-config.yml").is_file():
+        return key or path.name, Project(path, _private_mode(key or path.name, path)), ""
+    key = next((k for k in retro_repo_keys(path) if k in privates), None)
+    if key:
+        return key, Project(path, _private_mode(key, Path(privates[key]["spec_root"]).expanduser())), ""
+    if (path / "docs" / "specs").is_dir():
+        return path.name, Project(path, None), ""
+    return path.name, None, "sem docs/specs nem modo privado registrado"
+
+
+def _retro_registry_project(key: str, entry: dict):
+    spec_root = Path(entry["spec_root"]).expanduser()
+    if not spec_root.is_dir():
+        return key, None, "spec_root do registro não encontrado"
+    return key, Project(spec_root, _private_mode(key, spec_root)), ""
+
+
 def retro_candidates(folders, use_registry: bool):
-    """(nome, Project | None, caminho, motivo) de cada pasta e do registro; git não é chamado."""
+    """(caminho, construtor) de cada pasta e do registro; o construtor devolve (nome, Project | None, motivo) e só
+    roda dentro do try de retro_collect, para que um projeto ilegível vá para Ignorados."""
     registry = load_registry()["projects"] if registry_path().exists() else {}
     privates = {k: v for k, v in registry.items() if _registry_private(v)}
     by_root = {str(Path(v["spec_root"]).expanduser().resolve()): k for k, v in privates.items()}
     out = []
     for folder in folders:
         path = folder.resolve()
-        key = by_root.get(str(path))
-        if (path / "specs").is_dir() and (path / "sdd-config.yml").is_file():
-            out.append((key or path.name, Project(path, _private_mode(key or path.name, path)), path, ""))
-            continue
-        key = next((k for k in retro_repo_keys(path) if k in privates), None)
-        if key:
-            spec_root = Path(privates[key]["spec_root"]).expanduser()
-            out.append((key, Project(path, _private_mode(key, spec_root)), path, ""))
-        elif (path / "docs" / "specs").is_dir():
-            out.append((path.name, Project(path, None), path, ""))
-        else:
-            out.append((path.name, None, path, "sem docs/specs nem modo privado registrado"))
+        out.append((path, lambda path=path: _retro_folder_project(path, privates, by_root)))
     if use_registry:
         for key in sorted(privates):
-            spec_root = Path(privates[key]["spec_root"]).expanduser()
-            if not spec_root.is_dir():
-                out.append((key, None, spec_root, "spec_root do registro não encontrado"))
-            else:
-                out.append((key, Project(spec_root, _private_mode(key, spec_root)), spec_root, ""))
+            out.append((Path(privates[key]["spec_root"]).expanduser(),
+                        lambda key=key: _retro_registry_project(key, privates[key])))
     return out
 
 
 def retro_collect(folders, use_registry: bool, today_date: dt.date, stale_days: int):
-    """Métricas dos projetos analisáveis e ignorados (pasta e motivo); a mesma pasta de specs conta uma vez."""
+    """Métricas dos projetos analisáveis e ignorados (pasta e motivo); a mesma pasta de specs conta uma vez.
+    Projeto ilegível (arquivo ou pasta sem permissão, spec não UTF-8) vai para Ignorados, sem derrubar o relatório."""
     projects, ignored, seen = [], [], set()
-    for name, project, path, reason in retro_candidates(folders, use_registry):
-        if project is None:
-            ignored.append({"path": str(path), "reason": reason})
-            continue
-        specs_dir = project.specs_dir.resolve()
-        if specs_dir in seen:
-            continue
-        seen.add(specs_dir)
-        legacy = [d for d in LEGACY_DIRS if (specs_dir / d).is_dir() and any((specs_dir / d).glob("*.md"))]
-        if not project.specs:
-            reason = ("layout legado (pastas de status) — rode `migrate`" if legacy
-                      else "nenhuma spec na pasta de specs")
-            ignored.append({"path": str(path), "reason": reason})
-            continue
+    for path, build in retro_candidates(folders, use_registry):
         try:
+            name, project, reason = build()
+            if project is None:
+                ignored.append({"path": str(path), "reason": reason})
+                continue
+            specs_dir = project.specs_dir.resolve()
+            if specs_dir in seen:
+                continue
+            seen.add(specs_dir)
+            if specs_dir.is_dir():
+                list(specs_dir.iterdir())  # pasta sem permissão de leitura: PermissionError, não "sem specs"
+            if not project.specs:
+                legacy = [d for d in LEGACY_DIRS if (specs_dir / d).is_dir() and any((specs_dir / d).glob("*.md"))]
+                reason = ("layout legado (pastas de status) — rode `migrate`" if legacy
+                          else "nenhuma spec na pasta de specs")
+                ignored.append({"path": str(path), "reason": reason})
+                continue
             projects.append(retro_metrics(project, today_date, stale_days, name=name))
         except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError) as e:
             ignored.append({"path": str(path), "reason": f"ilegível ({type(e).__name__})"})
@@ -3967,7 +3974,7 @@ def spec_record(project: Project, doc: Doc, plan) -> dict:
         "approved_at": doc.scalar("approved_at") or None, "path": project.rel(doc.path),
         "wave": wave.get(doc.id), "readiness": {"state": state, "label": label} if state else None,
         "tests": plan_test_ids(doc) if doc.tier != "epic" else [],
-        "gates": {g: gates[g] for g in GATE_ROWS if g in gates},
+        "gates": {g: {"status": gates[g]["status"], "evidence": gates[g]["evidence"]} for g in GATE_ROWS if g in gates},
         "impediments": impediments(doc),
         "next_step": spec_state(project, doc)[1],
     }

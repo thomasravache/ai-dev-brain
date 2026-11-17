@@ -18,7 +18,7 @@ python3 <skill-dir>/scripts/spec_graph.py retro [PASTA ...] [--registry] [--stal
 
 The same specs folder counts once (a private repository passed as `PASTA` and its registry entry are one project). The project's name is the folder name, or the registry key for private projects.
 
-**Ignored** (exit 0, listed with the reason): a folder without `docs/specs` and without a private-mode entry, a specs folder with no spec, the legacy layout (status folders — run `migrate`), a registry `spec_root` that no longer exists, an unreadable project. A missing `PASTA` is exit 2 (`pasta não encontrada`); nothing to analyse is exit 2 (`nenhum projeto SDD encontrado`, with the ignored list).
+**Ignored** (exit 0, listed with the reason): a folder without `docs/specs` and without a private-mode entry, a specs folder with no spec, the legacy layout (status folders — run `migrate`), a registry `spec_root` that no longer exists, an unreadable project (`ilegível (<error type>)`: a spec that is not UTF-8, a file or the specs folder without read permission, an unreadable `.git/config`). An unreadable project never brings the report down. A git history that is not UTF-8 only turns `fail_history` into `null`. A missing `PASTA` is exit 2 (`pasta não encontrada`); nothing to analyse is exit 2 (`nenhum projeto SDD encontrado`, with the ignored list).
 
 ## Metrics per project
 
@@ -60,7 +60,7 @@ N = `--stale-days` (integer >= 1, default 30). The other limits are fixed; chang
 | R2 spec parada | `stale` not empty | resume, close or mark `deprecated` |
 | R3 entregue sem fechar | `unclosed` not empty | close G7 (Relatório de Entrega): `gate <ID> G7 --run` |
 | R4 evidência à mão | (manual + a_mao) / G0–G5 PASS **> 30%**, with **>= 10** PASS | `gate <ID> <G> --run`; review the sdd-config commands |
-| R5 nenhuma reprovação | **>= 20** PASS in G1–G5 and `fail_history` = 0 (`null` never fires) | check that gates run with `--run` and that failures are recorded with `gate --fail` |
+| R5 nenhuma reprovação | **>= 20** PASS in G1–G5, `fail_history` = 0 (`null` never fires) and no current FAIL in any gate | check that gates run with `--run` and that failures are recorded with `gate --fail` |
 | R6 N/A recorrente | per gate: N/A in **>= 50%** of the specs that record it, at least **5** | waiver in `pillars.waived` or the spec of the missing capability |
 | R7 impedimento velho | open for more than N days | solve it and close with `resolve` |
 
@@ -88,4 +88,4 @@ A rule that fires in **>= 50%** of the analysed projects, and in **at least 2**,
 
 - Git runs only as `git log`, with `GIT_OPTIONAL_LOCKS=0`; the private-mode lookup reads `.git/config` instead of running git. Nothing in the projects is created or changed (no index refresh, no lock).
 - Paths come only from the arguments and the registry; there is no disk scan.
-- Private projects belong to third parties: the report carries folder names or registry keys, spec IDs and numbers only — **never** titles, evidence, N/A reasons or impediment descriptions. Without `--out`, nothing is saved anywhere.
+- Private projects belong to third parties: the report carries folder names or registry keys, spec IDs and numbers only — **never** titles, evidence, N/A reasons or impediment descriptions. Spec IDs are always printed as the `SPEC-NNNN` prefix only: a spec without `id` in the frontmatter is keyed by its file name, and the slug after the number (made from the title) never leaves (`SPEC-?` when the name has no ID). Without `--out`, nothing is saved anywhere.
