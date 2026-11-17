@@ -46,4 +46,4 @@ collectors:
 | `<file>: relations[<i>]: falta o campo from` (or `to`, `type`) | a relation without a required field |
 | `<file>: entities precisa ser uma lista` | `entities` or `relations` is not a list |
 
-Contract name: since 2026.11.8 the collector prints `boson-atlas/collector@1`; the old name `org-atlas/collector@1` is the same contract and is still accepted by `scan`, `build`, `lint` and `context` until its removal, not before 2027-03 (SPEC-0071, SPEC-0073).
+Contract name: since 2026.11.8 the collector prints `boson-atlas/collector@1`; the old name `org-atlas/collector@1` is the same contract and is still accepted by `scan`, `build`, `lint` and `context` until its removal, not before 2027-03 (SPEC-0071, SPEC-0073). Until then `scan` writes `snapshots/<id>.json` with the old name, whatever the collector printed, so machines still on the previous version keep reading them.

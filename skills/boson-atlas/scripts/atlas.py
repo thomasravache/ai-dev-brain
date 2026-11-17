@@ -494,6 +494,10 @@ CONTRACT = "boson-atlas/collector@1"
 OLD_CONTRACT = "org-atlas/collector@1"  # same contract under the old name, accepted until SPEC-0073 (SPEC-0071)
 # a breaking @2 keeps accepting the previous version (ADR-0011); the old name is an alias, not another version
 SUPPORTED_CONTRACTS = (CONTRACT, OLD_CONTRACT)
+# The name written in snapshots/<id>.json, whatever name the collector printed (SPEC-0071, amendment v3): the old one,
+# so a machine still on the previous version (which knows only the old name) keeps building the same graph from a
+# snapshot written here (ADR-0020). SPEC-0073, which removes the old name, switches this to CONTRACT.
+SNAPSHOT_CONTRACT = OLD_CONTRACT
 CATEGORIES = ("code", "ci", "delivery", "runtime", "data", "messaging", "observability", "tracker", "docs",
               "secrets")
 KINDS = ("repository", "service", "environment", "deployment", "cluster", "datastore", "queue", "topic", "bucket",
@@ -1069,6 +1073,7 @@ def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
         report["reason"] = f"saída fora do contrato {CONTRACT} ({len(violations)} violação(ões))"
         report["violations"] = [_redact_text(v, extras)[0] for v in violations]
         return report
+    clean["contract"] = SNAPSHOT_CONTRACT  # until SPEC-0073: the old name, readable by the previous version
     snapshot, count = redact(clean, extras)
     text = normalize(snapshot)
     snapshot = json.loads(text)
@@ -3319,8 +3324,8 @@ def cmd_vendor(args):
     still_old = old_ci_kinds(atlas)
     for kind in still_old if (atlas / old_dir).is_dir() else ():
         if ci_file_state(atlas, CI_TARGETS[kind][1]) == "unknown":
-            print(f"{CI_TARGETS[kind][1]} não cita {SKILL_COPY} e pode ainda rodar {OLD_SKILL_COPY} — "
-                  f"{migration_step(kind)}")
+            print(f"{CI_TARGETS[kind][1]} não cita {SKILL_COPY} e pode ainda rodar {OLD_SKILL_COPY} — troque o "
+                  f"script do time para rodar {SKILL_COPY}, ou {migration_step(kind)}")
         else:
             print(f"a CI ainda roda {OLD_SKILL_COPY} — {migration_step(kind)}")
     if not still_old and (atlas / old_dir).is_dir():

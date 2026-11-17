@@ -2,7 +2,7 @@
 
 Todo coletor do atlas (os da skill, SPEC-0034 e SPEC-0035, ou um escrito pela organização, em qualquer linguagem) segue este contrato (ADR-0011). O `atlas.py scan` roda o coletor, valida a saída contra ele, mascara o que parecer segredo (`references/redaction.md`), grava um snapshot normalizado e mostra o que mudou desde o scan anterior. Um coletor novo nunca exige mudança no `atlas.py`.
 
-**Nome antigo:** até a versão 2026.11.7 o contrato se chamava `org-atlas/collector@1`. É o mesmo contrato, com o mesmo formato e as mesmas regras, por isso a versão continua `@1`: o `scan` aceita os dois nomes, e snapshots gravados com o nome antigo continuam válidos no `build`, no `lint` e no `context` (o próximo `scan` os regrava com o nome novo). O nome antigo é aceito até a remoção anunciada no `CHANGELOG.md`, não antes de 2027-03 (SPEC-0073); troque `contract` nos coletores próprios depois de atualizar a skill em todas as máquinas e rodar o `vendor` no atlas, porque uma versão anterior da skill não reconhece o nome novo (SPEC-0071, ADR-0020).
+**Nome antigo:** até a versão 2026.11.7 o contrato se chamava `org-atlas/collector@1`. É o mesmo contrato, com o mesmo formato e as mesmas regras, por isso a versão continua `@1`: o `scan` aceita a saída com qualquer dos dois nomes, e `build`, `lint` e `context` aceitam snapshots com qualquer um. **Até a remoção do nome antigo (SPEC-0073), o `scan` grava `snapshots/<id>.json` sempre com `"contract": "boson-atlas/collector@1"`**, qualquer que seja o nome que o coletor imprimiu: assim uma máquina ainda na versão anterior da skill (que só conhece o nome antigo) continua lendo os snapshots e gerando o mesmo grafo no mesmo atlas. O nome antigo é aceito até a remoção anunciada no `CHANGELOG.md`, não antes de 2027-03 (SPEC-0073), quando o `scan` passa a gravar o nome novo. Os coletores da skill já imprimem o nome novo; num coletor próprio, troque `contract` para `boson-atlas/collector@1` depois de atualizar a skill em todas as máquinas e rodar o `vendor` no atlas, porque o `scan` de uma versão anterior recusa a saída com o nome novo (SPEC-0071, ADR-0020).
 
 ## Declarar um coletor — `collectors` no `atlas-config.yml`
 
@@ -119,7 +119,7 @@ Mudança só aditiva mantém `boson-atlas/collector@1`. Mudança que quebra cria
 
 ## Exemplos
 
-Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou falham, com a mensagem indicada) no validador (CT-01 da SPEC-0033). Eles ainda usam o nome antigo `org-atlas/collector@1`, aceito como o novo; num coletor novo use `boson-atlas/collector@1`.
+Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou falham, com a mensagem indicada) no validador (CT-01 da SPEC-0033).
 
 ### Válidos
 
@@ -127,7 +127,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -204,7 +204,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "argocd",
   "category": "delivery",
   "collected_at": "2026-10-30T12:05:00Z",
@@ -284,13 +284,90 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 }
 ```
 
+**O mesmo coletor de código com o nome antigo do contrato** (`valid/old-contract-name.json`) — aceito até a SPEC-0073; só o `contract` difere de `valid/code-github.json`:
+
+```json
+{
+  "contract": "org-atlas/collector@1",
+  "collector": "github",
+  "category": "code",
+  "collected_at": "2026-10-30T12:00:00Z",
+  "entities": [
+    {
+      "kind": "repository",
+      "id": "acme/api",
+      "name": "api",
+      "attrs": {
+        "default_branch": "main",
+        "visibility": "private",
+        "archived": false,
+        "topics": [
+          "payments",
+          "go"
+        ]
+      },
+      "source": "github"
+    },
+    {
+      "kind": "pipeline",
+      "id": "acme/api/ci",
+      "name": "ci",
+      "attrs": {
+        "file": ".github/workflows/ci.yml",
+        "runs_last_30d": 42
+      },
+      "source": "github"
+    },
+    {
+      "kind": "team",
+      "id": "acme/payments",
+      "name": "payments",
+      "attrs": {
+        "members": 6
+      },
+      "source": "github"
+    }
+  ],
+  "relations": [
+    {
+      "from": "pipeline:acme/api/ci",
+      "to": "repository:acme/api",
+      "type": "builds",
+      "source": "github"
+    },
+    {
+      "from": "team:acme/payments",
+      "to": "repository:acme/api",
+      "type": "owns",
+      "source": "github"
+    }
+  ],
+  "signals": [
+    {
+      "type": "pr-titles",
+      "repository": "acme/api",
+      "total": 200,
+      "pattern_counts": {
+        "conventional": 180,
+        "ticket-prefix": 12,
+        "other": 8
+      },
+      "sample": [
+        "feat(api): add refunds endpoint",
+        "fix: retry on 503"
+      ]
+    }
+  ]
+}
+```
+
 ### Inválidos
 
 **`attrs` com objeto aninhado** (`invalid/attrs-not-scalar.json`) — violação: `entities[0]: attrs.owner não é escalar`
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -330,7 +407,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "billing",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -363,11 +440,11 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 }
 ```
 
-**Versão do contrato que não existe** (`invalid/contract-version.json`) — violação: `contract não suportado: org-atlas/collector@9`
+**Versão do contrato que não existe** (`invalid/contract-version.json`) — violação: `contract não suportado: boson-atlas/collector@9`
 
 ```json
 {
-  "contract": "org-atlas/collector@9",
+  "contract": "boson-atlas/collector@9",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -404,7 +481,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -448,7 +525,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -485,7 +562,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -529,7 +606,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "entities": [
@@ -565,7 +642,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",
@@ -602,7 +679,7 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
 
 ```json
 {
-  "contract": "org-atlas/collector@1",
+  "contract": "boson-atlas/collector@1",
   "collector": "github",
   "category": "code",
   "collected_at": "2026-10-30T12:00:00Z",

@@ -70,7 +70,7 @@ mesmo jeito (são a ferramenta, nunca conteúdo do atlas), e máquinas em versõ
   simbólico, não pode ser lido, cita `.org-atlas` ou não cita nenhuma das duas pastas (estado "desconhecido": pode
   rodar a ferramenta por outro script) —, o `vendor` atualiza também `.org-atlas/skill/` e imprime, para cada um,
   `a CI ainda roda .org-atlas/skill — para migrar: vendor --ci <ci> --force e depois git rm -r .org-atlas` (no estado
-  desconhecido, `<arquivo> não cita .boson-atlas/skill e pode ainda rodar .org-atlas/skill — para migrar: …`).
+  desconhecido, `<arquivo> não cita .boson-atlas/skill e pode ainda rodar .org-atlas/skill — troque o script do time para rodar .boson-atlas/skill, ou para migrar: …`).
   O link simbólico e o script do time não são tocados.
 - Com dois tipos de CI, se um arquivo personalizado mantido roda só `.org-atlas/skill` e o outro roda
   `.boson-atlas/skill` (ou `.boson-atlas/` já existe), o `vendor` atualiza as duas cópias (SPEC-0071).
