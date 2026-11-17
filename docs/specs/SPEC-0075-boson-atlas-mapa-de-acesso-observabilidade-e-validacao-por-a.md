@@ -41,6 +41,50 @@ approved_at:
 >      - logs dos primeiros minutos do serviço e dos vizinhos;
 >      - smoke no navegador ou suíte e2e, só em `test`.
 > - **Relação com a SPEC-0030 (probes):** a verificação ativa é o consumidor natural das probes. Decidir no DISCOVER se a entrega 4 vira filha da SPEC-0030 ou se as duas se fundem.
+> - **Rotina real de verificação pós-deploy (thomas, 2026-11-17), como inspiração para a entrega 4.** A rotina é toda só de leitura, e cada passo responde a uma pergunta. Os nomes de ferramenta aqui são exemplos; a entrega precisa ser agnóstica, com cada passo ligado a uma capacidade que o atlas mapeia e um adaptador por ferramenta:
+>   1. **O deploy chegou?** Run da CI no branch, Application do GitOps lida pelo cluster com Synced/Healthy e a revisão do repositório de IaC recém-mergeada.
+>   2. **O pod novo está de pé?** Rollout concluído, imagem nova e 0 restarts. Quando muda configuração, a variável aparece no deployment, só pelo nome.
+>   3. **Os logs estão limpos?** Erros agrupados por nível, separando erros novos de antigos (um erro é antigo se o arquivo que gera o log não foi tocado pelo PR) e a mensagem esperada da mudança.
+>   4. **O banco ficou como esperado?** Usuário só de leitura, com a credencial num arquivo de senhas local e nunca no comando. Migrations aplicadas e tabelas no estado esperado.
+>   5. **A mensageria está saudável?**
+>      - login por SSO;
+>      - fila e DLQ contando só as mensagens;
+>      - assinaturas do tópico com os filtros;
+>      - role do pod pela identidade de workload do cluster;
+>      - permissão testada por simulação no IAM, junto com a política do recurso, porque sem ela a simulação dá um falso negativo;
+>      - no cofre, só os nomes das chaves.
+>   6. **Onde mora a configuração?** Arquivo da app por ambiente no repositório de GitOps e busca do nome da variável.
+>
+>   **Ordem:** foto do estado antes do merge (pod, imagem, migrations, tabelas, filas), merge, deploy, comparação com a foto, registro do resultado no board e no runbook.
+>
+>   **Regras:** só leitura; nenhum segredo em comando, log ou comentário; restart ou alteração no ambiente ficam com a pessoa.
+> - **O que isso pede do atlas (mapa) e da verificação (ação):**
+>   - **Campos novos por ambiente:**
+>     - organização ou repositório da CI e branch por ambiente;
+>     - namespace do GitOps e nome da Application;
+>     - repositório de IaC e o caminho do arquivo da app;
+>     - cluster, mecanismo de identidade do workload e profile/região com o modo de login;
+>     - banco e o usuário só de leitura, só pelo nome, com a referência ao arquivo de senhas ou ao `secret-ref`;
+>     - filas, DLQs e tópicos por nome.
+>   - **Verificação em fases:** `foto` (antes), `aguardar` (CI, GitOps, rollout), `comparar` (pod, logs, banco, mensageria contra a foto) e `registrar`. A foto fica na conversa ou num arquivo temporário da tarefa, nunca no atlas.
+>   - **Capacidades plugáveis,** cada uma com adaptadores:
+>     - `ci-run` (GitHub Actions, GitLab…);
+>     - `gitops-app` (Argo CD, Flux…);
+>     - `rollout` (kubectl…);
+>     - `logs` (kubectl, Loki, CloudWatch…);
+>     - `db-readonly` (Postgres, MySQL…);
+>     - `messaging` (SQS/SNS, Kafka, RabbitMQ…);
+>     - `iam-simulate`;
+>     - `config-source`.
+>
+>     O comando é montado pelo adaptador a partir dos campos, nunca lido do atlas. Uma capacidade sem adaptador ou sem campo vira "não verificado", com o motivo.
+>   - **Onboarding humano:** perguntas em linguagem simples ("como você vê se o deploy chegou?", "onde ficam os logs?"), com cada resposta virando um campo. Ele mostra o que já foi coletado automaticamente para a pessoa só confirmar, e permite pular uma capacidade.
+>   - **Métricas para atualizar a configuração:**
+>     - em cada verificação, contar as capacidades verificadas, não verificadas (sem campo ou sem adaptador) e com erro de acesso;
+>     - quanto tempo cada fase levou;
+>     - quais campos o agente teve de descobrir sozinho.
+>
+>     O `lint` e o `doctor` usam isso para sugerir a atualização da configuração (ex.: "a última verificação descobriu o log group à mão: confirmar no atlas?"), sempre como proposta, no estilo da curadoria (ADR-0012).
 > - **Coletor `aws` oficial:** um coletor local do usuário (AWS CLI, só leitura: caches serverless, RDS, SQS, SNS e assinaturas SNS→SQS, cruzados com as env das Applications) serve de referência. Ele fica fora deste repositório.
 
 <!-- type: feature | migration | foundation (produto novo: ver references/greenfield.md). O épico não é executado: define visão, decisões, decomposição e entrega. Quem executa são as specs filhas (tier full ou lite, tamanho S/M, `parent: SPEC-0075`). A ordem de execução é calculada a partir do frontmatter das filhas (`spec_graph.py waves`). -->
