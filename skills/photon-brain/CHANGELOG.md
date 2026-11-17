@@ -12,6 +12,17 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Fixed
 - Regra de arquitetura de processo (`tests/brain_architecture_rules.py`, `subprocess_findings`): fora de `run_processor` passa a reportar também `from subprocess import ...`, `import subprocess as x`, `from os import system`/`popen`/`exec*`/`spawn*` e as chamadas feitas pelo apelido ou pelo nome importado, como a regra da `boson-atlas`. A regra é por nome e não pega acesso dinâmico (`__import__`, `importlib`, `getattr`). Só teste: o `brain.py` e a `BRAIN_VERSION` não mudam (ADR-0007) (SPEC-0062).
 
+## [2026.11.8] - 2026-11-17
+
+### Changed
+- A configuração local desta máquina passa para `~/.config/photon-brain/config.yml`. Sem `BRAIN_CONFIG_HOME`/`--config-home`, a leitura usa a pasta nova se existir e, se não, a antiga `~/.config/second-brain/config.yml` como reserva; toda gravação (`init`, `init --join`, `backup target add`) vai só para a pasta nova, com a configuração completa, e a antiga nunca é gravada, movida nem apagada. O `doctor` mostra um AVISO com o comando de cópia (`mkdir -p ~/.config/photon-brain && cp -p ~/.config/second-brain/config.yml ~/.config/photon-brain/`) quando só a antiga existe, e outro dizendo que ela é ignorada quando as duas existem; exit code e formato do `--json` não mudam (SPEC-0069, ADR-0020).
+- Mensagens com o nome novo: `photon-brain não configurado nesta máquina — rode init (ou init --join)`, `--version` (`photon-brain <versão>`), a descrição do `--help`, a primeira linha do `config`, o cabeçalho do `config.yml` local e o do `brain-config.yml` de vaults novos (`assets/brain-config.yml`; vaults existentes não mudam) (SPEC-0069).
+- Backups novos se chamam `photon-brain-AAAA-MM-DD-HHMMSS[-files].zip`. Os antigos `second-brain-…zip` seguem restauráveis e verificáveis, aparecem no `backup list` e entram na rotação: os dois prefixos contam juntos no `backup.keep`, saindo os mais antigos pela data do nome (com e sem `-files` à parte) (SPEC-0069).
+- Onboarding e exemplos de cron, launchd e Agendador de Tarefas com o nome novo (`~/photon-brain/vault` para vault novo); agendamentos existentes continuam funcionando, porque chamam o `brain.py` (SPEC-0069).
+
+### Deprecated
+- A leitura de `~/.config/second-brain/config.yml` como reserva será removida numa versão futura, não antes de 2027-03 (três versões mensais depois desta, SPEC-0073). Copie a configuração com o comando do `doctor` antes disso. Backups `second-brain-…zip` continuam restauráveis (SPEC-0069).
+
 ## [2026.11.7] - 2026-11-16
 
 ### Fixed
