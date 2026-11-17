@@ -8,7 +8,13 @@ Confere se há instalação antiga ao lado do plugin e diz como atualizar; nunca
 - stale-copy: cópia de skill com o nome novo mais velha que o plugin;
 - stale-sdd-tool: tools/sdd/ do projeto mais velho que a gluon-spec do plugin;
 - old-sdd-block: bloco sdd:start que ainda manda carregar a skill pelo nome antigo;
-- stale-atlas: atlas vendorizado (.org-atlas/skill/) mais velho que a boson-atlas do plugin;
+- stale-atlas: atlas vendorizado (.boson-atlas/skill/ ou .org-atlas/skill/) mais velho que a boson-atlas do plugin;
+- old-atlas-folder: pasta .org-atlas/ no projeto (cópia da boson-atlas no nome antigo), com o passo de migração do
+  vendor (SPEC-0072);
+- old-config: configuração da máquina na pasta antiga ($HOME/.config/second-brain ou $HOME/.config/org-atlas): só a
+  antiga existe -> o comando de cópia para a nova; as duas existem -> a antiga é ignorada e pode ser apagada. Sem
+  achado quando BRAIN_CONFIG_HOME/ATLAS_CONFIG_HOME está definido, como nas skills, que também não usam
+  XDG_CONFIG_HOME (SPEC-0072);
 - broken-leak-hook: pre-push do leak-check instalado pelo SDD (modo privado) cujo caminho gravado não existe e sem
   nenhuma alternativa da busca do hook (plugin fermion do installed_plugins.json, cópias de skill do usuário,
   tools/sdd/ não rastreado) — todo push seria recusado (SPEC-0068). O hook é lido de <projeto>/.git (pasta, ou
@@ -43,13 +49,20 @@ OLD_TO_NEW = {"sdd-management": "gluon-spec", "second-brain": "photon-brain", "o
 AGENT_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
 BLOCK_START = "<!-- sdd:start -->"
 BLOCK_END = "<!-- sdd:end -->"
-CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas", "broken-leak-hook")
+CHECKS = ("old-name-copy", "stale-copy", "stale-sdd-tool", "old-sdd-block", "stale-atlas", "broken-leak-hook",
+          "old-config", "old-atlas-folder")
 UNREADABLE = "unreadable-version"
 VERSION_TEXT_RE = re.compile(r"^\d+(?:\.\d+)*$")
 READ_LIMIT = 256 * 1024  # só os primeiros 256 KB de cada arquivo (Emenda v2)
 USAGE = "uso: fermion_doctor.py [--project PASTA] [--json]"
 LEAK_HOOK_SIGNATURE = "# SDD modo privado: recusa o push"  # 2ª linha do hook do leak-check (SPEC-0068)
 VENDORED_TOOL = "tools/sdd/spec_graph.py"
+# cópias da boson-atlas no atlas: a nova (SPEC-0070) e a antiga, ainda lida pela skill até a SPEC-0073
+ATLAS_COPIES = (".boson-atlas/skill", ".org-atlas/skill")
+OLD_ATLAS_FOLDER = ".org-atlas"
+# pasta de configuração antiga -> (nova, variável que a substitui) (SPEC-0069, SPEC-0070, SPEC-0072)
+OLD_CONFIG_DIRS = {"second-brain": ("photon-brain", "BRAIN_CONFIG_HOME"),
+                   "org-atlas": ("boson-atlas", "ATLAS_CONFIG_HOME")}
 
 
 # --------------------------------------------------------------------------- leitura segura
@@ -212,18 +225,52 @@ def check_sdd_blocks(report, project, plugin_root):
 
 
 def check_atlas(report, project, versions, plugin_root):
-    relative = Path(".org-atlas") / "skill"
-    text = read_text(project / relative / "scripts" / "atlas.py", real(project))
-    if text is None:
-        return
     cli = Path(plugin_root) / "skills" / "boson-atlas" / "scripts" / "atlas.py"
     fix = (f"rode no repositório do atlas: python3 {quoted(cli)} vendor --ci <github|generic>, o mesmo --ci da "
            "instalação")
-    version = read_version(text, SKILL_SCRIPTS["boson-atlas"][1])
-    if version is None:
-        report.add("stale-atlas", UNREADABLE, relative / "scripts" / "atlas.py", "versão não encontrada", fix)
-    elif older(version, versions["boson-atlas"]):
-        report.add("stale-atlas", "stale-atlas", relative, f"{version} < {versions['boson-atlas']}", fix)
+    for copy in ATLAS_COPIES:
+        relative = Path(copy)
+        text = read_text(project / relative / "scripts" / "atlas.py", real(project))
+        if text is None:
+            continue
+        version = read_version(text, SKILL_SCRIPTS["boson-atlas"][1])
+        if version is None:
+            report.add("stale-atlas", UNREADABLE, relative / "scripts" / "atlas.py", "versão não encontrada", fix)
+        elif older(version, versions["boson-atlas"]):
+            report.add("stale-atlas", "stale-atlas", relative, f"{version} < {versions['boson-atlas']}", fix)
+
+
+def check_old_atlas_folder(report, project, plugin_root):
+    """Pasta .org-atlas/ no projeto: a cópia da boson-atlas no nome antigo, com o passo de migração (SPEC-0070)."""
+    folder = Path(project) / OLD_ATLAS_FOLDER
+    try:
+        found = inside(folder, real(project)) and folder.is_dir()
+    except OSError:
+        found = False
+    if not found:
+        return
+    cli = Path(plugin_root) / "skills" / "boson-atlas" / "scripts" / "atlas.py"
+    remove = f"git rm -r {OLD_ATLAS_FOLDER}"
+    report.add("old-atlas-folder", "old-atlas-folder", OLD_ATLAS_FOLDER,
+               "cópia da boson-atlas no nome antigo",
+               f"para migrar, rode no repositório do atlas: python3 {quoted(cli)} vendor --ci <github|generic> "
+               f"--force e depois {remove} (se a CI já roda .boson-atlas/skill, só {remove})")
+
+
+def check_old_config(report, env):
+    """Configuração da máquina na pasta antiga (SPEC-0069, SPEC-0070): o mesmo critério do doctor de cada skill."""
+    config = Path(env.get("HOME") or Path.home()) / ".config"
+    root = real(config)
+    for old, (new, override) in OLD_CONFIG_DIRS.items():
+        if env.get(override) or not is_file(config / old / "config.yml", root):
+            continue
+        old_text, new_text = f"~/.config/{old}", f"~/.config/{new}"
+        if is_file(config / new / "config.yml", root):
+            report.add("old-config", "old-config", config / old, f"{old_text} é ignorada (vale {new_text})",
+                       "pode apagar a pasta antiga")
+        else:
+            report.add("old-config", "old-config", config / old, f"configuração no caminho antigo {old_text}",
+                       f"copie com: mkdir -p {new_text} && cp -p {old_text}/config.yml {new_text}/")
 
 
 def git_common_dir(project):
@@ -355,6 +402,8 @@ def diagnose(project, env, plugin_root=PLUGIN_ROOT):
     check_sdd_blocks(report, project, plugin_root)
     check_atlas(report, project, versions, plugin_root)
     check_leak_hook(report, project, env, plugin_root)
+    check_old_config(report, env)
+    check_old_atlas_folder(report, project, plugin_root)
     return versions, report
 
 
