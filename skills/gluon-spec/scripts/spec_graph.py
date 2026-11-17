@@ -19,7 +19,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.11.6"
+SDD_TOOL_VERSION = "2026.11.7"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -324,7 +324,7 @@ def find_sub(subs, keyword: str):
 
 
 def md_cell(text: str) -> str:
-    return str(text).replace("|", "\\|").replace("\n", " ")
+    return re.sub(r"\r\n?|\n", " ", str(text).replace("|", "\\|"))
 
 
 # ---------------------------------------------------------------- globs
@@ -763,6 +763,7 @@ def cmd_private(project: Project, action: str, spec_root, sync):
     config = target / "sdd-config.yml"
     if not config.exists():
         config.write_text((TEMPLATES_DIR / "sdd-config.template.yml").read_text(encoding="utf-8"), encoding="utf-8")
+        write_config_key(config, "sdd_version", SDD_TOOL_VERSION)  # SPEC-0078: só no config que o init cria
     if not (target / ".git").exists():
         run_git(target, "init", "-q")
     conv = team_conventions(Project(root))
@@ -2435,7 +2436,7 @@ def cmd_waves(project: Project):
     return 0
 
 
-def print_next(project: Project, plan):
+def print_next(project: Project, plan, today=None):
     running, batch, held = next_batch(project, plan)
     specs = project.specs
     active = [s for s in running if readiness(project, specs[s])[0] == "running"]
@@ -2460,6 +2461,11 @@ def print_next(project: Project, plan):
     blocked = [s for s in plan[0] if readiness(project, specs[s])[0] == "blocked"]
     for sid in sorted(blocked):
         print(f"  bloqueada {sid}: {readiness(project, specs[sid])[1]}")
+    unclosed = unclosed_specs(project, today or dt.date.today())
+    if unclosed:
+        print("A fechar (G5 PASS, G7 pendente — Relatório de Entrega):")
+        for sid, days in unclosed:
+            print(f"  {sid} — G5 há {'?' if days is None else days} dia(s)")
 
 
 def cmd_next(project: Project):
@@ -2993,6 +2999,12 @@ def head_ref(cwd: Path):
 
 def set_gate_row(doc: Doc, gate: str, status: str, evidence: str):
     lines = doc.text.split("\n")
+    put_gate_row(doc, lines, gate, status, evidence)
+    rewrite_doc(doc, "\n".join(lines))
+
+
+def put_gate_row(doc: Doc, lines, gate: str, status: str, evidence: str):
+    """Troca, em `lines` (em memória), a linha do gate no Registro de Gates."""
     bounds = section_bounds(lines, "Registro de Gates")
     if bounds is None:
         die(f"{doc.id} não tem 'Registro de Gates' — rode `upgrade {doc.id} --apply`")
@@ -3000,9 +3012,123 @@ def set_gate_row(doc: Doc, gate: str, status: str, evidence: str):
         cells = [c.strip() for c in CELL_SPLIT_RE.split(lines[i].strip()[1:-1])] if lines[i].strip().startswith("|") else []
         if cells and cells[0].split() and cells[0].split()[0].upper() == gate:
             lines[i] = f"| {cells[0]} | {status} | {md_cell(evidence)} | {today()} |"
-            doc.path.write_text("\n".join(lines), encoding="utf-8")
             return
     die(f"{doc.id}: linha do gate {gate} não encontrada no Registro de Gates — rode `upgrade {doc.id} --apply`")
+
+
+def rewrite_doc(doc: Doc, text: str):
+    """Grava a spec e atualiza o Doc em memória (o histórico lê o texto depois da linha da tabela)."""
+    doc.path.write_text(text, encoding="utf-8")
+    doc.__init__(doc.path, text)
+
+
+# Histórico de reprovações (SPEC-0078): subseção abaixo da tabela do Registro de Gates, escrita só pelo `gate`.
+HISTORY_TITLE = "### Histórico de reprovações"
+HISTORY_LINE_RE = re.compile(r"^- (\S+) (\S+) (\S+) — (.+)$")
+HISTORY_SHA_RE = re.compile(r"^([0-9a-f]{7,40}|\?)(?: \(árvore suja\))?$")
+HISTORY_PASS_RE = re.compile(r"^depois de (\d+) reprovação\(ões\)$")
+FAIL_STREAK_LIMIT = 3
+
+
+def history_bounds(lines):
+    """(início, fim) das linhas da subseção do histórico dentro do Registro de Gates; None sem a subseção."""
+    bounds = section_bounds(lines, "Registro de Gates")
+    if bounds is None:
+        return None
+    title = norm(HISTORY_TITLE)
+    start = next((i for i in range(bounds[0] + 1, bounds[1]) if norm(lines[i].strip()) == title), None)
+    if start is None:
+        return None
+    end = next((i for i in range(start + 1, bounds[1]) if lines[i].startswith("#")), bounds[1])
+    return start, end
+
+
+def parse_history_line(line: str):
+    """Uma linha do histórico como dict, ou None quando está fora do formato (ignorada, sem erro)."""
+    m = HISTORY_LINE_RE.match(line.rstrip())
+    if not m:
+        return None
+    gate, status, date, rest = m.groups()
+    if gate not in GATE_ROWS or not valid_date(date):
+        return None
+    if status == "PASS":
+        after = HISTORY_PASS_RE.match(rest.strip())
+        return {"gate": gate, "status": "PASS", "date": date, "after": int(after.group(1))} if after else None
+    if status != "FAIL" or " — " not in rest:
+        return None
+    evidence, tail = rest.rsplit(" — ", 1)
+    sha = HISTORY_SHA_RE.match(tail.strip())
+    if not sha:
+        return None
+    return {"gate": gate, "status": "FAIL", "date": date, "evidence": evidence.strip(), "sha": sha.group(1)}
+
+
+def gate_history(doc: Doc):
+    """Linhas válidas do histórico de reprovações, na ordem do arquivo ([] sem a subseção)."""
+    lines = doc.text.split("\n")
+    bounds = history_bounds(lines)
+    if bounds is None:
+        return []
+    return [h for h in (parse_history_line(line) for line in lines[bounds[0] + 1:bounds[1]]) if h]
+
+
+def consecutive_fails(doc: Doc, gate: str) -> int:
+    """Reprovações do gate depois da última linha PASS dele no histórico."""
+    return streak_in(gate_history(doc), gate)
+
+
+def streak_in(history, gate: str) -> int:
+    count = 0
+    for h in history:
+        if h["gate"] == gate:
+            count = count + 1 if h["status"] == "FAIL" else 0
+    return count
+
+
+def put_history_line(lines, line: str):
+    """Acrescenta, em `lines` (em memória), uma linha ao histórico; cria a subseção no fim do Registro de Gates na
+    primeira vez."""
+    bounds = history_bounds(lines)
+    if bounds is not None:
+        at = bounds[1]
+        while at > bounds[0] + 1 and not lines[at - 1].strip():
+            at -= 1
+        lines[at:at] = [line]
+    else:
+        section = section_bounds(lines, "Registro de Gates")
+        if section is None:
+            return
+        at = section[1]
+        while at > section[0] + 1 and not lines[at - 1].strip():
+            at -= 1
+        block = ["", HISTORY_TITLE, line]
+        if at == section[1] and at < len(lines):
+            block.append("")
+        lines[at:at] = block
+
+
+def streak_warning(spec_id: str, gate: str, count: int) -> str:
+    return (f"⚠ {count} reprovações seguidas em {gate} — registre `impede {spec_id} --type falha` "
+            f"e escale ao humano")
+
+
+def record_gate(doc: Doc, gate: str, status: str, evidence: str, history_evidence=None):
+    """Linha da tabela + histórico: FAIL acrescenta a reprovação; PASS/N/A depois de reprovações acrescenta o PASS.
+    Devolve o aviso das reprovações seguidas ("" quando não há)."""
+    before = consecutive_fails(doc, gate)
+    lines = doc.text.split("\n")
+    put_gate_row(doc, lines, gate, status, evidence)
+    warning = ""
+    if status == "FAIL":
+        text = md_cell(history_evidence if history_evidence is not None else evidence)
+        put_history_line(lines, f"- {gate} FAIL {today()} — {text}")
+    elif before > 0:
+        put_history_line(lines, f"- {gate} PASS {today()} — depois de {before} reprovação(ões)")
+    rewrite_doc(doc, "\n".join(lines))  # tabela e histórico numa gravação só
+    if status == "FAIL":
+        count = consecutive_fails(doc, gate)
+        warning = streak_warning(doc.id, gate, count) if count >= FAIL_STREAK_LIMIT else ""
+    return warning
 
 
 def pillar_waivers(project: Project) -> dict:
@@ -3023,8 +3149,10 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
     workdir = Path(cwd).resolve() if cwd else project.root
 
     if fail:
-        set_gate_row(doc, gate, "FAIL", fail)
+        warning = record_gate(doc, gate, "FAIL", fail, history_evidence=f"{fail} — {head_ref(workdir)[0]}")
         print(f"{spec_id} {gate} = FAIL — {fail}")
+        if warning:
+            print(warning)
         return 0
     pending = [g for g in order[:order.index(gate)] if not gate_ok(gates, g)]
     if pending:
@@ -3039,7 +3167,7 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
             if not refs and pillar not in pillar_waivers(project):
                 die(f"N/A em {gate} precisa apontar a spec que vai resolver (SPEC-NNNN existente) "
                     f"ou a dispensa do pilar '{pillar}' em sdd-config.yml (pillars.waived)")
-        set_gate_row(doc, gate, "N/A", na)
+        record_gate(doc, gate, "N/A", na)
         print(f"{spec_id} {gate} = N/A — {na}")
         return 0
 
@@ -3054,14 +3182,14 @@ def cmd_gate(project: Project, spec_id, gate, run, cwd, na, fail, by, evidence, 
             text = f"aprovado por {by}" + (f" — {evidence}" if evidence else "")
         else:
             die(f"{gate} é humano: informe --by <quem aprovou> (ou configure h2_policy: auto-on-green)")
-        set_gate_row(doc, gate, "PASS", text)
+        record_gate(doc, gate, "PASS", text)
         print(f"{spec_id} {gate} = PASS — {text}")
         return 0
 
     if not run:
         if not manual or not evidence:
             die(f"{gate} registra PASS com --run (evidência gerada) ou, excepcionalmente, --manual --evidence \"...\"")
-        set_gate_row(doc, gate, "PASS", f"{MANUAL_PREFIX} {evidence}")
+        record_gate(doc, gate, "PASS", f"{MANUAL_PREFIX} {evidence}")
         print(f"{spec_id} {gate} = PASS (manual) — {evidence}")
         return 0
 
@@ -3155,10 +3283,12 @@ def gate_run(project: Project, doc: Doc, spec_id, gate, workdir: Path, branch_di
     if note:
         parts.append(f"nota: {note}")
     evidence_text = "; ".join(parts) + f" — {sha}" + (" (árvore suja)" if dirty else "")
-    set_gate_row(doc, gate, "PASS" if ok else "FAIL", evidence_text)
+    warning = record_gate(doc, gate, "PASS" if ok else "FAIL", evidence_text)
     if project.private and gate in ("G1", "G2", "G3", "G4", "G5"):
         write_commit_ledger(project, doc, branch_dir)
     print(f"{spec_id} {gate} = {'PASS' if ok else 'FAIL'} — {evidence_text}")
+    if warning:
+        print(warning)
     return 0 if ok else 1
 
 
@@ -3334,7 +3464,43 @@ def cmd_status(project: Project, ids):
     return code
 
 
-def status_body(project: Project, ids):
+def unclosed_specs(project: Project, today: dt.date):
+    """(ID, dias desde o G5) das specs não épicas em approved/in-progress com G5 PASS e G7 não PASS."""
+    out = []
+    for doc in sorted(project.specs.values(), key=lambda d: d.id):
+        if doc.tier == "epic" or doc.status not in ("approved", "in-progress"):
+            continue
+        gates = gate_table(doc) or {}
+        g5 = gates.get("G5") or {}
+        if g5.get("status") != "PASS" or (gates.get("G7") or {}).get("status") == "PASS":
+            continue
+        out.append((doc.id, (today - dt.date.fromisoformat(g5["date"])).days if valid_date(g5["date"]) else None))
+    return out
+
+
+def fail_streaks(project: Project):
+    """(ID, gate, reprovações seguidas) das specs in-progress com >= 3 reprovações seguidas num gate que não está
+    PASS nem N/A na tabela, e sem impedimento `falha` aberto."""
+    out = []
+    for doc in sorted(project.specs.values(), key=lambda d: d.id):
+        if doc.tier == "epic" or doc.status != "in-progress":
+            continue
+        if any(normalize_imp_type(i["Tipo"]) == "falha" for i in open_impediments(doc)):
+            continue
+        history = gate_history(doc)
+        if not history:
+            continue
+        gates = gate_table(doc) or {}
+        for gate in GATE_ROWS:
+            if gate_ok(gates, gate):
+                continue  # PASS gravado por versão antiga ou à mão: sem aviso preso
+            count = streak_in(history, gate)
+            if count >= FAIL_STREAK_LIMIT:
+                out.append((doc.id, gate, count))
+    return out
+
+
+def status_body(project: Project, ids, today=None):
     if project.private:
         for warning in spec_root_pending(project.spec_root, project.sync):
             print(f"⚠ {warning}")
@@ -3352,6 +3518,11 @@ def status_body(project: Project, ids):
         print(f"⚠ worktree esquecida {path}: {why}")
     for path, why in misplaced_worktrees(project):
         print(f"⚠ worktree {path} {why}")
+    for sid, days in unclosed_specs(project, today or dt.date.today()):
+        print(f"⚠ entregue sem fechar: {sid} — G5 há {'?' if days is None else days} dia(s); "
+              f"feche o G7 (Relatório de Entrega)")
+    for sid, gate, count in fail_streaks(project):
+        print(f"⚠ {sid}: {count} reprovações seguidas em {gate} — `impede {sid} --type falha`")
     gaps = [pid for pid, _, state, _ in pillar_coverage(project) if state == "sem decisão"]
     if gaps:
         print(f"⚠ Pilares sem decisão: {', '.join(gaps)} — rode `pillars`\n")
@@ -3549,11 +3720,11 @@ RETRO_RULES = {
 }
 # Tabela fixa de sugestões de spec para a própria skill (espelha references/retro.md; nunca vira arquivo).
 RETRO_SUGGESTIONS = {
-    "R1": "gluon-spec: avisar a ferramenta atrasada no status e no hook, com o comando de atualização",
+    "R1": "gluon-spec: registrar a versão desconhecida (`whats-new --ack`, `private init`) e atualizar a atrasada no fluxo de atualização do projeto",
     "R2": "gluon-spec: revisão periódica das specs paradas (retomar, fechar ou deprecated)",
-    "R3": "gluon-spec: lembrar o fechamento do G7 depois do merge (G5 PASS sem G7)",
+    "R3": "gluon-spec: fechar o G7 no fluxo do merge, já que o aviso de entregue sem fechar não bastou",
     "R4": "gluon-spec: reduzir a evidência à mão (comandos do sdd-config prontos e `gate --run` como caminho padrão)",
-    "R5": "gluon-spec: guardar o histórico de FAIL no Registro de Gates (o PASS hoje apaga o FAIL)",
+    "R5": "gluon-spec: fazer o processo registrar as reprovações (`gate --run`/`--fail` e ferramenta vendorizada atualizada)",
     "R6": "gluon-spec: tratar o N/A recorrente (dispensa de pilar sugerida ou spec da capacidade que falta)",
     "R7": "gluon-spec: aviso de impedimento aberto há muito tempo no status",
 }
@@ -3561,6 +3732,7 @@ GENERATED_SHA_RE = re.compile(r" — (?:[0-9a-f]{7,40}|\?)(?: \(árvore suja\))?
 GENERATED_START = ("validate: ", "verify G", "Relatório de Entrega")
 GENERATED_EXIT_RE = re.compile(r"\S exit -?\d+ \(")
 GIT_REMOTE_RE = re.compile(r'^\s*\[remote\s+"origin"\]\s*$')
+RETRO_IMP_ID_RE = re.compile(r"^IMP-\d+$")  # mais largo que IMP_ID_RE: IMP-3, escrito à mão, fica como está
 
 
 def evidence_origin(evidence: str) -> str:
@@ -3623,7 +3795,7 @@ def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) 
     gates = {g: {"PASS": 0, "FAIL": 0, "N/A": 0} for g in GATE_ROWS}
     evidence = {o: 0 for o in RETRO_ORIGINS}
     stale, unclosed, leads, activity = [], [], [], []
-    amendments, imp_total, imp_open, imp_old = {}, 0, 0, []
+    amendments, imp_total, imp_open, imp_old, fail_recorded = {}, 0, 0, [], 0
     for key in sorted(project.specs):
         doc, sid = project.specs[key], retro_id(key)
         by_status[doc.status or "?"] += 1
@@ -3638,6 +3810,7 @@ def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) 
         own = [d for d in [_date(doc.scalar("created")), _date(doc.scalar("approved_at"))]
                + [_date(v) for v in dates.values()] if d]
         activity += own
+        fail_recorded += sum(1 for h in gate_history(doc) if h["status"] == "FAIL")
         g5, g7 = ((table.get(g) or {}).get("status") for g in ("G5", "G7"))
         if doc.status in RETRO_ACTIVE:
             if own and (today - max(own)).days > stale_days:
@@ -3658,7 +3831,7 @@ def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) 
             imp_open += 1
             opened = _date(item["Aberto em"])
             if opened and (today - opened).days > stale_days:
-                imp_old.append(f"{sid}/{item['ID']}")
+                imp_old.append(f"{sid}/{retro_imp_id(item['ID'])}")
     version = None
     try:
         version = project_tool_version(project)[0]
@@ -3669,24 +3842,39 @@ def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) 
         "private": bool(project.private),
         "specs": {"total": len(project.specs), "by_status": {k: v for k, v in sorted(by_status.items()) if v},
                   "by_tier": {k: v for k, v in sorted(by_tier.items()) if v}},
-        "tool": {"project": version or "desconhecida", "installed": SDD_TOOL_VERSION},
+        "tool": {"project": version or "desconhecida", "installed": SDD_TOOL_VERSION,
+                 "state": tool_state(version)},
         "last_activity": max(activity).isoformat() if activity else None,
-        "stale": sorted(stale),
-        "unclosed": sorted(unclosed),
+        "stale": sorted(set(stale)),
+        "unclosed": sorted(set(unclosed)),
         "lead_time_days": {"median": statistics.median(leads) if leads else None,
                            "p90": _p90(leads) if leads else None},
         "gates": gates,
         "fail_history": retro_fail_history(project.specs_dir),
+        "fail_recorded": fail_recorded,
         "evidence": evidence,
         "na_by_gate": {g: {"na": c["N/A"], "total": c["PASS"] + c["FAIL"] + c["N/A"]} for g, c in gates.items()},
         "amendments": {"total": sum(amendments.values()), "by_spec": amendments},
-        "impediments": {"total": imp_total, "open": imp_open, "old": sorted(imp_old)},
+        "impediments": {"total": imp_total, "open": imp_open, "old": sorted(set(imp_old))},
     }
 
 
-def _tool_behind(tool: dict) -> bool:
+def retro_imp_id(value: str) -> str:
+    """ID de impedimento que o retro mostra: IMP-<dígitos> como está; qualquer outro texto vira IMP-?."""
+    value = (value or "").strip()
+    return value if RETRO_IMP_ID_RE.match(value) else "IMP-?"
+
+
+def tool_state(version) -> str:
+    """atual | atrasada | desconhecida (versão ausente ou fora do formato)."""
+    if not version or not VERSION_RE.match(version):
+        return "desconhecida"
+    return "atrasada" if is_older(version) else "atual"
+
+
+def _tool_state(tool: dict) -> str:
     project = tool.get("project") or ""
-    return not VERSION_RE.match(project) or is_older(project)
+    return tool.get("state") or tool_state(project)
 
 
 def _finding(m: dict, rule: str, value, action: str) -> dict:
@@ -3697,9 +3885,13 @@ def retro_findings(projects: list) -> list:
     """Achados das regras fixas R1–R7 (references/retro.md), um por regra e projeto (R6: um por gate)."""
     out = []
     for m in projects:
-        if _tool_behind(m["tool"]):
-            update = ("`whats-new` e, depois de revisar, `whats-new --ack`" if m["private"]
-                      else "`whats-new` e `vendor --force` (sem tools/sdd: `whats-new --ack`)")
+        state = _tool_state(m["tool"])
+        if state == "desconhecida":
+            out.append(_finding(m, "R1", f"versão desconhecida (instalada {m['tool']['installed']})",
+                                "rode `whats-new --ack` (registra a versão do projeto)"))
+        elif state == "atrasada":
+            update = ("`whats-new` e, depois de atualizar, `whats-new --ack`" if m["private"]
+                      else "`whats-new` e `vendor --force` (sem tools/sdd: `whats-new --ack` depois de atualizar)")
             out.append(_finding(m, "R1", f"{m['tool']['project']} < {m['tool']['installed']}", f"rode {update}"))
         if m["stale"]:
             out.append(_finding(m, "R2", ", ".join(m["stale"]),
@@ -3714,7 +3906,8 @@ def retro_findings(projects: list) -> list:
                                 "registre os gates com `gate <ID> <G> --run`; revise os comandos do sdd-config"))
         passes = sum(m["gates"][g]["PASS"] for g in RETRO_RIGOR_GATES)
         current_fails = sum(c["FAIL"] for c in m["gates"].values())
-        if passes >= RETRO_NO_FAIL_MIN and m["fail_history"] == 0 and current_fails == 0:
+        if (passes >= RETRO_NO_FAIL_MIN and m["fail_history"] == 0 and not m.get("fail_recorded")
+                and current_fails == 0):
             out.append(_finding(m, "R5", f"{passes} PASS, 0 FAIL no histórico",
                                 "confira se os gates rodam com `--run` e se reprovações são registradas com "
                                 "`gate --fail`"))
@@ -3782,7 +3975,14 @@ def _private_mode(key: str, spec_root: Path) -> dict:
 
 
 def _registry_private(entry) -> bool:
-    return isinstance(entry, dict) and entry.get("mode") == "private" and bool(entry.get("spec_root"))
+    return (isinstance(entry, dict) and entry.get("mode") == "private" and isinstance(entry.get("spec_root"), str)
+            and bool(entry.get("spec_root")))
+
+
+def _registry_invalid(entry) -> bool:
+    """Entrada privada com spec_root que não é texto (editada à mão): vai para Ignorados, sem traceback."""
+    return (isinstance(entry, dict) and entry.get("mode") == "private" and entry.get("spec_root") is not None
+            and not isinstance(entry.get("spec_root"), str))
 
 
 def _retro_folder_project(path: Path, privates: dict, by_root: dict):
@@ -3819,6 +4019,8 @@ def retro_candidates(folders, use_registry: bool):
         for key in sorted(privates):
             out.append((Path(privates[key]["spec_root"]).expanduser(),
                         lambda key=key: _retro_registry_project(key, privates[key])))
+        for key in sorted(k for k, v in registry.items() if _registry_invalid(v)):
+            out.append((Path(str(key)), lambda key=key: (key, None, "registro inválido (spec_root não é texto)")))
     return out
 
 
@@ -3868,6 +4070,11 @@ def _counts(mapping: dict) -> str:
     return ", ".join(f"{k} {v}" for k, v in mapping.items()) or "—"
 
 
+def _tool_cell(tool: dict) -> str:
+    state = _tool_state(tool)
+    return tool["project"] if state == "desconhecida" else f"{tool['project']} ({state})"
+
+
 def render_retro_md(report: dict) -> str:
     projects, findings = report["projects"], report["findings"]
     lines = ["# Retrospectiva SDD", "", "## Resumo", "",
@@ -3882,20 +4089,20 @@ def render_retro_md(report: dict) -> str:
             f"{r} {RETRO_RULES.get(r, r)} {by_rule[r]}" for r in sorted(by_rule)))
     lines += ["", "## Projetos", "",
               ("| Projeto | Privado | Specs | Por status | Ferramenta | Última atividade | Paradas | Sem G7 | "
-               "Lead time (mediana/p90) | FAIL atual | FAIL no histórico | "
+               "Lead time (mediana/p90) | FAIL atual | FAIL no histórico | FAIL na spec | "
                "Evidência G0–G5 (gerada/manual/humana/à mão) | Emendas | Impedimentos (abertos/velhos) |"),
-              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for p in projects:
         lead = p["lead_time_days"]
         lead_text = "—" if lead["median"] is None else f"{lead['median']:g}/{lead['p90']} dias"
-        history = "sem git" if p["fail_history"] is None else str(p["fail_history"])
+        history = "sem histórico" if p["fail_history"] is None else str(p["fail_history"])
         ev = p["evidence"]
         imp = p["impediments"]
         lines.append(" | ".join([
             f"| {md_cell(p['name'])}", "sim" if p["private"] else "não", str(p["specs"]["total"]),
-            md_cell(_counts(p["specs"]["by_status"])), f"{p['tool']['project']}", p["last_activity"] or "—",
+            md_cell(_counts(p["specs"]["by_status"])), _tool_cell(p["tool"]), p["last_activity"] or "—",
             str(len(p["stale"])), str(len(p["unclosed"])), lead_text,
-            str(sum(c["FAIL"] for c in p["gates"].values())), history,
+            str(sum(c["FAIL"] for c in p["gates"].values())), history, str(p.get("fail_recorded", 0)),
             "/".join(str(ev[o]) for o in RETRO_ORIGINS), str(p["amendments"]["total"]),
             f"{imp['total']} ({imp['open']}/{len(imp['old'])})"]) + " |")
     lines += ["", "## N/A por gate", "", "N/A / linhas registradas (PASS, FAIL ou N/A).", "",

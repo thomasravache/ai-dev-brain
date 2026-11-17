@@ -60,7 +60,7 @@ As filhas seguintes consomem o relatório, não um contrato de código.
 | Spec | Título | Tier | Tipo | Tamanho | Depende de | Consome contrato de |
 |---|---|---|---|---|---|---|
 | SPEC-0074 | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | M | — | — |
-| SPEC-0078 | gluon-spec: ajustes do processo apontados pela primeira retrospectiva (radar, a detalhar) | lite | feature | S | SPEC-0074 | — |
+| SPEC-0078 | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | full | feature | M | SPEC-0074 | — |
 
 ## 5. Estratégia de Entrega
 - **Ambientes:** N/A — skills distribuídas por cópia e pelo plugin, sem deploy
