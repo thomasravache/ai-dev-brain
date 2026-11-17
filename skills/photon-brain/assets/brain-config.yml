@@ -1,4 +1,4 @@
-# second-brain — configuração compartilhada padrão (copiada para <vault>/brain-config.yml pelo init).
+# photon-brain — configuração compartilhada padrão (copiada para <vault>/brain-config.yml pelo init).
 # Sincroniza com o vault: só caminhos relativos ao vault, nunca absolutos (ADR-0008). Detalhes: references/config.md
 version: 1
 language: auto            # idioma do conteúdo das notas; a estrutura do vault é sempre em inglês

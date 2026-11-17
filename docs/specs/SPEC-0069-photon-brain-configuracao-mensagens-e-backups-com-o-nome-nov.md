@@ -4,14 +4,14 @@ title: "photon-brain: configuração, mensagens e backups com o nome novo e leit
 tier: full
 type: migration
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: []
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, skills/photon-brain/references/**, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, skills/photon-brain/references/**, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, .claude-plugin/plugin.json, tests/plugin/test_skill_names.py]
 adrs: [ADR-0008, ADR-0018, ADR-0019, ADR-0020]
 external: []
 size: M
@@ -154,20 +154,34 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Configuração e textos**
+- [x] Red: CH-01 (guarda), UT-01 a UT-06, IT-01, IT-02 com a tag `SPEC-0069:<ID>`, falhando pelo motivo certo
+- [x] Green: `local_config_path`/`local_config_write_path`, avisos do `doctor`, textos e `assets/brain-config.yml`
+
+**Fase 2: Backups**
+- [x] Red: UT-07 a UT-09
+- [x] Green: `backup_name`, `BACKUP_NAME_RE` com os dois prefixos e retenção conjunta
+- [x] Validar: suítes da photon-brain, tests/plugin e mcp, arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e aprovação (H2)
+- [x] Deploy via pipeline (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Relatório de Entrega, references, SKILL.md, CHANGELOG com a data de remoção, versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 3ec7d76 | 2026-11-16 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=30)) — 392393e | 2026-11-17 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 524a3a2 | 2026-11-17 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — e1198bf | 2026-11-17 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 1; leitura dupla, gravações, backups e textos conferidos por experimento; 2 minors: permissão não preservada na gravação a partir da pasta antiga e comando de cópia só POSIX; 2 nits) — 12c9f78 | 2026-11-17 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 5339099 | 2026-11-17 |
+| H2 Integração aprovada | PASS | aprovado por política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-17 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-17 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 9e6772f | 2026-11-17 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -178,39 +192,56 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- A `photon-brain` usa o próprio nome no que é técnico: configuração em `~/.config/photon-brain`, mensagens, `--version`, `--help`, cabeçalhos e backups `photon-brain-<data>.zip`. Máquinas com `~/.config/second-brain` funcionam sem ação (leitura dupla), toda gravação vai para a pasta nova e o `doctor` mostra o comando de cópia ou avisa que a antiga é ignorada. Backups antigos entram na rotação e seguem restauráveis. photon-brain 2026.11.8, plugin 2026.11.15.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `local_config_path` (leitura com reserva) e `local_config_write_path` (gravação) em `brain.py`; `old_config_items` no `doctor`; `BACKUP_NAME_RE` com os dois prefixos (grupo não capturante); textos, assets, references, SKILL.md e CHANGELOG (remoção da leitura antiga não antes de 2027-03, SPEC-0073).
+- Testes em 0613196 e 392393e (Emenda: a guarda de nomes da SPEC-0055 passou a exigir os identificadores novos), lint em 524a3a2; implementação em 42d236a.
+- **Revisão G4:** APPROVED na rodada 1, com experimentos (14 comandos de leitura sem criar a pasta nova, rotação com 18 nomes mistos, `shasum` da pasta antiga inalterado).
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: migration`.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Suíte atual sem outra mudança além de textos e prefixo | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-01 | Leitura: só a antiga → antiga; as duas → nova | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-02 | Sem pastas: leitura e gravação na nova | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-03 | Gravação com só a antiga: configuração completa na nova, antiga idêntica | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-04 | Sobrescrita sem reserva nem aviso | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-05 | doctor: AVISO com `cp -p` e de pasta ignorada | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-06 | Textos dizem `photon-brain` | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-07 | Backup `photon-brain-<data>.zip` | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-08 | Regex e retenção com os dois prefixos, nunca arquivo alheio | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| UT-09 | Restore e `backup list` com backup antigo | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| IT-01 | Máquina configurada pela versão anterior funciona sem ação | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
+| IT-02 | `init` cria só a pasta nova | PASS | `skills/photon-brain/tests/test_rename.py` e suítes da photon-brain e `tests/plugin` — suíte local no G5 (5339099) e CI do PR |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0020
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skill distribuída pelo plugin e por cópia
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — AVISOs do `doctor`; pasta antiga nunca tocada
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — CHANGELOG da photon-brain 2026.11.8; o README entra na SPEC-0072
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não define `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma) — ver Pendências
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — plugin 2026.11.15, PR desta spec.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- Minor da revisão: a gravação a partir da pasta antiga não preserva o modo do arquivo (sai com o umask, como antes); o arquivo só guarda caminhos. Candidato a ajuste junto da SPEC-0073.
+- Minor da revisão: o comando de cópia do `doctor` é POSIX; no Windows a pessoa copia à mão. Candidato a ajuste junto da SPEC-0073.
+- Nits: `BACKUP_NAME_RE` com `$` aceita `\n` no fim do nome; o `init` normal regrava só as quatro chaves conhecidas.
+- Cobertura do MCP: `mcp/tests/test_brain_server.py` confere que o servidor não toca a pasta antiga, mas não a nova — ajustar na SPEC-0072.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0069`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| v1 (sem mudança de contrato) | 2026-11-17 | `touches` ganha `tests/plugin/test_skill_names.py`: o `KeptIdentifiersTest` (SPEC-0055:UT-04) passa a exigir os identificadores novos da `photon-brain` (pasta padrão sem nenhuma configuração e `--version`), mantendo a checagem de `BACKUP_NAME_RE` com o prefixo antigo | o teste da SPEC-0055 fixava os nomes que esta spec troca; achado pelo test-writer no G1 | SPEC-0070 (mesmo ajuste para a `boson-atlas`), SPEC-0072 | thomas, 2026-11-17 (piloto automático com o recomendado) |

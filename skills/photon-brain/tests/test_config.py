@@ -19,7 +19,8 @@ Contrato esperado das funções puras de scripts/brain.py (o Implementer segue e
 
     load_config(config_home: Path | str | None = None) -> dict
         Lê <config_home>/config.yml (local: vault, files, provider; None = $BRAIN_CONFIG_HOME ou
-        ~/.config/second-brain) e <vault>/brain-config.yml (compartilhada), completa com os padrões do contrato
+        ~/.config/photon-brain, com a pasta antiga como reserva — SPEC-0069) e <vault>/brain-config.yml
+        (compartilhada), completa com os padrões do contrato
         e devolve {"values": {...}, "origins": {...}}:
           values  : configuração efetiva — vault, files, provider (strings, como gravadas na local), version,
                     language, layout {inbox, raw, mocs, templates, index, log}, para {...}, contexts

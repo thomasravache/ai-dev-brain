@@ -326,8 +326,10 @@ class KeptIdentifiersTest(unittest.TestCase):
             env = {k: v for k, v in os.environ.items() if k not in ("BRAIN_CONFIG_HOME", "ATLAS_CONFIG_HOME")}
             env["HOME"] = home
             with mock.patch.dict(os.environ, env, clear=True):
-                self.assertEqual(brain.local_config_path(),
-                                 Path(home) / ".config" / "second-brain" / "config.yml")
+                # SPEC-0069:CH-01 — sem nenhuma pasta, a photon-brain lê (e grava) em ~/.config/photon-brain
+                with self.subTest(default_config="photon-brain"):
+                    self.assertEqual(brain.local_config_path(),
+                                     Path(home) / ".config" / "photon-brain" / "config.yml")
                 self.assertEqual(atlas.local_config_path(),
                                  Path(home) / ".config" / "org-atlas" / "config.yml")
             with mock.patch.dict(os.environ, {"BRAIN_CONFIG_HOME": f"{home}/b", "ATLAS_CONFIG_HOME": f"{home}/a"}):
@@ -336,14 +338,17 @@ class KeptIdentifiersTest(unittest.TestCase):
 
         self.assertEqual(atlas.CONTRACT, "org-atlas/collector@1")
         self.assertEqual(atlas.SKILL_COPY, ".org-atlas/skill")
-        self.assertTrue(brain.BACKUP_NAME_RE.match("second-brain-2026-11-12-101010.zip"),
-                        "nome de backup second-brain-AAAA-MM-DD-HHMMSS.zip mudou")
+        # SPEC-0069:CH-01 — backups com o prefixo antigo seguem reconhecidos (rotação e restore)
+        old_backup = "second" + "-brain-2026-11-12-101010.zip"
+        self.assertTrue(brain.BACKUP_NAME_RE.match(old_backup),
+                        f"nome de backup antigo deixou de ser reconhecido: {old_backup}")
         self.assertEqual(sdd.VENDORED_TOOL, "tools/sdd/spec_graph.py")
         self.assertIn("<!-- sdd:start -->", sdd.AGENT_BLOCK_RE.pattern)
         self.assertIn("sdd-config.yml", (SKILLS / "gluon-spec" / "scripts" / "spec_graph.py").read_text(
             encoding="utf-8"))
 
-        for skill, script, prefix in (("photon-brain", "brain.py", "second-brain "),
+        # SPEC-0069:CH-01 — a --version da photon-brain diz o nome novo
+        for skill, script, prefix in (("photon-brain", "brain.py", "photon-brain "),
                                       ("boson-atlas", "atlas.py", "org-atlas ")):
             with self.subTest(version_output=skill):
                 out = subprocess.run([sys.executable, str(SKILLS / skill / "scripts" / script), "--version"],

@@ -4,15 +4,15 @@ A photon-brain separa o que é de cada máquina do que é do vault (ADR-0008). `
 
 ## Camada local — `config.yml`
 
-Fica em `$BRAIN_CONFIG_HOME/config.yml`; sem a variável, em `~/.config/second-brain/config.yml`. Nunca vai para o vault nem para um repositório. Guarda só os caminhos desta máquina:
+Fica em `$BRAIN_CONFIG_HOME/config.yml`; sem a variável, em `~/.config/photon-brain/config.yml`. Nunca vai para o vault nem para um repositório. Guarda só os caminhos desta máquina:
 
 ```yaml
 vault: <pasta sincronizada pelo provedor>/Vault
 files: <pasta sincronizada pelo provedor>/Vault-files
 provider: google-drive          # google-drive | onedrive | icloud | local
 backup_targets:                 # opcional: destinos de backup desta máquina (references/backup.md)
-  - <pasta local fora do provedor>/second-brain
-  - <pasta de outro provedor ou conta>/second-brain-backups
+  - <pasta local fora do provedor>/photon-brain
+  - <pasta de outro provedor ou conta>/photon-brain-backups
 ```
 
 - `vault` — pasta do vault, dentro da pasta sincronizada do provedor. Cada máquina grava o seu caminho, inclusive um link simbólico.
@@ -22,12 +22,14 @@ backup_targets:                 # opcional: destinos de backup desta máquina (r
 
 É escrita pelo `brain.py init` (e pelo `init --join` numa máquina nova). `BRAIN_CONFIG_HOME` troca a pasta, útil para testes ou para mais de um vault.
 
+**Compatibilidade com o nome antigo:** uma máquina configurada antes da versão 2026.11.8 tem a configuração em `~/.config/second-brain/config.yml`. Sem `BRAIN_CONFIG_HOME`, o `brain.py` lê `~/.config/photon-brain/config.yml` se existir; se não, lê a pasta antiga como reserva, até a remoção anunciada no `CHANGELOG.md` (não antes de 2027-03, SPEC-0073). Toda gravação (`init`, `init --join`, `backup target add`) vai só para a pasta nova, com a configuração completa; a pasta antiga nunca é gravada, movida nem apagada. O `doctor` mostra um AVISO com o comando de cópia (`mkdir -p ~/.config/photon-brain && cp -p ~/.config/second-brain/config.yml ~/.config/photon-brain/`) quando só a antiga existe, e outro dizendo que ela é ignorada (e pode ser apagada) quando as duas existem. Com `BRAIN_CONFIG_HOME` vale só essa pasta, sem reserva nem aviso (SPEC-0069, ADR-0020).
+
 ## Camada compartilhada — `brain-config.yml`
 
 Fica na raiz do vault e sincroniza com ele: todas as máquinas veem os mesmos contextos e a mesma estrutura. **Nunca tem caminho absoluto** — tudo é relativo ao vault. O `init` gera o arquivo a partir de `assets/brain-config.yml`, com os comentários do modelo; só mudam os valores de `--map` e as entradas de `--context`. Exemplo com `--context college=projects/college:College`:
 
 ```yaml
-# second-brain — configuração compartilhada padrão (copiada para <vault>/brain-config.yml pelo init).
+# photon-brain — configuração compartilhada padrão (copiada para <vault>/brain-config.yml pelo init).
 # Sincroniza com o vault: só caminhos relativos ao vault, nunca absolutos (ADR-0008). Detalhes: references/config.md
 version: 1
 language: auto            # idioma do conteúdo das notas; a estrutura do vault é sempre em inglês

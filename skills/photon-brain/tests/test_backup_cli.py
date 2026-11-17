@@ -10,7 +10,7 @@ Saídas que os testes conferem (contrato da seção 6):
         "destino já existe", exit 0; dentro do vault ou da pasta files -> exit 2, config.yml igual.
     backup [--dest PASTA ...] [--with-files] --json -> {"name", "entries" (número de entradas do manifesto),
         "targets": [{"path", "status": "ok"|"failed", "detail", "removed": [nomes]}]}; zip
-        second-brain-AAAA-MM-DD-HHMMSS[-files].zip com vault/<rel>, files/<rel> e brain-backup.json.
+        photon-brain-AAAA-MM-DD-HHMMSS[-files].zip (SPEC-0069) com vault/<rel>, files/<rel> e brain-backup.json.
     backup list --json -> {"targets": [{"path", "status": "ok"|"failed", "detail", "backups": [{"name", "created",
         "size", "entries", "with_files"}]}]}, backups do mais novo para o mais velho (hipótese de chaves do
         Test-writer, seguindo o --json do backup).
@@ -41,7 +41,8 @@ from test_backup import MANIFEST, make_backup_zip, sha, stamp
 from test_store_cli import StoreCliTestCase, today
 
 SPEC = "SPEC-0051"
-PATTERN = re.compile(r"^second-brain-\d{4}-\d{2}-\d{2}-\d{6}(-files)?\.zip$")
+# SPEC-0069:CH-01 — backups novos com o prefixo photon-brain
+PATTERN = re.compile(r"^photon-brain-\d{4}-\d{2}-\d{2}-\d{6}(-files)?\.zip$")
 NOTE_A = "projects/college/Aula 1.md"
 NOTE_B = "projects/college/Aula 2.md"
 
@@ -126,7 +127,7 @@ class BackupTest(BackupCliTestCase):
         log_before = self.log()
         data = self.backup_json()
         name = data["name"]
-        self.assertRegex(name, r"^second-brain-\d{4}-\d{2}-\d{2}-\d{6}\.zip$")
+        self.assertRegex(name, r"^photon-brain-\d{4}-\d{2}-\d{2}-\d{6}\.zip$")
         for folder in (self.a, self.b):
             target = self.target_of(data, folder)
             self.assertEqual(target["status"], "ok", target)
@@ -187,7 +188,7 @@ class BackupTest(BackupCliTestCase):
         pdf.parent.mkdir(parents=True, exist_ok=True)
         pdf.write_bytes(b"%PDF-1.4 aula")
         data = self.backup_json("--dest", self.a, "--with-files")
-        self.assertRegex(data["name"], r"^second-brain-\d{4}-\d{2}-\d{2}-\d{6}-files\.zip$")
+        self.assertRegex(data["name"], r"^photon-brain-\d{4}-\d{2}-\d{2}-\d{6}-files\.zip$")
         manifest = manifest_of(self.a / data["name"])
         self.assertIs(manifest["with_files"], True)
         self.assertEqual(manifest["entries"].get("files/college/2026/aula.pdf"), sha(b"%PDF-1.4 aula"))
@@ -274,7 +275,7 @@ class ListAndVerifyTest(BackupCliTestCase):
         out = self.box.run("backup", "verify", altered)
         self.assertExit(out, 1)
         self.assertRegex(out.stdout + out.stderr, rf"(?m)^ERRO .*{re.escape(name)} — \S")
-        out = self.box.run("backup", "verify", self.a / "second-brain-2020-01-01-000000.zip")
+        out = self.box.run("backup", "verify", self.a / "photon-brain-2020-01-01-000000.zip")
         self.assertExit(out, 2)
 
 

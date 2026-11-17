@@ -12,7 +12,7 @@ Saídas que os testes conferem (contrato da seção 6; mensagens de erro podem i
     files dentro do vault      exit 2, "files precisa ficar fora do vault"
     provider inválido          exit 2, mensagem com os quatro providers
     init --join sem config     exit 2, "vault sem brain-config.yml — rode init"
-    config / doctor sem local  exit 3, "second-brain não configurado nesta máquina — rode init (ou init --join)"
+    config / doctor sem local  exit 3, "photon-brain não configurado nesta máquina — rode init (ou init --join)"
     config --json              {"values": {...}, "origins": {...}} (ver test_config.load_config)
     log.md                     uma linha "- AAAA-MM-DD HH:MM <comando> <resumo>" no fim, por escrita no vault
                                (init: "- AAAA-MM-DD HH:MM init ..."; context add: "- ... context add ...")
@@ -32,7 +32,9 @@ import unittest
 from brain_support import (
     INIT_LOG_LINE,
     LOG_LINE,
+    NEW_CONFIG_DIR,
     NOT_CONFIGURED,
+    OLD_CONFIG_DIR,
     SCRIPT,
     SKILL,
     Sandbox,
@@ -107,7 +109,9 @@ class NewVaultTest(CliTestCase):
         self.assertIn(str(self.box.files), text)
         self.assertIn("google-drive", text)
         self.assertTrue(self.box.files.is_dir())
-        self.assertFalse((self.box.home / ".config" / "second-brain").exists(), "ignorou BRAIN_CONFIG_HOME")
+        # SPEC-0069:CH-01 — nenhuma das pastas padrão (nova ou antiga) é criada com BRAIN_CONFIG_HOME
+        for name in (NEW_CONFIG_DIR, OLD_CONFIG_DIR):
+            self.assertFalse(self.box.default_dir(name).exists(), f"ignorou BRAIN_CONFIG_HOME: criou {name}")
 
         config = self.box.config_json()
         self.assertEqual(config["values"]["contexts"]["college"], {"folder": "projects/college", "title": "College"})
@@ -227,7 +231,7 @@ class NotConfiguredTest(CliTestCase):
             with self.subTest(args=args):
                 out = self.box.run(*args)
                 self.assertExit(out, 3)
-                self.assertIn(NOT_CONFIGURED, output(out))
+                self.assertIn(NOT_CONFIGURED, output(out))  # SPEC-0069:CH-01
 
 
 class DoctorTest(CliTestCase):

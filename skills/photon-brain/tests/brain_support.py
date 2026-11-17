@@ -3,7 +3,8 @@
 - `load_brain()` importa scripts/brain.py pelo caminho (importlib), sem sys.path de outra skill (ADR-0007).
   Ausente ou com erro de import = None; `brain()` e `fn(nome)` transformam isso em falha clara do teste.
 - `Sandbox` cria um diretório temporário resolvido (macOS: /var -> /private/var) com HOME e BRAIN_CONFIG_HOME
-  próprios e roda `python3 scripts/brain.py ...` como subprocesso.
+  próprios e roda `python3 scripts/brain.py ...` como subprocesso; `run_default` roda sem BRAIN_CONFIG_HOME, para os
+  casos da pasta padrão (~/.config/photon-brain e a reserva antiga, SPEC-0069), sempre com o HOME temporário.
 """
 import importlib.util
 import json
@@ -18,7 +19,11 @@ from pathlib import Path
 TESTS = Path(__file__).resolve().parent
 SKILL = TESTS.parent
 SCRIPT = SKILL / "scripts" / "brain.py"
-NOT_CONFIGURED = "second-brain não configurado nesta máquina — rode init (ou init --join)"
+# SPEC-0069:CH-01 — o texto passa a dizer photon-brain; o nome antigo fica montado numa constante só (guarda de nomes,
+# SPEC-0072), usado apenas nos casos de compatibilidade.
+NOT_CONFIGURED = "photon-brain não configurado nesta máquina — rode init (ou init --join)"
+NEW_CONFIG_DIR = "photon-brain"
+OLD_CONFIG_DIR = "second" + "-brain"
 # linha de log.md do contrato v2 (formato da SPEC-0019): "- AAAA-MM-DD HH:MM <comando> <resumo>"
 LOG_LINE = re.compile(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} \S", re.MULTILINE)
 INIT_LOG_LINE = re.compile(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} init \S", re.MULTILINE)
@@ -74,11 +79,26 @@ class Sandbox:
 
     def run(self, *args, config_home=None, cwd=None):
         """`cwd` padrão: a raiz do sandbox (os testes da SPEC-0021 rodam também de dentro do vault)."""
-        env = dict(os.environ)
-        env["HOME"] = str(self.home)
+        env = self.env()
         env["BRAIN_CONFIG_HOME"] = str(config_home or self.config_home)
         return subprocess.run([sys.executable, str(SCRIPT), *[str(a) for a in args]], check=False,
                               cwd=cwd or self.root, capture_output=True, text=True, env=env)
+
+    def env(self) -> dict:
+        """Ambiente do subprocesso: HOME e XDG_CONFIG_HOME temporários, sem BRAIN_CONFIG_HOME herdado."""
+        env = {k: v for k, v in os.environ.items() if k != "BRAIN_CONFIG_HOME"}
+        env["HOME"] = str(self.home)
+        env["XDG_CONFIG_HOME"] = str(self.home / ".config")
+        return env
+
+    def run_default(self, *args, cwd=None):
+        """Sem BRAIN_CONFIG_HOME: a configuração local vem da pasta padrão sob o HOME temporário (SPEC-0069)."""
+        return subprocess.run([sys.executable, str(SCRIPT), *[str(a) for a in args]], check=False,
+                              cwd=cwd or self.root, capture_output=True, text=True, env=self.env())
+
+    def default_dir(self, name: str) -> Path:
+        """<HOME temporário>/.config/<name> (NEW_CONFIG_DIR ou OLD_CONFIG_DIR)."""
+        return self.home / ".config" / name
 
     def init(self, *extra, vault=None, files=None, provider="google-drive", config_home=None):
         return self.run("init", "--vault", vault or self.vault, "--files", files or self.files,

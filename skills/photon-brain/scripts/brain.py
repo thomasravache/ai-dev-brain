@@ -54,7 +54,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.7"
+BRAIN_VERSION = "2026.11.8"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -72,8 +72,12 @@ SHARED_VERSION = "1"
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
 ORIGIN_LOCAL, ORIGIN_VAULT, ORIGIN_DEFAULT = "local", "vault", "padrão"
-NOT_CONFIGURED = "second-brain não configurado nesta máquina — rode init (ou init --join)"
-LOCAL_HEADER = "# second-brain — configuração local desta máquina (references/config.md). Não vai para o vault.\n"
+NOT_CONFIGURED = "photon-brain não configurado nesta máquina — rode init (ou init --join)"
+LOCAL_HEADER = "# photon-brain — configuração local desta máquina (references/config.md). Não vai para o vault.\n"
+# Local configuration folders under ~/.config (SPEC-0069, ADR-0020): the new one is read first and is the only one
+# written; the old one is read as a fallback until its removal (SPEC-0073) and is never written, moved nor deleted.
+CONFIG_DIR = "photon-brain"
+OLD_CONFIG_DIR = "second-brain"
 CONTEXT_NAME_RE = re.compile(r"^[\w][\w-]*$")
 KEY_RE = re.compile(r"^([^\s'\"#{}\[\],:][^:]*?)\s*:(?:\s+(.*))?$")
 NEEDS_QUOTES_RE = re.compile(r":\s|:$|\s#|^[\[\]{}&*!|>'\"%@`,#?:-]|^\s|\s$|\"|\\")
@@ -208,7 +212,8 @@ PERSONAL_DETECTORS = ("cpf", "cnpj", "card", "labeled-document")
 PERSONAL_KINDS = {"cpf": "cpf", "cnpj": "cnpj", "card": "cartão", "labeled-document": "documento rotulado"}
 BACKUP_DEFAULTS = {"keep": 10, "warn_days": 7, "with_files": False}  # backup: of brain-config.yml (SPEC-0051)
 BACKUP_MINIMUM = {"keep": 1, "warn_days": 0}  # keep >= 1 (ADR-0015), warn_days >= 0
-BACKUP_NAME_RE = re.compile(r"^second-brain-(\d{4}-\d{2}-\d{2}-\d{6})(-files)?\.zip$")  # the only names rotated
+BACKUP_PREFIX = "photon-brain"  # backups written by this version; second-brain-… ones are still read (SPEC-0069)
+BACKUP_NAME_RE = re.compile(r"^(?:photon-brain|second-brain)-(\d{4}-\d{2}-\d{2}-\d{6})(-files)?\.zip$")  # rotated
 BACKUP_STAMP = "%Y-%m-%d-%H%M%S"
 BACKUP_MANIFEST = "brain-backup.json"
 BACKUP_PARTIAL = ".partial"
@@ -443,15 +448,50 @@ def relative_folder(vault: str, folder: str) -> str:
     return rel
 
 
-def local_config_path(config_home=None) -> Path:
-    """$BRAIN_CONFIG_HOME/config.yml (default ~/.config/second-brain/config.yml); config_home wins over both."""
+def config_override(config_home=None):
+    """config_home, else $BRAIN_CONFIG_HOME, as a Path; None when neither is given (the default folders apply)."""
     if config_home:
-        base = Path(config_home)
-    elif os.environ.get("BRAIN_CONFIG_HOME"):
-        base = Path(os.environ["BRAIN_CONFIG_HOME"])
-    else:
-        base = Path.home() / ".config" / "second-brain"
-    return base / "config.yml"
+        return Path(config_home)
+    if os.environ.get("BRAIN_CONFIG_HOME"):
+        return Path(os.environ["BRAIN_CONFIG_HOME"])
+    return None
+
+
+def default_config_path(name: str = CONFIG_DIR) -> Path:
+    return Path.home() / ".config" / name / "config.yml"
+
+
+def local_config_path(config_home=None) -> Path:
+    """Where the local configuration is read (SPEC-0069): config_home or $BRAIN_CONFIG_HOME (no fallback), else the
+    first existing of ~/.config/photon-brain/config.yml and ~/.config/second-brain/config.yml (fallback until
+    SPEC-0073), else ~/.config/photon-brain/config.yml (not configured)."""
+    override = config_override(config_home)
+    if override is not None:
+        return override / "config.yml"
+    for name in (CONFIG_DIR, OLD_CONFIG_DIR):
+        path = default_config_path(name)
+        if path.is_file():
+            return path
+    return default_config_path()
+
+
+def local_config_write_path(config_home=None) -> Path:
+    """Where the local configuration is written: config_home or $BRAIN_CONFIG_HOME, else always
+    ~/.config/photon-brain/config.yml; the old folder is never written (SPEC-0069, ADR-0020)."""
+    override = config_override(config_home)
+    return override / "config.yml" if override is not None else default_config_path()
+
+
+def old_config_items(config_home=None) -> list:
+    """doctor AVISO about the old default folder (none with an override): only the old one exists -> the copy
+    command; both exist -> the old one is ignored (SPEC-0069)."""
+    if config_override(config_home) is not None or not default_config_path(OLD_CONFIG_DIR).is_file():
+        return []
+    old, new = f"~/.config/{OLD_CONFIG_DIR}", f"~/.config/{CONFIG_DIR}"
+    if default_config_path().is_file():
+        return [("AVISO", f"{old} é ignorada (vale {new})", "pode apagá-la")]
+    return [("AVISO", f"configuração no caminho antigo {old}",
+             f"copie com: mkdir -p {new} && cp -p {old}/config.yml {new}/")]
 
 
 def shared_config_path(vault: str) -> Path:
@@ -2077,9 +2117,10 @@ def cmd_init(args, config_home=None) -> int:
         error = "files precisa ficar fora do vault"
     if error:
         raise BrainError(error)
-    vault, local_path = Path(vault_s), local_config_path(config_home)
+    vault, local_path = Path(vault_s), local_config_write_path(config_home)
     shared_path = shared_config_path(vault_s)
-    local_text = render_local_config(vault_s, files_s, args.provider, local_backup_targets(local_path))
+    local_text = render_local_config(vault_s, files_s, args.provider,
+                                     local_backup_targets(local_config_path(config_home)))
 
     if args.join:
         if args.adopt or args.map or args.context or args.force:
@@ -2144,7 +2185,7 @@ def cmd_config(as_json: bool, config_home=None) -> int:
     values, origins = config["values"], config["origins"]
     for warning in config.get("warnings", []):
         print(f"aviso: {warning['message']}", file=sys.stderr)
-    print(f"second-brain {BRAIN_VERSION} — configuração local: {local_config_path(config_home)}")
+    print(f"photon-brain {BRAIN_VERSION} — configuração local: {local_config_path(config_home)}")
     for key in ("vault", "files", "provider", "version", "language", "inbox_stale_days"):
         print(f"{key}: {values[key]}  ({origins[key]})")
     for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
@@ -2341,6 +2382,7 @@ def confidential_item(values: dict, problems: dict) -> tuple:
 
 def cmd_doctor(as_json: bool, config_home=None) -> int:
     rows = doctor_items(read_config(config_home), local_config_path(config_home))
+    rows[1:1] = old_config_items(config_home)
     code = 1 if any(status == "ERRO" for status, _, _ in rows) else 0
     if as_json:
         items = [{"status": s, "item": i, "detail": d} for s, i, d in rows]
@@ -2601,9 +2643,9 @@ def cmd_export_notebooklm(args, config_home=None) -> int:
 # ---------------------------------------------------------------- backup and restore (SPEC-0051, ADR-0015)
 
 def backup_name(with_files: bool = False, clock=None) -> str:
-    """"second-brain-AAAA-MM-DD-HHMMSS[-files].zip" with the time of clock() (None = datetime.now). Pure."""
+    """"photon-brain-AAAA-MM-DD-HHMMSS[-files].zip" with the time of clock() (None = datetime.now). Pure."""
     stamp = (clock or dt.datetime.now)().strftime(BACKUP_STAMP)
-    return f"second-brain-{stamp}{'-files' if with_files else ''}.zip"
+    return f"{BACKUP_PREFIX}-{stamp}{'-files' if with_files else ''}.zip"
 
 
 def backup_moment(name: str):
@@ -2847,13 +2889,13 @@ PARTIAL_HINT = "backup interrompido; pode ser apagado à mão (references/backup
 
 def cmd_backup_target_add(args, config_home=None) -> int:
     config = read_config(config_home)
-    values, local_path = config["values"], local_config_path(config_home)
+    values, local_path = config["values"], local_config_write_path(config_home)
     folder = check_backup_target(args.folder, values, "destino")
     known = next((target for target in values["backup_targets"] if same_folder(folder, target)), None)
     if known is not None:
         print(f"destino já existe: {known}" + (f" (mesma pasta de {folder})" if known != folder else ""))
         return 0
-    local = read_yaml(local_path)
+    local = read_yaml(local_config_path(config_home))  # full configuration, maybe from the old folder (SPEC-0069)
     local["backup_targets"] = values["backup_targets"] + [folder]
     write_local_config(local_path, LOCAL_HEADER + dump_yaml(local))
     print(f"Destino de backup acrescentado: {folder} (configuração local: {local_path})")
@@ -4423,9 +4465,9 @@ def context_add_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="brain.py",
-        description=("Ferramentas determinísticas do second-brain: onboarding do vault, configuração, diagnóstico, "
+        description=("Ferramentas determinísticas da photon-brain: onboarding do vault, configuração, diagnóstico, "
                      "busca, fluxo de guardar, inbox, processadores, manutenção (lint) e exportação para o NotebookLM."))
-    parser.add_argument("--version", action="version", version=f"second-brain {BRAIN_VERSION}")
+    parser.add_argument("--version", action="version", version=f"photon-brain {BRAIN_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("init", help="cria um vault novo, adota um existente (--adopt) ou só liga esta máquina (--join)")
     p.add_argument("--vault", required=True, help="pasta do vault (dentro da pasta sincronizada do provedor)")
