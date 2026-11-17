@@ -55,9 +55,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Fase 1 (test-writer): CH-01, UT-01 a UT-04 e IT-01 com a tag `SPEC-0072:<ID>`, falhando pelo motivo certo
-- [ ] Fase 2 (implementer): checagens `old-config` e `old-atlas-folder`, `stale-atlas` nas duas pastas, bloco do hook, guarda de nomes com exceções listadas, README e versão do plugin
-- [ ] Fase 3 (reviewer): G4 independente
+- [x] Fase 1 (test-writer): CH-01, UT-01 a UT-04 e IT-01 com a tag `SPEC-0072:<ID>`, falhando pelo motivo certo
+- [x] Fase 2 (implementer): checagens `old-config` e `old-atlas-folder`, `stale-atlas` nas duas pastas, bloco do hook, guarda de nomes com exceções listadas, README e versão do plugin
+- [x] Fase 3 (reviewer): G4 independente
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -68,9 +68,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — b75f949 | 2026-11-17 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 18dfd31 | 2026-11-17 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED (rodada 2; blocker do Python 3.12+ e minors 2–8 resolvidos, provados em 3.9 e 3.14; guarda sem falso positivo nos arquivos reais; 2 nits aceitos) — 6b6bf41 | 2026-11-17 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — a8e52fe | 2026-11-17 |
+| H2 Integração aprovada | PASS | aprovado por política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-17 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-17 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
@@ -83,28 +83,42 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+- O `fermion_doctor`, que roda em todo início de sessão, passa a avisar a configuração nas pastas antigas (`old-config`, com o comando `cp -p` ou "pode apagar", inclusive quando a pasta antiga é link simbólico), a pasta `.org-atlas/` no projeto (`old-atlas-folder`) e a cópia velha da ferramenta nas duas pastas (`stale-atlas`). Uma guarda nova (`tests/plugin/test_old_technical_names.py`) acusa qualquer nome técnico antigo em arquivo versionado fora de exceções estreitas e listadas, lendo as strings dos scripts pela AST (igual do Python 3.9 ao 3.15). README, `gluon-spec/SKILL.md`, `brownfield.md` e referências da boson-atlas corrigidos. Plugin 2026.11.18.
 
 ### Como foi feito
+- `old_config`/`old_atlas_folder` e `config_exists` em `scripts/fermion_doctor.py`; o hook de início de sessão não precisou mudar (já põe uma linha por achado, até 1.500 caracteres).
+- Testes em 0615c77 (limpeza dos nomes antigos nos testes e fixtures), 089d8a3 e ae74063 (Emenda v4); implementação em 3c608b9 e b75f949.
+- Impedimento IMP-01 (a guarda achou referências velhas reais na gluon-spec) resolvido pela Emenda v3; Emendas v4 e v5 pela revisão.
+- **Revisão G4:** rodada 1 CHANGES_REQUESTED (guarda quebrava no Python 3.12+ e deixava passar f-strings; padrões e exceções largos; link simbólico) → Emendas v4 e v5; rodada 2 APPROVED, provada em 3.9 e 3.14.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes:** 089d8a3 vermelho — 12 falhas em `tests/plugin` (sem `old-config`/`old-atlas-folder`, README e gluon-spec com referências velhas); ae74063 vermelho — 7 falhas (link simbólico, docs, notas de compatibilidade).
+- **Depois:** 3c608b9 e b75f949 verdes; suíte completa no G5 (a8e52fe) e CI do PR (Python 3.9 e 3.15).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Sem nada antigo, saída do doctor igual com linhas OK das checagens novas | PASS | `tests/plugin/test_fermion_doctor.py::OldNamesGuardTest` — G5 e CI do PR |
+| UT-01 | `old-config` com `cp -p`, "pode apagar", link simbólico e sem achado com `*_CONFIG_HOME` | PASS | `tests/plugin/test_fermion_doctor.py::OldConfigTest` — G5 e CI do PR |
+| UT-02 | `stale-atlas` nas duas pastas e `old-atlas-folder` só na antiga | PASS | `tests/plugin/test_fermion_doctor.py::OldAtlasFolderTest` — G5 e CI do PR |
+| UT-03 | Guarda de nomes técnicos com exemplo e arquivos reais, nos dois Pythons | PASS | `tests/plugin/test_old_technical_names.py` — G5 e CI do PR |
+| UT-04 | Tools `brain_*` do MCP não criam nem mudam as pastas de configuração | PASS | `mcp/tests/test_brain_server.py` — G5 e CI do PR |
+| IT-01 | Hook de início de sessão com o bloco das checagens novas | PASS | `tests/plugin/test_fermion_doctor.py::OldNamesHookTest` — G5 e CI do PR |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — 089d8a3/ae74063 vermelhos, 3c608b9/b75f949 verdes
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido — checagens da SPEC-0061 e busca com exemplo da SPEC-0055
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: plugin e cópias, sem deploy
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — README; CHANGELOGs das skills já registram as trocas (SPEC-0069 a 0071)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — nenhuma
 
 ### Deploy
+N/A — plugin 2026.11.18, PR desta spec.
 
 ### Pendências
+- Nits da revisão, aceitos: `<antigo>-backup.zip` não é acusado (não é o formato real); a exceção E5 isenta a atribuição inteira das 6 constantes listadas.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
