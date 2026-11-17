@@ -4,12 +4,12 @@ title: fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos
 tier: lite
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: [SPEC-0069, SPEC-0070, SPEC-0071]
 consumes_contract: []
-touches: [scripts/fermion_doctor.py, tests/plugin/**, hooks/session_start.py, README.md, .claude-plugin/plugin.json]
+touches: [scripts/fermion_doctor.py, tests/plugin/**, hooks/session_start.py, README.md, .claude-plugin/plugin.json, mcp/tests/test_brain_server.py]
 adrs: [ADR-0019, ADR-0020]
 external: []
 size: S
@@ -44,6 +44,7 @@ Depois das SPEC-0069 a 0071, cada skill avisa no próprio `doctor` quando a máq
 - **UT-01** — Dados `HOME` e `XDG_CONFIG_HOME` temporários com `~/.config/second-brain`, depois com as duas pastas, e o mesmo para `org-atlas`, quando o `fermion_doctor --json` roda, então há o achado `old-config` com o comando de cópia (`cp -p`) no primeiro caso e "pode apagar" no segundo; com `BRAIN_CONFIG_HOME`/`ATLAS_CONFIG_HOME` definidos, nenhum achado.
 - **UT-02** — Dado um projeto com `.org-atlas/skill` velho e outro com `.boson-atlas/skill` velho, quando o `fermion_doctor` roda, então `stale-atlas` acusa os dois e `old-atlas-folder` acusa só o primeiro.
 - **UT-03** — Dado um exemplo com cada nome técnico antigo fora das exceções e as exceções listadas, quando a guarda de nomes roda, então acusa cada uso fora das exceções com `arquivo:linha` e nenhum dentro delas; nos arquivos versionados reais, depois das SPEC-0069 a 0071, nenhum achado.
+- **UT-04** — (Emenda v2) Dado o servidor MCP rodando as tools `brain_*` com `HOME` temporário, quando as tools de leitura rodam, então nem `~/.config/second-brain` nem `~/.config/photon-brain` são criadas ou alteradas (hoje o teste só confere a pasta antiga).
 - **IT-01** — Dado um ambiente temporário com `~/.config/second-brain` e um projeto com `.org-atlas/`, quando o hook de início de sessão roda como o Claude Code o chama, então o bloco "Instalação desatualizada (fermion)" traz uma linha para cada um, dentro de 1.500 caracteres.
 
 ## 5. Questões em Aberto
@@ -54,6 +55,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Fase 1 (test-writer): CH-01, UT-01 a UT-04 e IT-01 com a tag `SPEC-0072:<ID>`, falhando pelo motivo certo
+- [ ] Fase 2 (implementer): checagens `old-config` e `old-atlas-folder`, `stale-atlas` nas duas pastas, bloco do hook, guarda de nomes com exceções listadas, README e versão do plugin
+- [ ] Fase 3 (reviewer): G4 independente
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -105,3 +109,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| v2 | 2026-11-17 | `touches` ganha `mcp/tests/test_brain_server.py` e o plano ganha UT-04 (o teste do MCP passa a conferir também `~/.config/photon-brain`); a guarda de nomes aceita como exceção as docstrings "formerly org-atlas/second-brain" dos scripts e os fixtures de compatibilidade (`tests/fixtures/previous/`, `old-contract-name.json`, `legacy_contract.py`) | achados das revisões das SPEC-0069 e 0071 | nenhuma | thomas, 2026-11-17 (piloto automático com o recomendado) |
