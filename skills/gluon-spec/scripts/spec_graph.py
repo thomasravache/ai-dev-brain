@@ -7,9 +7,11 @@ import datetime as dt
 import difflib
 import heapq
 import json
+import math
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -17,7 +19,7 @@ import unicodedata
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-SDD_TOOL_VERSION = "2026.11.5"
+SDD_TOOL_VERSION = "2026.11.6"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "references"
 ASSETS_DIR = SKILL_DIR / "assets"
@@ -529,9 +531,10 @@ def resolve_mode(root: Path):
 
 
 class Project:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, mode="auto"):
+        """mode "auto" resolve o modo pelo registro (via git); retro passa o modo pronto (dict ou None) sem git."""
         self.root = root
-        mode = resolve_mode(root)
+        mode = resolve_mode(root) if mode == "auto" else mode
         self.private = mode is not None
         self.mode_key = mode["key"] if mode else None
         self.spec_root = mode["spec_root"] if mode else None
@@ -2608,8 +2611,11 @@ def cmd_index(project: Project, stdout: bool):
     return 0
 
 
-def run_git(root: Path, *args, input=None):
-    result = subprocess.run(["git", *args], check=False, cwd=root, capture_output=True, text=True, input=input)
+def run_git(root: Path, *args, input=None, env=None):
+    """env: variáveis somadas ao ambiente atual (ex.: GIT_OPTIONAL_LOCKS=0 nas leituras do retro)."""
+    full_env = dict(os.environ, **env) if env else None
+    result = subprocess.run(["git", *args], check=False, cwd=root, capture_output=True, text=True, input=input,
+                            env=full_env)
     return result.returncode, result.stdout, result.stderr
 
 
@@ -3515,6 +3521,434 @@ def cmd_whats_new(project: Project, ack: bool):
         print("Para se atualizar:\n" + "\n".join(steps))
     else:
         print(f"Projeto em dia com a skill ({SDD_TOOL_VERSION}).")
+    return 0
+
+
+# ---------------------------------------------------------------- retro (retrospectiva entre projetos, SPEC-0074)
+
+RETRO_VERSION = 1
+RETRO_STALE_DAYS = 30
+RETRO_ACTIVE = ("approved", "in-progress")
+RETRO_HAND_PCT = 30          # R4: (manual + à mão) acima disso, em %
+RETRO_HAND_MIN = 10          # R4: mínimo de G0–G5 PASS
+RETRO_NO_FAIL_MIN = 20       # R5: mínimo de PASS de G1–G5
+RETRO_RIGOR_GATES = ("G1", "G2", "G3", "G4", "G5")
+RETRO_EVIDENCE_GATES = ("G0", "G1", "G2", "G3", "G4", "G5")
+RETRO_NA_MIN = 5             # R6: mínimo de specs que registram o gate
+RETRO_ORIGINS = ("gerada", "manual", "humana", "a_mao")
+RETRO_GIT_ENV = {"GIT_OPTIONAL_LOCKS": "0"}
+RETRO_RULES = {
+    "R1": "ferramenta atrasada", "R2": "spec parada", "R3": "entregue sem fechar", "R4": "evidência à mão",
+    "R5": "nenhuma reprovação", "R6": "N/A recorrente", "R7": "impedimento velho",
+}
+# Tabela fixa de sugestões de spec para a própria skill (espelha references/retro.md; nunca vira arquivo).
+RETRO_SUGGESTIONS = {
+    "R1": "gluon-spec: avisar a ferramenta atrasada no status e no hook, com o comando de atualização",
+    "R2": "gluon-spec: revisão periódica das specs paradas (retomar, fechar ou deprecated)",
+    "R3": "gluon-spec: lembrar o fechamento do G7 depois do merge (G5 PASS sem G7)",
+    "R4": "gluon-spec: reduzir a evidência à mão (comandos do sdd-config prontos e `gate --run` como caminho padrão)",
+    "R5": "gluon-spec: guardar o histórico de FAIL no Registro de Gates (o PASS hoje apaga o FAIL)",
+    "R6": "gluon-spec: tratar o N/A recorrente (dispensa de pilar sugerida ou spec da capacidade que falta)",
+    "R7": "gluon-spec: aviso de impedimento aberto há muito tempo no status",
+}
+GENERATED_SHA_RE = re.compile(r" — (?:[0-9a-f]{7,40}|\?)(?: \(árvore suja\))?$")
+GENERATED_START = ("validate: ", "verify G", "Relatório de Entrega")
+GENERATED_EXIT_RE = re.compile(r"\S exit -?\d+ \(")
+GIT_REMOTE_RE = re.compile(r'^\s*\[remote\s+"origin"\]\s*$')
+
+
+def evidence_origin(evidence: str) -> str:
+    """Origem da evidência de um gate PASS: gerada (formato do `gate --run`), manual, humana ou a_mao."""
+    text = (evidence or "").strip()
+    if text.startswith(MANUAL_PREFIX):
+        return "manual"
+    if norm(text).startswith("aprovado por"):
+        return "humana"
+    if GENERATED_SHA_RE.search(text) and (text.startswith(GENERATED_START) or GENERATED_EXIT_RE.search(text)):
+        return "gerada"
+    return "a_mao"
+
+
+def gate_dates(doc: Doc) -> dict:
+    """Data (válida) de cada linha do Registro de Gates: {gate: "AAAA-MM-DD"}."""
+    content = doc.section("Registro de Gates")
+    out = {}
+    for _, rows in parse_tables(COMMENT_RE.sub("", content or "")):
+        for row in rows:
+            words = row[0].split() if row else []
+            key = words[0].upper() if words else ""
+            date = row[3].strip() if len(row) > 3 else ""
+            if key in GATE_ROWS and valid_date(date):
+                out[key] = date
+    return out
+
+
+def _date(value: str):
+    return dt.date.fromisoformat(value) if valid_date(value) else None
+
+
+def retro_fail_history(specs_dir: Path):
+    """Linhas FAIL removidas do Registro de Gates no `git log -p` da pasta de specs; None fora de repositório git."""
+    if not Path(specs_dir).is_dir():
+        return None
+    try:
+        code, out, _ = run_git(Path(specs_dir), "log", "-p", "-U0", "--no-color", "--no-ext-diff", "--no-textconv",
+                               "--format=", "--", ".", env=RETRO_GIT_ENV)
+    except OSError:  # git fora do PATH
+        return None
+    if code != 0:
+        return None
+    count = 0
+    for line in out.splitlines():
+        if not line.startswith("-") or line.startswith("---"):
+            continue
+        row = line[1:].strip()
+        if not (row.startswith("|") and row.endswith("|") and len(row) > 1):
+            continue
+        cells = [c.strip() for c in CELL_SPLIT_RE.split(row[1:-1])]
+        words = cells[0].split() if cells else []
+        if not words or words[0].upper() not in GATE_ROWS or len(cells) < 2:
+            continue
+        cell = cells[1].upper()
+        if next((s for s in GATE_STATUSES if s in cell), cell) == "FAIL":
+            count += 1
+    return count
+
+
+def _p90(values: list) -> int:
+    ordered = sorted(values)
+    return ordered[math.ceil(0.9 * len(ordered)) - 1]
+
+
+def retro_metrics(project: Project, today: dt.date, stale_days: int, name=None) -> dict:
+    """Métricas de um projeto já carregado (só IDs e números: nada de títulos, evidências ou descrições)."""
+    by_status, by_tier = Counter(), Counter()
+    gates = {g: {"PASS": 0, "FAIL": 0, "N/A": 0} for g in GATE_ROWS}
+    evidence = {o: 0 for o in RETRO_ORIGINS}
+    stale, unclosed, leads, activity = [], [], [], []
+    amendments, imp_total, imp_open, imp_old = {}, 0, 0, []
+    for sid in sorted(project.specs):
+        doc = project.specs[sid]
+        by_status[doc.status or "?"] += 1
+        by_tier[doc.tier or "?"] += 1
+        table = gate_table(doc) or {}
+        dates = gate_dates(doc)
+        for g, row in table.items():
+            if row["status"] in gates[g]:
+                gates[g][row["status"]] += 1
+            if g in RETRO_EVIDENCE_GATES and row["status"] == "PASS":
+                evidence[evidence_origin(row["evidence"])] += 1
+        own = [d for d in [_date(doc.scalar("created")), _date(doc.scalar("approved_at"))]
+               + [_date(v) for v in dates.values()] if d]
+        activity += own
+        g5, g7 = ((table.get(g) or {}).get("status") for g in ("G5", "G7"))
+        if doc.status in RETRO_ACTIVE:
+            if own and (today - max(own)).days > stale_days:
+                stale.append(sid)
+            if g5 == "PASS" and g7 != "PASS":
+                unclosed.append(sid)
+        approved, closed = _date(doc.scalar("approved_at")), _date(dates.get("G7", ""))
+        if doc.status == "implemented" and g7 == "PASS" and approved and closed and closed >= approved:
+            leads.append((closed - approved).days)
+        content = doc.section("Emendas")
+        rows = [r for _, rs in parse_tables(COMMENT_RE.sub("", content or "")) for r in rs if any(c.strip() for c in r)]
+        if rows:
+            amendments[sid] = len(rows)
+        for item in impediments(doc):
+            imp_total += 1
+            if item["Fechado em"]:
+                continue
+            imp_open += 1
+            opened = _date(item["Aberto em"])
+            if opened and (today - opened).days > stale_days:
+                imp_old.append(f"{sid}/{item['ID']}")
+    version = None
+    try:
+        version = project_tool_version(project)[0]
+    except (OSError, UnicodeDecodeError):
+        pass
+    return {
+        "name": name or project.root.name,
+        "private": bool(project.private),
+        "specs": {"total": len(project.specs), "by_status": {k: v for k, v in sorted(by_status.items()) if v},
+                  "by_tier": {k: v for k, v in sorted(by_tier.items()) if v}},
+        "tool": {"project": version or "desconhecida", "installed": SDD_TOOL_VERSION},
+        "last_activity": max(activity).isoformat() if activity else None,
+        "stale": sorted(stale),
+        "unclosed": sorted(unclosed),
+        "lead_time_days": {"median": statistics.median(leads) if leads else None,
+                           "p90": _p90(leads) if leads else None},
+        "gates": gates,
+        "fail_history": retro_fail_history(project.specs_dir),
+        "evidence": evidence,
+        "na_by_gate": {g: {"na": c["N/A"], "total": c["PASS"] + c["FAIL"] + c["N/A"]} for g, c in gates.items()},
+        "amendments": {"total": sum(amendments.values()), "by_spec": amendments},
+        "impediments": {"total": imp_total, "open": imp_open, "old": sorted(imp_old)},
+    }
+
+
+def _tool_behind(tool: dict) -> bool:
+    project, installed = tool.get("project") or "", tool.get("installed") or SDD_TOOL_VERSION
+    if not VERSION_RE.match(project):
+        return True
+    return version_key(project) < version_key(installed)
+
+
+def _finding(m: dict, rule: str, value, action: str) -> dict:
+    return {"rule": rule, "project": m["name"], "value": value, "action": action}
+
+
+def retro_findings(projects: list) -> list:
+    """Achados das regras fixas R1–R7 (references/retro.md), um por regra e projeto (R6: um por gate)."""
+    out = []
+    for m in projects:
+        if _tool_behind(m["tool"]):
+            update = ("`whats-new` e, depois de revisar, `whats-new --ack`" if m["private"]
+                      else "`whats-new` e `vendor --force` (sem tools/sdd: `whats-new --ack`)")
+            out.append(_finding(m, "R1", f"{m['tool']['project']} < {m['tool']['installed']}", f"rode {update}"))
+        if m["stale"]:
+            out.append(_finding(m, "R2", ", ".join(m["stale"]),
+                                "retome, feche ou marque `deprecated` (`set <ID> status=deprecated`)"))
+        if m["unclosed"]:
+            out.append(_finding(m, "R3", ", ".join(m["unclosed"]),
+                                "feche o G7 (Relatório de Entrega): `gate <ID> G7 --run`"))
+        total = sum(m["evidence"].values())
+        hand = m["evidence"].get("manual", 0) + m["evidence"].get("a_mao", 0)
+        if total >= RETRO_HAND_MIN and hand * 100 > RETRO_HAND_PCT * total:
+            out.append(_finding(m, "R4", f"{round(100 * hand / total)}% ({hand}/{total})",
+                                "registre os gates com `gate <ID> <G> --run`; revise os comandos do sdd-config"))
+        passes = sum(m["gates"][g]["PASS"] for g in RETRO_RIGOR_GATES)
+        if passes >= RETRO_NO_FAIL_MIN and m["fail_history"] == 0:
+            out.append(_finding(m, "R5", f"{passes} PASS, 0 FAIL no histórico",
+                                "confira se os gates rodam com `--run` e se reprovações são registradas com "
+                                "`gate --fail`"))
+        for g in GATE_ROWS:
+            na, gate_total = m["na_by_gate"][g]["na"], m["na_by_gate"][g]["total"]
+            if gate_total >= RETRO_NA_MIN and na * 2 >= gate_total:
+                out.append(_finding(m, "R6", f"{g}: {na}/{gate_total} N/A",
+                                    "registre a dispensa em `pillars.waived` ou crie a spec da capacidade que falta"))
+        if m["impediments"]["old"]:
+            out.append(_finding(m, "R7", ", ".join(m["impediments"]["old"]),
+                                "resolva o impedimento e feche com `resolve`"))
+    return out
+
+
+def retro_skill_suggestions(findings: list, project_count: int) -> list:
+    """Regra em >= 50% dos projetos (mín. 2) vira sugestão de spec para a skill, em texto (nunca cria arquivo)."""
+    by_rule = defaultdict(set)
+    for f in findings:
+        by_rule[f["rule"]].add(f["project"])
+    out = []
+    for rule in sorted(by_rule):
+        count = len(by_rule[rule])
+        if count >= 2 and count * 2 >= project_count:
+            out.append({"rule": rule, "projects": count, "suggestion": RETRO_SUGGESTIONS.get(rule, rule)})
+    return out
+
+
+def _git_common_dir(folder: Path):
+    """Pasta comum do git de `folder` lida dos arquivos (.git ou gitdir/commondir), sem rodar git."""
+    marker = folder / ".git"
+    if marker.is_dir():
+        return marker
+    if marker.is_file():
+        m = re.match(r"gitdir:\s*(.+)", marker.read_text(encoding="utf-8", errors="replace").strip())
+        if m:
+            gitdir = (folder / m.group(1).strip()).resolve()
+            common = gitdir / "commondir"
+            if common.is_file():
+                return (gitdir / common.read_text(encoding="utf-8").strip()).resolve()
+            return gitdir
+    return None
+
+
+def retro_repo_keys(folder: Path) -> list:
+    """Mesmas chaves de repo_keys (remoto normalizado e worktree principal), lidas dos arquivos do git."""
+    keys = []
+    common = _git_common_dir(folder)
+    config = common / "config" if common else None
+    if config and config.is_file():
+        inside = False
+        for line in config.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip().startswith("["):
+                inside = bool(GIT_REMOTE_RE.match(line))
+                continue
+            m = re.match(r"^\s*url\s*=\s*(.+?)\s*$", line)
+            if inside and m:
+                keys.append(normalize_remote(m.group(1)))
+                break
+    keys.append(str((common.parent if common else folder).resolve()))
+    return keys
+
+
+def _private_mode(key: str, spec_root: Path) -> dict:
+    return {"key": key, "mode": "private", "spec_root": spec_root, "sync": "none"}
+
+
+def _registry_private(entry) -> bool:
+    return isinstance(entry, dict) and entry.get("mode") == "private" and bool(entry.get("spec_root"))
+
+
+def retro_candidates(folders, use_registry: bool):
+    """(nome, Project | None, caminho, motivo) de cada pasta e do registro; git não é chamado."""
+    registry = load_registry()["projects"] if registry_path().exists() else {}
+    privates = {k: v for k, v in registry.items() if _registry_private(v)}
+    by_root = {str(Path(v["spec_root"]).expanduser().resolve()): k for k, v in privates.items()}
+    out = []
+    for folder in folders:
+        path = folder.resolve()
+        key = by_root.get(str(path))
+        if (path / "specs").is_dir() and (path / "sdd-config.yml").is_file():
+            out.append((key or path.name, Project(path, _private_mode(key or path.name, path)), path, ""))
+            continue
+        key = next((k for k in retro_repo_keys(path) if k in privates), None)
+        if key:
+            spec_root = Path(privates[key]["spec_root"]).expanduser()
+            out.append((key, Project(path, _private_mode(key, spec_root)), path, ""))
+        elif (path / "docs" / "specs").is_dir():
+            out.append((path.name, Project(path, None), path, ""))
+        else:
+            out.append((path.name, None, path, "sem docs/specs nem modo privado registrado"))
+    if use_registry:
+        for key in sorted(privates):
+            spec_root = Path(privates[key]["spec_root"]).expanduser()
+            if not spec_root.is_dir():
+                out.append((key, None, spec_root, "spec_root do registro não encontrado"))
+            else:
+                out.append((key, Project(spec_root, _private_mode(key, spec_root)), spec_root, ""))
+    return out
+
+
+def retro_collect(folders, use_registry: bool, today_date: dt.date, stale_days: int):
+    """Métricas dos projetos analisáveis e ignorados (pasta e motivo); a mesma pasta de specs conta uma vez."""
+    projects, ignored, seen = [], [], set()
+    for name, project, path, reason in retro_candidates(folders, use_registry):
+        if project is None:
+            ignored.append({"path": str(path), "reason": reason})
+            continue
+        specs_dir = project.specs_dir.resolve()
+        if specs_dir in seen:
+            continue
+        seen.add(specs_dir)
+        legacy = [d for d in LEGACY_DIRS if (specs_dir / d).is_dir() and any((specs_dir / d).glob("*.md"))]
+        if not project.specs:
+            reason = ("layout legado (pastas de status) — rode `migrate`" if legacy
+                      else "nenhuma spec na pasta de specs")
+            ignored.append({"path": str(path), "reason": reason})
+            continue
+        try:
+            projects.append(retro_metrics(project, today_date, stale_days, name=name))
+        except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError) as e:
+            ignored.append({"path": str(path), "reason": f"ilegível ({type(e).__name__})"})
+    return projects, ignored
+
+
+def retro_report(projects, ignored, stale_days: int) -> dict:
+    findings = retro_findings(projects)
+    return {
+        "retro_version": RETRO_VERSION,
+        "generated_at": dt.datetime.now().replace(microsecond=0).isoformat(),
+        "installed_tool": SDD_TOOL_VERSION,
+        "stale_days": stale_days,
+        "projects": projects,
+        "findings": findings,
+        "skill_suggestions": retro_skill_suggestions(findings, len(projects)),
+        "ignored": ignored,
+    }
+
+
+def _counts(mapping: dict) -> str:
+    return ", ".join(f"{k} {v}" for k, v in mapping.items()) or "—"
+
+
+def render_retro_md(report: dict) -> str:
+    projects, findings = report["projects"], report["findings"]
+    lines = ["# Retrospectiva SDD", "", "## Resumo", "",
+             (f"- Gerado em {report['generated_at']} · ferramenta instalada {report['installed_tool']} · "
+              f"parada = mais de {report['stale_days']} dias sem atividade"),
+             (f"- Projetos analisados: {len(projects)} ({sum(1 for p in projects if p['private'])} em modo privado); "
+              f"ignorados: {len(report['ignored'])}"),
+             f"- Specs: {sum(p['specs']['total'] for p in projects)}; achados: {len(findings)}"]
+    by_rule = Counter(f["rule"] for f in findings)
+    if by_rule:
+        lines.append("- Achados por regra: " + ", ".join(
+            f"{r} {RETRO_RULES.get(r, r)} {by_rule[r]}" for r in sorted(by_rule)))
+    lines += ["", "## Projetos", "",
+              ("| Projeto | Privado | Specs | Por status | Ferramenta | Última atividade | Paradas | Sem G7 | "
+               "Lead time (mediana/p90) | FAIL atual | FAIL no histórico | "
+               "Evidência G0–G5 (gerada/manual/humana/à mão) | Emendas | Impedimentos (abertos/velhos) |"),
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for p in projects:
+        lead = p["lead_time_days"]
+        lead_text = "—" if lead["median"] is None else f"{lead['median']:g}/{lead['p90']} dias"
+        history = "sem git" if p["fail_history"] is None else str(p["fail_history"])
+        ev = p["evidence"]
+        imp = p["impediments"]
+        lines.append(" | ".join([
+            f"| {md_cell(p['name'])}", "sim" if p["private"] else "não", str(p["specs"]["total"]),
+            md_cell(_counts(p["specs"]["by_status"])), f"{p['tool']['project']}", p["last_activity"] or "—",
+            str(len(p["stale"])), str(len(p["unclosed"])), lead_text,
+            str(sum(c["FAIL"] for c in p["gates"].values())), history,
+            "/".join(str(ev[o]) for o in RETRO_ORIGINS), str(p["amendments"]["total"]),
+            f"{imp['total']} ({imp['open']}/{len(imp['old'])})"]) + " |")
+    lines += ["", "## N/A por gate", "", "N/A / linhas registradas (PASS, FAIL ou N/A).", "",
+              "| Projeto | " + " | ".join(GATE_ROWS) + " |", "|---|" + "---|" * len(GATE_ROWS)]
+    for p in projects:
+        cells = [f"{p['na_by_gate'][g]['na']}/{p['na_by_gate'][g]['total']}" for g in GATE_ROWS]
+        lines.append(f"| {md_cell(p['name'])} | " + " | ".join(cells) + " |")
+    lines += ["", "## Achados", ""]
+    if findings:
+        lines += ["| Regra | Projeto | Valor | Ação |", "|---|---|---|---|"]
+        lines += [f"| {f['rule']} {RETRO_RULES.get(f['rule'], '')} | {md_cell(f['project'])} | {md_cell(f['value'])} "
+                  f"| {md_cell(f['action'])} |" for f in findings]
+    else:
+        lines.append("Nenhum achado.")
+    lines += ["", "## O que ajustar na skill", ""]
+    if report["skill_suggestions"]:
+        lines += ["Regras que disparam em metade dos projetos ou mais (mínimo 2). Só sugestão: nenhuma spec é criada.",
+                  "", "| Regra | Projetos | Sugestão de spec |", "|---|---|---|"]
+        lines += [f"| {s['rule']} {RETRO_RULES.get(s['rule'], '')} | {s['projects']} de {len(projects)} "
+                  f"| {md_cell(s['suggestion'])} |" for s in report["skill_suggestions"]]
+    else:
+        lines.append("Nenhuma regra disparou em metade dos projetos ou mais.")
+    lines += ["", "## Ignorados", ""]
+    if report["ignored"]:
+        lines += ["| Pasta | Motivo |", "|---|---|"]
+        lines += [f"| {md_cell(i['path'])} | {md_cell(i['reason'])} |" for i in report["ignored"]]
+    else:
+        lines.append("Nenhum.")
+    return "\n".join(lines) + "\n"
+
+
+def stale_days_arg(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        number = 0
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"--stale-days precisa ser inteiro >= 1 (recebido: {value!r})")
+    return number
+
+
+def cmd_retro(folders, use_registry: bool, stale_days: int, as_json: bool, out, root=None):
+    """Retrospectiva só de leitura: nada é gravado além de --out; o git roda só com `log`."""
+    paths = [Path(f).expanduser() for f in folders]
+    for folder, path in zip(folders, paths):
+        if not path.is_dir():
+            die(f"pasta não encontrada: {folder}")
+    if not paths and not use_registry:
+        paths = [Path(root).resolve() if root else find_root(Path.cwd())]
+    projects, ignored = retro_collect(paths, use_registry, dt.date.today(), stale_days)
+    if not projects:
+        listed = "".join(f"\n  {i['path']}: {i['reason']}" for i in ignored)
+        die("nenhum projeto SDD encontrado" + (f" — ignorados:{listed}" if listed else ""))
+    report = retro_report(projects, ignored, stale_days)
+    text = json.dumps(report, ensure_ascii=False, indent=2) + "\n" if as_json else render_retro_md(report)
+    if out:
+        Path(out).write_text(text, encoding="utf-8")
+        print(f"escrito: {out}")
+    else:
+        sys.stdout.write(text)
     return 0
 
 
@@ -4492,6 +4926,15 @@ def main(argv=None):
                                          "--ack grava sdd_version")
     p.add_argument("--ack", action="store_true", help="grava sdd_version = versão da skill no sdd-config (depois de revisar)")
     sub.add_parser("pillars", help="cobertura dos pilares de entrega (perfil do sdd-config) e N/A recorrente")
+    p = sub.add_parser("retro", help="retrospectiva só de leitura entre projetos: métricas, achados (R1–R7) e "
+                                      "sugestões para a skill")
+    p.add_argument("folders", nargs="*", metavar="PASTA",
+                   help="raiz de projeto ou spec_root (sem PASTA e sem --registry: o projeto atual)")
+    p.add_argument("--registry", action="store_true", help="inclui os spec_root do registro do modo privado")
+    p.add_argument("--stale-days", type=stale_days_arg, default=RETRO_STALE_DAYS, metavar="N",
+                   help=f"dias sem atividade para spec parada e impedimento velho (padrão: {RETRO_STALE_DAYS})")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", metavar="ARQUIVO", help="grava a saída nesse arquivo (o único que o comando escreve)")
     p = sub.add_parser("upgrade", help="atualiza specs antigas para os templates atuais (seções, chaves, gates); simulação por padrão")
     p.add_argument("ids", nargs="*")
     p.add_argument("--apply", action="store_true")
@@ -4519,6 +4962,8 @@ def main(argv=None):
         if not args.refresh:
             parser.error("--scan exige --refresh")
         return cmd_private_hooks_scan(Path(args.scan))  # roda fora de repositório: não depende do root
+    if args.command == "retro":  # lê vários projetos: não depende do root nem do modo do diretório atual
+        return cmd_retro(args.folders, args.registry, args.stale_days, args.json, args.out, args.root)
     root = Path(args.root).resolve() if args.root else find_root(Path.cwd())
     project = Project(root)
     if project.private:

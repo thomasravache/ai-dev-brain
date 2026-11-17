@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.6] - 2026-11-17
+
+### Added
+- Comando `retro [PASTA ...] [--registry] [--stale-days N] [--json] [--out ARQUIVO]`: retrospectiva só de leitura entre projetos feitos com o SDD (pastas informadas, `spec_root` passados direto e, com `--registry`, os do modo privado; a mesma pasta de specs conta uma vez). Mostra, por projeto, inventário, versão da ferramenta, specs paradas, entregues sem G7, lead time do H1 ao G7, gates atuais, reprovações no histórico do git (linhas FAIL removidas do Registro de Gates, por `git log` com `GIT_OPTIONAL_LOCKS=0`; "sem git" fora de repositório), origem da evidência (gerada, manual, humana, à mão), N/A por gate, emendas e impedimentos; achados das regras fixas R1–R7 com a ação que resolve; e "O que ajustar na skill", com sugestão de spec em texto para regra que dispara em metade dos projetos ou mais (mínimo 2). Saída em Markdown ou JSON (`retro_version` 1). Não grava nada além de `--out`, não cria specs e não traz títulos, evidências, motivos de N/A nem descrições de impedimento. Regras e limites em `references/retro.md` (SPEC-0074).
+
 ## [2026.11.5] - 2026-11-16
 
 ### Fixed
