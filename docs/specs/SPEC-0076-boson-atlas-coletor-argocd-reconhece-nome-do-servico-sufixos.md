@@ -10,7 +10,7 @@ parent:
 depends_on: []
 consumes_contract: []
 touches: []
-adrs: []
+adrs: [ADR-0011]
 external: []
 size: S
 approved_by:

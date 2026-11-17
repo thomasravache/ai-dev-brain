@@ -6,7 +6,7 @@ type: feature
 status: proposed
 created: 2026-11-17
 depends_on: []
-adrs: []
+adrs: [ADR-0010, ADR-0011, ADR-0012]
 external: []
 approved_by:
 approved_at:
