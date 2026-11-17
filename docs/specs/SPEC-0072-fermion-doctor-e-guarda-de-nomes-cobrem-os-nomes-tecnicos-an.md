@@ -9,7 +9,7 @@ created: 2026-11-16
 parent: SPEC-0067
 depends_on: [SPEC-0069, SPEC-0070, SPEC-0071]
 consumes_contract: []
-touches: [scripts/fermion_doctor.py, tests/plugin/**, hooks/session_start.py, README.md, .claude-plugin/plugin.json, mcp/tests/test_brain_server.py]
+touches: [scripts/fermion_doctor.py, tests/plugin/**, hooks/session_start.py, README.md, .claude-plugin/plugin.json, mcp/tests/test_brain_server.py, mcp/tests/helpers.py, skills/gluon-spec/SKILL.md, skills/gluon-spec/references/brownfield.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/tests/**, skills/photon-brain/tests/test_architecture.py]
 adrs: [ADR-0019, ADR-0020]
 external: []
 size: S
@@ -77,6 +77,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-17 | G1 | spec | guarda de nomes acha usos reais fora do touches: gluon-spec SKILL.md:168 e references/brownfield.md:31 citam ~/.config/org-atlas como pasta do atlas; collector-contract.md:5 descreve o snapshot ao contrário; testes e fixtures com o nome antigo fora de tests/plugin | listar exceções estreitas; nenhuma cabe sem esconder referência errada | architect | Emenda v3 — touches inclui gluon-spec SKILL.md/brownfield.md, collector-contract.md e testes/fixtures; exceções estreitas confirmadas | 2026-11-17 |
 
 ## 10. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
@@ -110,3 +111,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | v2 | 2026-11-17 | `touches` ganha `mcp/tests/test_brain_server.py` e o plano ganha UT-04 (o teste do MCP passa a conferir também `~/.config/photon-brain`); a guarda de nomes aceita como exceção as docstrings "formerly org-atlas/second-brain" dos scripts e os fixtures de compatibilidade (`tests/fixtures/previous/`, `old-contract-name.json`, `legacy_contract.py`) | achados das revisões das SPEC-0069 e 0071 | nenhuma | thomas, 2026-11-17 (piloto automático com o recomendado) |
+| v3 | 2026-11-17 | `touches` ganha `skills/gluon-spec/SKILL.md` e `skills/gluon-spec/references/brownfield.md` (passam a citar `~/.config/boson-atlas`, com a antiga como reserva), `skills/boson-atlas/references/collector-contract.md` (a nota do snapshot diz o contrário do código: o `scan` grava o nome antigo até a SPEC-0073), os testes e fixtures da `boson-atlas`, `skills/photon-brain/tests/test_architecture.py` e `mcp/tests/helpers.py`, que deixam de usar o nome antigo fora dos fixtures de compatibilidade (coletores falsos e snapshots de fixture passam a `boson-atlas/collector@1`; testes que precisam do antigo o montam por partes); a guarda não confere comentários nem docstrings dos scripts, e nos Markdown isenta só notas de compatibilidade que trazem o nome novo correspondente | impedimento IMP-01: a guarda encontrou referências velhas reais, que uma exceção esconderia | nenhuma | thomas, 2026-11-17 (piloto automático com o recomendado) |

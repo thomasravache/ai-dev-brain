@@ -6,7 +6,7 @@
 
 - Validação (G0): **3 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 1, approved 1, in-progress 1, implemented 61
-- Impedimentos: **0 aberto(s)**, 28 resolvido(s)
+- Impedimentos: **0 aberto(s)**, 29 resolvido(s)
 
 ## Cobertura de Pilares
 
@@ -30,8 +30,8 @@ Perfil: **minimo**
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0072 | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite/S | in-progress | 🔄 em andamento |  |
-| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ aguarda implementação de SPEC-0072 |  |
+| 3 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0072; saiu da onda 2: arquivos em comum com SPEC-0073 |
 
 ## Épicos
 
