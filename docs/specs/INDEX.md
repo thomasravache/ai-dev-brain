@@ -1,11 +1,11 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-11-16 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-17 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 20 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 6, implemented 58
+- Validação (G0): **3 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 5, implemented 58
 - Impedimentos: **0 aberto(s)**, 28 resolvido(s)
 
 ## Cobertura de Pilares
@@ -25,16 +25,16 @@ Perfil: **minimo**
 
 **Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** —
+**Próximo lote:** SPEC-0069
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 1 | SPEC-0070 | boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome novo e leitura dupla | full/M | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0069 | photon-brain: configuração, mensagens e backups com o nome novo e leitura dupla | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0028 |
-| 3 | SPEC-0071 | boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceito | full/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 2: arquivos em comum com SPEC-0069 |
-| 4 | SPEC-0072 | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 5 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 1 | SPEC-0069 | photon-brain: configuração, mensagens e backups com o nome novo e leitura dupla | full/M | approved | ✅ pronta |  |
+| 2 | SPEC-0070 | boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome novo e leitura dupla | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0069 |
+| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0069 |
+| 3 | SPEC-0071 | boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceito | full/S | approved | ⛔ aguarda implementação de SPEC-0070 |  |
+| 4 | SPEC-0072 | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite/S | approved | ⛔ aguarda implementação de SPEC-0069; aguarda implementação de SPEC-0070; aguarda implementação de SPEC-0071 |  |
+| 5 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ aguarda implementação de SPEC-0069; aguarda implementação de SPEC-0070; aguarda implementação de SPEC-0071; aguarda implementação de SPEC-0072 |  |
 
 ## Épicos
 
@@ -47,7 +47,7 @@ Perfil: **minimo**
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | implemented | 8/8 implementadas |
 | SPEC-0065 | gluon-spec: segurança como parte da spec e dos gates | proposed | 0/0 implementadas |
 | SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | proposed | 0/0 implementadas |
-| SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | proposed | 0/5 implementadas |
+| SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 0/5 implementadas |
 
 ## Grafo de Dependências
 
@@ -60,11 +60,11 @@ flowchart LR
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
   subgraph E0067["SPEC-0067 · Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações"]
-    S0069["SPEC-0069<br/>photon-brain: configuração, mensagens e…"]:::proposed
-    S0070["SPEC-0070<br/>boson-atlas: configuração, pasta .boson…"]:::proposed
-    S0071["SPEC-0071<br/>boson-atlas: contrato do coletor com o …"]:::proposed
-    S0072["SPEC-0072<br/>fermion_doctor e guarda de nomes cobrem…"]:::proposed
-    S0073["SPEC-0073<br/>Remoção dos nomes técnicos antigos na v…"]:::proposed
+    S0069["SPEC-0069<br/>photon-brain: configuração, mensagens e…"]:::approved
+    S0070["SPEC-0070<br/>boson-atlas: configuração, pasta .boson…"]:::approved
+    S0071["SPEC-0071<br/>boson-atlas: contrato do coletor com o …"]:::approved
+    S0072["SPEC-0072<br/>fermion_doctor e guarda de nomes cobrem…"]:::approved
+    S0073["SPEC-0073<br/>Remoção dos nomes técnicos antigos na v…"]:::approved
   end
   S0023 --> S0028
   S0070 --> S0071
@@ -151,13 +151,13 @@ flowchart LR
 | [SPEC-0064](SPEC-0064-photon-brain-titulo-de-nota-confidencial-fora-do-log-md-na-b.md) | photon-brain: título de nota confidencial fora do log.md na busca e no contexto | lite | fix | implemented | 2026-11-16 | — | — | — |
 | [SPEC-0065](SPEC-0065-gluon-spec-seguranca-como-parte-da-spec-e-dos-gates.md) | gluon-spec: segurança como parte da spec e dos gates | epic | feature | proposed | 2026-11-16 | — | — | — |
 | [SPEC-0066](SPEC-0066-dogfooding-o-fermion-valida-e-melhora-o-proprio-repositorio.md) | Dogfooding: o Fermion valida e melhora o próprio repositório | epic | feature | proposed | 2026-11-16 | — | — | — |
-| [SPEC-0067](SPEC-0067-aposentar-os-nomes-tecnicos-antigos-second-brain-org-atlas-s.md) | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | epic | migration | proposed | 2026-11-16 | — | — | — |
+| [SPEC-0067](SPEC-0067-aposentar-os-nomes-tecnicos-antigos-second-brain-org-atlas-s.md) | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | epic | migration | approved | 2026-11-16 | — | — | — |
 | [SPEC-0068](SPEC-0068-gluon-spec-hook-do-leak-check-acha-a-ferramenta-depois-de-up.md) | gluon-spec: hook do leak-check acha a ferramenta depois de update do plugin ou remoção da cópia | lite | fix | implemented | 2026-11-16 | — | — | — |
-| [SPEC-0069](SPEC-0069-photon-brain-configuracao-mensagens-e-backups-com-o-nome-nov.md) | photon-brain: configuração, mensagens e backups com o nome novo e leitura dupla | full | migration | proposed | 2026-11-16 | SPEC-0067 | — | — |
-| [SPEC-0070](SPEC-0070-boson-atlas-configuracao-pasta-boson-atlas-e-mensagens-com-o.md) | boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome novo e leitura dupla | full | migration | proposed | 2026-11-16 | SPEC-0067 | — | — |
-| [SPEC-0071](SPEC-0071-boson-atlas-contrato-do-coletor-com-o-nome-boson-atlas-org-a.md) | boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceito | full | migration | proposed | 2026-11-16 | SPEC-0067 | SPEC-0070 | — |
-| [SPEC-0072](SPEC-0072-fermion-doctor-e-guarda-de-nomes-cobrem-os-nomes-tecnicos-an.md) | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite | feature | proposed | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071 | — |
-| [SPEC-0073](SPEC-0073-remocao-dos-nomes-tecnicos-antigos-na-versao-anunciada.md) | Remoção dos nomes técnicos antigos na versão anunciada | lite | refactor | proposed | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071, SPEC-0072 | — |
+| [SPEC-0069](SPEC-0069-photon-brain-configuracao-mensagens-e-backups-com-o-nome-nov.md) | photon-brain: configuração, mensagens e backups com o nome novo e leitura dupla | full | migration | approved | 2026-11-16 | SPEC-0067 | — | — |
+| [SPEC-0070](SPEC-0070-boson-atlas-configuracao-pasta-boson-atlas-e-mensagens-com-o.md) | boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome novo e leitura dupla | full | migration | approved | 2026-11-16 | SPEC-0067 | — | — |
+| [SPEC-0071](SPEC-0071-boson-atlas-contrato-do-coletor-com-o-nome-boson-atlas-org-a.md) | boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceito | full | migration | approved | 2026-11-16 | SPEC-0067 | SPEC-0070 | — |
+| [SPEC-0072](SPEC-0072-fermion-doctor-e-guarda-de-nomes-cobrem-os-nomes-tecnicos-an.md) | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite | feature | approved | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071 | — |
+| [SPEC-0073](SPEC-0073-remocao-dos-nomes-tecnicos-antigos-na-versao-anunciada.md) | Remoção dos nomes técnicos antigos na versão anunciada | lite | refactor | approved | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071, SPEC-0072 | — |
 
 ## ADRs
 
@@ -181,4 +181,4 @@ flowchart LR
 | [ADR-0017](../adr/ADR-0017-servidor-mcp-local-como-camada-fina-sobre-as-clis.md) | Servidor MCP local como camada fina sobre as CLIs | accepted | mcp/tests/test_architecture.py (SPEC-0054:UT-07) |
 | [ADR-0018](../adr/ADR-0018-nomes-das-skills-gluon-spec-photon-brain-e-boson-atlas.md) | Nomes das skills: gluon-spec, photon-brain e boson-atlas | accepted | tests/plugin/test_skill_names.py (SPEC-0055:UT-01 a UT-04) |
 | [ADR-0019](../adr/ADR-0019-auto-melhoria-do-plugin-so-le-e-avisa-nunca-atualiza-sozinha.md) | Auto-melhoria do plugin só lê e avisa, nunca atualiza sozinha | accepted | tests/plugin/test_fermion_doctor.py (SPEC-0061:UT-06) e mcp/tests/test_architecture.py |
-| [ADR-0020](../adr/ADR-0020-nomes-tecnicos-novos-com-leitura-dupla-e-remocao-anunciada.md) | Nomes técnicos novos com leitura dupla e remoção anunciada | proposed | — |
+| [ADR-0020](../adr/ADR-0020-nomes-tecnicos-novos-com-leitura-dupla-e-remocao-anunciada.md) | Nomes técnicos novos com leitura dupla e remoção anunciada | accepted | — |

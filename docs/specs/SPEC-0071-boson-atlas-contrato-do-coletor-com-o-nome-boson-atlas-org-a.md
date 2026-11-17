@@ -4,7 +4,7 @@ title: "boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceit
 tier: full
 type: migration
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: [SPEC-0070]
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/collect
 adrs: [ADR-0011, ADR-0020]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0071 — boson-atlas: contrato do coletor com o nome boson-atlas, org-atlas aceito

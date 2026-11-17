@@ -4,7 +4,7 @@ title: "photon-brain: configuração, mensagens e backups com o nome novo e leit
 tier: full
 type: migration
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, sk
 adrs: [ADR-0008, ADR-0018, ADR-0019, ADR-0020]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0069 — photon-brain: configuração, mensagens e backups com o nome novo e leitura dupla

@@ -4,7 +4,7 @@ title: Remoção dos nomes técnicos antigos na versão anunciada
 tier: lite
 type: refactor
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: [SPEC-0069, SPEC-0070, SPEC-0071, SPEC-0072]
@@ -13,8 +13,8 @@ touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/tests/**, sk
 adrs: [ADR-0020]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0073 — Remoção dos nomes técnicos antigos na versão anunciada

@@ -4,7 +4,7 @@ title: fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos
 tier: lite
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: [SPEC-0069, SPEC-0070, SPEC-0071]
@@ -13,8 +13,8 @@ touches: [scripts/fermion_doctor.py, tests/plugin/**, hooks/session_start.py, RE
 adrs: [ADR-0019, ADR-0020]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0072 — fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos

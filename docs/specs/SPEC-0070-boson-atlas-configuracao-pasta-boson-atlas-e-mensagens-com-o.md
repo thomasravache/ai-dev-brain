@@ -4,7 +4,7 @@ title: "boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome n
 tier: full
 type: migration
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-16
 parent: SPEC-0067
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skil
 adrs: [ADR-0010, ADR-0018, ADR-0019, ADR-0020]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0070 — boson-atlas: configuração, pasta .boson-atlas e mensagens com o nome novo e leitura dupla

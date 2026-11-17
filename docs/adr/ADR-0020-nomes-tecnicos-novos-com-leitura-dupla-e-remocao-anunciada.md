@@ -1,7 +1,7 @@
 ---
 id: ADR-0020
 title: Nomes técnicos novos com leitura dupla e remoção anunciada
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-16
 pillars: []

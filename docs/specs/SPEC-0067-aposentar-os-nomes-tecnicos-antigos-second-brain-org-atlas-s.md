@@ -3,13 +3,13 @@ id: SPEC-0067
 title: Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações
 tier: epic
 type: migration
-status: proposed
+status: approved
 created: 2026-11-16
 depends_on: []
 adrs: [ADR-0018, ADR-0020]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-17
 ---
 
 # SPEC-0067 — Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações (Épico)
