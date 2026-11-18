@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 3, implemented 66
+- Validação (G0): **3 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 2, in-progress 1, implemented 66
 - Impedimentos: **1 aberto(s)**, 29 resolvido(s)
 
 ## Impedimentos Abertos
@@ -29,16 +29,16 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0080  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0080
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 1d) |  |
-| 2 | SPEC-0080 | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 3 | SPEC-0081 | gluon-spec: org_context escolhe o atlas no DISCOVER | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0080 |
+| 1 | SPEC-0080 | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full/M | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 1d) | saiu da onda 1: arquivos em comum com SPEC-0080 |
+| 3 | SPEC-0081 | gluon-spec: org_context escolhe o atlas no DISCOVER | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0080; saiu da onda 2: arquivos em comum com SPEC-0073 |
 
 ## Épicos
 
@@ -74,7 +74,7 @@ flowchart LR
   end
   subgraph E0077["SPEC-0077 · boson-atlas: mais de uma organização por máquina"]
     S0079["SPEC-0079<br/>boson-atlas: vários atlas na configuraç…"]:::implemented
-    S0080["SPEC-0080<br/>boson-atlas: atlas escolhido pelo remot…"]:::approved
+    S0080["SPEC-0080<br/>boson-atlas: atlas escolhido pelo remot…"]:::inprogress
     S0081["SPEC-0081<br/>gluon-spec: org_context escolhe o atlas…"]:::approved
   end
   S0023 --> S0028
@@ -178,7 +178,7 @@ flowchart LR
 | [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | approved | 2026-11-17 | — | — | — |
 | [SPEC-0078](SPEC-0078-gluon-spec-ajustes-do-processo-apontados-pela-primeira-retro.md) | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | full | feature | implemented | 2026-11-17 | SPEC-0066 | SPEC-0074 | — |
 | [SPEC-0079](SPEC-0079-boson-atlas-varios-atlas-na-configuracao-local-e-escolha-por.md) | boson-atlas: vários atlas na configuração local e escolha por --atlas | full | feature | implemented | 2026-11-18 | SPEC-0077 | — | — |
-| [SPEC-0080](SPEC-0080-boson-atlas-atlas-escolhido-pelo-remote-do-projeto-nas-tools.md) | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full | feature | approved | 2026-11-18 | SPEC-0077 | SPEC-0079 | SPEC-0079@1 |
+| [SPEC-0080](SPEC-0080-boson-atlas-atlas-escolhido-pelo-remote-do-projeto-nas-tools.md) | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full | feature | in-progress | 2026-11-18 | SPEC-0077 | SPEC-0079 | SPEC-0079@1 |
 | [SPEC-0081](SPEC-0081-gluon-spec-org-context-escolhe-o-atlas-no-discover.md) | gluon-spec: org_context escolhe o atlas no DISCOVER | lite | feature | approved | 2026-11-18 | SPEC-0077 | — | SPEC-0079@1 |
 
 ## ADRs

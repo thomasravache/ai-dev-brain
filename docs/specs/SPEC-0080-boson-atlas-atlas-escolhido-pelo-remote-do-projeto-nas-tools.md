@@ -4,7 +4,7 @@ title: "boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no 
 tier: full
 type: feature
 user_facing: true
-status: approved
+status: in-progress
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: [SPEC-0079]
@@ -211,6 +211,13 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Fase 0: CH-01 escrito e passando no código atual, commitado antes de qualquer mudança
+- [ ] Red: UT-01 a UT-09, IT-01, IT-02, CT-01 e E2E-01 com a tag `SPEC-0080:<ID>`, falhando pelo motivo certo
+- [ ] Green: `remotes:` (validação, `init --remote`, modelo), passo do remote em `project_remote_choice`, aviso de empate no `doctor`; parâmetro `atlas` e `cwd` do projeto nas tools `atlas_*`; linha do hook; docs, CHANGELOG, `ATLAS_VERSION` e `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega, docs e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
