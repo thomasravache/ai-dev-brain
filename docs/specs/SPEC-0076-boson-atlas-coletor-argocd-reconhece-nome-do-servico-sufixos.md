@@ -4,7 +4,7 @@ title: "boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, fi
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-17
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tes
 adrs: [ADR-0011]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-18
 ---
 
 # SPEC-0076 — boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos
@@ -82,6 +82,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 a UT-05 e IT-01 com a tag `SPEC-0076:<ID>`, falhando pelo motivo certo; fixture do IT-01 em `tests/fixtures/argocd/`
+- [ ] Green: `nameOverride` na ordem do nome do serviço, sufixos padrão novos e SQS/SNS em `host_of`, em `assets/collectors/argocd.py`; `references/collectors/argocd.md` (ordem do nome, sufixos com exemplo de `atlas-config.yml`, tabela de valores com SQS/SNS); CHANGELOG da boson-atlas com o aviso da troca de ids de serviço; `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
