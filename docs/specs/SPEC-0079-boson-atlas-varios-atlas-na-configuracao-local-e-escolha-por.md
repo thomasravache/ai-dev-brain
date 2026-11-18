@@ -11,7 +11,7 @@ depends_on: []
 consumes_contract: []
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json, skills/boson-atlas/assets/ci/**]
 adrs: [ADR-0010, ADR-0020, ADR-0021]
 external: []
 size: M
@@ -146,6 +146,12 @@ doctor [--atlas X]
 9. **Pasta já configurada:** sem `--name`, uma pasta já configurada mantém o nome que tem, mesmo com `init --force` de outra organização.
 10. **Forma de um atlas só sem `atlas:`:** é preenchida pelo `init`, que mantém as credenciais, e não conta como conflito.
 
+**Correções do G4 (Emenda v4):**
+11. **Atlas movido com `mv`:** na forma de um atlas só, sem `--name`, `init`/`init --join` de outra pasta também reaponta a entrada quando a pasta dela não existe mais ou a `organization` dela não pode ser lida. Mantém as credenciais e não grava `.bak`.
+12. **CI do atlas (`assets/ci/atlas-scan.sh` e `assets/ci/github-atlas-scan.yml`):** todo `scan` e `lint` passa `--atlas "$PWD"`. Assim a CI varre sempre o atlas do repositório, mesmo com `ATLAS_CONFIG_HOME` que já tenha outro atlas ou com `ATLAS_NAME` exportado.
+13. **Isolamento das credenciais no `scan`:** os coletores recebem o ambiente do shell **sem** as variáveis declaradas (`env`) só nas credenciais de outros atlas. Uma variável declarada também pelo atlas escolhido continua. Credenciais por `profile` ou arquivo continuam dependendo da configuração do coletor, e a doc diz isso.
+14. **Ordem no arquivo:** a forma de vários atlas é gravada com as entradas em ordem de nome.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -167,7 +173,9 @@ doctor [--atlas X]
 | Conflito no init | nome em uso por outro caminho, ou caminho já com outro nome | exit 2 sem mudar o arquivo | UT-06 |
 | Repetir join | mesmo nome e caminho | atualiza; com uma entrada continua na forma antiga | IT-01 |
 | Trocar padrão | `config --set-default b` | `default: b`; nome inexistente → exit 2 | UT-07 |
-| Credenciais isoladas | `scan` e `doctor` do atlas b | só as credenciais de b são lidas e checadas | IT-02 |
+| Credenciais isoladas | `scan` e `doctor` do atlas b | só as credenciais de b são checadas; coletores sem as variáveis só de outros atlas | IT-02 |
+| Atlas movido e compatibilidade do init | `mv` + `init --join`; outra pasta da mesma organização; `--force`; forma sem `atlas:` | reaponta ou preenche mantendo credenciais | UT-09 |
+| CI do atlas | `atlas-scan.sh` com `ATLAS_CONFIG_HOME` de outro atlas ou `ATLAS_NAME` exportado | varre o atlas do repositório | UT-10 |
 | Doctor | vários atlas, um com pasta ausente | linha de atlas configurados e AVISO com o nome | UT-08 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
@@ -183,10 +191,19 @@ doctor [--atlas X]
 - **UT-06** — Dados os atlas `a` e `b`, quando o `init --join` usa `--name a` com o caminho de `b`, ou o caminho de `a` com `--name c`, então exit 2 com o nome ou o caminho em uso, e o arquivo não muda.
 - **UT-07** — Dados os atlas `a` (default) e `b`, quando `config --set-default b` roda, então `default: b`; com `config --set-default c`, exit 2 e o arquivo não muda.
 - **UT-08** — Dados os atlas `a` e `b`, com a pasta de `b` removida, quando o `doctor` roda escolhendo `a`, então há a linha "Atlas configurados: 2 (a, b)", um AVISO citando `b` e nenhum ERRO por causa de `b`.
+- **UT-09** — Emenda v3 e v4, cobrindo os quatro casos do `init`:
+  - configuração de um atlas só criada com `init`, com credenciais, e pasta movida com `mv`: `init --join` na pasta nova reaponta a entrada, mantém as credenciais, continua na forma de um atlas só e não grava `.bak`;
+  - outra pasta da mesma organização, com a antiga presente: reaponta (item 8);
+  - `init --force` de outra organização numa pasta já configurada: mantém o nome (item 9);
+  - forma de um atlas só sem `atlas:`: é preenchida e mantém as credenciais (item 10).
+- **UT-10** — Dado o `assets/ci/atlas-scan.sh` rodando no repositório do atlas `globex`:
+  - com um `ATLAS_CONFIG_HOME` já configurado com `acme` (como `default`), o `scan` e o `lint` usam `globex`;
+  - com `ATLAS_NAME=acme` exportado, o script não sai com exit 3;
+  - o `github-atlas-scan.yml` passa `--atlas "$PWD"` em todo `scan` e `lint`.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Com o CLI como processo e `HOME` temporário, a forma antiga sobrevive: `init` de um atlas, depois `init --join` no mesmo atlas, e o arquivo continua na forma antiga, igual byte a byte ao da versão atual. `init --join` de um segundo atlas passa à forma nova com `.bak`. Restaurar o `.bak` volta ao comportamento de um atlas só.
-- **IT-02** — Dois atlas com coletores `generic` que declaram credenciais diferentes (`env A_TOKEN` em `a`, `env B_TOKEN` em `b`): `scan --atlas b` e `doctor --atlas b` checam só `B_TOKEN`, e nenhuma saída nem snapshot de `b` cita `A_TOKEN`.
+- **IT-02** — Dois atlas com coletores `generic` que declaram credenciais diferentes (`env A_TOKEN` em `a`, `env B_TOKEN` em `b`): `scan --atlas b` e `doctor --atlas b` checam só `B_TOKEN`, e nenhuma saída nem snapshot de `b` cita `A_TOKEN`. Emenda v4: com `A_TOKEN` e `B_TOKEN` exportados, o coletor de `b` não recebe `A_TOKEN` no ambiente (o coletor de teste grava os nomes das variáveis que vê), e recebe `B_TOKEN`.
 
 ### 7.4 Testes de Contrato
 - **CT-01** — Dados dois atlas e cada forma de escolha, quando `config --json` roda, então os campos `atlas_name`, `selected_by` (`option`/`env`/`default`/`single`) e `atlases` seguem o contrato da seção 6, que as SPEC-0080 e SPEC-0081 consomem.
@@ -305,5 +322,6 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0079`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v4: reaponta o atlas movido com `mv`; a CI do atlas passa `--atlas "$PWD"`; os coletores não recebem as variáveis declaradas só por outros atlas; entradas gravadas em ordem de nome; UT-09 e UT-10 novos e IT-02 ampliado; `touches` ganha `assets/ci/**` | G4 rodada 1 (2 major, 3 minor) | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v3: `init`/`init --join` sem `--name` numa configuração de um atlas, com o mesmo nome derivado, reaponta a entrada (comportamento anterior); pasta já configurada mantém o nome; forma de um atlas sem `atlas:` é preenchida | G2 (implementador): os testes SPEC-0070 UT-03/UT-04 exigem o comportamento anterior, e quebrá-lo iria contra o ADR-0020 (nada configurado quebra) | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece o formato do `config --list`, a normalização do nome derivado, `default: true` na forma de um atlas só, o exit 1 do `doctor` sem escolha, o formato da linha de atlas no `doctor`, as credenciais vazias de uma entrada nova e o `<x>` como foi digitado | G1 (test-writer): sete pontos sem definição no contrato; nenhum campo consumido pelas SPEC-0080/0081 muda | nenhuma (pins `SPEC-0079@1` continuam) | thomas, 2026-11-18 (piloto automático com o recomendado) |
