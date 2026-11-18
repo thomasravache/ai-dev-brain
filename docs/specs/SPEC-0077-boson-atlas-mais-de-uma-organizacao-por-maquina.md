@@ -67,11 +67,7 @@ Quem tem um atlas só não percebe mudança nenhuma: o arquivo, os comandos e as
 
 ## 5. Estratégia de Entrega
 - **Ambientes:** N/A — as skills são distribuídas por cópia e pelo plugin, sem deploy (mesmo critério da SPEC-0017).
-- **Entrega por onda:**
-  - onda 1: SPEC-0079 e SPEC-0081, em paralelo porque não tocam os mesmos arquivos e a 0081 só consome o contrato;
-  - onda 2: SPEC-0080.
-
-  Cada onda é uma versão do plugin.
+- **Entrega por onda:** SPEC-0079 → SPEC-0080 → SPEC-0081, em sequência. As três tocam o `plugin.json` (versão), e a 0080 depende da 0079 no `atlas.py` (`waves`). Cada filha é uma versão do plugin, e a 0081 pode ser entregue antes da 0080 se for priorizada, porque só consome o contrato da 0079.
 - **Feature flags:** N/A — o comportamento novo só aparece quando há mais de um atlas, ou com `--atlas` ou `remotes:`.
 - **Rollback:**
   - com um atlas só, voltar à versão anterior não exige nada, porque o arquivo continua na forma antiga;
