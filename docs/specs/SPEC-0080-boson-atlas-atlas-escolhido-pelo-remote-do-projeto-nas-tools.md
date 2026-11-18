@@ -233,13 +233,16 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 7274c26 | 2026-11-18 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=4)) — ffa2016 | 2026-11-18 |
-| G2 Green | PENDING | | |
+| G2 Green | FAIL | test exit 1 (FAILED (failures=7)); lint exit 0 (All checks passed!) — fb2ee85 | 2026-11-18 |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
+
+### Histórico de reprovações
+- G2 FAIL 2026-11-18 — test exit 1 (FAILED (failures=7)); lint exit 0 (All checks passed!) — fb2ee85
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
