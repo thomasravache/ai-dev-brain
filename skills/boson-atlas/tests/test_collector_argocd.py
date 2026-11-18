@@ -975,7 +975,7 @@ class NameOverrideTest(unittest.TestCase):
 
 class DotnetSuffixesTest(unittest.TestCase):
     KEYS = types.MappingProxyType({
-        "BM.Account__RouterEndpoint": "http://account",
+        "Acme.Account__RouterEndpoint": "http://account",
         "ServiceUrl": "https://pay.interno/x",
         "CallbackUri": "https://cb.interno",
         "Db_Host": "db.interno",
@@ -983,7 +983,7 @@ class DotnetSuffixesTest(unittest.TestCase):
         "DB_PASSWORD": "fake-pass",
         "API_TOKEN": "not-a-real-token",
     })
-    WANT = ("BM.Account__RouterEndpoint=account", "CallbackUri=cb.interno", "Db_Host=db.interno",
+    WANT = ("Acme.Account__RouterEndpoint=account", "CallbackUri=cb.interno", "Db_Host=db.interno",
             "ServiceUrl=pay.interno")
 
     def test_default_suffixes_are_the_new_superset(self):
@@ -994,7 +994,7 @@ class DotnetSuffixesTest(unittest.TestCase):
         self.assertEqual(function("parse_suffixes")(args.ref_suffixes), NEW_DEFAULT_SUFFIXES)
 
     def test_dotnet_keys_with_the_default_suffixes(self):
-        """SPEC-0076:UT-03 — com os sufixos padrão, BM.Account__RouterEndpoint, ServiceUrl, CallbackUri e Db_Host
+        """SPEC-0076:UT-03 — com os sufixos padrão, Acme.Account__RouterEndpoint, ServiceUrl, CallbackUri e Db_Host
         saem (account, pay.interno, cb.interno, db.interno), em valuesObject e em plugin.env; LOG_LEVEL,
         DB_PASSWORD e API_TOKEN continuam fora."""
         extract = function("extract_config_refs")
@@ -1122,10 +1122,128 @@ class AwsAccountNeverLeavesTest(ArgocdCase):
                                 "dev-invalid": []})
 
 
+class HardenedValuesTest(ArgocdCase):
+    """Emenda v3: nulo e booleano YAML, strings de conexão sem esquema e SQS FIPS/VPC endpoint."""
+
+    LITERALS = ("null", "~", "true", "False", "NULL", "TRUE", "false")
+    CONNECTION = types.MappingProxyType({
+        "ReplicaDsn": "Server=db;Password=abc@xyz",
+        "Db_Host": "Host=db;Password=p@ss",
+    })
+    SQS = types.MappingProxyType({
+        "FIPS_QUEUE_URL": "https://sqs-fips.us-east-1.amazonaws.com/123456789012/orders",
+        "VPCE_QUEUE_URL": "https://vpce-1.sqs.us-east-1.vpce.amazonaws.com/123456789012/orders",
+    })
+    NEVER = (ACCOUNT_ID, "us-east-1", "vpce", "amazonaws", "sqs-fips", "xyz", "abc", "p@ss", "Password")
+
+    def assert_service(self, app, want):
+        service, _ = function("service_and_environment")(app)
+        self.assertEqual(service, want)
+
+    def test_null_and_boolean_name_override_falls_to_the_next_item(self):
+        """SPEC-0076:UT-06 — nameOverride igual a null, ~, true ou False (em helm.values, helm.parameters e
+        helm.valuesObject, como texto ou como nulo/booleano do JSON) é recusado: o serviço cai no próximo lugar,
+        na próxima origem ou no nome da Application."""
+        for literal in self.LITERALS:
+            places = {
+                "values": helm(values=f"nameOverride: {literal}\n"),
+                "values com aspas": helm(values=f"nameOverride: \"{literal}\"\n"),
+                "parameters": helm(parameters=[{"name": "nameOverride", "value": literal}]),
+                "valuesObject": helm(valuesObject={"nameOverride": literal}),
+            }
+            for where, source in places.items():
+                with self.subTest(literal=literal, where=where):
+                    self.assert_service(bare_application(source=source), "dev-account")
+            with self.subTest(literal=literal, where="parameters -> valuesObject"):
+                source = helm(parameters=[{"name": "nameOverride", "value": literal}],
+                              valuesObject={"nameOverride": "account"})
+                self.assert_service(bare_application(source=source), "account")
+            with self.subTest(literal=literal, where="valuesObject -> values"):
+                source = helm(valuesObject={"nameOverride": literal}, values="nameOverride: account\n")
+                self.assert_service(bare_application(source=source), "account")
+            with self.subTest(literal=literal, where="próxima origem"):
+                app = bare_application(source=helm(values=f"nameOverride: {literal}\n"),
+                                       sources=[helm(valuesObject={"nameOverride": "account"})])
+                self.assert_service(app, "account")
+        for native in (None, True, False):
+            with self.subTest(native=native):
+                self.assert_service(bare_application(source=helm(valuesObject={"nameOverride": native})),
+                                    "dev-account")
+                source = helm(valuesObject={"nameOverride": native}, values="nameOverride: account\n")
+                self.assert_service(bare_application(source=source), "account")
+        _, relations = function("map_application")(bare_application(source=helm(values="nameOverride: null\n")))
+        self.assertIn(relation("deployment:dev-account", "service:dev-account", "deploys"), relations)
+        self.assertNotIn("service:null", json.dumps(relations))
+
+    def test_boolean_and_null_values_give_no_reference(self):
+        """SPEC-0076:UT-06 — valores true/false/null (em qualquer caixa, e ~) em chaves com sufixo, como
+        ENABLE_CURL=true e VerifyHost=false, não dão referência."""
+        host_of = function("host_of")
+        for literal in self.LITERALS:
+            with self.subTest(literal=literal):
+                self.assertIsNone(host_of(literal))
+        extract = function("extract_config_refs")
+        sources = {
+            "parameters": {"helm": {"parameters": [{"name": "ENABLE_CURL", "value": "true"},
+                                                   {"name": "VerifyHost", "value": "false"},
+                                                   {"name": "CacheEndpoint", "value": "null"}]}},
+            "values": {"helm": {"values": "ENABLE_CURL: true\nVerifyHost: False\nCacheEndpoint: ~\n"
+                                          "ProxyUrl: NULL\n"}},
+            "valuesObject": {"helm": {"valuesObject": {"ENABLE_CURL": "true", "VerifyHost": "false",
+                                                       "CacheEndpoint": "Null", "Flags": {"UseUrl": True}}}},
+            "plugin.env": {"plugin": {"env": [{"name": "ENABLE_CURL", "value": "TRUE"},
+                                              {"name": "VerifyHost", "value": "false"}]}},
+        }
+        for where, source in sources.items():
+            with self.subTest(where=where):
+                self.assertEqual(extract(source), [])
+
+    def test_connection_strings_without_scheme_give_no_reference(self):
+        """SPEC-0076:UT-06 — strings de conexão sem esquema com "=" ou ";" na autoridade
+        (ReplicaDsn=Server=db;Password=abc@xyz, Db_Host=Host=db;Password=p@ss) não dão referência: nem xyz, nem
+        ss saem."""
+        host_of = function("host_of")
+        for key, value in self.CONNECTION.items():
+            with self.subTest(key=key):
+                self.assertIsNone(host_of(value))
+        refs = function("extract_config_refs")({"helm": {"valuesObject": {"env": dict(self.CONNECTION)}}})
+        self.assertEqual(refs, [])
+        for fragment in ("xyz", "ss"):
+            self.assertNotIn(fragment, json.dumps(refs))
+
+    def test_sqs_fips_and_vpc_endpoint_urls_give_the_queue_name(self):
+        """SPEC-0076:UT-06 — as URLs do SQS FIPS (sqs-fips.<região>) e de VPC endpoint
+        (*.sqs.<região>.vpce.amazonaws.com) dão orders, sem região, id de VPC endpoint nem conta."""
+        host_of = function("host_of")
+        for key, value in self.SQS.items():
+            with self.subTest(key=key):
+                self.assertEqual(host_of(value), "orders")
+        refs = function("extract_config_refs")({"helm": {"valuesObject": {"env": dict(self.SQS)}}})
+        self.assertEqual(refs, ["FIPS_QUEUE_URL=orders", "VPCE_QUEUE_URL=orders"])
+
+    def test_collector_output_has_none_of_the_hardened_values(self):
+        """SPEC-0076:UT-06 — pela CLI (--input): nameOverride: null não vira service:null, as chaves booleanas e
+        as strings de conexão não dão referência, as URLs FIPS e VPC endpoint dão orders, e nada da região, do id
+        de VPC endpoint, da conta ou da senha aparece na saída do coletor."""
+        env = dict(self.CONNECTION, **self.SQS, ENABLE_CURL="true", VerifyHost="false")
+        apps = [bare_application("dev-hardened", source=helm(values="nameOverride: null\n", valuesObject={"env": env}))]
+        path = self.tmp / "hardened.json"
+        path.write_text(json.dumps(apps), encoding="utf-8")
+        data, result = self.collect("--from", "argocd", "--input", path)
+        for fragment in self.NEVER:
+            with self.subTest(never_out=fragment):
+                self.assertNotIn(fragment, output(result))
+        keys = {f"{e['kind']}:{e['id']}" for e in data["entities"]}
+        self.assertIn("service:dev-hardened", keys)
+        self.assertNotIn("service:null", keys)
+        refs = {e["id"]: e["attrs"]["config_refs"] for e in data["entities"] if e["kind"] == "deployment"}
+        self.assertEqual(refs, {"dev-hardened": ["FIPS_QUEUE_URL=orders", "VPCE_QUEUE_URL=orders"]})
+
+
 class NameOverrideScanTest(ArgocdCase):
     def test_scan_and_build_link_router_to_account_and_to_the_queue(self):
         """SPEC-0076:IT-01 — --input gravado com dev-account (nameOverride: account) e dev-router
-        (BM.Router__AccountEndpoint=http://account e ORDERS_QUEUE_URL do SQS), mais um generic com queue:orders:
+        (Acme.Router__AccountEndpoint=http://account e ORDERS_QUEUE_URL do SQS), mais um generic com queue:orders:
         scan e build num atlas temporário dão service:account (não service:dev-account), service:dev-router
         depends_on service:account e depends_on queue:orders (inferidas), sem o id da conta nos snapshots."""
         sandbox = Sandbox()

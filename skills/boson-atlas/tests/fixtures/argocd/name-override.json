@@ -22,7 +22,7 @@
         "chart": "router",
         "targetRevision": "1.0.0",
         "helm": {"valuesObject": {"env": {
-          "BM.Router__AccountEndpoint": "http://account",
+          "Acme.Router__AccountEndpoint": "http://account",
           "ORDERS_QUEUE_URL": "https://sqs.us-east-1.amazonaws.com/123456789012/orders",
           "LOG_LEVEL": "info"
         }}}
