@@ -1,10 +1,10 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-11-17 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-18 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **4 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 2, approved 1, implemented 64
 - Impedimentos: **1 aberto(s)**, 29 resolvido(s)
 
@@ -12,7 +12,7 @@
 
 | Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
 |---|---|---|---|---|---|---|---|
-| SPEC-0073 | IMP-01 | externo | — | thomas (data) | 2026-11-17 | 0d | remoção anunciada: não antes de 2027-03 (três versões mensais depois das SPEC-0069 a 0071, CHANGELOGs da photon-brain 2026.11.8 e da boson-atlas 2026.11.7/2026.11.8) |
+| SPEC-0073 | IMP-01 | externo | — | thomas (data) | 2026-11-17 | 1d | remoção anunciada: não antes de 2027-03 (três versões mensais depois das SPEC-0069 a 0071, CHANGELOGs da photon-brain 2026.11.8 e da boson-atlas 2026.11.7/2026.11.8) |
 
 ## Cobertura de Pilares
 
@@ -35,9 +35,9 @@ Perfil: **minimo**
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 0d) |  |
+| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 1d) |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 3 | SPEC-0076 | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
+| 2 | SPEC-0076 | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
 
 ## Épicos
 
