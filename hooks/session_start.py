@@ -165,15 +165,18 @@ def parse_json(text):
 
 def atlas_line(runner, deadline, cwd):
     """Linha do atlas (SPEC-0080): com 1 atlas (ou JSON ilegível), a linha de sempre; com 2+, o nome escolhido e o
-    motivo; exit 2 (vários sem escolha), o passo que falta, com os nomes de `config --list --json`. Nunca mostra
+    motivo; exit 2 com `atlas_name` nulo em `config --list --json` (vários sem escolha), o passo que falta, com os
+    nomes da lista; outro exit 2 tira o bloco e vira uma linha no stderr (SPEC-0080, Emenda v3). Nunca mostra
     caminho, remote nem credencial: só nomes de atlas."""
     result = call(runner, deadline, ATLAS, ["config", "--json"], cwd)
     if result.returncode == NOT_CONFIGURED:
         return None
     if result.returncode == CHOICE_EXIT:
         listed = call(runner, deadline, ATLAS, ["config", "--list", "--json"], cwd)
-        names = atlas_names(parse_json(listed.stdout)) if listed.returncode == 0 else []
-        if len(names) < 2:
+        data = parse_json(listed.stdout) if listed.returncode == 0 else None
+        names = atlas_names(data)
+        no_choice = isinstance(data, dict) and "atlas_name" in data and data["atlas_name"] is None
+        if len(names) < 2 or not no_choice:  # outro exit 2 (credenciais, ci: ou remotes: do escolhido, Emenda v3)
             raise Unavailable(f"config saiu com {result.returncode}")
         return ATLAS_NO_CHOICE.format(names=", ".join(names))
     if result.returncode != 0:

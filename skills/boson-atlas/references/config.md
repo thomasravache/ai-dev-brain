@@ -66,11 +66,12 @@ remotes:                       # opcional
   - gitlab.acme.interno/plataforma
 ```
 
-- Cada item é `host/caminho` em minúsculas, sem esquema, `@`, `:`, espaço, `..` nem barra no início ou no fim. Um item fora disso faz os comandos saírem com 2, citando o item; o `lint` aponta o mesmo problema.
+- Cada item é `host/caminho` em minúsculas, sem esquema, `@`, `:`, espaço, caractere de controle, `..` nem barra no início ou no fim. Um item fora disso faz os comandos do atlas escolhido saírem com 2, citando o item; o `lint` aponta o mesmo problema. A mensagem mostra o item com as credenciais trocadas por `***` (`https://***@github.com/acme`) e os caracteres de controle escapados (`\x1b`).
+- Um atlas com `remotes:` inválido conta como sem `remotes:` no passo 3 e não atrapalha os outros: o exit 2 só acontece quando ele é o escolhido, o `config --list` não falha por isso e o `doctor` mostra `AVISO remotes do atlas <nome>`, sem o item.
 - `init --atlas <pasta> --org O --mode M --remote github.com/acme [--remote ...]` grava a lista no atlas novo (o `init --join` não aceita `--remote`: a lista já vem do atlas).
 - No passo 3, a CLI lê `git -C <pasta atual> config --get remote.origin.url` (só leitura, `GIT_OPTIONAL_LOCKS=0`, prazo de 5 s) e o normaliza para `host/caminho` em minúsculas, sem esquema, usuário, senha ou token, porta nem `.git`: `https://usuario:token@GitHub.com/Acme/API.git` e `git@github.com:Acme/API.git` viram `github.com/acme/api`; `ssh://git@host:2222/g/r.git` vira `host/g/r`.
 - Um item casa quando é igual ao remote ou prefixo dele por segmentos inteiros: `github.com/acme` casa `github.com/acme/api`, mas não `github.com/acme-labs/x`. Com mais de um atlas casando, vale o prefixo mais longo; empate no mesmo comprimento pula o passo (vale o `default`) e o `doctor` mostra um AVISO com os nomes dos atlas.
-- Pasta sem git, sem `origin`, sem `git` no `PATH` ou com o prazo estourado: o passo é pulado sem erro. Sem nenhum atlas com `remotes:`, o `git` nem é chamado.
+- Pasta sem git, sem `origin`, sem `git` no `PATH`, pasta atual removida ou prazo estourado: o passo é pulado sem erro. Sem nenhum atlas com `remotes:`, o `git` nem é chamado.
 - O remote nunca aparece na saída: `selected_by` diz só `remote`, e o AVISO do `doctor` traz só os nomes dos atlas.
 - Atualize todas as máquinas antes de declarar `remotes:`: a versão anterior ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: remotes`.
 

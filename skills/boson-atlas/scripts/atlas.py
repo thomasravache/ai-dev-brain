@@ -439,9 +439,31 @@ REMOTES_PROBLEM = ("remotes aceita só prefixos host/caminho em minúsculas, sem
                    "nem barra no início ou no fim (ex.: github.com/acme)")
 
 
+USERINFO_RE = re.compile(r"^((?:[A-Za-z][A-Za-z0-9+.-]*:)?//)?([^/]*)@")  # optional scheme, then the userinfo up to "@"
+
+
+def is_control(c: str) -> bool:
+    """C0 (below 0x20), DEL and C1 (0x7f to 0x9f) control characters (SPEC-0080, Emenda v3 item 13)."""
+    return ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F
+
+
+def masked_remote_item(item) -> str:
+    """An item of `remotes:` as it may appear in a message (SPEC-0080, Emenda v3 items 7 and 13): the credentials
+    replaced by *** (https://***@host/...) and control characters escaped (\\xNN), so no token nor raw escape
+    sequence leaves the CLI. The userinfo is masked after a scheme or when it holds a secret (user:token@); a bare
+    user@host/path keeps the user name (UT-07)."""
+    def mask(match):
+        secret = match.group(1) or ":" in match.group(2)
+        return f"{match.group(1) or ''}***@" if secret else match.group(0)
+    text = USERINFO_RE.sub(mask, str(item), count=1)
+    return "".join(f"\\x{ord(c):02x}" if is_control(c) else c for c in text)
+
+
 def remote_item_problem(item) -> bool:
     """True when an item of `remotes:` is not a lowercase host/path prefix (SPEC-0080)."""
     if not isinstance(item, str) or not item or item != item.lower():
+        return True
+    if any(is_control(c) for c in item):
         return True
     if any(c in item for c in "@:\\") or any(c.isspace() for c in item) or ".." in item:
         return True
@@ -459,7 +481,7 @@ def validate_remotes(remotes) -> list:
         raise AtlasError("remotes precisa ser uma lista de prefixos host/caminho (ex.: [github.com/acme])", 2)
     for item in remotes:
         if remote_item_problem(item):
-            raise AtlasError(f"item inválido em remotes: {item} — {REMOTES_PROBLEM}", 2)
+            raise AtlasError(f"item inválido em remotes: {masked_remote_item(item)} — {REMOTES_PROBLEM}", 2)
     return list(remotes)
 
 
@@ -636,7 +658,10 @@ def normalize_remote(url):
 def project_remote(cwd=None):
     """Normalized `origin` remote of the folder (git config --get remote.origin.url, GIT_OPTIONAL_LOCKS=0, 5 s), or
     None: no git, no repository, no origin, timeout. Never raises and never prints (the remote is not shown)."""
-    cwd = os.getcwd() if cwd is None else str(cwd)
+    try:
+        cwd = os.getcwd() if cwd is None else str(cwd)
+    except OSError:  # the current folder was removed: the remote step is skipped (Emenda v3, item 12)
+        return None
     if cwd in _REMOTE_CACHE:
         return _REMOTE_CACHE[cwd]
     try:  # run_collector: the only process runner of atlas.py (argv list, no shell, timeout, output captured)
@@ -662,10 +687,20 @@ def atlas_remotes(entry) -> list:
     return validate_remotes(shared.get("remotes") if isinstance(shared, dict) else None)
 
 
+def usable_remotes(entry):
+    """atlas_remotes, or None when the atlas's `remotes:` is invalid: in the remote step such an atlas counts as
+    having no remotes, so it never breaks the choice of another atlas (SPEC-0080, Emenda v3 item 8)."""
+    try:
+        return atlas_remotes(entry)
+    except AtlasError:
+        return None
+
+
 def remote_matches(config: dict, cwd=None) -> list:
     """Names of the atlases whose longest `remotes:` prefix matches the project's remote by whole segments, all at
-    the same (greatest) length; [] without remotes, without a remote or without a match."""
-    declared = {name: atlas_remotes(entry) for name, entry in config["entries"].items()}
+    the same (greatest) length; [] without remotes, without a remote or without a match. An atlas with an invalid
+    `remotes:` counts as having none."""
+    declared = {name: usable_remotes(entry) or [] for name, entry in config["entries"].items()}
     if not any(declared.values()):
         return []  # no git call when no atlas declares remotes:
     remote = project_remote(cwd)
@@ -4053,15 +4088,24 @@ def other_atlas_items(config: dict, chosen) -> list:
 def remote_tie_items(config: dict) -> list:
     """doctor AVISO when the folder's remote matches more than one atlas at the same length (the remote step is
     skipped); names only, never the remote (SPEC-0080)."""
-    try:
-        names = remote_matches(config)
-    except AtlasError as e:
-        return [("AVISO", "remote do projeto", str(e))]
+    names = remote_matches(config)
     if len(names) < 2:
         return []
     detail = (f"o remote desta pasta casa com mais de um atlas no mesmo comprimento ({', '.join(names)}) e não "
               "escolhe nenhum — deixe o prefixo em remotes: de um só atlas ou use --atlas")
     return [("AVISO", "remote do projeto", detail)]
+
+
+def invalid_remotes_items(config: dict) -> list:
+    """doctor AVISO for each atlas whose `remotes:` is invalid (the remote step ignores it); the name only, never the
+    item (SPEC-0080, Emenda v3 item 8)."""
+    rows = []
+    for name in sorted(config["entries"]):
+        if usable_remotes(config["entries"][name]) is None:
+            detail = ("remotes: inválido no atlas-config.yml — o passo do remote ignora este atlas; rode lint com "
+                      f"--atlas {name} para ver o item")
+            rows.append(("AVISO", f"remotes do atlas {name}", detail))
+    return rows
 
 
 def doctor_rows(config_home=None, choice=None) -> list:
@@ -4087,7 +4131,7 @@ def doctor_rows(config_home=None, choice=None) -> list:
     entries = config["entries"]
     rows.append(("OK", "Atlas configurados", f"{len(entries)} ({_names(entries)})"))
     rows += other_atlas_items(config, name)
-    rows += remote_tie_items(config)
+    rows += invalid_remotes_items(config) + remote_tie_items(config)
     if name is None:
         rows.append(("ERRO", "atlas escolhido", no_choice))
         return rows

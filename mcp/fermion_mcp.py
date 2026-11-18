@@ -470,6 +470,16 @@ def project_dir():
     return os.environ.get(PROJECT_ENV) or os.getcwd()
 
 
+def atlas_cwd():
+    """cwd das atlas_* (SPEC-0080): project_dir() quando é uma pasta que existe; senão None, o cwd do servidor
+    (Emenda v3, item 11)."""
+    try:
+        folder = project_dir()
+        return folder if os.path.isdir(folder) else None
+    except OSError:  # o cwd do próprio servidor foi removido
+        return None
+
+
 def sdd_command_args(name, arguments):
     """Argumentos da CLI (depois de `spec_graph.py --root <projeto>`) para uma tool sdd_* já validada; nunca grava."""
     if name == "sdd_status":
@@ -694,7 +704,7 @@ class Server:
         argv = [python_executable(), str(cli)] + args
         try:
             if family == "atlas":  # a escolha do atlas (remote do projeto) depende da pasta (SPEC-0080)
-                completed = self.runner(argv, CLI_TIMEOUT, cwd=project_dir())
+                completed = self.runner(argv, CLI_TIMEOUT, cwd=atlas_cwd())
             else:
                 completed = self.runner(argv, CLI_TIMEOUT)
         except subprocess.TimeoutExpired:
