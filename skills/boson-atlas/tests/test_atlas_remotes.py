@@ -299,6 +299,9 @@ INVALID_REMOTES = (
     "GitHub.com/acme",
 )
 
+# Emenda v4, item 14: o userinfo antes da primeira "/" vira "***@", com ou sem esquema
+SHOWN_AS = {"user@github.com/acme": "***@github.com/acme"}
+
 
 class RemotesValidationTest(RemoteCase):
     def test_invalid_items_exit_2_and_init_writes_the_list(self):
@@ -315,7 +318,9 @@ class RemotesValidationTest(RemoteCase):
                 self.set_remotes(atlas, ["github.com/globex", item])
                 out = self.cli("config", "--json")
                 self.assertExit(out, 2)
-                self.assertIn(item, output(out))
+                self.assertIn(SHOWN_AS.get(item, item), output(out))
+                if item in SHOWN_AS:
+                    self.assertNotIn(item, output(out), "o userinfo do item aparece sem máscara (Emenda v4)")
         with self.subTest(caso="init --remote"):
             new = self.box.root / "work" / "globex-atlas"
             new.mkdir(parents=True)
@@ -462,3 +467,46 @@ class AmendmentEdgeCasesTest(RemoteCase):
                 out = self.cli("config", "--json")
                 self.assertExit(out, 2)
                 self.assertNotIn("\x1b", output(out), "o caractere de controle volta cru na mensagem")
+
+
+# ---------------------------------------------------------------- Emenda v4 (UT-13)
+
+TOK = "TOKZ9Q"
+TOKEN_ITEMS = (
+    f"{TOK}@github.com/acme",
+    f"ghp_{TOK}@github.com:acme/x",
+    f"https://github.com/acme?access_token={TOK}",
+    f"https://github.com/acme#{TOK}",
+    f"https:/u:{TOK}@h/x",
+)
+QUERY_ITEMS = ("github.com/acme?token=x", "github.com/acme#x", "github.com/a=b")
+
+
+class TokenInRemotesTest(RemoteCase):
+    def test_token_never_leaves_and_query_fragment_or_equals_are_refused(self):
+        """SPEC-0080:UT-13 — itens com userinfo sem esquema, scp-like, query, fragment ou esquema torto: config,
+        doctor e lint nunca mostram o token; itens com "?", "#" ou "=" dão exit 2 (Emenda v4)."""
+        self.make_atlas("acme", ["github.com/acme"])
+        globex = self.make_atlas("globex", ["github.com/globex"])
+        self.configure(default="acme")
+        commands = (
+            (("config", "--json", "--atlas", "globex"), 2),
+            (("config", "--list", "--json"), 0),
+            (("doctor",), None),
+            (("doctor", "--json"), None),
+            (("lint", "--json"), None),
+            (("lint", "--json", "--atlas", "globex"), None),
+        )
+        for item in TOKEN_ITEMS:
+            self.set_remotes(globex, [item])
+            for args, code in commands:
+                with self.subTest(item=item, comando=" ".join(args)):
+                    out = self.cli(*args)
+                    self.assertNotIn("Traceback", output(out))
+                    self.assertNotIn(TOK, output(out), "o token do item de remotes: vazou")
+                    if code is not None:
+                        self.assertExit(out, code)
+        for item in QUERY_ITEMS:
+            with self.subTest(item=item, comando="config --json --atlas globex"):
+                self.set_remotes(globex, [item])
+                self.assertExit(self.cli("config", "--json", "--atlas", "globex"), 2)

@@ -325,10 +325,13 @@ LEAKY_REMOTE = f"https://u:{SECRET}@github.com/globex"
 MASKED_REMOTE = "https://***@github.com/globex"
 
 
-class AmendmentServerTest(ProjectFolderCase):
+class AmendmentCase(ProjectFolderCase):
+    """acme e globex criados pela CLI; `globex_remote` vai como único item de remotes: da globex."""
+
     def configure(self, default=None, globex_remote="github.com/globex"):
         acme = self.make_atlas("acme", "payments-api", "github.com/acme")
         globex = self.make_atlas("globex", "billing-api", json.dumps(globex_remote))
+        self.globex = globex
         self.sandbox.config_home.mkdir(parents=True, exist_ok=True)
         head = f"default: {default}\n" if default else ""
         (self.sandbox.config_home / "config.yml").write_text(
@@ -342,6 +345,8 @@ class AmendmentServerTest(ProjectFolderCase):
         response, _ = server.ask(call("atlas_config", arguments, id=1), timeout=PROCESS_TIMEOUT)
         return result_of(self, response, id=1)
 
+
+class AmendmentServerTest(AmendmentCase):
     def test_atlas_config_never_shows_the_token_of_an_invalid_remote(self):
         """SPEC-0080:UT-10 — globex com remotes: https://u:SECRETTOK@github.com/globex: atlas_config com atlas
         "globex" é erro da tool com o item mascarado, sem o token."""
@@ -361,3 +366,32 @@ class AmendmentServerTest(ProjectFolderCase):
         structured = result.get("structuredContent") or {}
         self.assertEqual((structured.get("atlas_name"), structured.get("selected_by")), ("acme", "default"),
                          structured)
+
+
+# ---------------------------------------------------------------- Emenda v4 (UT-13)
+
+TOK = "TOKZ9Q"
+TOKEN_ITEMS = (
+    f"{TOK}@github.com/acme",
+    f"ghp_{TOK}@github.com:acme/x",
+    f"https://github.com/acme?access_token={TOK}",
+    f"https://github.com/acme#{TOK}",
+    f"https:/u:{TOK}@h/x",
+)
+
+
+class TokenInRemotesServerTest(AmendmentCase):
+    def test_atlas_config_never_shows_a_token_of_remotes(self):
+        """SPEC-0080:UT-13 — globex com cada item que carrega um token (userinfo sem esquema, scp-like, query,
+        fragment, esquema torto): atlas_config com atlas "globex" é erro da tool e o token não aparece."""
+        self.configure(default="acme")
+        server = ServerProcess(self.sandbox, env=self.environ(self.root))
+        self.addCleanup(server.close)
+        for id, item in enumerate(TOKEN_ITEMS, start=1):
+            with self.subTest(item=item):
+                (self.globex / "atlas-config.yml").write_text(
+                    generic_config("Globex") + f"remotes:\n  - {json.dumps(item)}\n", encoding="utf-8")
+                response, _ = server.ask(call("atlas_config", {"atlas": "globex"}, id=id), timeout=PROCESS_TIMEOUT)
+                result = result_of(self, response, id=id)
+                self.assertNotIn(TOK, json.dumps(result, ensure_ascii=False), "o token vazou pela tool")
+                self.assertIs(result.get("isError"), True, result)
