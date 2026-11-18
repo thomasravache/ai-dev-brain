@@ -11,7 +11,7 @@ depends_on: [SPEC-0079]
 consumes_contract: [SPEC-0079@1]
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, mcp/fermion_mcp.py, mcp/tests/**, mcp/README.md, hooks/session_start.py, tests/plugin/test_session_start.py, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, mcp/fermion_mcp.py, mcp/tests/**, mcp/README.md, hooks/session_start.py, tests/plugin/**, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0021]
 external: []
 size: M
@@ -130,6 +130,19 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 5. **Passagem à CLI:** colada, `--atlas=<valor>`, para que um valor começando com `-` não vire opção, como as tools `brain_*` já fazem.
 6. **Validação de `remotes:` no UT-07:** acontece ao ler a configuração (`config --json` e os demais comandos), que sai com exit 2 e cita o item. Itens com `:` ou maiúsculas também são recusados, e o `lint` aceita `remotes` como chave conhecida.
 
+**Correções do G4 (Emenda v3):**
+7. **Item inválido de `remotes:` nas mensagens:** toda mensagem que cita um item inválido (CLI, `doctor`, `lint` e, por consequência, MCP) mostra o item com as credenciais trocadas por `***` (`https://***@host/...`). Nenhum token sai.
+8. **Um atlas com `remotes:` inválido não derruba os outros:**
+   - no passo do remote, um atlas cujo `remotes:` é inválido conta como sem `remotes`;
+   - o exit 2 por `remotes:` inválido só acontece quando esse atlas é o escolhido;
+   - o `config --list` nunca falha por isso;
+   - o `doctor` mostra um AVISO com o nome do atlas, sem o item.
+9. **Hook com exit 2:** a linha "nenhum escolhido" só aparece quando o `config --list --json` traz `atlas_name` nulo. Outro exit 2 (credenciais ou `ci:` inválidos no atlas escolhido) tira o bloco do atlas e manda uma linha ao stderr, como qualquer falha da CLI.
+10. **`mcp/README.md`:** o parágrafo do parâmetro `atlas` fica abaixo da tabela de tools.
+11. **`CLAUDE_PROJECT_DIR` inexistente:** as tools `atlas_*` usam a pasta do projeto como `cwd` só quando ela existe; senão usam o `cwd` do servidor, e o passo do remote é pulado.
+12. **Pasta atual removida:** o passo do remote é pulado sem erro.
+13. **`remotes:` com caractere de controle:** o item é recusado (abaixo de 0x20 e de 0x7f a 0x9f).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -170,6 +183,13 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 - **UT-07** — Dados itens de `remotes:` com `https://`, `@`, espaço, `..`, `/abs` e barra final, quando a configuração é lida, então exit 2 com o item. `init --remote github.com/acme --remote gitlab.acme.interno/plataforma` grava a lista.
 - **UT-08** — Dado o servidor MCP, quando `atlas_context`, `atlas_config`, `atlas_doctor`, `atlas_lint` e `atlas_curate_list` recebem `atlas: "b"`, então a CLI recebe `--atlas b`. Um valor vazio, com mais de 200 caracteres ou com caractere de controle é recusado pelo esquema. O exit 2 da escolha vira erro da tool com a mensagem.
 - **UT-09** — Dado o hook, quando `config --json` devolve 1 atlas, 2 atlas com `selected_by` `remote`, `env` ou `default`, exit 2 ou exit 3, então as linhas são as do contrato, e nenhuma contém caminho, remote ou credencial.
+- **UT-10** — Dado um `remotes:` com `https://u:SECRETTOK@github.com/globex`, quando `config --json`, `config --list --json`, `doctor --json`, `lint --json` e a tool `atlas_config` rodam, então `SECRETTOK` não aparece em nenhuma saída, e o item aparece como `https://***@github.com/globex` (Emenda v3, item 7).
+- **UT-11** — Dados os atlas `acme` (default) e `globex` com `remotes:` inválido, quando `config --json`, `context`, `lint` e `config --list --json` rodam fora e dentro de um repositório git, então `acme` funciona (exit 0) e `config --list` sai 0. Com `--atlas globex`, exit 2 com o item mascarado. O `doctor` mostra um AVISO citando `globex` (Emenda v3, item 8).
+- **UT-12** — Casos de borda da Emenda v3:
+  - hook com `config --json` em exit 2 e `config --list --json` com `atlas_name: "acme"`: não mostra "nenhum escolhido" (item 9);
+  - `atlas_config` com `CLAUDE_PROJECT_DIR=/inexistente`: responde com o atlas `default` (item 11);
+  - `config --json` numa pasta atual removida: sai 0 pelo `default` (item 12);
+  - item `github.com/acme\x1b[31m`: exit 2 (item 13).
 
 ### 7.3 Testes de Integração
 - **IT-01** — Com a CLI como processo, `HOME` temporário, dois atlas com `remotes:` e dois repositórios git locais com `origin` diferentes, `context` sem opção usa o grafo do atlas certo em cada repositório.
@@ -289,4 +309,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0080`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v3: item inválido de `remotes:` mascarado; atlas com `remotes:` inválido não derruba os outros (AVISO no `doctor`); hook só diz "nenhum escolhido" com `atlas_name` nulo; README; `CLAUDE_PROJECT_DIR` inexistente e pasta removida pulam o passo; caractere de controle recusado; `touches` ganha `tests/plugin/**`; UT-10 a UT-12 novos | G4 rodada 1 (1 blocker de processo, 2 major, 5 minor) | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece de onde o hook tira os nomes no exit 2 (`config --list --json`), o formato e os textos do motivo, a recusa de qualquer caractere de controle no parâmetro `atlas`, o `--atlas=<valor>` colado e onde `remotes:` é validado | G1 (test-writer): seis pontos sem definição no contrato | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
