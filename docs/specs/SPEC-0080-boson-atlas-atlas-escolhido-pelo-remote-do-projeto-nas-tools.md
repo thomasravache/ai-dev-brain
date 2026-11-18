@@ -139,7 +139,7 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
    - o `doctor` mostra um AVISO com o nome do atlas, sem o item.
 9. **Hook com exit 2:** a linha "nenhum escolhido" só aparece quando o `config --list --json` traz `atlas_name` nulo. Outro exit 2 (credenciais ou `ci:` inválidos no atlas escolhido) tira o bloco do atlas e manda uma linha ao stderr, como qualquer falha da CLI.
 10. **`mcp/README.md`:** o parágrafo do parâmetro `atlas` fica abaixo da tabela de tools.
-11. **`CLAUDE_PROJECT_DIR` inexistente:** as tools `atlas_*` usam a pasta do projeto como `cwd` só quando ela existe; senão usam o `cwd` do servidor, e o passo do remote é pulado.
+11. **`CLAUDE_PROJECT_DIR` inexistente:** as tools `atlas_*` usam a pasta do projeto como `cwd` só quando ela existe; senão usam o `cwd` do servidor, e o passo do remote usa o remote dessa pasta, se houver.
 12. **Pasta atual removida:** o passo do remote é pulado sem erro.
 13. **`remotes:` com caractere de controle:** o item é recusado (abaixo de 0x20 e de 0x7f a 0x9f).
 
