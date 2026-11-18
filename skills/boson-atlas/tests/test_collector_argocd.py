@@ -1240,6 +1240,110 @@ class HardenedValuesTest(ArgocdCase):
         self.assertEqual(refs, {"dev-hardened": ["FIPS_QUEUE_URL=orders", "VPCE_QUEUE_URL=orders"]})
 
 
+class HardenedValuesV4Test(ArgocdCase):
+    """Emenda v4: =, ; ou , na autoridade também com esquema, booleanos YAML 1.1 e hosts de VPC endpoint."""
+
+    YAML11 = ("yes", "no", "on", "off", "y", "n", "Yes", "NO", "On", "OFF", "Y", "N", "yEs", "oFf")
+    CONNECTION = types.MappingProxyType({
+        "ReplicaDsn": "sqlserver://db;user=sa;password=p@ss",
+        "RelayHost": "tcp://h;Password=a@b",
+        "CacheUrl": "redis://cache,password=p@ss",
+    })
+    VPCE_SQS = "https://sqs.us-east-1.vpce.amazonaws.com/123456789012/orders"
+    VPCE_SNS = "https://vpce-1.sns.us-east-1.vpce.amazonaws.com/x"
+
+    def assert_service(self, app, want):
+        service, _ = function("service_and_environment")(app)
+        self.assertEqual(service, want)
+
+    def test_connection_strings_with_scheme_give_no_reference(self):
+        """SPEC-0076:UT-06 — Emenda v4: com esquema também, autoridade com "=", ";" ou ","
+        (sqlserver://db;user=sa;password=p@ss, tcp://h;Password=a@b, redis://cache,password=p@ss) não dá
+        referência: nem ss, nem b saem."""
+        host_of = function("host_of")
+        for key, value in self.CONNECTION.items():
+            with self.subTest(key=key):
+                self.assertIsNone(host_of(value))
+        refs = function("extract_config_refs")({"helm": {"valuesObject": {"env": dict(self.CONNECTION)}}})
+        self.assertEqual(refs, [])
+        for fragment in ("ss", "=b", "a@b", "p@ss"):
+            self.assertNotIn(fragment, json.dumps(refs))
+
+    def test_yaml_1_1_booleans_are_rejected_as_name_override(self):
+        """SPEC-0076:UT-06 — Emenda v4: nameOverride igual a yes, no, on, off, y ou n (em qualquer caixa, em
+        helm.values, helm.parameters e helm.valuesObject) é recusado e cai no próximo item da ordem."""
+        for literal in self.YAML11:
+            places = {
+                "values": helm(values=f"nameOverride: {literal}\n"),
+                "parameters": helm(parameters=[{"name": "nameOverride", "value": literal}]),
+                "valuesObject": helm(valuesObject={"nameOverride": literal}),
+            }
+            for where, source in places.items():
+                with self.subTest(literal=literal, where=where):
+                    self.assert_service(bare_application(source=source), "dev-account")
+            with self.subTest(literal=literal, where="parameters -> valuesObject"):
+                source = helm(parameters=[{"name": "nameOverride", "value": literal}],
+                              valuesObject={"nameOverride": "account"})
+                self.assert_service(bare_application(source=source), "account")
+            with self.subTest(literal=literal, where="próxima origem"):
+                app = bare_application(source=helm(values=f"nameOverride: {literal}\n"),
+                                       sources=[helm(valuesObject={"nameOverride": "account"})])
+                self.assert_service(app, "account")
+
+    def test_yaml_1_1_booleans_give_no_reference(self):
+        """SPEC-0076:UT-06 — Emenda v4: VerifyHost=no (e yes, on, off, y, n, em qualquer caixa) não dá referência."""
+        host_of = function("host_of")
+        for literal in self.YAML11:
+            with self.subTest(literal=literal):
+                self.assertIsNone(host_of(literal))
+        extract = function("extract_config_refs")
+        sources = {
+            "parameters": {"helm": {"parameters": [{"name": "VerifyHost", "value": "no"},
+                                                   {"name": "ENABLE_CURL", "value": "Yes"}]}},
+            "values": {"helm": {"values": "VerifyHost: no\nENABLE_CURL: ON\nProxyUrl: off\nCacheEndpoint: y\n"
+                                          "SyncUri: N\n"}},
+            "valuesObject": {"helm": {"valuesObject": {"VerifyHost": "no", "ENABLE_CURL": "on",
+                                                       "CacheEndpoint": "Off"}}},
+            "plugin.env": {"plugin": {"env": [{"name": "VerifyHost", "value": "NO"},
+                                              {"name": "ENABLE_CURL", "value": "y"}]}},
+        }
+        for where, source in sources.items():
+            with self.subTest(where=where):
+                self.assertEqual(extract(source), [])
+
+    def test_vpc_endpoint_hosts_never_leave_whole(self):
+        """SPEC-0076:UT-06 — Emenda v4: https://sqs.us-east-1.vpce.amazonaws.com/<conta>/orders dá orders, e
+        https://vpce-1.sns.us-east-1.vpce.amazonaws.com/x (VPC endpoint de outro serviço) não dá referência."""
+        host_of = function("host_of")
+        self.assertEqual(host_of(self.VPCE_SQS), "orders")
+        self.assertIsNone(host_of(self.VPCE_SNS))
+        refs = function("extract_config_refs")({"helm": {"valuesObject": {"env": {
+            "ORDERS_QUEUE_URL": self.VPCE_SQS, "EventsEndpoint": self.VPCE_SNS}}}})
+        self.assertEqual(refs, ["ORDERS_QUEUE_URL=orders"])
+        for fragment in ("us-east-1", "vpce", "amazonaws", ACCOUNT_ID):
+            self.assertNotIn(fragment, json.dumps(refs))
+
+    def test_collector_output_has_none_of_the_v4_values(self):
+        """SPEC-0076:UT-06 — Emenda v4, pela CLI (--input): nameOverride: yes cai no nome da Application, as strings
+        de conexão com esquema e os booleanos YAML 1.1 não dão referência, o VPC endpoint do SQS dá orders e o do
+        SNS nada; a região, vpce, a conta e as senhas não aparecem na saída."""
+        env = dict(self.CONNECTION, ORDERS_QUEUE_URL=self.VPCE_SQS, EventsEndpoint=self.VPCE_SNS,
+                   VerifyHost="no", ENABLE_CURL="on")
+        apps = [bare_application("dev-hardened", source=helm(values="nameOverride: yes\n",
+                                                            valuesObject={"env": env}))]
+        path = self.tmp / "hardened-v4.json"
+        path.write_text(json.dumps(apps), encoding="utf-8")
+        data, result = self.collect("--from", "argocd", "--input", path)
+        for fragment in (ACCOUNT_ID, "us-east-1", "vpce", "amazonaws", "p@ss", "a@b", "password", "Password"):
+            with self.subTest(never_out=fragment):
+                self.assertNotIn(fragment, output(result))
+        keys = {f"{e['kind']}:{e['id']}" for e in data["entities"]}
+        self.assertIn("service:dev-hardened", keys)
+        self.assertNotIn("service:yes", keys)
+        refs = {e["id"]: e["attrs"]["config_refs"] for e in data["entities"] if e["kind"] == "deployment"}
+        self.assertEqual(refs, {"dev-hardened": ["ORDERS_QUEUE_URL=orders"]})
+
+
 class NameOverrideScanTest(ArgocdCase):
     def test_scan_and_build_link_router_to_account_and_to_the_queue(self):
         """SPEC-0076:IT-01 — --input gravado com dev-account (nameOverride: account) e dev-router
