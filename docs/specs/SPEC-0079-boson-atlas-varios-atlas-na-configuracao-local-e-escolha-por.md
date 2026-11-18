@@ -127,6 +127,20 @@ doctor [--atlas X]
   - vários atlas sem escolha → ERRO com a mensagem de escolha acima
 ```
 
+**Esclarecimentos (Emenda v2, achados do test-writer no G1):**
+1. **`config --list`:**
+   - texto: uma linha por atlas (`<nome>  <caminho>  <organization>  [default]`) e no fim `escolhido: <nome> (<selected_by>)` ou `escolhido: nenhum`;
+   - `--json`: `{"atlases": [{"name", "atlas", "default", "organization"}], "atlas_name": str|null, "selected_by": str|null}`.
+2. **Nome derivado da organization:**
+   - minúsculas, com o que não for `[a-z0-9-]` trocado por `-`;
+   - sequências de `-` viram uma só, e `-` nas pontas é removido;
+   - corte em 63 caracteres; resultado vazio vira `default`.
+3. **Forma de um atlas só:** a única entrada aparece com `"default": true` em `atlases`.
+4. **`doctor` com vários atlas e nenhuma escolha:** linha ERRO com a mensagem de escolha e exit 1, como as outras linhas ERRO do `doctor`.
+5. **Linha da lista no `doctor`:** segue o formato do `doctor` (`OK  Atlas configurados — 2 (acme, globex)`). O texto `Atlas configurados` e `2 (acme, globex)` aparecem na saída.
+6. **Credenciais de uma entrada nova:** vazias (`credentials: {}`). Atualizar a mesma entrada (mesmo nome e caminho) mantém as dela. As credenciais de outra entrada nunca são copiadas.
+7. **Mensagem do exit 3 para nome ou caminho não configurado:** `<x>` é o valor como foi digitado.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -283,3 +297,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0079`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece o formato do `config --list`, a normalização do nome derivado, `default: true` na forma de um atlas só, o exit 1 do `doctor` sem escolha, o formato da linha de atlas no `doctor`, as credenciais vazias de uma entrada nova e o `<x>` como foi digitado | G1 (test-writer): sete pontos sem definição no contrato; nenhum campo consumido pelas SPEC-0080/0081 muda | nenhuma (pins `SPEC-0079@1` continuam) | thomas, 2026-11-18 (piloto automático com o recomendado) |
