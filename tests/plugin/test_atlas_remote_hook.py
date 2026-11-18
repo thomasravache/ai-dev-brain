@@ -307,3 +307,41 @@ class TwoOrganizationsJourneyTest(unittest.TestCase):
             self.step(env, acme, chosen_line("acme", "remote do projeto", ["globex"]), "payments-api")  # 4
             other = git_repo(env, base / "src" / "other", "https://github.com/initech/x.git")
             self.step(env, other, chosen_line("acme", "padrão", ["globex"]), "payments-api")  # 5
+
+
+# ---------------------------------------------------------------- UT-12 (Emenda v3, item 9)
+
+INVALID_CHOSEN_CLI = ("item inválido em remotes: https://***@github.com/acme — remotes aceita só prefixos host/caminho "
+                      "em minúsculas")
+
+
+def chosen_but_invalid_answer():
+    """config --json sai com 2 por outro motivo (remotes: inválido no atlas escolhido); config --list --json mostra
+    que há um atlas escolhido (atlas_name "acme")."""
+    listed = json.dumps({"atlases": [{"name": n, "atlas": f"/caminho/SEGREDO-{n}", "default": n == "acme",
+                                      "organization": n.title()} for n in ("acme", "globex")],
+                         "atlas_name": "acme", "selected_by": "default"})
+
+    def answer(argv, timeout):
+        if "--list" in argv:
+            return subprocess.CompletedProcess(argv, 0, stdout=listed, stderr="")
+        return subprocess.CompletedProcess(argv, 2, stdout="", stderr=f"erro: {INVALID_CHOSEN_CLI}\n")
+    return answer
+
+
+class OtherExit2Test(HookTestCase):
+    def test_exit_2_with_a_chosen_atlas_is_not_no_choice(self):
+        """SPEC-0080:UT-12 — config --json com exit 2 e config --list --json com atlas_name "acme": o hook não diz
+        "nenhum escolhido"; tira o bloco do atlas e manda uma linha ao stderr."""
+        project = make_project(self.base / "p", sdd=False)
+        runner = FakeRunner(atlas=chosen_but_invalid_answer())
+        code, out, err = self.run_hook(runner, cwd=project)
+        self.assertEqual(code, 0)
+        context = self.context(out) if out.strip() else ""
+        self.assertNotIn("nenhum escolhido", context)
+        self.assertNotIn("Vários atlas", context)
+        self.assertNotIn("Atlas da organização", context, "exit 2 do atlas escolhido tira o bloco do atlas")
+        self.assertTrue(err.strip(), "a falha da CLI vai ao stderr")
+        for leak in LEAKS:
+            self.assertNotIn(leak, context)
+        self.assert_timeouts(runner)

@@ -344,3 +344,121 @@ class TwoRepositoriesTest(RemoteCase):
         globex = self.repo("globex-billing", "https://github.com/globex/billing.git")
         self.assertEqual(self.services(acme), ["service:payments-api"])
         self.assertEqual(self.services(globex), ["service:billing-api"])
+
+
+# ---------------------------------------------------------------- Emenda v3 (UT-10 a UT-12)
+
+SECRET = "SECRETTOK"
+LEAKY_REMOTE = f"https://u:{SECRET}@github.com/globex"
+MASKED_REMOTE = "https://***@github.com/globex"
+
+
+class MaskedRemoteTest(RemoteCase):
+    def assertNoSecret(self, result):
+        self.assertNotIn("Traceback", output(result))
+        self.assertNotIn(SECRET, output(result), "o token do item de remotes: vazou")
+
+    def test_invalid_item_with_credentials_is_masked_everywhere(self):
+        """SPEC-0080:UT-10 — remotes: com https://u:SECRETTOK@github.com/globex: config --json, config --list
+        --json, doctor --json e lint --json nunca mostram o token; onde o item aparece, aparece mascarado."""
+        self.make_atlas("acme", ["github.com/acme"])
+        self.make_atlas("globex", [LEAKY_REMOTE])
+        self.configure(default="globex")
+        with self.subTest(comando="config --json (globex escolhido)"):
+            out = self.cli("config", "--json")
+            self.assertNoSecret(out)
+            self.assertExit(out, 2)
+            self.assertIn(MASKED_REMOTE, output(out))
+        with self.subTest(comando="config --json --atlas globex"):
+            out = self.cli("config", "--json", "--atlas", "globex")
+            self.assertNoSecret(out)
+            self.assertExit(out, 2)
+            self.assertIn(MASKED_REMOTE, output(out))
+        with self.subTest(comando="config --list --json"):
+            out = self.cli("config", "--list", "--json")
+            self.assertNoSecret(out)
+            self.assertExit(out, 0)
+        with self.subTest(comando="doctor --json"):
+            self.assertNoSecret(self.cli("doctor", "--json"))
+        with self.subTest(comando="lint --json"):
+            out = self.cli("lint", "--json")
+            self.assertNoSecret(out)
+            self.assertIn(MASKED_REMOTE, output(out))
+
+
+class InvalidRemotesIsolationTest(RemoteCase):
+    def test_atlas_with_invalid_remotes_does_not_break_the_others(self):
+        """SPEC-0080:UT-11 — acme (default) e globex com remotes: inválido: fora e dentro de um repositório git,
+        config --json, context e lint usam acme (exit 0) e config --list sai 0; --atlas globex → exit 2 com o item
+        mascarado; o doctor tem um AVISO citando globex, sem o item."""
+        self.make_atlas("acme", ["github.com/acme"], service="payments-api")
+        self.make_atlas("globex", [LEAKY_REMOTE])
+        self.configure(default="acme")
+        places = {
+            "fora de git": (self.box.root, "default"),
+            "repo da globex": (self.repo("globex-api", "https://github.com/globex/api.git"), "default"),
+            "repo da acme": (self.repo("acme-api", "https://github.com/acme/api.git"), "remote"),
+        }
+        for label, (cwd, selected_by) in places.items():
+            with self.subTest(pasta=label, comando="config --json"):
+                self.assertChosen(cwd, "acme", selected_by)
+            with self.subTest(pasta=label, comando="context"):
+                out = self.cli("context", "api", "--json", cwd=cwd)
+                self.assertExit(out, 0)
+                self.assertEqual(sorted(s["key"] for s in json.loads(out.stdout)["services"]),
+                                 ["service:payments-api"])
+            with self.subTest(pasta=label, comando="lint"):
+                out = self.cli("lint", cwd=cwd)
+                self.assertExit(out, 0)
+                self.assertNotIn(SECRET, output(out))
+            with self.subTest(pasta=label, comando="config --list --json"):
+                out = self.cli("config", "--list", "--json", cwd=cwd)
+                self.assertExit(out, 0)
+                self.assertEqual([a["name"] for a in json.loads(out.stdout)["atlases"]], ["acme", "globex"])
+                self.assertNotIn(SECRET, output(out))
+            with self.subTest(pasta=label, comando="config --json --atlas globex"):
+                out = self.cli("config", "--json", "--atlas", "globex", cwd=cwd)
+                self.assertExit(out, 2)
+                self.assertIn(MASKED_REMOTE, output(out))
+                self.assertNotIn(SECRET, output(out))
+        with self.subTest(comando="doctor"):
+            out = self.cli("doctor", cwd=places["repo da globex"][0])
+            self.assertNotIn("Traceback", output(out))
+            self.assertNotIn(SECRET, output(out))
+            rows = doctor_lines(out.stdout)
+            warned = [row for row in rows if row[0] == "AVISO" and "globex" in " ".join(row)
+                      and "remotes" in " ".join(row)]
+            self.assertTrue(warned, out.stdout)
+            for row in warned:
+                self.assertNotIn("github.com", " ".join(row), "o AVISO não mostra o item")
+
+
+class AmendmentEdgeCasesTest(RemoteCase):
+    def test_removed_working_folder_skips_the_remote_step(self):
+        """SPEC-0080:UT-12 — config --json numa pasta atual removida: o passo do remote é pulado e vale o default
+        (exit 0, sem Traceback)."""
+        self.acme_and_globex(default="acme")
+        repo = self.repo("globex-api", "https://github.com/globex/api.git")
+        gone = repo / "sub"
+        gone.mkdir()
+        launcher = ("import os, sys; os.chdir(sys.argv[1]); os.rmdir(sys.argv[1]); "
+                    "os.execv(sys.executable, [sys.executable, *sys.argv[2:]])")
+        out = subprocess.run([sys.executable, "-c", launcher, str(gone), str(SCRIPT), "config", "--json"],
+                             check=False, cwd=str(repo), capture_output=True, text=True, timeout=TIMEOUT,
+                             env=self.environ())
+        self.assertExit(out, 0)
+        data = json.loads(out.stdout)
+        self.assertEqual((data.get("atlas_name"), data.get("selected_by")), ("acme", "default"), data)
+
+    def test_control_characters_in_remotes_are_refused(self):
+        """SPEC-0080:UT-12 — item de remotes: com caractere de controle (abaixo de 0x20, 0x7f a 0x9f) → exit 2."""
+        atlas = self.make_atlas("acme", ["github.com/acme"])
+        self.configure()
+        for label, item in (("ESC", "github.com/acme\x1b[31m"), ("TAB", "github.com/ac\tme"),
+                            ("DEL", "github.com/acme\x7f"), ("C1 0x85", "github.com/acme\x85"),
+                            ("C1 0x9f", "github.com/acme\x9f")):
+            with self.subTest(caso=label):
+                self.set_remotes(atlas, [item])
+                out = self.cli("config", "--json")
+                self.assertExit(out, 2)
+                self.assertNotIn("\x1b", output(out), "o caractere de controle volta cru na mensagem")

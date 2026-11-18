@@ -236,7 +236,9 @@ def facts(service):
 
 
 @unittest.skipUnless(HAS_GIT, "git não está no PATH")
-class ProjectFolderTest(unittest.TestCase):
+class ProjectFolderCase(unittest.TestCase):
+    """Sandbox, atlas criados pela CLI e repositórios git locais (IT-02 e Emenda v3)."""
+
     def setUp(self):
         self.sandbox = Sandbox()
         self.addCleanup(self.sandbox.cleanup)
@@ -287,6 +289,8 @@ class ProjectFolderTest(unittest.TestCase):
             f"  acme:\n    atlas: \"{acme}\"\n    credentials: {{}}\n"
             f"  globex:\n    atlas: \"{globex}\"\n    credentials: {{}}\n", encoding="utf-8")
 
+
+class ProjectFolderTest(ProjectFolderCase):
     def services(self, server, arguments, id):
         response, _ = server.ask(call("atlas_context", arguments, id=id), timeout=PROCESS_TIMEOUT)
         result = result_of(self, response, id=id)
@@ -312,3 +316,48 @@ class ProjectFolderTest(unittest.TestCase):
                 response, _ = server.ask(call("atlas_config", {}, id=3), timeout=PROCESS_TIMEOUT)
                 structured = result_of(self, response, id=3).get("structuredContent") or {}
                 self.assertEqual(structured.get("selected_by"), "remote", structured)
+
+
+# ---------------------------------------------------------------- Emenda v3 (UT-10 e UT-12)
+
+SECRET = "SECRETTOK"
+LEAKY_REMOTE = f"https://u:{SECRET}@github.com/globex"
+MASKED_REMOTE = "https://***@github.com/globex"
+
+
+class AmendmentServerTest(ProjectFolderCase):
+    def configure(self, default=None, globex_remote="github.com/globex"):
+        acme = self.make_atlas("acme", "payments-api", "github.com/acme")
+        globex = self.make_atlas("globex", "billing-api", json.dumps(globex_remote))
+        self.sandbox.config_home.mkdir(parents=True, exist_ok=True)
+        head = f"default: {default}\n" if default else ""
+        (self.sandbox.config_home / "config.yml").write_text(
+            head + "atlases:\n"
+            f"  acme:\n    atlas: \"{acme}\"\n    credentials: {{}}\n"
+            f"  globex:\n    atlas: \"{globex}\"\n    credentials: {{}}\n", encoding="utf-8")
+
+    def atlas_config(self, project, arguments):
+        server = ServerProcess(self.sandbox, env=self.environ(project))
+        self.addCleanup(server.close)
+        response, _ = server.ask(call("atlas_config", arguments, id=1), timeout=PROCESS_TIMEOUT)
+        return result_of(self, response, id=1)
+
+    def test_atlas_config_never_shows_the_token_of_an_invalid_remote(self):
+        """SPEC-0080:UT-10 — globex com remotes: https://u:SECRETTOK@github.com/globex: atlas_config com atlas
+        "globex" é erro da tool com o item mascarado, sem o token."""
+        self.configure(default="acme", globex_remote=LEAKY_REMOTE)
+        result = self.atlas_config(self.root, {"atlas": "globex"})
+        text = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn(SECRET, text, "o token do item de remotes: vazou pela tool")
+        self.assertIs(result.get("isError"), True, result)
+        self.assertIn(MASKED_REMOTE, text_of(result))
+
+    def test_missing_project_dir_falls_back_to_the_server_folder(self):
+        """SPEC-0080:UT-12 — atlas_config com CLAUDE_PROJECT_DIR numa pasta que não existe: usa o cwd do servidor,
+        o passo do remote é pulado e responde com o atlas default."""
+        self.configure(default="acme")
+        result = self.atlas_config(self.root / "inexistente", {})
+        self.assertIs(result.get("isError"), False, text_of(result))
+        structured = result.get("structuredContent") or {}
+        self.assertEqual((structured.get("atlas_name"), structured.get("selected_by")), ("acme", "default"),
+                         structured)
