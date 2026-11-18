@@ -257,8 +257,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [x] Green: forma nova e `select_atlas` em `atlas.py`; `scan_config`, `_lint_atlas`, `load_config` e `doctor_rows` pela entrada escolhida; `init`/`join_atlas` com `--name`/`--default`; `config --list`/`--set-default`; `references/config.md`, `references/modes.md`, `SKILL.md`, CHANGELOG, `ATLAS_VERSION` e `plugin.json`
 - [x] Validar: suíte completa + arquitetura (G2/G3)
 - [x] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega, docs e CHANGELOG (G7)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega, docs e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -287,37 +287,71 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- **Vários atlas:** a configuração local da `boson-atlas` guarda vários atlas com nome (`default:` + `atlases:`), cada um com as suas credenciais. A forma de um atlas só (`atlas:` + `credentials:`) continua lida e é gravada enquanto houver uma entrada, e a forma nova só aparece ao acrescentar o segundo atlas, com `config.yml.bak`.
+- **Escolha do atlas:** todos os comandos menos o `init` aceitam `--atlas <nome|caminho>`, e a ordem `--atlas` → `ATLAS_NAME` → `default` → atlas único decide. Vários atlas sem escolha dão exit 2 com o passo, e um nome ou caminho fora da lista dá exit 3.
+- **`init` e `init --join`:** ganham `--name` e `--default` e acrescentam sem apagar os outros. Reapontam o atlas de quem mudou de pasta (Emendas v3 e v4).
+- **Consulta:** `config --list [--json]` e `config --set-default`; o `config --json` ganha `atlas_name`, `selected_by` e `atlases`; o `doctor` lista os atlas configurados.
+- **Isolamento:** os coletores não recebem as variáveis declaradas só por outros atlas (Emenda v4), e a CI do atlas passa `--atlas "$PWD"`.
+- **Docs e versões:** `references/config.md`, `references/modes.md`, `SKILL.md`, CHANGELOG `[2026.11.10]` com o rollback (restaurar `config.yml.bak`), `ATLAS_VERSION` 2026.11.10 e o plugin 2026.11.22.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **Testes:**
+  - 1c415c6: caracterização (CH-01), passando no código anterior;
+  - 731cc5b e c948e4c: plano e Emenda v2;
+  - 4afae19: Emenda v4.
+- **Implementação:** em `scripts/atlas.py`.
+  - c3aa61c: `local_atlases`, `select_atlas` (com o ponto `project_remote_choice` reservado à SPEC-0080), `updated_local`, `config --list`/`--set-default` e as linhas do `doctor`;
+  - 81a5ceb: Emenda v4, com `collector_environment`, o reapontamento do atlas movido, a CI e as entradas em ordem de nome.
+- **Emendas:**
+  - v2: sete esclarecimentos do test-writer;
+  - v3: compatibilidade do `init` com os testes da SPEC-0070;
+  - v4: achados do G4, com `touches` ganhando `assets/ci/**`.
+- **Revisão G4:**
+  - rodada 1: CHANGES_REQUESTED. Major: `mv` + `join` criava uma entrada quebrada, e a CI podia varrer o atlas errado;
+  - rodada 2: APPROVED, com 2 minors.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Configuração de um atlas só igual à versão anterior | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-01 | Nome derivado da organization e normalização | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-02 | Forma inválida → exit 2 com a chave | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-03 | Ordem `--atlas` → `ATLAS_NAME` → `default`, por nome e caminho | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-04 | Sem escolha → exit 2; desconhecido → exit 3; `config --list` | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-05 | Acrescentar atlas: forma nova e `.bak` | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-06 | Conflito de nome ou caminho no `init` | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-07 | `config --set-default` | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-08 | `doctor` com vários atlas | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| UT-09 | Compatibilidade do `init` (atlas movido, mesma organização, `--force`, sem `atlas:`) | PASS | `test_multi_atlas.py::InitCompatibilityTest` — CI do PR #55 (run 44367043914) |
+| UT-10 | CI do atlas com `ATLAS_CONFIG_HOME` de outro atlas e `ATLAS_NAME` exportado | PASS | `test_multi_atlas.py::AtlasCiScriptTest` — CI do PR #55 (run 44367043914) |
+| IT-01 | Forma antiga sobrevive a `init`/`join` e o `.bak` restaura | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| IT-02 | Credenciais isoladas no `scan` e no `doctor`, inclusive no ambiente dos coletores | PASS | `test_multi_atlas.py`, `CollectorEnvironmentTest` — CI do PR #55 (run 44367043914) |
+| CT-01 | Campos `atlas_name`, `selected_by` e `atlases` do `config --json` | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
+| E2E-01 | Jornada com duas organizações | PASS | `test_multi_atlas.py` — CI do PR #55 (run 44367043914) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0021
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — segurança e isolamento (IT-02), compatibilidade (CH-01, IT-01)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — `selected_by`, `config --list`, `doctor`; rollback pelo `.bak` no CHANGELOG
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — `ATLAS_VERSION` 2026.11.10, plugin 2026.11.22, PR #55.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Dois minors da rodada 2 do G4 ficam como nits sem spec, a retomar se aparecerem no uso:
+- um atlas que declare `PATH` ou `HOME` como credencial esconderia a variável dos coletores dos outros atlas;
+- o reapontamento de um atlas cuja pasta sumiu é silencioso (igual à versão anterior).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0079`. -->
