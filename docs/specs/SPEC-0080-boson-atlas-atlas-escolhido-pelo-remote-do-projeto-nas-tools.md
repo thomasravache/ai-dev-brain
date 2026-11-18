@@ -122,6 +122,14 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
   exit 3 → nada (como hoje)
 ```
 
+**Esclarecimentos (Emenda v2, achados do test-writer no G1):**
+1. **Hook com exit 2:** os `<nomes>` vêm de uma segunda chamada de leitura, `config --list --json`, que nunca falha com vários atlas e fica dentro do prazo do hook. Com 0 atlas ou `config --json` ilegível, o hook mantém a linha atual.
+2. **Formato dos nomes:** na ordem de `atlases` (por nome), separados por `, `.
+3. **Motivo no hook para `option` e `single`:** usa o texto da CLI: `--atlas` e `único`. `env` vira `ATLAS_NAME`, `default` vira `padrão` e `remote` vira `remote do projeto`.
+4. **Parâmetro `atlas` das tools:** recusa qualquer caractere de controle, inclusive TAB, LF e CR, porque o valor vira argv.
+5. **Passagem à CLI:** colada, `--atlas=<valor>`, para que um valor começando com `-` não vire opção, como as tools `brain_*` já fazem.
+6. **Validação de `remotes:` no UT-07:** acontece ao ler a configuração (`config --json` e os demais comandos), que sai com exit 2 e cita o item. Itens com `:` ou maiúsculas também são recusados, e o `lint` aceita `remotes` como chave conhecida.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -278,3 +286,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0080`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece de onde o hook tira os nomes no exit 2 (`config --list --json`), o formato e os textos do motivo, a recusa de qualquer caractere de controle no parâmetro `atlas`, o `--atlas=<valor>` colado e onde `remotes:` é validado | G1 (test-writer): seis pontos sem definição no contrato | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
