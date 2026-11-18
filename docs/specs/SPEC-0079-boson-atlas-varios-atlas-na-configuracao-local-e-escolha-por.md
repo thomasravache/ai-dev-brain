@@ -252,11 +252,11 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Fase 0: CH-01 escrito e passando no código atual, commitado antes de qualquer mudança
-- [ ] Red: UT-01 a UT-08, IT-01, IT-02, CT-01 e E2E-01 com a tag `SPEC-0079:<ID>`, falhando pelo motivo certo
-- [ ] Green: forma nova e `select_atlas` em `atlas.py`; `scan_config`, `_lint_atlas`, `load_config` e `doctor_rows` pela entrada escolhida; `init`/`join_atlas` com `--name`/`--default`; `config --list`/`--set-default`; `references/config.md`, `references/modes.md`, `SKILL.md`, CHANGELOG, `ATLAS_VERSION` e `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
+- [x] Fase 0: CH-01 escrito e passando no código atual, commitado antes de qualquer mudança
+- [x] Red: UT-01 a UT-08, IT-01, IT-02, CT-01 e E2E-01 com a tag `SPEC-0079:<ID>`, falhando pelo motivo certo
+- [x] Green: forma nova e `select_atlas` em `atlas.py`; `scan_config`, `_lint_atlas`, `load_config` e `doctor_rows` pela entrada escolhida; `init`/`join_atlas` com `--name`/`--default`; `config --list`/`--set-default`; `references/config.md`, `references/modes.md`, `SKILL.md`, CHANGELOG, `ATLAS_VERSION` e `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
 - [ ] Integração + CI verde (G5) e H2
 - [ ] Relatório de Entrega, docs e CHANGELOG (G7)
 
@@ -268,7 +268,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=53, skipped=1)) — c948e4c | 2026-11-18 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 81a5ceb | 2026-11-18 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 946f252 | 2026-11-18 |
-| G4 Review | FAIL | rodada 1: CHANGES_REQUESTED — 2 major (mv + join cria entrada quebrada; CI do atlas pode varrer o atlas errado com ATLAS_CONFIG_HOME/ATLAS_NAME), 3 minor (isolamento de env dos coletores, ordem de gravação, testes da Emenda v3) | 2026-11-18 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer (subagente), rodada 2: APPROVED — 0 blocker, 0 major, 2 minor (PATH declarado por outro atlas; reapontamento silencioso) — c18d811 | 2026-11-18 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -276,6 +276,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-18 — rodada 1: CHANGES_REQUESTED — 2 major (mv + join cria entrada quebrada; CI do atlas pode varrer o atlas errado com ATLAS_CONFIG_HOME/ATLAS_NAME), 3 minor (isolamento de env dos coletores, ordem de gravação, testes da Emenda v3) — 1e336c4
+- G4 PASS 2026-11-18 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
