@@ -23,7 +23,13 @@ Contrato (seção 6 da spec) que os testes fixam:
     config --json: "values", "origins" + "atlas_name", "selected_by" (option | env | default | single) e
         "atlases": [{"name", "atlas", "default"}] por nome. config --list: todos os atlas e o escolhido ("nenhum"
         sem escolha, sem falhar). config --set-default <nome>: nome inexistente -> exit 2.
-    doctor: linha "Atlas configurados: N (a, b)"; pasta de outro atlas ausente -> AVISO com o nome.
+    doctor: linha "OK Atlas configurados — N (a, b)"; pasta de outro atlas ausente -> AVISO com o nome; vários sem
+        escolha -> ERRO com a mensagem de escolha e exit 1.
+    Emenda v2: config --list em texto (`<nome>  <caminho>  <organization>  [default]` por atlas e no fim
+        `escolhido: <nome> (<selected_by>)` ou `escolhido: nenhum`) e em --json ({"atlases": [{"name", "atlas",
+        "default", "organization"}], "atlas_name", "selected_by"}); nome derivado com "-" único, sem "-" nas pontas e
+        cortado em 63; a forma de um atlas só tem "default": true; entrada nova com credentials vazias; <x> do exit 3
+        como foi digitado.
 
 Isolamento: HOME, XDG_CONFIG_HOME e ATLAS_CONFIG_HOME temporários (helpers.Sandbox; run_default para a pasta
 padrão), ATLAS_NAME sempre tirado do ambiente salvo quando o teste o define. Organizações genéricas (Acme, Globex);
@@ -210,6 +216,26 @@ class ReadTest(MultiAtlasCase):
         self.assertEqual(data.get("atlas_name"), "default")
         self.assertEqual(data.get("selected_by"), "single")
 
+        long_org = "Acme " + "x" * 70  # Emenda v2: corte em 63 caracteres
+        cases = [  # Emenda v2: sequências de "-" viram uma só, "-" nas pontas sai, vazio vira "default"
+            ("-Acme", "acme"),
+            ("!!!", "default"),
+            ("Globex, Inc.", "globex-inc"),
+            ("Acme  Corp", "acme-corp"),
+            (long_org, ("acme-" + "x" * 70)[:63]),
+        ]
+        for index, (organization, name) in enumerate(cases):
+            with self.subTest(organization=organization):
+                folder = self.box.root / "work" / f"org-{index}"
+                folder.mkdir(parents=True)
+                (folder / "atlas-config.yml").write_text(
+                    f"version: 1\norganization: {json.dumps(organization)}\nmode: repo\n", encoding="utf-8")
+                self.box.write_local(fn("render_local_config")(str(folder), {}))
+                data = self.config_json()
+                self.assertEqual(data["values"]["organization"], organization, "fixture: organization lida")
+                self.assertEqual(data.get("atlas_name"), name)
+                self.assertRegex(data.get("atlas_name") or "", r"^[a-z0-9][a-z0-9-]{0,62}\Z")
+
     def test_invalid_local_configuration_exits_2_naming_the_key(self):
         """SPEC-0079:UT-02 — duas formas juntas, nome inválido, default sem entrada, chave desconhecida: exit 2."""
         acme = self.make_atlas(self.box.root / "work" / "acme-atlas", "Acme")
@@ -259,29 +285,48 @@ class SelectionTest(MultiAtlasCase):
                 self.assertExit(out, 2)
                 self.assertIn(NO_CHOICE, output(out))
 
+        with self.subTest(sem_escolha="doctor"):  # Emenda v2: linha ERRO com a mensagem de escolha e exit 1
+            out = self.cli("doctor")
+            self.assertEqual(out.returncode, 1, output(out))
+            self.assertNotIn("Traceback", output(out))
+            rows = doctor_lines(out.stdout)
+            self.assertTrue([r for r in rows if r[0] == "ERRO" and NO_CHOICE in f"{r[1]} — {r[2]}"], out.stdout)
+
         other = self.box.root / "work" / "initech-atlas"
         other.mkdir(parents=True)
-        cases = [
+        cases = [  # Emenda v2: <x> é o valor como foi digitado
             ("--atlas nome", ("--atlas", "initech"), {}, "initech"),
             ("ATLAS_NAME nome", (), {"ATLAS_NAME": "initech"}, "initech"),
-            ("--atlas caminho", ("--atlas", str(other)), {}, None),
+            ("--atlas caminho absoluto", ("--atlas", str(other)), {}, str(other)),
+            ("--atlas caminho relativo", ("--atlas", "work/initech-atlas"), {}, "work/initech-atlas"),
+            ("ATLAS_NAME caminho relativo", (), {"ATLAS_NAME": "./work/initech-atlas"}, "./work/initech-atlas"),
         ]
-        for case, args, env, shown in cases:
+        for case, args, env, typed in cases:
             for command in (("config", "--json"), ("context", "api")):
                 with self.subTest(caso=case, comando=command[0]):
                     out = self.cli(*command, *args, env=env)
                     self.assertExit(out, 3)
-                    text = output(out)
-                    self.assertIn(UNKNOWN_PREFIX + (shown or ""), text)
-                    self.assertIn(UNKNOWN_STEP, text)
-                    self.assertIn(UNKNOWN_LIST, text)
+                    self.assertIn(f"{UNKNOWN_PREFIX}{typed} — {UNKNOWN_STEP} {UNKNOWN_LIST}", output(out))
 
         out = self.cli("config", "--list")
         self.assertExit(out, 0)
-        for name, path in (("acme", self.acme), ("globex", self.globex)):
-            self.assertIn(name, out.stdout)
-            self.assertIn(str(path), out.stdout)
-        self.assertIn("nenhum", out.stdout)
+        lines = out.stdout.splitlines()
+        for name, path, organization in (("acme", self.acme, "Acme"), ("globex", self.globex, "Globex")):
+            self.assertTrue([line for line in lines if line.split()[:3] == [name, str(path), organization]],
+                            out.stdout)
+        self.assertFalse([line for line in lines if line.rstrip().endswith("[default]")], "sem default")
+        self.assertEqual(lines[-1].strip(), "escolhido: nenhum")
+
+        out = self.cli("config", "--list", "--json")
+        self.assertExit(out, 0)
+        data = json.loads(out.stdout)
+        self.assertEqual(set(data), {"atlases", "atlas_name", "selected_by"})
+        self.assertEqual(data["atlases"], [
+            {"name": "acme", "atlas": str(self.acme), "default": False, "organization": "Acme"},
+            {"name": "globex", "atlas": str(self.globex), "default": False, "organization": "Globex"},
+        ])
+        self.assertIsNone(data["atlas_name"])
+        self.assertIsNone(data["selected_by"])
 
 
 # ---------------------------------------------------------------- init, set-default e doctor (UT-05 a UT-08)
@@ -360,8 +405,8 @@ class WriteTest(MultiAtlasCase):
             with self.subTest(args=args):
                 out = self.cli(*args)
                 self.assertExit(out, 0)
-                self.assertIn(f"Atlas configurados: 2 ({NAMES})", out.stdout)
                 rows = doctor_lines(out.stdout)
+                self.assertIn(("OK", "Atlas configurados", f"2 ({NAMES})"), rows, out.stdout)  # Emenda v2
                 self.assertTrue([r for r in rows if r[0] == "AVISO" and "globex" in f"{r[1]} {r[2]}"], out.stdout)
                 self.assertEqual([r for r in rows if r[0] == "ERRO" and "globex" in f"{r[1]} {r[2]}"], [])
                 self.assertIn(("OK", "pasta do atlas", str(self.acme)), rows)
@@ -465,7 +510,9 @@ class ConfigJsonContractTest(MultiAtlasCase):
         self.box.write_local(fn("render_local_config")(str(self.acme), {}), config_home=single)
         out = self.cli("config", "--json", config_home=single)
         self.assertExit(out, 0)
-        self.assertContract(json.loads(out.stdout), "acme", "single", [("acme", str(self.acme))])
+        data = json.loads(out.stdout)
+        self.assertContract(data, "acme", "single", [("acme", str(self.acme))])
+        self.assertIs(data["atlases"][0]["default"], True, "Emenda v2: a única entrada é o default")
 
 
 # ---------------------------------------------------------------- jornada (E2E-01)
@@ -492,8 +539,17 @@ class TwoOrganizationsJourneyTest(MultiAtlasCase):
 
         out = self.cli("config", "--list")  # 3
         self.assertExit(out, 0)
-        for text in ("acme", "globex", str(acme), str(globex), "Acme", "Globex"):
-            self.assertIn(text, out.stdout)
+        lines = out.stdout.splitlines()
+        self.assertTrue([line for line in lines if line.split() == ["acme", str(acme), "Acme", "[default]"]],
+                        out.stdout)
+        self.assertTrue([line for line in lines if line.split() == ["globex", str(globex), "Globex"]], out.stdout)
+        self.assertEqual(lines[-1].strip(), "escolhido: acme (default)")
+        out = self.cli("config", "--list", "--json")
+        self.assertExit(out, 0)
+        listed = json.loads(out.stdout)
+        self.assertEqual((listed.get("atlas_name"), listed.get("selected_by")), ("acme", "default"))
+        self.assertEqual([(i.get("name"), i.get("default"), i.get("organization")) for i in listed["atlases"]],
+                         [("acme", True, "Acme"), ("globex", False, "Globex")])
         data = self.config_json()
         self.assertEqual([(i.get("name"), i.get("default")) for i in data.get("atlases") or []],
                          [("acme", True), ("globex", False)])
