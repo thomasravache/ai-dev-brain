@@ -144,7 +144,7 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 13. **`remotes:` com caractere de controle:** o item é recusado (abaixo de 0x20 e de 0x7f a 0x9f).
 
 **Correções da rodada 2 do G4 (Emenda v4):**
-14. **Máscara sempre aplicada:** toda mensagem que cita um item de `remotes:` mostra `***@` no lugar de qualquer userinfo antes da primeira `/`, com ou sem esquema e com ou sem `:` (`TOK@github.com/acme` → `***@github.com/acme`, `git@host:g/r` → `***@host:g/r`). Também troca o que vem depois de `?` ou `#` por `***`. O UT-07 deixa de esperar `user@github.com/acme` sem máscara.
+14. **Máscara sempre aplicada:** toda mensagem que cita um item de `remotes:` mostra `***@` no lugar de tudo o que vem antes do último `@` (depois do esquema), com ou sem esquema e com ou sem `:` (`TOK@github.com/acme` → `***@github.com/acme`, `git@host:g/r` → `***@host:g/r`). Também troca o que vem depois de `?` ou `#` por `***`. O UT-07 deixa de esperar `user@github.com/acme` sem máscara.
 15. **Item com `?`, `#` ou `=`:** é recusado (exit 2), porque nunca casaria com um remote normalizado e poderia carregar um token.
 
 **Design:** N/A — sem interface gráfica.
