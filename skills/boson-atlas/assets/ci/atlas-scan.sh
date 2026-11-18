@@ -15,8 +15,8 @@ export ATLAS_CONFIG_HOME
 python3 .boson-atlas/skill/scripts/atlas.py init --join --atlas "$PWD" || exit 1
 
 failed=0
-python3 .boson-atlas/skill/scripts/atlas.py scan || failed=1
-python3 .boson-atlas/skill/scripts/atlas.py lint || failed=1
+python3 .boson-atlas/skill/scripts/atlas.py scan --atlas "$PWD" || failed=1
+python3 .boson-atlas/skill/scripts/atlas.py lint --atlas "$PWD" || failed=1
 if [ "$failed" -ne 0 ]; then
   echo "atlas-scan: scan ou lint falhou (veja acima)" >&2
   exit 1

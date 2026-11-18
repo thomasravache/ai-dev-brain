@@ -38,11 +38,11 @@ jobs:
       - name: Scan
         id: scan
         continue-on-error: true
-__ENV__        run: python3 .boson-atlas/skill/scripts/atlas.py scan
+__ENV__        run: python3 .boson-atlas/skill/scripts/atlas.py scan --atlas "$PWD"
       - name: Lint
         id: lint
         continue-on-error: true
-        run: python3 .boson-atlas/skill/scripts/atlas.py lint
+        run: python3 .boson-atlas/skill/scripts/atlas.py lint --atlas "$PWD"
       - name: Abrir PR com o diff
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,7 +54,7 @@ __ENV__        run: python3 .boson-atlas/skill/scripts/atlas.py scan
             echo "Sem mudanças no atlas."
             exit 0
           fi
-          if ! python3 .boson-atlas/skill/scripts/atlas.py lint --only secret-leak; then
+          if ! python3 .boson-atlas/skill/scripts/atlas.py lint --atlas "$PWD" --only secret-leak; then
             echo "::error::lint acusou segredo no atlas: nada foi enviado. Corrija e rode o workflow de novo."
             exit 1
           fi
@@ -111,4 +111,4 @@ __ENV__        run: python3 .boson-atlas/skill/scripts/atlas.py scan
           echo "ATLAS_CONFIG_HOME=$ATLAS_CONFIG_HOME" >> "$GITHUB_ENV"
           python3 .boson-atlas/skill/scripts/atlas.py init --join --atlas "$PWD"
       - name: Lint
-        run: python3 .boson-atlas/skill/scripts/atlas.py lint
+        run: python3 .boson-atlas/skill/scripts/atlas.py lint --atlas "$PWD"

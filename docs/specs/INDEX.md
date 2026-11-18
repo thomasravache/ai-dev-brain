@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **4 erro(s), 23 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 1, implemented 65
+- Validação (G0): **3 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 1, approved 3, implemented 66
 - Impedimentos: **1 aberto(s)**, 29 resolvido(s)
 
 ## Impedimentos Abertos
@@ -31,12 +31,14 @@ Perfil: **minimo**
 
 **Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** —
+**Próximo lote:** SPEC-0080
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 1d) |  |
+| 2 | SPEC-0080 | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 3 | SPEC-0081 | gluon-spec: org_context escolhe o atlas no DISCOVER | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0080 |
 
 ## Épicos
 
@@ -51,7 +53,7 @@ Perfil: **minimo**
 | SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | implemented | 2/2 implementadas |
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
 | SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | proposed | 0/0 implementadas |
-| SPEC-0077 | boson-atlas: mais de uma organização por máquina | proposed | 0/0 implementadas |
+| SPEC-0077 | boson-atlas: mais de uma organização por máquina | approved | 1/3 implementadas |
 
 ## Grafo de Dependências
 
@@ -70,6 +72,11 @@ flowchart LR
     S0072["SPEC-0072<br/>fermion_doctor e guarda de nomes cobrem…"]:::implemented
     S0073["SPEC-0073<br/>Remoção dos nomes técnicos antigos na v…"]:::approved
   end
+  subgraph E0077["SPEC-0077 · boson-atlas: mais de uma organização por máquina"]
+    S0079["SPEC-0079<br/>boson-atlas: vários atlas na configuraç…"]:::implemented
+    S0080["SPEC-0080<br/>boson-atlas: atlas escolhido pelo remot…"]:::approved
+    S0081["SPEC-0081<br/>gluon-spec: org_context escolhe o atlas…"]:::approved
+  end
   S0023 --> S0028
   S0070 --> S0071
   S0069 --> S0072
@@ -79,6 +86,9 @@ flowchart LR
   S0070 --> S0073
   S0071 --> S0073
   S0072 --> S0073
+  S0079 --> S0080
+  S0079 -. contrato v1 .-> S0080
+  S0079 -. contrato v1 .-> S0081
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -165,8 +175,11 @@ flowchart LR
 | [SPEC-0074](SPEC-0074-gluon-spec-retrospectiva-entre-projetos-spec-graph-py-retro.md) | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | implemented | 2026-11-17 | SPEC-0066 | — | — |
 | [SPEC-0075](SPEC-0075-boson-atlas-mapa-de-acesso-observabilidade-e-validacao-por-a.md) | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | epic | feature | proposed | 2026-11-17 | — | — | — |
 | [SPEC-0076](SPEC-0076-boson-atlas-coletor-argocd-reconhece-nome-do-servico-sufixos.md) | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite | fix | implemented | 2026-11-17 | — | — | — |
-| [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | proposed | 2026-11-17 | — | — | — |
+| [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | approved | 2026-11-17 | — | — | — |
 | [SPEC-0078](SPEC-0078-gluon-spec-ajustes-do-processo-apontados-pela-primeira-retro.md) | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | full | feature | implemented | 2026-11-17 | SPEC-0066 | SPEC-0074 | — |
+| [SPEC-0079](SPEC-0079-boson-atlas-varios-atlas-na-configuracao-local-e-escolha-por.md) | boson-atlas: vários atlas na configuração local e escolha por --atlas | full | feature | implemented | 2026-11-18 | SPEC-0077 | — | — |
+| [SPEC-0080](SPEC-0080-boson-atlas-atlas-escolhido-pelo-remote-do-projeto-nas-tools.md) | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full | feature | approved | 2026-11-18 | SPEC-0077 | SPEC-0079 | SPEC-0079@1 |
+| [SPEC-0081](SPEC-0081-gluon-spec-org-context-escolhe-o-atlas-no-discover.md) | gluon-spec: org_context escolhe o atlas no DISCOVER | lite | feature | approved | 2026-11-18 | SPEC-0077 | — | SPEC-0079@1 |
 
 ## ADRs
 
@@ -191,3 +204,4 @@ flowchart LR
 | [ADR-0018](../adr/ADR-0018-nomes-das-skills-gluon-spec-photon-brain-e-boson-atlas.md) | Nomes das skills: gluon-spec, photon-brain e boson-atlas | accepted | tests/plugin/test_skill_names.py (SPEC-0055:UT-01 a UT-04) |
 | [ADR-0019](../adr/ADR-0019-auto-melhoria-do-plugin-so-le-e-avisa-nunca-atualiza-sozinha.md) | Auto-melhoria do plugin só lê e avisa, nunca atualiza sozinha | accepted | tests/plugin/test_fermion_doctor.py (SPEC-0061:UT-06) e mcp/tests/test_architecture.py |
 | [ADR-0020](../adr/ADR-0020-nomes-tecnicos-novos-com-leitura-dupla-e-remocao-anunciada.md) | Nomes técnicos novos com leitura dupla e remoção anunciada | accepted | — |
+| [ADR-0021](../adr/ADR-0021-varios-atlas-por-maquina-e-ordem-de-escolha.md) | Vários atlas por máquina e ordem de escolha | accepted | testes das SPEC-0079 e SPEC-0080 (CH-01, IT-01, IT-02, CT-01) e tests/test_architecture.py |
