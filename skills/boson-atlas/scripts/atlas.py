@@ -435,11 +435,11 @@ def validate_ci(ci) -> None:
         raise AtlasError("ci.schedule precisa ser uma expressão cron de 5 campos (ex.: \"0 6 * * 1\")", 2)
 
 
-REMOTES_PROBLEM = ("remotes aceita só prefixos host/caminho em minúsculas, sem esquema, \"@\", \":\", espaço, \"..\" "
-                   "nem barra no início ou no fim (ex.: github.com/acme)")
+REMOTES_PROBLEM = ("remotes aceita só prefixos host/caminho em minúsculas, sem esquema, \"@\", \":\", \"?\", \"#\", "
+                   "\"=\", espaço, caractere de controle, \"..\" nem barra no início ou no fim (ex.: github.com/acme)")
 
 
-USERINFO_RE = re.compile(r"^((?:[A-Za-z][A-Za-z0-9+.-]*:)?//)?([^/]*)@")  # optional scheme, then the userinfo up to "@"
+SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:/+")  # https://, ssh://, and a malformed https:/
 
 
 def is_control(c: str) -> bool:
@@ -448,24 +448,30 @@ def is_control(c: str) -> bool:
 
 
 def masked_remote_item(item) -> str:
-    """An item of `remotes:` as it may appear in a message (SPEC-0080, Emenda v3 items 7 and 13): the credentials
-    replaced by *** (https://***@host/...) and control characters escaped (\\xNN), so no token nor raw escape
-    sequence leaves the CLI. The userinfo is masked after a scheme or when it holds a secret (user:token@); a bare
-    user@host/path keeps the user name (UT-07)."""
-    def mask(match):
-        secret = match.group(1) or ":" in match.group(2)
-        return f"{match.group(1) or ''}***@" if secret else match.group(0)
-    text = USERINFO_RE.sub(mask, str(item), count=1)
-    return "".join(f"\\x{ord(c):02x}" if is_control(c) else c for c in text)
+    """An item of `remotes:` as it may appear in a message (SPEC-0080, Emenda v3 items 7 and 13, Emenda v4 item 14):
+    whatever follows "?" or "#" becomes ***, any userinfo becomes ***@ (https://***@host/..., ***@host:g/r), with or
+    without a scheme and with or without ":", and control characters are escaped (\\xNN), so no token nor raw escape
+    sequence leaves the CLI. The mask covers up to the last "@" (a superset of the userinfo before the first "/")."""
+    text = str(item)
+    cut = min((i for i in (text.find("?"), text.find("#")) if i >= 0), default=-1)
+    if cut >= 0:
+        text = text[:cut + 1] + "***"
+    scheme = SCHEME_RE.match(text)
+    head = scheme.group(0) if scheme else ""
+    rest = text[len(head):]
+    if "@" in rest:
+        rest = "***@" + rest.rsplit("@", 1)[1]
+    return "".join(f"\\x{ord(c):02x}" if is_control(c) else c for c in head + rest)
 
 
 def remote_item_problem(item) -> bool:
-    """True when an item of `remotes:` is not a lowercase host/path prefix (SPEC-0080)."""
+    """True when an item of `remotes:` is not a lowercase host/path prefix (SPEC-0080); "?", "#" and "=" are refused
+    too, since they never match a normalized remote and may carry a token (Emenda v4, item 15)."""
     if not isinstance(item, str) or not item or item != item.lower():
         return True
     if any(is_control(c) for c in item):
         return True
-    if any(c in item for c in "@:\\") or any(c.isspace() for c in item) or ".." in item:
+    if any(c in item for c in "@:\\?#=") or any(c.isspace() for c in item) or ".." in item:
         return True
     if item.startswith(("/", "~")) or item.endswith("/"):
         return True
