@@ -44,11 +44,13 @@ Impacto: grafo com serviços duplicados por ambiente e sem as dependências de s
   3. nome da Application.
 
   O valor só vale se for um nome simples (mesma regra de `HOST_RE`). Template, vazio ou texto com espaço passa para o próximo item da ordem.
+  Dentro de uma origem vale a precedência do Argo CD e do Helm: `helm.parameters`, depois `helm.valuesObject`, depois `helm.values`. Um `nameOverride` inválido é ignorado e a busca segue para o próximo lugar e para a próxima origem; o nome da Application só vale quando nenhuma origem tem um válido (Emenda v2).
 - **Sufixos padrão:** `HOST,URL,URI,ENDPOINT,DSN,ADDR,_QUEUE,_TOPIC,_BUCKET`, um superconjunto do padrão atual (`HOST` cobre `_HOST`, `URL` cobre `_URL`). A comparação continua sem diferença de caixa e só pelo fim da chave. O `--ref-suffixes` continua substituindo a lista inteira, e a doc ganha um exemplo de `atlas-config.yml` com sufixos próprios (ex.: `redis`).
 - **SQS e SNS:** antes da regra genérica, `host_of` reconhece:
   - URL de fila do SQS (`https://sqs.<região>.amazonaws.com/<conta>/<fila>` e o formato antigo `https://<região>.queue.amazonaws.com/<conta>/<fila>`) → o nome da fila;
   - ARN `arn:<partição>:sqs|sns:<região>:<conta>:<nome>` → o nome.
 
+  Uma URL de fila do SQS sem o segmento da conta (`https://sqs.<região>.amazonaws.com/<fila>`) não dá referência: o host regional nunca sai sozinho (Emenda v2).
   O id da conta, a região e o resto da URL nunca saem. Um valor com `@` em qualquer lugar, ou um nome fora de `HOST_RE`, não dá referência (mesma regra de privacidade de hoje). A referência fica `ORDERS_QUEUE_URL=orders` (ou `orders.fifo`), e a regra 2 do `build` casa com uma `queue`/`topic` de mesmo nome emitida por outro coletor.
 - **Não muda:**
   - o contrato `boson-atlas/collector@1` (ADR-0011): mesmas entidades, atributos e formato `KEY=host`;
@@ -139,3 +141,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-18 | Esclarece a ordem do `nameOverride` (parâmetros > valuesObject > values em cada origem; inválido segue para o próximo lugar e a próxima origem) e que URL do SQS sem a conta não dá referência; testes do UT-01 e do UT-05 cobrem os dois casos | G1 (test-writer): três ambiguidades da Mudança Proposta | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
