@@ -102,7 +102,16 @@ class DoctorToolListTest(unittest.TestCase):
         self.assertEqual(sorted(self.tools), sorted([*before, DOCTOR_TOOL]))
         for name, tool in before.items():
             with self.subTest(tool=name):
-                self.assertEqual(self.tools[name], tool)
+                self.assertEqual(without_atlas_param(self.tools[name]), tool)
+
+
+def without_atlas_param(tool):
+    """A tool sem a propriedade opcional "atlas" das atlas_* (SPEC-0080); o resto continua preso ao retrato."""
+    schema = tool.get("inputSchema")
+    if not tool.get("name", "").startswith("atlas_") or not isinstance(schema, dict):
+        return tool
+    properties = {k: v for k, v in schema.get("properties", {}).items() if k != "atlas"}
+    return {**tool, "inputSchema": {**schema, "properties": properties}}
 
 
 # --------------------------------------------------------------------------- UT-08: tools/call

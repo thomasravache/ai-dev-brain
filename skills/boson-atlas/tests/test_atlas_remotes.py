@@ -283,7 +283,7 @@ class DoctorTieTest(RemoteCase):
         with self.subTest(caso="sem empate, sem aviso"):
             other = self.repo("globex-api", "https://github.com/globex/api.git")
             rows = doctor_lines(self.cli("doctor", cwd=other).stdout)
-            self.assertFalse([row for row in rows if "initech" in " ".join(row)], rows)
+            self.assertFalse([row for row in rows if row[0] == "AVISO" and "initech" in " ".join(row)], rows)
 
 
 # ---------------------------------------------------------------- UT-07
