@@ -52,11 +52,14 @@ ACCESS_DENIED = re.compile(r"Unauthenticated|PermissionDenied|permission denied|
 HOST_RE = re.compile(r"^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)$")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 # the SQS endpoints: regional (sqs.<region>.amazonaws.com), FIPS (sqs-fips.<region>.amazonaws.com), legacy
-# (<region>.queue.amazonaws.com) and VPC endpoint (<vpce-id>.sqs.<region>.vpce.amazonaws.com) (SPEC-0076)
-SQS_HOST_RE = re.compile(r"^(?:sqs(?:-fips)?\.[a-z0-9-]+|(?:[a-z0-9-]+\.)?queue|[a-z0-9.-]+\.sqs\.[a-z0-9-]+\.vpce)"
+# (<region>.queue.amazonaws.com) and VPC endpoint ([<vpce-id>.]sqs.<region>.vpce.amazonaws.com) (SPEC-0076)
+SQS_HOST_RE = re.compile(r"^(?:sqs(?:-fips)?\.[a-z0-9-]+|(?:[a-z0-9-]+\.)?queue|(?:[a-z0-9.-]+\.)?sqs\.[a-z0-9-]+\.vpce)"
                          r"\.amazonaws\.com(?:\.cn)?$", re.IGNORECASE)
-# YAML null and boolean literals: never a host or a service name (SPEC-0076, Emenda v3)
-YAML_LITERALS = frozenset(("null", "~", "true", "false"))
+# any AWS VPC endpoint host: never leaves whole (Emenda v4)
+VPCE_HOST_RE = re.compile(r"\.vpce\.amazonaws\.com(?:\.cn)?$", re.IGNORECASE)
+# YAML null and boolean literals, YAML 1.1 booleans included (accepted by Helm): never a host or a service name
+# (SPEC-0076, Emendas v3 and v4)
+YAML_LITERALS = frozenset(("null", "~", "true", "false", "yes", "no", "on", "off", "y", "n"))
 # the path of an SQS queue URL: /<account>/<queue>
 SQS_PATH_RE = re.compile(r"^/\d{12}/([^/?#]+)$")
 # arn:<partition>:sqs|sns:<region>:<account>:<name>
@@ -129,17 +132,19 @@ def host_of(value):
     nothing safe is left. A URL gives its host (s3://bucket/x gives the bucket); host:port and user:pass@host give
     the host; a bare name stays as it is.
 
-    A YAML null or boolean literal (null, ~, true, false, any case) gives None, and so does a value without a
-    scheme whose authority has "=" or ";" (a connection string such as Server=db;Password=p@ss, whose text after
-    "@" may be part of the password) (SPEC-0076, Emenda v3).
+    A YAML null or boolean literal (null, ~, true, false and the YAML 1.1 yes, no, on, off, y, n, any case) gives
+    None, and so does a value, with or without a scheme, whose authority has "=", ";" or "," (a connection string
+    such as Server=db;Password=p@ss or sqlserver://db;password=p@ss, whose text after "@" may be part of the
+    password) (SPEC-0076, Emendas v3 and v4).
 
     AWS (SPEC-0076), before the generic rule: an SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<queue>,
-    the FIPS sqs-fips.<region>.amazonaws.com, the VPC endpoint <vpce-id>.sqs.<region>.vpce.amazonaws.com or the
+    the FIPS sqs-fips.<region>.amazonaws.com, the VPC endpoint [<vpce-id>.]sqs.<region>.vpce.amazonaws.com or the
     legacy https://<region>.queue.amazonaws.com/<account>/<queue>) and an SQS or SNS ARN
     (arn:<partition>:sqs|sns:<region>:<account>:<name>) give only the queue or topic name. The account, the region
     and the rest of the URL never leave: an SQS endpoint without exactly /<account>/<queue> as its path (no account,
-    extra path, query) gives None, never the regional host alone; any other ARN gives None; and an "@" anywhere in
-    an SQS or ARN value gives None.
+    extra path, query) gives None, never the regional host alone; any other ARN gives None; an "@" anywhere in
+    an SQS or ARN value gives None; and a VPC endpoint host of any other service (*.vpce.amazonaws.com) gives
+    None, so no VPC endpoint host ever leaves whole (Emenda v4).
 
     Generic rule (G4 review): drop the scheme; the authority is the text up to the first "/", "?" or "#". An "@"
     after that point (path, query or fragment: it may be a password) makes the value ambiguous and gives None —
@@ -156,7 +161,7 @@ def host_of(value):
     match = SCHEME_RE.match(value)
     rest = value[match.end():] if match else value
     authority = re.split(r"[/?#]", rest, maxsplit=1)[0]
-    if not match and ("=" in authority or ";" in authority):
+    if any(c in authority for c in "=;,"):
         return None
     host = _strip_port(authority.rsplit("@", 1)[-1])
     if host and SQS_HOST_RE.match(host):
@@ -164,6 +169,8 @@ def host_of(value):
             return None
         path = SQS_PATH_RE.match(rest[len(authority):])
         return _resource_name(path.group(1)) if path else None
+    if host and VPCE_HOST_RE.search(host):
+        return None
     if "@" in rest[len(authority):]:
         return None
     if not host or not HOST_RE.match(host):
