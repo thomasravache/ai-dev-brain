@@ -143,6 +143,10 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 12. **Pasta atual removida:** o passo do remote é pulado sem erro.
 13. **`remotes:` com caractere de controle:** o item é recusado (abaixo de 0x20 e de 0x7f a 0x9f).
 
+**Correções da rodada 2 do G4 (Emenda v4):**
+14. **Máscara sempre aplicada:** toda mensagem que cita um item de `remotes:` mostra `***@` no lugar de qualquer userinfo antes da primeira `/`, com ou sem esquema e com ou sem `:` (`TOK@github.com/acme` → `***@github.com/acme`, `git@host:g/r` → `***@host:g/r`). Também troca o que vem depois de `?` ou `#` por `***`. O UT-07 deixa de esperar `user@github.com/acme` sem máscara.
+15. **Item com `?`, `#` ou `=`:** é recusado (exit 2), porque nunca casaria com um remote normalizado e poderia carregar um token.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -185,6 +189,7 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 - **UT-09** — Dado o hook, quando `config --json` devolve 1 atlas, 2 atlas com `selected_by` `remote`, `env` ou `default`, exit 2 ou exit 3, então as linhas são as do contrato, e nenhuma contém caminho, remote ou credencial.
 - **UT-10** — Dado um `remotes:` com `https://u:SECRETTOK@github.com/globex`, quando `config --json`, `config --list --json`, `doctor --json`, `lint --json` e a tool `atlas_config` rodam, então `SECRETTOK` não aparece em nenhuma saída. Nas saídas que citam o item (`config --json` com `globex` escolhido, `lint --json` e a tool `atlas_config`), ele aparece como `https://***@github.com/globex` (Emenda v3, item 7, com a redação do UT-10 ajustada no G1).
 - **UT-11** — Dados os atlas `acme` (default) e `globex` com `remotes:` inválido, quando `config --json`, `context`, `lint` e `config --list --json` rodam fora e dentro de um repositório git, então `acme` funciona (exit 0) e `config --list` sai 0. Com `--atlas globex`, exit 2 com o item mascarado. O `doctor` mostra um AVISO citando `globex` (Emenda v3, item 8).
+- **UT-13** — Dados os itens `TOK@github.com/acme`, `ghp_TOK@github.com:acme/x`, `https://github.com/acme?access_token=TOK`, `https://github.com/acme#TOK` e `https:/u:TOK@h/x`, quando a configuração é lida (CLI, `doctor`, `lint` e tool `atlas_config`), então `TOK` não aparece em nenhuma saída. `github.com/acme?token=x`, `github.com/acme#x` e `github.com/a=b` dão exit 2 (Emenda v4).
 - **UT-12** — Casos de borda da Emenda v3:
   - hook com `config --json` em exit 2 e `config --list --json` com `atlas_name: "acme"`: não mostra "nenhum escolhido" (item 9);
   - `atlas_config` com `CLAUDE_PROJECT_DIR=/inexistente`: responde com o atlas `default` (item 11);
@@ -312,5 +317,6 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0080`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v4: a máscara de userinfo vale sempre (com e sem esquema), e query/fragment também viram `***`; itens com `?`, `#` ou `=` são recusados; UT-07 ajustado; UT-13 novo | G4 rodada 2 (1 major, 1 minor): `TOK@github.com/acme` e `?access_token=` ainda saíam sem máscara | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v3: item inválido de `remotes:` mascarado; atlas com `remotes:` inválido não derruba os outros (AVISO no `doctor`); hook só diz "nenhum escolhido" com `atlas_name` nulo; README; `CLAUDE_PROJECT_DIR` inexistente e pasta removida pulam o passo; caractere de controle recusado; `touches` ganha `tests/plugin/**`; UT-10 a UT-12 novos | G4 rodada 1 (1 blocker de processo, 2 major, 5 minor) | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece de onde o hook tira os nomes no exit 2 (`config --list --json`), o formato e os textos do motivo, a recusa de qualquer caractere de controle no parâmetro `atlas`, o `--atlas=<valor>` colado e onde `remotes:` é validado | G1 (test-writer): seis pontos sem definição no contrato | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
