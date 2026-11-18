@@ -95,8 +95,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [x] Green: `nameOverride` na ordem do nome do serviço, sufixos padrão novos e SQS/SNS em `host_of`, em `assets/collectors/argocd.py`; `references/collectors/argocd.md` (ordem do nome, sufixos com exemplo de `atlas-config.yml`, tabela de valores com SQS/SNS); CHANGELOG da boson-atlas com o aviso da troca de ids de serviço; `ATLAS_VERSION` (só a constante, em `scripts/atlas.py`) e `version` do `plugin.json`
 - [x] Validar: suíte completa + arquitetura (G2/G3)
 - [x] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -125,28 +125,66 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+- **Nome do serviço:** o coletor `argocd` usa o rótulo `--service-label`, depois o `nameOverride` dos values do Helm (`helm.parameters` > `helm.valuesObject` > `helm.values`, só na raiz, origem por origem) e só então o nome da Application. Applications sem o rótulo (`dev-account`, `qa-account`) passam a apontar para `service:account`, e a regra 3 do `build` casa com `http://account`.
+- **Sufixos padrão:** `HOST,URL,URI,ENDPOINT,DSN,ADDR,_QUEUE,_TOPIC,_BUCKET`, que inclui tudo do padrão anterior e cobre chaves .NET (`Acme.Account__RouterEndpoint`, `ServiceUrl`, `CallbackUri`). A doc mostra como trocar a lista no `atlas-config.yml` com `--ref-suffixes`.
+- **SQS e SNS:** a URL de fila do SQS (padrão, formato antigo, FIPS e VPC endpoint) e os ARNs de `sqs`/`sns` dão só o nome da fila ou do tópico. Conta, região e id de VPC endpoint nunca saem.
+- **Endurecimento (Emendas v3 e v4):**
+  - nulo e booleanos do YAML (inclusive `yes`/`no`/`on`/`off`) são recusados no `nameOverride` e nos valores;
+  - uma autoridade com `=`, `;` ou `,` não dá referência, com ou sem esquema, o que fecha o vazamento de parte de senha em strings de conexão que já existia antes desta spec;
+  - nenhum host de VPC endpoint sai inteiro.
+- `references/collectors/argocd.md`, o CHANGELOG `[2026.11.9]` (com o aviso de troca dos ids de serviço no primeiro `scan`), `ATLAS_VERSION` 2026.11.9 e o plugin em 2026.11.21.
 
 ### Como foi feito
+- **Testes:**
+  - 734a16d: UT-01 a UT-05 e IT-01, com as fixtures `name-override*.json`;
+  - 8c75a49: Emenda v2;
+  - 25e3be3: Emenda v3 (UT-06);
+  - 5853118: Emenda v4.
+- **Implementação:**
+  - 0108986: `name_override`, os sufixos e o SQS/SNS em `host_of`;
+  - ac9e088: Emenda v3;
+  - 13daf77: Emenda v4.
+
+  Tudo em `assets/collectors/argocd.py`, com funções puras e sem dependências.
+- O Architect incluiu a constante `ATLAS_VERSION` (`scripts/atlas.py`) no `touches` durante o PLAN.
+- **Emendas:**
+  - v2: precedência do `nameOverride` e SQS sem conta (dúvidas do test-writer);
+  - v3: endurecimento e troca do prefixo dos exemplos por `Acme.`;
+  - v4: string de conexão com esquema, YAML 1.1 e VPC endpoint.
+- **Revisão G4:**
+  - rodada 1: APPROVED com 5 minors, que viraram a Emenda v3;
+  - rodada 2: CHANGES_REQUESTED (major: `sqlserver://db;password=p@ss` ainda dava `ss`);
+  - rodada 3: APPROVED sem achados.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes (734a16d/8c75a49):** 44 falhas, todas por asserção, por exemplo `'dev-account' != 'account'`, `sqs.us-east-1.amazonaws.com` no lugar de `orders` e `None` para os ARNs. No IT-01, `service:account` não existia no grafo. Antes de 25e3be3 e 5853118: `service:null`, `ReplicaDsn=xyz` e `ReplicaDsn=ss`.
+- **Depois (13daf77):** suíte completa verde, com boson-atlas em 436 testes (1 skip antigo) no Python 3.14 e no 3.9 local, e na CI.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | `nameOverride` em valuesObject, values e parameters vira o serviço; precedência e origem seguinte (Emenda v2) | PASS | `test_collector_argocd.py::NameOverrideTest` — CI do PR #54 (run 44340775616, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-02 | Rótulo vence; `nameOverride` inválido cai no nome da Application | PASS | `test_collector_argocd.py::NameOverrideTest` — CI do PR #54 (run 44340775616) e suíte local no G2 |
+| UT-03 | Sufixos padrão novos pegam as chaves .NET e deixam `LOG_LEVEL`, `DB_PASSWORD` e `API_TOKEN` fora | PASS | `test_collector_argocd.py::DotnetSuffixesTest` — CI do PR #54 (run 44340775616) e suíte local no G2 |
+| UT-04 | URL do SQS e ARNs de SQS/SNS dão o nome da fila ou do tópico | PASS | `test_collector_argocd.py::AwsQueueTopicTest` — CI do PR #54 (run 44340775616) e suíte local no G2 |
+| UT-05 | Valores inseguros ou de outro serviço não dão referência; o id da conta nunca sai | PASS | `test_collector_argocd.py::AwsQueueTopicTest`, `AwsAccountNeverLeavesTest` — CI do PR #54 (run 44340775616) e suíte local no G2 |
+| UT-06 | Nulo e booleanos, strings de conexão com e sem esquema, SQS FIPS/VPC endpoint (Emendas v3 e v4) | PASS | `test_collector_argocd.py::HardenedValuesTest`, `HardenedValuesV4Test` — CI do PR #54 (run 44340775616) e suíte local no G2 |
+| IT-01 | `scan` + `build` com `service:account`, `depends_on` para `service:account` e `queue:orders`, sem o id da conta nos snapshots | PASS | `test_collector_argocd.py::NameOverrideScanTest` — CI do PR #54 (run 44340775616) e suíte local no G2 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — 734a16d, 8c75a49, 25e3be3 e 5853118 em vermelho; 0108986, ac9e088 e 13daf77 em verde
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 3
+- [x] Padrão existente mantido — funções puras de `argocd.py` e testes no estilo da SPEC-0035/0047
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — `collectors/argocd.md` e CHANGELOG `[2026.11.9]`
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — nenhuma nos coletores atuais; `publishes`/`consumes` fica como possível spec futura
 
 ### Deploy
+N/A — `ATLAS_VERSION` 2026.11.9, plugin 2026.11.21, PR #54.
 
 ### Pendências
+Nenhuma nova. Inferir `publishes`/`consumes` a partir de filas e tópicos fica como possível spec futura, se for priorizado (seção 3).
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
