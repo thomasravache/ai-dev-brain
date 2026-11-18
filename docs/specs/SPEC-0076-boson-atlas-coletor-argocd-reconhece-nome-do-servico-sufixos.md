@@ -105,7 +105,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — 80676c7 | 2026-11-18 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=44, skipped=1)) — 8c75a49 | 2026-11-18 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 13daf77 | 2026-11-18 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 9668ee0 | 2026-11-18 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — f0d5123 | 2026-11-18 |
 | G4 Review | FAIL | rodada 2: CHANGES_REQUESTED — 1 major (string de conexão com esquema deixa sair parte da senha), 2 minors (booleanos YAML 1.1, formas de VPC endpoint) | 2026-11-18 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
