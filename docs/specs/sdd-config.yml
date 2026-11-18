@@ -137,6 +137,6 @@ pr_title_max: 100
 root_docs:
   - README.md
   - AGENTS.md
-changelog: skills/sdd-management/CHANGELOG.md
+changelog: skills/gluon-spec/CHANGELOG.md
 # Itens extras de Definição de Pronto do projeto, anexados a cada spec no PLAN.
 dod_extra: []
