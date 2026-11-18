@@ -9,7 +9,7 @@ created: 2026-11-17
 parent:
 depends_on: []
 consumes_contract: []
-touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/scripts/atlas.py, .claude-plugin/plugin.json]
 adrs: [ADR-0011]
 external: []
 size: S
@@ -83,7 +83,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
 - [ ] Red: UT-01 a UT-05 e IT-01 com a tag `SPEC-0076:<ID>`, falhando pelo motivo certo; fixture do IT-01 em `tests/fixtures/argocd/`
-- [ ] Green: `nameOverride` na ordem do nome do serviço, sufixos padrão novos e SQS/SNS em `host_of`, em `assets/collectors/argocd.py`; `references/collectors/argocd.md` (ordem do nome, sufixos com exemplo de `atlas-config.yml`, tabela de valores com SQS/SNS); CHANGELOG da boson-atlas com o aviso da troca de ids de serviço; `version` do `plugin.json`
+- [ ] Green: `nameOverride` na ordem do nome do serviço, sufixos padrão novos e SQS/SNS em `host_of`, em `assets/collectors/argocd.py`; `references/collectors/argocd.md` (ordem do nome, sufixos com exemplo de `atlas-config.yml`, tabela de valores com SQS/SNS); CHANGELOG da boson-atlas com o aviso da troca de ids de serviço; `ATLAS_VERSION` (só a constante, em `scripts/atlas.py`) e `version` do `plugin.json`
 - [ ] Validar: suíte completa + arquitetura (G2/G3)
 - [ ] Review independente (G4)
 - [ ] Integração + CI verde (G5) e H2
