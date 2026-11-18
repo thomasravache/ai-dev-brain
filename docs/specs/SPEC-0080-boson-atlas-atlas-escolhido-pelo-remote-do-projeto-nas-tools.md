@@ -4,7 +4,7 @@ title: "boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no 
 tier: full
 type: feature
 user_facing: true
-status: proposed
+status: approved
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: [SPEC-0079]
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skil
 adrs: [ADR-0010, ADR-0021]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-18
 ---
 
 # SPEC-0080 — boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão

@@ -4,7 +4,7 @@ title: "boson-atlas: vários atlas na configuração local e escolha por --atlas
 tier: full
 type: feature
 user_facing: true
-status: proposed
+status: approved
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skil
 adrs: [ADR-0010, ADR-0020, ADR-0021]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-18
 ---
 
 # SPEC-0079 — boson-atlas: vários atlas na configuração local e escolha por --atlas
@@ -216,6 +216,13 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Fase 0: CH-01 escrito e passando no código atual, commitado antes de qualquer mudança
+- [ ] Red: UT-01 a UT-08, IT-01, IT-02, CT-01 e E2E-01 com a tag `SPEC-0079:<ID>`, falhando pelo motivo certo
+- [ ] Green: forma nova e `select_atlas` em `atlas.py`; `scan_config`, `_lint_atlas`, `load_config` e `doctor_rows` pela entrada escolhida; `init`/`join_atlas` com `--name`/`--default`; `config --list`/`--set-default`; `references/config.md`, `references/modes.md`, `SKILL.md`, CHANGELOG, `ATLAS_VERSION` e `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega, docs e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

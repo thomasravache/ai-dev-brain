@@ -3,13 +3,13 @@ id: SPEC-0077
 title: "boson-atlas: mais de uma organização por máquina"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-11-17
 depends_on: []
 adrs: [ADR-0010, ADR-0020, ADR-0021]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-18
 ---
 
 # SPEC-0077 — boson-atlas: mais de uma organização por máquina (Épico)

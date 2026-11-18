@@ -4,7 +4,7 @@ title: "gluon-spec: org_context escolhe o atlas no DISCOVER"
 tier: lite
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/brownfield.md
 adrs: [ADR-0010, ADR-0021]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-18
 ---
 
 # SPEC-0081 — gluon-spec: org_context escolhe o atlas no DISCOVER

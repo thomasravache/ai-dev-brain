@@ -1,7 +1,7 @@
 ---
 id: ADR-0021
 title: Vários atlas por máquina e ordem de escolha
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-18
 pillars: []
