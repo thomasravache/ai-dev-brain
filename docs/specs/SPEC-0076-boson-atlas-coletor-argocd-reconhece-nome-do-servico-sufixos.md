@@ -9,7 +9,7 @@ created: 2026-11-17
 parent:
 depends_on: []
 consumes_contract: []
-touches: []
+touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/tests/test_collector_argocd.py, skills/boson-atlas/tests/fixtures/argocd/**, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0011]
 external: []
 size: S
@@ -19,38 +19,63 @@ approved_at:
 
 # SPEC-0076 — boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos
 
-> **Radar (thomas, 2026-11-17):** achados de um uso real do coletor argocd (ArgoCD via kubectl, AWS e GitOps num repositório de IaC). A detalhar antes do G0:
-> - **Nome do serviço:** sem o rótulo `app.kubernetes.io/part-of`, o coletor cria um serviço por Application (`dev-account`, `qa-account`…), e a inferência por host (`http://account`) nunca casa. Sugestão: usar o `nameOverride` do Helm (`valuesObject`) como alternativa ao rótulo.
-> - **Sufixos de `config_refs`:** em .NET as chaves terminam em `Endpoint`, `Url`, `Uri`, `Host` ou `redis` (ex.: `BM.Account__RouterEndpoint`). Com os sufixos padrão (`_URL`, `_HOST`…) saem 73 referências; com esses, 301. Avaliar se os sufixos devem ser configuráveis no `atlas-config.yml`.
-> - **Filas e tópicos:** o coletor descarta o caminho da URL do SQS (vira só `sqs.us-east-1.amazonaws.com`) e não extrai nada de ARN do SNS. Isso perde a fila e o tópico, e a relação publishes/consumes deixa de existir.
-> - Avaliar se é uma spec só ou três, e se algum item muda o contrato do coletor (ADR-0011).
+> Origem: radar de 2026-11-17 (uso real do coletor argocd via kubectl, com GitOps num repositório de IaC); detalhada em 2026-11-18.
 
 <!-- Tier lite: bug fix ou mudança pequena, um módulo, sem mudança de contrato público, tamanho S. type: fix | feature | refactor. user_facing: true se o defeito aparece numa jornada do usuário (o teste de regressão deveria ser E2E). Se qualquer condição falhar, use o tier full. Substitua todos os marcadores com chaves duplas. -->
 
 ## 1. Problema
-{{Comportamento atual vs. esperado. Para bug: passos de reprodução, ambiente e impacto.}}
+Três achados de um uso real do coletor `argocd` (SPEC-0035) fazem o atlas perder relações:
+
+1. **Nome do serviço.** Sem o rótulo `app.kubernetes.io/part-of`, cada Application vira um serviço (`dev-account`, `qa-account`…). A regra 3 do `build` (host igual ao nome de um serviço → `depends_on`) nunca casa com `http://account`, porque não existe `service:account`. Os charts Helm já declaram o nome no `nameOverride` dos values, mas o coletor não lê esse valor.
+2. **Sufixos de `config_refs`.** Em .NET as chaves terminam em `Endpoint`, `Url`, `Uri` ou `Host`, sem `_` (ex.: `BM.Account__RouterEndpoint`, `ServiceUrl`). O padrão (`_HOST,_URL,_DSN,_ADDR,_QUEUE,_TOPIC,_BUCKET`) descarta essas chaves: no uso real saíram 73 referências com o padrão e 301 com os sufixos ajustados. O `--ref-suffixes` já existe e é configurável no `command` do `atlas-config.yml`, mas o padrão e a documentação não cobrem esse estilo de nome.
+3. **Filas e tópicos da AWS.** Na URL de fila do SQS (`https://sqs.us-east-1.amazonaws.com/123456789012/orders`), o nome da fila fica no caminho. O coletor guarda só o host `sqs.us-east-1.amazonaws.com`, que é igual para todas as filas da região. O ARN do SNS (`arn:aws:sns:us-east-1:123456789012:orders-events`) não dá referência nenhuma. A regra 2 do `build` perde as filas e os tópicos.
+
+Impacto: grafo com serviços duplicados por ambiente e sem as dependências de serviço, fila e tópico.
 
 ## 2. Causa Raiz
-{{Causa identificada no código (arquivo/trecho e por que falha). Corrija a causa, não o sintoma. Para melhoria pequena: contexto técnico.}}
+- `service_and_environment` em `assets/collectors/argocd.py` usa só o rótulo `--service-label` e, sem ele, o `metadata.name` da Application. Não consulta os values do Helm.
+- `DEFAULT_REF_SUFFIXES` exige o `_` (`_HOST`, `_URL`). Como `_matches` compara pelo fim da chave, `RouterEndpoint` e `ServiceUrl` não casam.
+- `host_of` segue uma regra genérica: tira o esquema, fica com a autoridade e descarta o caminho. Isso é certo para bancos e caches, mas a URL de fila do SQS guarda o recurso no caminho. O ARN (`arn:...:...`) falha no `_strip_port` porque o que vem depois de `:` não é porta.
 
 ## 3. Mudança Proposta
-{{O que muda e o que explicitamente NÃO muda.}}
+- **Nome do serviço:** a ordem passa a ser:
+  1. rótulo `--service-label`;
+  2. `nameOverride` dos values do Helm, na primeira origem (`spec.source`, depois `spec.sources`) que o declare, só na raiz: em `helm.valuesObject`, numa linha sem indentação de `helm.values`, ou no parâmetro `nameOverride` de `helm.parameters`;
+  3. nome da Application.
 
-**Padrão seguido:** {{arquivos de referência do padrão existente que a correção respeita}}
+  O valor só vale se for um nome simples (mesma regra de `HOST_RE`). Template, vazio ou texto com espaço passa para o próximo item da ordem.
+- **Sufixos padrão:** `HOST,URL,URI,ENDPOINT,DSN,ADDR,_QUEUE,_TOPIC,_BUCKET`, um superconjunto do padrão atual (`HOST` cobre `_HOST`, `URL` cobre `_URL`). A comparação continua sem diferença de caixa e só pelo fim da chave. O `--ref-suffixes` continua substituindo a lista inteira, e a doc ganha um exemplo de `atlas-config.yml` com sufixos próprios (ex.: `redis`).
+- **SQS e SNS:** antes da regra genérica, `host_of` reconhece:
+  - URL de fila do SQS (`https://sqs.<região>.amazonaws.com/<conta>/<fila>` e o formato antigo `https://<região>.queue.amazonaws.com/<conta>/<fila>`) → o nome da fila;
+  - ARN `arn:<partição>:sqs|sns:<região>:<conta>:<nome>` → o nome.
 
-**Rollback:** {{revert do commit | outro procedimento}}
+  O id da conta, a região e o resto da URL nunca saem. Um valor com `@` em qualquer lugar, ou um nome fora de `HOST_RE`, não dá referência (mesma regra de privacidade de hoje). A referência fica `ORDERS_QUEUE_URL=orders` (ou `orders.fifo`), e a regra 2 do `build` casa com uma `queue`/`topic` de mesmo nome emitida por outro coletor.
+- **Não muda:**
+  - o contrato `boson-atlas/collector@1` (ADR-0011): mesmas entidades, atributos e formato `KEY=host`;
+  - a regra de inferência do `build`, que continua dando `depends_on` e não adivinha `publishes`/`consumes` (doc da SPEC-0035);
+  - os ambientes, o cluster e o `sourced_from`;
+  - os demais formatos de valor.
 
-**Outras ocorrências:** {{o mesmo defeito existe em outro lugar? liste como novas specs | Nenhuma}}
+**Padrão seguido:** as funções puras de `assets/collectors/argocd.py` (`host_of`, `_ref`, `service_and_environment`) e seus testes em `tests/test_collector_argocd.py`, com fixtures em `tests/fixtures/argocd/` (SPEC-0035, SPEC-0047).
+
+**Rollback:** reverter o commit. O `scan` seguinte volta aos serviços com o nome da Application, e o `diff` mostra a troca uma vez.
+
+**Outras ocorrências:** nenhuma nos coletores atuais (`github` e `generic` não extraem `config_refs`). `publishes`/`consumes` a partir de filas e tópicos é inferência nova do `build` e fica para uma spec própria, se for priorizada.
 
 ## 4. Plano de Testes (TDD)
-<!-- Mínimo: um teste de regressão que reproduz o problema e FALHA antes da correção, no nível em que o defeito aparece (IT para fronteiras de I/O, E2E para jornadas de usuário). Código sem cobertura: primeiro CH-xx fixando o comportamento atual. Tag no código: `SPEC-0076:<ID>`. Modo privado: sem tag no código; aponte o teste no fim da linha com `→ caminho::nome` (ex.: `→ tests/test_soma.py::test_soma`). Categoria sem teste: "N/A — motivo" SEM ID. -->
-- {{CH-01 — comportamento atual preservado | Caracterização: N/A — área já coberta}}
-- **UT-01** — {{teste de regressão: Dado..., quando..., então...}}
-- {{IT-01 ou E2E-01 — regressão no nível do defeito | Integração/E2E: N/A — motivo}}
+- Caracterização: N/A — os testes da SPEC-0035/0047 em `test_collector_argocd.py` cobrem o comportamento atual e continuam passando sem mudança, exceto pelos sufixos padrão, que crescem.
+- **UT-01** — Dada uma Application sem o rótulo de serviço e com `nameOverride: account` em `helm.valuesObject`, quando o coletor mapeia, então o serviço é `service:account`; o mesmo vale para uma linha sem indentação `nameOverride: account` em `helm.values` e para o parâmetro `nameOverride` em `helm.parameters`.
+- **UT-02** — Dada uma Application com o rótulo de serviço e com `nameOverride`, quando o coletor mapeia, então vale o rótulo; e dado `nameOverride` indentado (fora da raiz), vazio, com template do Helm (chaves duplas) ou `${NAME}` ou com espaço, então vale o nome da Application.
+- **UT-03** — Dados os sufixos padrão e as chaves `BM.Account__RouterEndpoint=http://account`, `ServiceUrl=https://pay.interno/x`, `CallbackUri=https://cb.interno` e `Db_Host=db.interno`, quando o coletor extrai `config_refs`, então as quatro saem (`...=account`, `...=pay.interno`, `...=cb.interno`, `...=db.interno`), e `LOG_LEVEL`, `DB_PASSWORD` e `API_TOKEN` continuam fora.
+- **UT-04** — Dadas `ORDERS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/orders`, o formato antigo `https://us-east-1.queue.amazonaws.com/123456789012/billing.fifo`, `EVENTS_TOPIC=arn:aws:sns:us-east-1:123456789012:orders-events` e `DLQ_QUEUE=arn:aws:sqs:sa-east-1:123456789012:orders-dlq`, quando o coletor extrai `config_refs`, então saem `orders`, `billing.fifo`, `orders-events` e `orders-dlq`.
+- **UT-05** — Dados valores de SQS e SNS com `@` em qualquer posição, com nome fora de `HOST_RE`, com caminho extra (`.../conta/fila/x`) ou com ARN de outro serviço (`arn:aws:s3:::bucket`, `arn:aws:iam::123456789012:role/x`), quando o coletor extrai, então não sai referência nenhuma, e o id da conta (`123456789012`) não aparece em lugar nenhum da saída do coletor.
+- **IT-01** — Dado um `--input` gravado (fixture) com duas Applications sem rótulo (`dev-account` com `nameOverride: account`, e `dev-router` com `BM.Router__AccountEndpoint=http://account` e `ORDERS_QUEUE_URL` do SQS), mais um coletor `generic` que emite `queue:orders`, quando `scan` e `build` rodam num atlas temporário, então o grafo tem `service:account` (e não `service:dev-account`), a aresta inferida `service:dev-router` → `depends_on` → `service:account` e o `depends_on` para `queue:orders`, sem o id da conta nos snapshots.
 
 ## 5. Questões em Aberto
-<!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento (seção Registro de Impedimentos). -->
-{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}
+- [x] Uma spec ou três? — Uma: os três achados estão no mesmo arquivo (`argocd.py`), com a mesma doc e os mesmos testes, tamanho S, sem dependência entre eles (recomendação do arquiteto, aceita no piloto automático autorizado por thomas em 2026-11-17: "beleza, segue no piloto automático até o merge"; revisável no H1)
+- [x] Algum item muda o contrato do coletor (ADR-0011)? — Não: mesmas entidades, atributos e formato `KEY=host`; muda só quais chaves e valores viram referência e de onde vem o nome do serviço (recomendação do arquiteto, piloto automático; revisável no H1)
+- [x] Os sufixos devem ser configuráveis no `atlas-config.yml`? — Já são, pelo `--ref-suffixes` no `command` do coletor; a correção é ampliar o padrão (superconjunto, sem `_`) e documentar o exemplo, sem chave nova de configuração (recomendação do arquiteto, piloto automático; revisável no H1)
+- [x] O `nameOverride` deve vir por padrão ou atrás de uma opção nova? — Por padrão, depois do rótulo: é o nome que o próprio chart dá ao serviço, e atlas sem o rótulo hoje já têm um serviço por Application; o CHANGELOG avisa que o primeiro `scan` depois do upgrade mostra a troca dos ids de serviço uma vez, como na SPEC-0047 (recomendação do arquiteto, piloto automático; revisável no H1)
 
 ## 6. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado".
