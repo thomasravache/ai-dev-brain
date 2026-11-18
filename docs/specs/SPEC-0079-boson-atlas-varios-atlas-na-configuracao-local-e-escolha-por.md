@@ -141,6 +141,11 @@ doctor [--atlas X]
 6. **Credenciais de uma entrada nova:** vazias (`credentials: {}`). Atualizar a mesma entrada (mesmo nome e caminho) mantém as dela. As credenciais de outra entrada nunca são copiadas.
 7. **Mensagem do exit 3 para nome ou caminho não configurado:** `<x>` é o valor como foi digitado.
 
+**Compatibilidade do `init` (Emenda v3, achado do implementador no G2):**
+8. **Mover o atlas de pasta:** sem `--name`, com uma configuração de um atlas só e com o nome derivado igual ao da única entrada, `init`/`init --join` de outra pasta **reaponta** essa entrada e mantém as credenciais, como na versão anterior (SPEC-0070 UT-03/UT-04). É o caso de quem mudou o atlas de pasta. Com `--name` explícito em conflito, continua exit 2 (UT-06). Organização diferente acrescenta uma entrada nova.
+9. **Pasta já configurada:** sem `--name`, uma pasta já configurada mantém o nome que tem, mesmo com `init --force` de outra organização.
+10. **Forma de um atlas só sem `atlas:`:** é preenchida pelo `init`, que mantém as credenciais, e não conta como conflito.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -297,4 +302,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0079`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v3: `init`/`init --join` sem `--name` numa configuração de um atlas, com o mesmo nome derivado, reaponta a entrada (comportamento anterior); pasta já configurada mantém o nome; forma de um atlas sem `atlas:` é preenchida | G2 (implementador): os testes SPEC-0070 UT-03/UT-04 exigem o comportamento anterior, e quebrá-lo iria contra o ADR-0020 (nada configurado quebra) | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece o formato do `config --list`, a normalização do nome derivado, `default: true` na forma de um atlas só, o exit 1 do `doctor` sem escolha, o formato da linha de atlas no `doctor`, as credenciais vazias de uma entrada nova e o `<x>` como foi digitado | G1 (test-writer): sete pontos sem definição no contrato; nenhum campo consumido pelas SPEC-0080/0081 muda | nenhuma (pins `SPEC-0079@1` continuam) | thomas, 2026-11-18 (piloto automático com o recomendado) |
