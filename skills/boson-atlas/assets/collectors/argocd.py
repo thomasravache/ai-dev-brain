@@ -51,8 +51,12 @@ ACCESS_DENIED = re.compile(r"Unauthenticated|PermissionDenied|permission denied|
 # a host name, IPv4 or bracketed IPv6, or a resource name (queue, topic, bucket): nothing else leaves host_of
 HOST_RE = re.compile(r"^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)$")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
-# the regional SQS endpoint (sqs.<region>.amazonaws.com) and the legacy one (<region>.queue.amazonaws.com)
-SQS_HOST_RE = re.compile(r"^(?:sqs\.[a-z0-9-]+|(?:[a-z0-9-]+\.)?queue)\.amazonaws\.com(?:\.cn)?$", re.IGNORECASE)
+# the SQS endpoints: regional (sqs.<region>.amazonaws.com), FIPS (sqs-fips.<region>.amazonaws.com), legacy
+# (<region>.queue.amazonaws.com) and VPC endpoint (<vpce-id>.sqs.<region>.vpce.amazonaws.com) (SPEC-0076)
+SQS_HOST_RE = re.compile(r"^(?:sqs(?:-fips)?\.[a-z0-9-]+|(?:[a-z0-9-]+\.)?queue|[a-z0-9.-]+\.sqs\.[a-z0-9-]+\.vpce)"
+                         r"\.amazonaws\.com(?:\.cn)?$", re.IGNORECASE)
+# YAML null and boolean literals: never a host or a service name (SPEC-0076, Emenda v3)
+YAML_LITERALS = frozenset(("null", "~", "true", "false"))
 # the path of an SQS queue URL: /<account>/<queue>
 SQS_PATH_RE = re.compile(r"^/\d{12}/([^/?#]+)$")
 # arn:<partition>:sqs|sns:<region>:<account>:<name>
@@ -125,8 +129,13 @@ def host_of(value):
     nothing safe is left. A URL gives its host (s3://bucket/x gives the bucket); host:port and user:pass@host give
     the host; a bare name stays as it is.
 
-    AWS (SPEC-0076), before the generic rule: an SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<queue>
-    or the legacy https://<region>.queue.amazonaws.com/<account>/<queue>) and an SQS or SNS ARN
+    A YAML null or boolean literal (null, ~, true, false, any case) gives None, and so does a value without a
+    scheme whose authority has "=" or ";" (a connection string such as Server=db;Password=p@ss, whose text after
+    "@" may be part of the password) (SPEC-0076, Emenda v3).
+
+    AWS (SPEC-0076), before the generic rule: an SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<queue>,
+    the FIPS sqs-fips.<region>.amazonaws.com, the VPC endpoint <vpce-id>.sqs.<region>.vpce.amazonaws.com or the
+    legacy https://<region>.queue.amazonaws.com/<account>/<queue>) and an SQS or SNS ARN
     (arn:<partition>:sqs|sns:<region>:<account>:<name>) give only the queue or topic name. The account, the region
     and the rest of the URL never leave: an SQS endpoint without exactly /<account>/<queue> as its path (no account,
     extra path, query) gives None, never the regional host alone; any other ARN gives None; and an "@" anywhere in
@@ -139,7 +148,7 @@ def host_of(value):
     if not isinstance(value, str):
         return None
     value = value.strip().strip("\"'").strip()
-    if not value or any(c.isspace() for c in value):
+    if not value or any(c.isspace() for c in value) or value.lower() in YAML_LITERALS:
         return None
     if value[:4].lower() == "arn:":
         match = AWS_ARN_RE.match(value)
@@ -147,6 +156,8 @@ def host_of(value):
     match = SCHEME_RE.match(value)
     rest = value[match.end():] if match else value
     authority = re.split(r"[/?#]", rest, maxsplit=1)[0]
+    if not match and ("=" in authority or ";" in authority):
+        return None
     host = _strip_port(authority.rsplit("@", 1)[-1])
     if host and SQS_HOST_RE.match(host):
         if "@" in value:
@@ -268,8 +279,11 @@ def repository_ref(repo_url):
 
 
 def _simple_name(value):
-    """A nameOverride value -> the name when it is a simple name (HOST_RE: no template, space or empty), else None."""
-    return value if isinstance(value, str) and HOST_RE.match(value) else None
+    """A nameOverride value -> the name when it is a simple name (HOST_RE: no template, space or empty) and not a
+    YAML null or boolean literal (null, ~, true, false, any case: Emenda v3), else None."""
+    if not isinstance(value, str) or value.lower() in YAML_LITERALS:
+        return None
+    return value if HOST_RE.match(value) else None
 
 
 def _name_override_in_text(text):
