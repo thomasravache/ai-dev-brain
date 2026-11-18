@@ -912,6 +912,39 @@ class NameOverrideTest(unittest.TestCase):
                                           helm(valuesObject={"nameOverride": "other"})])
         self.assert_service(multi, "account")
 
+    def test_precedence_inside_a_source_and_invalid_values_are_skipped(self):
+        """SPEC-0076:UT-01 — Emenda v2: numa origem vale helm.parameters, depois helm.valuesObject, depois
+        helm.values; um nameOverride inválido é ignorado e a busca segue para o próximo lugar e a próxima origem;
+        o nome da Application só vale quando nenhuma origem tem um válido."""
+        template = "{{ .Values.app }}"
+        cases = {
+            "parameters ganha": (helm(parameters=[{"name": "nameOverride", "value": "account"}],
+                                      valuesObject={"nameOverride": "from-object"},
+                                      values="nameOverride: from-text\n"), None, "account"),
+            "valuesObject ganha de values": (helm(valuesObject={"nameOverride": "account"},
+                                                  values="nameOverride: from-text\n"), None, "account"),
+            "parameters inválido segue para valuesObject": (
+                helm(parameters=[{"name": "nameOverride", "value": "${NAME}"}],
+                     valuesObject={"nameOverride": "account"}, values="nameOverride: from-text\n"), None, "account"),
+            "parameters e valuesObject inválidos seguem para values": (
+                helm(parameters=[{"name": "nameOverride", "value": ""}],
+                     valuesObject={"nameOverride": template}, values="nameOverride: account\n"), None, "account"),
+            "origem inválida segue para a próxima": (
+                helm(parameters=[{"name": "nameOverride", "value": "my account"}],
+                     valuesObject={"nameOverride": template}, values="nameOverride: \"${NAME}\"\n"),
+                [helm(values="replicaCount: 1\n"), helm(valuesObject={"nameOverride": "account"})], "account"),
+            "spec.sources inválido segue para a próxima de spec.sources": (
+                None, [helm(valuesObject={"nameOverride": template}),
+                       helm(parameters=[{"name": "nameOverride", "value": "account"}])], "account"),
+            "nenhuma válida: nome da Application": (
+                helm(valuesObject={"nameOverride": template}),
+                [helm(parameters=[{"name": "nameOverride", "value": "${NAME}"}]),
+                 helm(values="nameOverride: \"\"\n")], "dev-account"),
+        }
+        for where, (source, sources, want) in cases.items():
+            with self.subTest(where=where):
+                self.assert_service(bare_application(source=source, sources=sources), want)
+
     def test_label_wins_and_invalid_name_override_falls_back_to_the_application_name(self):
         """SPEC-0076:UT-02 — com o rótulo de serviço, vale o rótulo; nameOverride fora da raiz (indentado), vazio,
         com template do Helm ou ${NAME}, ou com espaço: vale o nome da Application."""
@@ -1034,6 +1067,31 @@ class AwsQueueTopicTest(unittest.TestCase):
         text = json.dumps(refs)
         for fragment in (ACCOUNT_ID, "us-east-1", "sa-east-1", "amazonaws", "arn:"):
             self.assertNotIn(fragment, text)
+
+    # Emenda v2: URL de fila do SQS sem o segmento da conta (e o host regional sozinho) não dá referência
+    NO_ACCOUNT = (
+        "https://sqs.us-east-1.amazonaws.com/orders",
+        "https://sqs.us-east-1.amazonaws.com/orders/",
+        "https://sqs.us-east-1.amazonaws.com/orders.fifo",
+        "https://us-east-1.queue.amazonaws.com/billing.fifo",
+        "https://us-east-1.queue.amazonaws.com/billing",
+        "https://sqs.us-east-1.amazonaws.com",
+        "https://sqs.us-east-1.amazonaws.com/",
+        "https://us-east-1.queue.amazonaws.com/",
+        "sqs.us-east-1.amazonaws.com",
+    )
+
+    def test_sqs_url_without_the_account_gives_no_reference(self):
+        """SPEC-0076:UT-05 — Emenda v2: URL de fila do SQS sem o segmento da conta (formato novo e antigo), ou o host
+        regional sozinho, não dá referência: o host regional nunca sai sozinho."""
+        host_of = function("host_of")
+        for value in self.NO_ACCOUNT:
+            with self.subTest(value=value):
+                self.assertIsNone(host_of(value))
+        source = {"helm": {"valuesObject": {"env": {f"Q{i}_QUEUE_URL": v for i, v in enumerate(self.NO_ACCOUNT)}}}}
+        refs = function("extract_config_refs")(source)
+        self.assertEqual(refs, [])
+        self.assertNotIn("amazonaws", json.dumps(refs))
 
     def test_unsafe_or_foreign_values_give_no_reference(self):
         """SPEC-0076:UT-05 — SQS e SNS com "@" em qualquer posição, nome fora de HOST_RE, caminho extra ou ARN de
