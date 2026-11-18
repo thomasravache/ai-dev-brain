@@ -3,6 +3,8 @@
 
 Two configuration layers (ADR-0010): the local one, per machine, in $ATLAS_CONFIG_HOME/config.yml (atlas path and
 credential names, never values) and the shared one, in <atlas>/atlas-config.yml (never an absolute path).
+The local layer may hold several named atlases (`default:` + `atlases:`, ADR-0021); every command but init uses the
+one chosen by select_atlas (--atlas, ATLAS_NAME, default, the only one) and only its credentials (SPEC-0079).
 init creates the atlas structure from assets/ (or, with --join, only the local layer); config shows the effective
 configuration with the origin of each value; doctor reports what is configured, what works and what is missing,
 looking only at files, shutil.which and os.environ (never at a variable's value).
@@ -26,7 +28,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.9"
+ATLAS_VERSION = "2026.11.10"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -441,11 +443,176 @@ def read_local(config_home=None):
     return path, read_yaml(path)
 
 
-def load_config(config_home=None) -> dict:
-    """Effective configuration: local layer + <atlas>/atlas-config.yml + defaults, with the origin of each
-    top-level value ("local" | "atlas" | "padrão"). Invalid credentials raise AtlasError (code 2) without writing
-    anything; an unreadable atlas-config.yml raises AtlasError (code 1)."""
-    _, local = read_local(config_home)
+# ---------------------------------------------------------------- several atlases (SPEC-0079, ADR-0021)
+
+ATLAS_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}\Z")
+ATLAS_NAME_MAX = 63
+MULTI_KEYS = ("default", "atlases")
+DEFAULT_NAME = "default"  # name of the one-atlas entry whose organization cannot be read
+SELECTED_BY_TEXT = {"option": "--atlas", "env": "ATLAS_NAME", "default": "default", "single": "único"}
+UNKNOWN_ATLAS = ("atlas não configurado nesta máquina: {typed} — rode init --join --atlas <caminho> "
+                 "(atlas configurados: {names})")
+NO_CHOICE = ("vários atlas configurados ({names}) e nenhum escolhido — use --atlas <nome>, ATLAS_NAME ou "
+             "config --set-default <nome>")
+
+
+class NoAtlasChosen(AtlasError):
+    """Several atlases and no choice (exit 2); config --list shows "nenhum" and doctor an ERRO row instead."""
+
+
+def atlas_name_of(organization) -> str:
+    """Name of an entry derived from the organization: lowercase, anything outside [a-z0-9-] becomes "-", runs of
+    "-" become one, "-" at the ends is removed, cut at 63 characters; empty = "default" (SPEC-0079, amendment v2)."""
+    text = re.sub(r"[^a-z0-9-]", "-", str(organization or "").lower())
+    text = re.sub(r"-+", "-", text).strip("-")[:ATLAS_NAME_MAX]
+    return text or DEFAULT_NAME
+
+
+def organization_of(atlas):
+    """organization of <atlas>/atlas-config.yml as text, or None when it cannot be read (never raises)."""
+    if not isinstance(atlas, str) or not atlas:
+        return None
+    try:
+        data = read_yaml(Path(atlas) / SHARED_FILE)
+    except (AtlasError, OSError, ValueError):
+        return None
+    organization = data.get("organization")
+    return organization if isinstance(organization, str) and organization else None
+
+
+def _names(entries) -> str:
+    return ", ".join(sorted(entries))
+
+
+def local_atlases(path: Path, local: dict) -> dict:
+    """The atlases of the local layer: {"path", "form": "single" | "multi", "default": name | None,
+    "entries": {name: {"atlas", "credentials"}}} (entries sorted by name in the multi form).
+
+    Multi form: `default:` (optional, must be in atlases) + `atlases: {<name>: {atlas, credentials}}`. One-atlas
+    form (`atlas:` + `credentials:`): one entry named after the organization of its atlas-config.yml (atlas_name_of).
+    Both forms together, an invalid name, a default without entry or an unknown key = AtlasError (code 2) naming
+    the key. Credentials are validated by whoever uses the chosen entry (doctor shows them as an ERRO row)."""
+    if not any(key in local for key in MULTI_KEYS):
+        atlas = local.get("atlas")
+        name = atlas_name_of(organization_of(atlas)) if isinstance(atlas, str) and atlas else DEFAULT_NAME
+        return {"path": path, "form": "single", "default": None, "entries": {name: local}}
+    mixed = [key for key in local if key not in MULTI_KEYS]
+    if mixed:
+        known = [key for key in mixed if key in LOCAL_KEYS]
+        if known:
+            raise AtlasError(f"configuração local com as duas formas em {path}: atlases junto de "
+                             f"{', '.join(known)} — deixe {', '.join(known)} só dentro de atlases.<nome> "
+                             "(references/config.md)", 2)
+        raise AtlasError(f"chave desconhecida em {path}: {', '.join(map(str, mixed))} — a forma de vários atlas "
+                         "aceita só default e atlases (references/config.md)", 2)
+    atlases = local.get("atlases")
+    if not isinstance(atlases, dict) or not atlases:
+        raise AtlasError(f"atlases precisa ser um mapa <nome>: {{atlas, credentials}} em {path}", 2)
+    entries = {}
+    for name, entry in atlases.items():
+        if not ATLAS_NAME_RE.match(str(name)):
+            raise AtlasError(f"nome de atlas inválido em {path}: {name} — use [a-z0-9][a-z0-9-]{{0,62}}", 2)
+        if entry in ("", None):
+            entry = {}
+        if not isinstance(entry, dict):
+            raise AtlasError(f"atlases.{name} precisa ser um mapa {{atlas, credentials}} em {path}", 2)
+        unknown = [str(key) for key in entry if key not in LOCAL_KEYS]
+        if unknown:
+            raise AtlasError(f"chave desconhecida em atlases.{name}: {', '.join(unknown)} — use só "
+                             f"{', '.join(LOCAL_KEYS)} ({path})", 2)
+        entries[str(name)] = entry
+    default = local.get("default")
+    if default in ("", None):
+        default = None
+    elif not isinstance(default, str) or default not in entries:
+        raise AtlasError(f"default: {default} não está em atlases ({_names(entries)}) em {path}", 2)
+    return {"path": path, "form": "multi", "default": default, "entries": dict(sorted(entries.items()))}
+
+
+def is_default(config: dict, name: str) -> bool:
+    """The entry is the default: named by `default:`, or the only one when there is no `default:` (one-atlas form)."""
+    if config["default"] is not None:
+        return name == config["default"]
+    return len(config["entries"]) == 1
+
+
+def entry_atlas(entry) -> str:
+    atlas = entry.get("atlas") if isinstance(entry, dict) else None
+    return atlas if isinstance(atlas, str) else ""
+
+
+def atlas_list(config: dict) -> list:
+    """[{"name", "atlas", "default"}] sorted by name (config --json, contract SPEC-0079@1)."""
+    return [{"name": name, "atlas": entry_atlas(config["entries"][name]), "default": is_default(config, name)}
+            for name in sorted(config["entries"])]
+
+
+def is_path_choice(value: str) -> bool:
+    """--atlas / ATLAS_NAME is a folder when it has "/" or starts with "~" or "."; otherwise it is a name."""
+    return "/" in value or value.startswith(("~", "."))
+
+
+def same_folder(first: str, second: str) -> bool:
+    """Both paths point to the same folder (~ expanded, relative to the current folder, symlinks resolved)."""
+    return os.path.realpath(os.path.expanduser(first)) == os.path.realpath(os.path.expanduser(second))
+
+
+def _find_atlas(config: dict, typed: str) -> str:
+    entries = config["entries"]
+    if is_path_choice(typed):
+        found = [name for name, entry in entries.items() if entry_atlas(entry) and same_folder(entry_atlas(entry), typed)]
+    else:
+        found = [typed] if typed in entries else []
+    if not found:
+        raise AtlasError(UNKNOWN_ATLAS.format(typed=typed, names=_names(entries)), 3)
+    return found[0]
+
+
+def project_remote_choice(config: dict):
+    """Step 3 of the order of choice (ADR-0021), reserved for SPEC-0080: the `origin` remote of the current project
+    matched against the `remotes:` of each atlas. Not implemented yet: always None, so the order goes on to the
+    default. When implemented, it returns (name, selected_by) or None (no match, or a tie)."""
+
+
+def select_atlas(config: dict, choice=None, environ=None) -> tuple:
+    """(name, selected_by) of the entry used by every command but init, the first that applies (ADR-0021):
+    1. --atlas <name|folder> ("option"); 2. ATLAS_NAME ("env"); 3. the project's remote (reserved, SPEC-0080);
+    4. `default:` ("default"); 5. the only atlas ("single"). A name or folder that is not configured = AtlasError
+    (code 3) with the list and the step; several atlases and no choice = NoAtlasChosen (code 2)."""
+    environ = os.environ if environ is None else environ
+    for value, selected_by in ((choice, "option"), (environ.get("ATLAS_NAME"), "env")):
+        if value not in (None, ""):
+            return _find_atlas(config, str(value)), selected_by
+    found = project_remote_choice(config)
+    if found is not None:
+        return found
+    if config["default"] is not None:
+        return config["default"], "default"
+    if len(config["entries"]) == 1:
+        return next(iter(config["entries"])), "single"
+    raise NoAtlasChosen(NO_CHOICE.format(names=_names(config["entries"])), 2)
+
+
+def where(config: dict, name: str) -> str:
+    """The local file, plus the entry in the multi form (for messages)."""
+    return f"{config['path']} (atlases.{name})" if config["form"] == "multi" else str(config["path"])
+
+
+def chosen_atlas(config_home=None, choice=None) -> tuple:
+    """(config, name, selected_by) of this machine: read_local + local_atlases + select_atlas."""
+    path, local = read_local(config_home)
+    config = local_atlases(path, local)
+    name, selected_by = select_atlas(config, choice)
+    return config, name, selected_by
+
+
+def load_config(config_home=None, choice=None) -> dict:
+    """Effective configuration of the chosen atlas (select_atlas): its entry of the local layer +
+    <atlas>/atlas-config.yml + defaults, with the origin of each top-level value ("local" | "atlas" | "padrão"),
+    plus "atlas_name", "selected_by" and "atlases" (SPEC-0079). Invalid credentials raise AtlasError (code 2)
+    without writing anything; an unreadable atlas-config.yml raises AtlasError (code 1)."""
+    config, name, selected_by = chosen_atlas(config_home, choice)
+    local = config["entries"][name]
     values, origins = {}, {}
     atlas = local.get("atlas")
     present = isinstance(atlas, str) and atlas != ""
@@ -464,28 +631,84 @@ def load_config(config_home=None) -> dict:
         found = key in shared
         values[key] = shared[key] if found else defaults.get(key, "")
         origins[key] = ORIGIN_ATLAS if found else ORIGIN_DEFAULT
-    return {"values": values, "origins": origins}
+    return {"values": values, "origins": origins, "atlas_name": name, "selected_by": selected_by,
+            "atlases": atlas_list(config)}
 
 
 def render_local_config(atlas: str, credentials=None) -> str:
     return LOCAL_HEADER + dump_yaml({"atlas": atlas, "credentials": credentials or {}})
 
 
-def write_local_config(path: Path, text: str):
-    """The local layer lives outside the atlas: replaced atomically (it is the machine's pointer to the atlas)."""
+def render_atlases(entries: dict, default) -> str:
+    """Text of the local layer: the one-atlas form while there is one entry (rollback to the previous version keeps
+    working), the multi form (`default:` + `atlases:`) with two or more (ADR-0021)."""
+    if len(entries) == 1:
+        (entry,) = entries.values()
+        return render_local_config(entry_atlas(entry), entry.get("credentials") or {})
+    data = {"default": default} if default else {}
+    data["atlases"] = {name: {"atlas": entry_atlas(entry), "credentials": entry.get("credentials") or {}}
+                       for name, entry in entries.items()}
+    return LOCAL_HEADER + dump_yaml(data)
+
+
+def write_local_config(path: Path, text: str, backup_of=None):
+    """The local layer lives outside the atlas: replaced atomically (it is the machine's pointer to the atlas).
+    backup_of: file whose bytes go to config.yml.bak (or .bak.N) first, when the one-atlas form becomes the multi
+    form (SPEC-0079); returns that backup path, or None."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    backup = None
+    if backup_of is not None:
+        backup = backup_path(path)
+        backup.write_bytes(Path(backup_of).read_bytes())
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
+    return backup
 
 
-def existing_credentials(path: Path) -> dict:
-    """Credentials already declared in this machine's local layer (kept when init rewrites it)."""
-    if not path.is_file():
-        return {}
-    credentials = read_yaml(path).get("credentials")
+def updated_local(atlas_path: str, name, organization, make_default=False) -> dict:
+    """The local layer after init / init --join adds or updates the entry `name` -> atlas_path (SPEC-0079), without
+    writing: {"text", "name", "default", "backup_of"}. name None = the name the folder already has on this machine,
+    else atlas_name_of(organization) (so init --force with another organization keeps updating the same entry). An
+    invalid --name, a name used by another folder or a folder already configured with another --name = AtlasError
+    (code 2). The other entries and their credentials do not change; the same name and folder keep the entry's
+    credentials; a new entry has none. The first entry becomes the default, --default makes `name` the default.
+
+    Compatibility with the one-atlas form (ADR-0020, SPEC-0070 UT-03/UT-04): without --name, when the only entry
+    has the derived name, init/init --join of another folder re-points that entry (as the previous version did,
+    credentials kept) instead of failing; a second atlas of another organization is added."""
+    if name not in (None, "") and not ATLAS_NAME_RE.match(name):
+        raise AtlasError(f"--name inválido: {name} — use [a-z0-9][a-z0-9-]{{0,62}}", 2)
+    read = local_config_path()  # full configuration, maybe from the old folder
+    config = (local_atlases(read, read_yaml(read)) if read.is_file()
+              else {"path": read, "form": None, "default": None, "entries": {}})
+    entries = dict(config["entries"])
+    same = [n for n, e in entries.items() if entry_atlas(e) and same_folder(entry_atlas(e), atlas_path)]
+    repoint = False
+    if name in (None, ""):
+        name = same[0] if same else atlas_name_of(organization)
+        repoint = config["form"] == "single" and not same and name in entries  # same organization, other folder
+    if config["form"] == "single" and (repoint or not entry_atlas(next(iter(entries.values()), {}))):
+        entries = {name: next(iter(entries.values()))}  # this init fills or re-points it (credentials kept)
+        same = [name]
+    if name in entries and name not in same:
+        raise AtlasError(f"nome já usado por outro atlas nesta máquina: {name} ({entry_atlas(entries[name])}) — "
+                         "escolha outro nome com --name", 2)
+    if same and name not in same:
+        raise AtlasError(f"atlas já configurado nesta máquina com o nome {same[0]}: {atlas_path} — use --name "
+                         f"{same[0]} (ou omita --name)", 2)
+    credentials = (entries.get(name) or {}).get("credentials")
     validate_credentials(credentials)
-    return credentials if isinstance(credentials, dict) else {}
+    entries[name] = {"atlas": atlas_path, "credentials": credentials if isinstance(credentials, dict) else {}}
+    default = config["default"]
+    if config["form"] == "single":
+        default = next(iter(config["entries"]))  # the only atlas was the default
+    elif config["form"] is None:
+        default = name  # the first entry becomes the default
+    if make_default or (default is not None and default not in entries):
+        default = name
+    backup_of = read if config["form"] == "single" and len(entries) > 1 else None
+    return {"text": render_atlases(entries, default), "name": name, "default": default, "backup_of": backup_of}
 
 
 # ---------------------------------------------------------------- collector contract (ADR-0011)
@@ -1120,12 +1343,13 @@ def print_scan(reports: list) -> None:
     print(f"{len(reports)} coletor(es), {failed} com falha")
 
 
-def scan_config():
-    """(atlas folder, shared configuration) of this machine for scan; problems = AtlasError."""
-    path, local = read_local()
-    atlas = local.get("atlas")
-    if not isinstance(atlas, str) or not atlas:
-        raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
+def scan_config(choice=None):
+    """(atlas folder, shared configuration) of the chosen atlas (select_atlas: --atlas, ATLAS_NAME, default, the only
+    one) for scan, build, context, curate and vendor; problems = AtlasError."""
+    config, name, _ = chosen_atlas(choice=choice)
+    atlas = entry_atlas(config["entries"][name])
+    if not atlas:
+        raise AtlasError(f"atlas não definido em {where(config, name)} — rode init (ou init --join)", 3)
     require_readable_atlas(atlas)
     shared_path = Path(atlas) / SHARED_FILE
     if not shared_path.is_file():
@@ -1147,12 +1371,12 @@ def selected_collectors(collectors: list, only) -> list:
     return [by_id[name] for name in dict.fromkeys(wanted)]
 
 
-def cmd_scan(only=None, as_json=False):
+def cmd_scan(only=None, as_json=False, choice=None):
     """scan [--only id,...] [--json]: each enabled collector (or the --only ones) is run, validated, redacted,
     normalized and written to snapshots/<id>.json; snapshots/_scan.json keeps seen_at (date of the last good scan),
     status and counts. A failing collector keeps its previous snapshot and seen_at and does not stop the others.
     Exit 0 without failure, 1 with a failure, 2 with an invalid configuration or an unknown --only id."""
-    atlas, shared = scan_config()
+    atlas, shared = scan_config(choice)
     collectors = validate_collectors(shared.get("collectors"))
     redaction = shared.get("redaction")
     extra = redaction.get("extra_patterns") if isinstance(redaction, dict) else None
@@ -1741,10 +1965,10 @@ def print_build(report: dict) -> None:
     print(build_line(report))
 
 
-def cmd_build(as_json=False):
+def cmd_build(as_json=False, choice=None):
     """build [--json]: graph.json and the pages from the snapshots already on disk (also runs at the end of every
     scan). Exit 0; an unreadable snapshot is a warning."""
-    atlas, shared = scan_config()
+    atlas, shared = scan_config(choice)
     report = build_atlas(atlas, shared)
     if as_json:
         print(json.dumps({"version": ATLAS_VERSION, **report}, ensure_ascii=False, indent=2))
@@ -2150,7 +2374,7 @@ def cmd_curate(args):
     """curate propose [--json] | list [--status S] [--json] | confirm ID --by --via | reject ID --by --via
     [--reason]. Only confirm and reject record a decision; propose (also run at the end of every scan) only
     creates inferred conventions and refreshes evidence."""
-    atlas, shared = scan_config()
+    atlas, shared = scan_config(args.atlas)
     if args.action == "propose":
         report = curate_propose(atlas, shared)
         if args.json:
@@ -2510,7 +2734,7 @@ def cmd_context(args):
         raise AtlasError(f"--limit precisa ser maior que zero: {args.limit}", 2)
     if args.max_chars < 1:
         raise AtlasError(f"--max-chars precisa ser maior que zero: {args.max_chars}", 2)
-    atlas, _ = scan_config()
+    atlas, _ = scan_config(args.atlas)
     query = " ".join(args.query).strip()
     package = build_context(atlas, query, args.hops, args.limit, args.max_chars)
     nothing = not package["services"]
@@ -3092,9 +3316,10 @@ def lint_line(finding) -> str:
     return f"{label} {finding['rule']} {finding['path']} — {finding['detail']} (sugestão: {finding['suggestion']})"
 
 
-def _lint_atlas() -> Path:
-    """The atlas folder, from the local configuration of this machine only (atlas-config.yml is read by run_lint,
-    as one more file of the atlas). Without configuration = AtlasError (code 3)."""
+def _lint_atlas(choice=None) -> Path:
+    """The folder of the chosen atlas (select_atlas), from the local configuration of this machine only
+    (atlas-config.yml is read by run_lint, as one more file of the atlas). Without configuration = AtlasError
+    (code 3)."""
     path = local_config_path()
     if not path.is_file():
         raise AtlasError(NOT_CONFIGURED, 3)
@@ -3105,9 +3330,11 @@ def _lint_atlas() -> Path:
         raise AtlasError(f"não consegui ler {path}: {reason}", 1) from None
     except ValueError as e:
         raise AtlasError(f"não consegui ler {path}: {_yaml_problem(e)}", 1) from None
-    atlas = local.get("atlas")
-    if not isinstance(atlas, str) or not atlas:
-        raise AtlasError(f"atlas não definido em {path} — rode init (ou init --join)", 3)
+    config = local_atlases(path, local)
+    name, _ = select_atlas(config, choice)
+    atlas = entry_atlas(config["entries"][name])
+    if not atlas:
+        raise AtlasError(f"atlas não definido em {where(config, name)} — rode init (ou init --join)", 3)
     if not os.path.isdir(atlas):
         raise AtlasError(f"pasta do atlas não encontrada: {atlas} — rode init (ou init --join)", 3)
     require_readable_atlas(atlas)
@@ -3119,7 +3346,7 @@ def cmd_lint(args):
     2 with an unknown rule in --only, 3 not configured. Messages on stderr are masked too."""
     try:
         rules = lint_rules(args.only)
-        findings = run_lint(_lint_atlas(), rules)
+        findings = run_lint(_lint_atlas(args.atlas), rules)
     except AtlasError as e:
         raise AtlasError(_mask_all(e, []), e.code) from None
     except OSError as e:
@@ -3295,7 +3522,7 @@ def cmd_vendor(args):
     """vendor --ci github|generic [--schedule CRON] [--force] (SPEC-0040): writes the CI files of the atlas of this
     machine and the copy of the skill they run; never runs git nor a platform CLI (ADR-0010). Everything is
     validated before the first write: mode local, an invalid ci or --schedule = exit 2."""
-    atlas, shared = scan_config()
+    atlas, shared = scan_config(args.atlas)
     if shared.get("mode") == "local":
         raise AtlasError(LOCAL_ONLY, 2)
     problems = check_shared(shared)
@@ -3337,7 +3564,8 @@ def cmd_vendor(args):
 # ---------------------------------------------------------------- init
 
 def backup_path(path: Path) -> Path:
-    """atlas-config.yml.bak, or .bak.1, .bak.2... so an older backup is never overwritten."""
+    """<name>.bak (atlas-config.yml.bak, config.yml.bak), or .bak.1, .bak.2... so an older backup is never
+    overwritten."""
     candidate, n = path.with_name(path.name + ".bak"), 0
     while candidate.exists():
         n += 1
@@ -3369,22 +3597,38 @@ def create_structure(atlas: Path, organization: str, shared_text: str) -> list:
     return created
 
 
-def join_atlas(atlas_path: str, local_path: Path) -> int:
+def write_local_update(local_path: Path, update: dict) -> None:
+    """Writes the local layer computed by updated_local (with config.yml.bak when it becomes the multi form)."""
+    backup = write_local_config(local_path, update["text"], update["backup_of"])
+    if backup is not None:
+        print(f"Configuração anterior (um atlas só) em {backup}")
+
+
+def print_entry(update: dict) -> None:
+    mark = " (padrão)" if update["default"] == update["name"] else ""
+    print(f"Atlas nesta máquina: {update['name']}{mark}")
+
+
+def join_atlas(atlas_path: str, local_path: Path, name=None, make_default=False) -> int:
+    """init --join: adds or updates the entry of an existing atlas in the local layer (updated_local)."""
     require_readable_atlas(atlas_path)
     shared = Path(atlas_path) / SHARED_FILE
     if not shared.is_file():
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared}", 2)
     data = read_yaml(shared)
-    credentials = existing_credentials(local_config_path())  # full configuration, maybe from the old folder
-    write_local_config(local_path, render_local_config(atlas_path, credentials))
+    update = updated_local(atlas_path, name, data.get("organization"), make_default)
+    write_local_update(local_path, update)
     print(f"Máquina ligada ao atlas em {atlas_path} ({data.get('organization', '')}, modo {data.get('mode', '')})")
+    print_entry(update)
     print(f"Configuração local: {local_path}")
     return 0
 
 
 def cmd_init(args):
-    """init (new atlas, same configuration again, --force with .bak) or init --join (only the local layer).
-    Everything is validated before the first write; credentials already declared on this machine are kept."""
+    """init (new atlas, same configuration again, --force with .bak) or init --join (only the local layer), with
+    --name N (default: derived from the organization) and --default (SPEC-0079): the entry N is added or updated and
+    the other atlases of this machine do not change. Everything is validated before the first write; credentials
+    already declared for the same entry are kept."""
     atlas_path = absolute(args.atlas)
     local_path = local_config_write_path()  # always the new folder (SPEC-0070); credentials come from the read path
     if args.join:
@@ -3393,23 +3637,23 @@ def cmd_init(args):
         if extra:
             raise AtlasError(f"init --join não aceita {', '.join(extra)}: a organização e o modo vêm do "
                              "atlas-config.yml do atlas", 2)
-        return join_atlas(atlas_path, local_path)
+        return join_atlas(atlas_path, local_path, args.name, args.default)
     if not args.org or not args.mode:
         raise AtlasError("init precisa de --org NOME e --mode repo|local (ou --join para um atlas existente)", 2)
     shared_text = render_atlas_config(args.org, args.mode)
-    credentials = existing_credentials(local_config_path())
     atlas = Path(atlas_path)
     shared = atlas / SHARED_FILE
     if atlas.exists() and not atlas.is_dir():
         raise AtlasError(f"não é uma pasta: {atlas_path}", 2)
     require_readable_atlas(atlas)
-    local_text = render_local_config(atlas_path, credentials)
+    update = updated_local(atlas_path, args.name, args.org.strip(), args.default)
 
     if shared.is_file():
         current = read_text(shared)
         if current == shared_text:
-            write_local_config(local_path, local_text)
+            write_local_update(local_path, update)
             print(f"Atlas já configurado em {atlas_path}")
+            print_entry(update)
             print(f"Configuração local: {local_path}")
             return 0
         if not args.force:
@@ -3417,18 +3661,20 @@ def cmd_init(args):
         backup = backup_path(shared)
         backup.write_text(current, encoding="utf-8")
         shared.write_text(shared_text, encoding="utf-8")
-        write_local_config(local_path, local_text)
+        write_local_update(local_path, update)
         print(f"atlas-config.yml substituído em {atlas_path} (anterior em {backup.name})")
+        print_entry(update)
         print(f"Configuração local: {local_path}")
         return 0
 
     if atlas.is_dir() and not is_empty_folder(atlas):
         raise AtlasError(f"pasta não está vazia — escolha outra pasta: {atlas_path}", 2)
     created = create_structure(atlas, args.org.strip(), shared_text)
-    write_local_config(local_path, local_text)
+    write_local_update(local_path, update)
     print(f"Atlas criado em {atlas_path} (modo {args.mode})")
     for name in created:
         print(f"  {name}")
+    print_entry(update)
     print(f"Configuração local: {local_path}")
     if args.mode == "local":
         print("Próximo passo: git init na pasta do atlas (o atlas.py não executa o git).")
@@ -3441,13 +3687,59 @@ def describe(value) -> str:
     return fmt_flow(value) if isinstance(value, (dict, list)) else fmt_scalar(value)
 
 
-def cmd_config(as_json):
-    config = load_config()
+def cmd_config_list(as_json, choice=None):
+    """config --list [--json]: every atlas of this machine (name, folder, organization, default) and which one would
+    be chosen now and why; several atlases without a choice is not an error here ("nenhum")."""
+    path, local = read_local()
+    config = local_atlases(path, local)
+    try:
+        name, selected_by = select_atlas(config, choice)
+    except NoAtlasChosen:
+        name = selected_by = None
+    items = [dict(item, organization=organization_of(item["atlas"]) or "?") for item in atlas_list(config)]
     if as_json:
+        print(json.dumps({"atlases": items, "atlas_name": name, "selected_by": selected_by}, ensure_ascii=False,
+                         indent=2))
+        return 0
+    for item in items:
+        mark = "  [default]" if item["default"] else ""
+        print(f"{item['name']}  {item['atlas'] or '(sem pasta)'}  {item['organization']}{mark}")
+    print(f"escolhido: {name} ({selected_by})" if name else "escolhido: nenhum")
+    return 0
+
+
+def cmd_set_default(name: str):
+    """config --set-default <name>: writes `default: <name>` (multi form); a name that is not configured = exit 2
+    without writing; with one entry the file does not change (it already is the default)."""
+    path, local = read_local()
+    config = local_atlases(path, local)
+    entries = config["entries"]
+    if name not in entries:
+        raise AtlasError(f"atlas não configurado nesta máquina: {name} (atlas configurados: {_names(entries)})", 2)
+    if is_default(config, name):
+        print(f"{name} já é o atlas padrão desta máquina")
+        return 0
+    target = local_config_write_path()
+    write_local_config(target, render_atlases(entries, name))
+    print(f"Atlas padrão desta máquina: {name}")
+    print(f"Configuração local: {target}")
+    return 0
+
+
+def cmd_config(args):
+    """config [--json] [--atlas X]: effective configuration of the chosen atlas; --list and --set-default
+    (SPEC-0079)."""
+    if args.list:
+        return cmd_config_list(args.json, args.atlas)
+    if args.set_default is not None:
+        return cmd_set_default(args.set_default)
+    config = load_config(choice=args.atlas)
+    if args.json:
         print(json.dumps(config, ensure_ascii=False, indent=2))
         return 0
     values, origins = config["values"], config["origins"]
     print(f"boson-atlas {ATLAS_VERSION} — configuração local: {local_config_path()}")
+    print(f"atlas: {config['atlas_name']} (escolhido por: {SELECTED_BY_TEXT[config['selected_by']]})")
     for key in LOCAL_KEYS + SHARED_KEYS:
         if key == "credentials" and values[key]:
             print(f"credentials: ({origins[key]})")
@@ -3591,10 +3883,36 @@ def atlas_checks(atlas: Path) -> tuple:
     return rows, shared
 
 
-def doctor_rows(config_home=None) -> list:
-    """(status, item, detail) for each item of the contract; raises AtlasError(NOT_CONFIGURED, 3) without the
-    local layer. Never runs a process and never prints a variable's value."""
-    path, local = read_local(config_home)
+def other_atlas_items(config: dict, chosen) -> list:
+    """doctor AVISO for each other atlas of this machine whose folder no longer exists (SPEC-0079)."""
+    rows = []
+    for name, entry in config["entries"].items():
+        atlas = entry_atlas(entry)
+        if name == chosen:
+            continue
+        try:
+            missing = not atlas or not Path(atlas).is_dir()
+        except OSError:
+            missing = True
+        if missing:
+            detail = (f"pasta não existe: {atlas or '(sem pasta)'} — tire a entrada {name} de {config['path']} ou "
+                      "rode init --join")
+            rows.append(("AVISO", f"atlas {name}", detail))
+    return rows
+
+
+def doctor_rows(config_home=None, choice=None) -> list:
+    """(status, item, detail) for each item of the contract, for the chosen atlas (select_atlas) and only its
+    credentials; raises AtlasError(NOT_CONFIGURED, 3) without the local layer and AtlasError (code 3) for a name or
+    folder that is not configured. Several atlases without a choice = an ERRO row. Never runs a process and never
+    prints a variable's value."""
+    path, raw = read_local(config_home)
+    config = local_atlases(path, raw)
+    try:
+        name, selected_by = select_atlas(config, choice)
+    except NoAtlasChosen as e:
+        name, selected_by, no_choice = None, None, str(e)
+    local = config["entries"][name] if name else {}
     rows = []
     credentials = local.get("credentials")
     try:
@@ -3603,6 +3921,13 @@ def doctor_rows(config_home=None) -> list:
     except AtlasError as e:
         rows.append(("ERRO", "configuração local", f"{e} ({path})"))
         credentials = {}
+    entries = config["entries"]
+    rows.append(("OK", "Atlas configurados", f"{len(entries)} ({_names(entries)})"))
+    rows += other_atlas_items(config, name)
+    if name is None:
+        rows.append(("ERRO", "atlas escolhido", no_choice))
+        return rows
+    rows.append(("OK", "atlas escolhido", f"{name} (escolhido por: {SELECTED_BY_TEXT[selected_by]})"))
     atlas = local.get("atlas")
     if not isinstance(atlas, str) or not atlas:
         rows.append(("ERRO", "pasta do atlas", f"atlas não definido em {path} — rode init (ou init --join)"))
@@ -3641,8 +3966,8 @@ def old_copy_items(atlas: Path) -> list:
     return [("AVISO", item, f"cópia da skill no nome antigo — {migration_step((kinds or ['github|generic'])[0])}")]
 
 
-def cmd_doctor(as_json):
-    rows = doctor_rows()
+def cmd_doctor(as_json, choice=None):
+    rows = doctor_rows(choice=choice)
     rows[1:1] = old_config_items()
     has_error = any(status == "ERRO" for status, _, _ in rows)
     if as_json:
@@ -3655,6 +3980,12 @@ def cmd_doctor(as_json):
     return 1 if has_error else 0
 
 
+def add_atlas_option(parser) -> None:
+    """--atlas <name|folder> of every command but init (select_atlas, ADR-0021)."""
+    parser.add_argument("--atlas", help=("atlas desta máquina (nome ou pasta); sem ele: ATLAS_NAME, o default ou o "
+                                         "único configurado"))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="atlas.py", description="Ferramentas determinísticas da boson-atlas.")
     parser.add_argument("--version", action="version", version=f"boson-atlas {ATLAS_VERSION}")
@@ -3665,33 +3996,47 @@ def main(argv=None):
     p.add_argument("--mode", help="repo | local")
     p.add_argument("--force", action="store_true", help="substitui atlas-config.yml diferente (anterior em .bak)")
     p.add_argument("--join", action="store_true", help="atlas já configurado: grava só a configuração local")
+    p.add_argument("--name", help="nome do atlas nesta máquina (padrão: derivado da organização)")
+    p.add_argument("--default", action="store_true", help="torna este atlas o padrão desta máquina")
     p = sub.add_parser("config", help="configuração efetiva e a origem de cada valor (local | atlas | padrão)")
     p.add_argument("--json", action="store_true")
+    add_atlas_option(p)
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--list", action="store_true", help="todos os atlas desta máquina e qual seria escolhido")
+    group.add_argument("--set-default", metavar="NOME", help="torna NOME o atlas padrão desta máquina")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
+    add_atlas_option(p)
     p = sub.add_parser("scan", help="roda os coletores, valida, mascara, grava snapshots/ e mostra o diff")
     p.add_argument("--only", help="ids dos coletores separados por vírgula")
     p.add_argument("--json", action="store_true")
+    add_atlas_option(p)
     p = sub.add_parser("build", help="junta os snapshots no graph.json, infere relações e gera as páginas")
     p.add_argument("--json", action="store_true")
+    add_atlas_option(p)
     p = sub.add_parser("lint", help="só lê e aponta o que precisa de atenção no atlas (segredos, coletores, referências)")
     p.add_argument("--only", help="regras separadas por vírgula")
     p.add_argument("--json", action="store_true")
+    add_atlas_option(p)
     p = sub.add_parser("context", help="pacote só de leitura do atlas para uma tarefa (serviços, dependências, convenções)")
     p.add_argument("query", nargs="+", help="termos da tarefa")
     p.add_argument("--hops", type=int, default=1, help="passos no grafo a partir dos serviços encontrados (0..2)")
     p.add_argument("--limit", type=int, default=8, help="quantos serviços no máximo")
     p.add_argument("--max-chars", type=int, default=30000, help="tamanho máximo do pacote")
     p.add_argument("--json", action="store_true")
+    add_atlas_option(p)
     p = sub.add_parser("curate", help="propõe convenções (inferred) e registra a decisão humana (confirm | reject)")
     curate = p.add_subparsers(dest="action", required=True)
     q = curate.add_parser("propose", help="cria ou atualiza conventions/<id>.md a partir dos sinais")
     q.add_argument("--json", action="store_true")
+    add_atlas_option(q)
     q = curate.add_parser("list", help="convenções e o status de cada uma")
     q.add_argument("--status", choices=("inferred", "confirmed", "rejected"))
     q.add_argument("--json", action="store_true")
+    add_atlas_option(q)
     for action in ("confirm", "reject"):
         q = curate.add_parser(action, help=f"{action}: decisão humana sobre uma convenção (exige --by e --via)")
+        add_atlas_option(q)
         q.add_argument("id")
         q.add_argument("--by", help="quem decide")
         q.add_argument("--via", help="'PR #<n>' ou 'local'")
@@ -3701,19 +4046,20 @@ def main(argv=None):
     p.add_argument("--ci", required=True, choices=tuple(CI_TARGETS), help="github (GitHub Actions) | generic (script)")
     p.add_argument("--schedule", help="agenda cron (padrão: ci.schedule, senão \"0 6 * * 1\")")
     p.add_argument("--force", action="store_true", help="sobrescreve o arquivo da CI customizado")
+    add_atlas_option(p)
     args = parser.parse_args(argv)
 
     try:
         if args.command == "init":
             return cmd_init(args)
         if args.command == "config":
-            return cmd_config(args.json)
+            return cmd_config(args)
         if args.command == "doctor":
-            return cmd_doctor(args.json)
+            return cmd_doctor(args.json, args.atlas)
         if args.command == "scan":
-            return cmd_scan(args.only, args.json)
+            return cmd_scan(args.only, args.json, args.atlas)
         if args.command == "build":
-            return cmd_build(args.json)
+            return cmd_build(args.json, args.atlas)
         if args.command == "lint":
             return cmd_lint(args)
         if args.command == "context":

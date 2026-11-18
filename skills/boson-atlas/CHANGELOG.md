@@ -9,6 +9,19 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.10] - 2026-11-18
+
+### Added
+- Vários atlas na mesma máquina: a configuração local aceita `default:` + `atlases: {<nome>: {atlas, credentials}}`, cada atlas com as suas credenciais (só nomes). A forma de um atlas só (`atlas:` + `credentials:`) continua lida e é a gravada enquanto houver um atlas; o nome dessa entrada vem da `organization` em minúsculas (`Acme Corp` → `acme-corp`, `default` quando não pode ser lida). As duas formas juntas, nome inválido, `default` sem entrada ou chave desconhecida numa entrada saem com 2 (SPEC-0079, ADR-0021).
+- Ordem de escolha do atlas em `scan`, `build`, `context`, `curate`, `vendor`, `lint`, `config` e `doctor`: `--atlas <nome|pasta>`, depois `ATLAS_NAME`, depois o `default` e depois o único configurado. Nome ou pasta fora da lista sai com 3 (`atlas não configurado nesta máquina: <x> — rode init --join --atlas <caminho> (atlas configurados: …)`); vários atlas sem escolha saem com 2 com os três passos. As credenciais de um atlas nunca são usadas por outro (SPEC-0079, ADR-0021).
+- `init` e `init --join` com `--name N` e `--default`: acrescentam ou atualizam a entrada sem mudar as outras; a primeira entrada vira o padrão; nome ou pasta já usados por outra entrada saem com 2 sem gravar. Ao passar para a forma de vários atlas, o arquivo anterior fica em `config.yml.bak` (SPEC-0079).
+- `config --list [--json]` (todos os atlas e qual seria escolhido agora) e `config --set-default <nome>`. `config --json` ganha `atlas_name`, `selected_by` (`option`, `env`, `default`, `single`) e `atlases`; o texto do `config` ganha a linha `atlas: <nome> (escolhido por: …)` (SPEC-0079).
+- `doctor`: linhas `Atlas configurados — N (a, b)` e `atlas escolhido`, AVISO para outro atlas cuja pasta não existe mais e ERRO (exit 1) com vários atlas e nenhum escolhido (SPEC-0079).
+
+### Changed
+- Com um atlas só e sem `--name`, o `init`/`init --join` de outra pasta da mesma organização continua só trocando a pasta da entrada (como antes); um atlas de outra organização agora é acrescentado em vez de substituir o anterior, e começa sem credenciais (SPEC-0079).
+- **Rollback:** voltar para 2026.11.9 não exige ação para quem tem um atlas só (o arquivo continua na forma antiga). Quem já tem dois atlas restaura a forma antiga antes: `cp ~/.config/boson-atlas/config.yml.bak ~/.config/boson-atlas/config.yml` (ou na pasta de `ATLAS_CONFIG_HOME`); a versão anterior não entende `atlases:` (SPEC-0079, ADR-0021).
+
 ## [2026.11.9] - 2026-11-18
 
 ### Fixed

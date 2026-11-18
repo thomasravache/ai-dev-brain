@@ -134,6 +134,24 @@ Sem CI, quem garante é o aviso de envelhecimento: o `context` abre com `## Avis
 
 Revise o diff (`git diff`) e faça commit na pasta do atlas.
 
+Com vários atlas nesta máquina (SPEC-0079), diga qual cada agendamento roda: `atlas.py scan --atlas acme` (ou
+`ATLAS_NAME=acme`), um agendamento por atlas, cada um só com as credenciais daquele atlas. Sem escolha e sem
+`default`, o `scan` sai com 2.
+
+## Duas organizações na mesma máquina
+
+Cada organização tem o seu atlas, num modo ou noutro, e a máquina guarda os dois na configuração local
+(`references/config.md`, ADR-0021):
+
+1. `atlas.py init --atlas ~/acme-atlas --org Acme --mode repo` (ou `init --join` no clone): o primeiro vira o `default`.
+2. `atlas.py init --join --atlas ~/globex-atlas --name globex` (ou `init ... --org Globex --name globex`): acrescenta
+   o segundo, passa o `config.yml` para a forma de vários atlas e guarda a anterior em `config.yml.bak`.
+3. Declare as credenciais de cada um dentro da sua entrada em `atlases.<nome>.credentials` (só nomes).
+4. Escolha por comando com `--atlas globex` ou `ATLAS_NAME=globex`; troque o padrão com `config --set-default globex`;
+   `config --list` mostra os dois e qual vale agora.
+
+A CI de um atlas no modo repo não muda: o workflow liga só aquele atlas num `ATLAS_CONFIG_HOME` temporário.
+
 ## Migração local → repositório
 
 1. Crie o repositório do atlas na plataforma (vazio).
@@ -141,5 +159,6 @@ Revise o diff (`git diff`) e faça commit na pasta do atlas.
 3. Troque `mode: local` por `mode: repo` no `atlas-config.yml` (é uma linha; não há comando para mudar de modo).
 4. Declare `ci.env` (só nomes) e crie os secrets com os mesmos nomes na plataforma.
 5. Rode `atlas.py vendor --ci github` (ou `generic`), faça commit de `.boson-atlas/` e do arquivo da CI e envie.
-6. Nas outras máquinas: clone o repositório e rode `atlas.py init --join --atlas <pasta>`.
+6. Nas outras máquinas: clone o repositório e rode `atlas.py init --join --atlas <pasta>` (com `--name <nome>` se a
+   máquina já tem o atlas de outra organização).
 7. Remova o agendamento local (cron ou `/schedule`) para não haver dois scans.
