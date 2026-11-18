@@ -4,12 +4,14 @@ the source repository of each deployment and its configuration references, read 
 Stdlib only, Python 3.9+; prints the boson-atlas/collector@1 output (ADR-0011).
 
 Usage: python3 argocd.py --from argocd|kubectl [--env-label KEY] [--service-label KEY]
-                         [--ref-suffixes _HOST,_URL,...] [--input FILE]
+                         [--ref-suffixes HOST,URL,...] [--input FILE]
 
 Only the Application list is read (`argocd app list -o json` or `kubectl get applications.argoproj.io -A -o json`):
 never Secrets, rendered manifests or cluster state. From the Helm parameters, Helm values and plugin env only the
 key names ending in a configured suffix leave the collector, each with the bare host or resource name of its value:
-user, password, port, path and query are stripped here, before the scan's redaction (two layers, spec §4).
+user, password, port, path and query are stripped here, before the scan's redaction (two layers, spec §4); an AWS
+SQS queue URL or SQS/SNS ARN gives only the queue or topic name, never the account or the region (SPEC-0076).
+The service of an Application is its service label, else the root nameOverride of its Helm values, else its name.
 The chosen CLI is the only external process, run by run_cli: argv as a list, never a shell, with a timeout.
 --input FILE reads a recorded list instead of calling a CLI (references/collectors/argocd.md).
 """
@@ -30,7 +32,8 @@ COLLECTOR = "argocd"
 CATEGORY = "delivery"
 DEFAULT_ENV_LABEL = "env"
 DEFAULT_SERVICE_LABEL = "app.kubernetes.io/part-of"
-DEFAULT_REF_SUFFIXES = ("_HOST", "_URL", "_DSN", "_ADDR", "_QUEUE", "_TOPIC", "_BUCKET")
+# HOST and URL also cover _HOST and _URL; without "_" they match .NET keys (RouterEndpoint, ServiceUrl) (SPEC-0076)
+DEFAULT_REF_SUFFIXES = ("HOST", "URL", "URI", "ENDPOINT", "DSN", "ADDR", "_QUEUE", "_TOPIC", "_BUCKET")
 CLI_TIMEOUT = 120  # seconds for the one CLI call
 GUIDE = "references/collectors/argocd.md"
 NO_ACCESS = "sem acesso às Applications"
@@ -48,6 +51,21 @@ ACCESS_DENIED = re.compile(r"Unauthenticated|PermissionDenied|permission denied|
 # a host name, IPv4 or bracketed IPv6, or a resource name (queue, topic, bucket): nothing else leaves host_of
 HOST_RE = re.compile(r"^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)$")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+# the SQS endpoints: regional (sqs.<region>.amazonaws.com), FIPS (sqs-fips.<region>.amazonaws.com), legacy
+# (<region>.queue.amazonaws.com) and VPC endpoint ([<vpce-id>.]sqs.<region>.vpce.amazonaws.com) (SPEC-0076)
+SQS_HOST_RE = re.compile(r"^(?:sqs(?:-fips)?\.[a-z0-9-]+|(?:[a-z0-9-]+\.)?queue|(?:[a-z0-9.-]+\.)?sqs\.[a-z0-9-]+\.vpce)"
+                         r"\.amazonaws\.com(?:\.cn)?$", re.IGNORECASE)
+# any AWS VPC endpoint host: never leaves whole (Emenda v4)
+VPCE_HOST_RE = re.compile(r"\.vpce\.amazonaws\.com(?:\.cn)?$", re.IGNORECASE)
+# YAML null and boolean literals, YAML 1.1 booleans included (accepted by Helm): never a host or a service name
+# (SPEC-0076, Emendas v3 and v4)
+YAML_LITERALS = frozenset(("null", "~", "true", "false", "yes", "no", "on", "off", "y", "n"))
+# the path of an SQS queue URL: /<account>/<queue>
+SQS_PATH_RE = re.compile(r"^/\d{12}/([^/?#]+)$")
+# arn:<partition>:sqs|sns:<region>:<account>:<name>
+AWS_ARN_RE = re.compile(r"^arn:[a-z0-9-]+:(?:sqs|sns):[a-z0-9-]+:\d{12}:(.+)$")
+# a root "nameOverride: value" line of a Helm values text (no indentation, not a list item)
+NAME_OVERRIDE_LINE_RE = re.compile(r"^nameOverride\s*:(?:\s+(.*))?$")
 # "KEY: value" in a Helm values text, optionally as a list item ("- KEY: value")
 YAML_LINE_RE = re.compile(r"^\s*(?:-\s+)?([A-Za-z0-9_.-]+)\s*:(?:\s+(.*))?$")
 # GitHub repoURL: https/http/ssh/git:// (credentials allowed) or scp-like git@github.com:owner/repo
@@ -104,26 +122,57 @@ def _strip_port(hostport: str):
     return host
 
 
+def _resource_name(name):
+    """A queue or topic name when it is a strict resource name (HOST_RE), else None."""
+    return name if name and HOST_RE.match(name) else None
+
+
 def host_of(value):
     """Configuration value -> only the host or the resource name (no credential, port, path or query); None when
     nothing safe is left. A URL gives its host (s3://bucket/x gives the bucket); host:port and user:pass@host give
     the host; a bare name stays as it is.
 
-    Rule (G4 review): drop the scheme; the authority is the text up to the first "/", "?" or "#". An "@" after
-    that point (path, query or fragment: it may be a password) makes the value ambiguous and gives None — losing a
-    reference is acceptable, leaking never is. Otherwise the host is what follows the last "@" of the authority,
-    without the port, and must be a strict host name, IP or resource name, else None."""
+    A YAML null or boolean literal (null, ~, true, false and the YAML 1.1 yes, no, on, off, y, n, any case) gives
+    None, and so does a value, with or without a scheme, whose authority has "=", ";" or "," (a connection string
+    such as Server=db;Password=p@ss or sqlserver://db;password=p@ss, whose text after "@" may be part of the
+    password) (SPEC-0076, Emendas v3 and v4).
+
+    AWS (SPEC-0076), before the generic rule: an SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<queue>,
+    the FIPS sqs-fips.<region>.amazonaws.com, the VPC endpoint [<vpce-id>.]sqs.<region>.vpce.amazonaws.com or the
+    legacy https://<region>.queue.amazonaws.com/<account>/<queue>) and an SQS or SNS ARN
+    (arn:<partition>:sqs|sns:<region>:<account>:<name>) give only the queue or topic name. The account, the region
+    and the rest of the URL never leave: an SQS endpoint without exactly /<account>/<queue> as its path (no account,
+    extra path, query) gives None, never the regional host alone; any other ARN gives None; an "@" anywhere in
+    an SQS or ARN value gives None; and a VPC endpoint host of any other service (*.vpce.amazonaws.com) gives
+    None, so no VPC endpoint host ever leaves whole (Emenda v4).
+
+    Generic rule (G4 review): drop the scheme; the authority is the text up to the first "/", "?" or "#". An "@"
+    after that point (path, query or fragment: it may be a password) makes the value ambiguous and gives None —
+    losing a reference is acceptable, leaking never is. Otherwise the host is what follows the last "@" of the
+    authority, without the port, and must be a strict host name, IP or resource name, else None."""
     if not isinstance(value, str):
         return None
     value = value.strip().strip("\"'").strip()
-    if not value or any(c.isspace() for c in value):
+    if not value or any(c.isspace() for c in value) or value.lower() in YAML_LITERALS:
         return None
+    if value[:4].lower() == "arn:":
+        match = AWS_ARN_RE.match(value)
+        return _resource_name(match.group(1)) if match and "@" not in value else None
     match = SCHEME_RE.match(value)
     rest = value[match.end():] if match else value
     authority = re.split(r"[/?#]", rest, maxsplit=1)[0]
-    if "@" in rest[len(authority):]:
+    if any(c in authority for c in "=;,"):
         return None
     host = _strip_port(authority.rsplit("@", 1)[-1])
+    if host and SQS_HOST_RE.match(host):
+        if "@" in value:
+            return None
+        path = SQS_PATH_RE.match(rest[len(authority):])
+        return _resource_name(path.group(1)) if path else None
+    if host and VPCE_HOST_RE.search(host):
+        return None
+    if "@" in rest[len(authority):]:
+        return None
     if not host or not HOST_RE.match(host):
         return None
     return host
@@ -236,14 +285,55 @@ def repository_ref(repo_url):
     return f"repository:{match.group(1)}/{match.group(2)}".lower() if match else None
 
 
+def _simple_name(value):
+    """A nameOverride value -> the name when it is a simple name (HOST_RE: no template, space or empty) and not a
+    YAML null or boolean literal (null, ~, true, false, any case: Emenda v3), else None."""
+    if not isinstance(value, str) or value.lower() in YAML_LITERALS:
+        return None
+    return value if HOST_RE.match(value) else None
+
+
+def _name_override_in_text(text):
+    """The first valid root "nameOverride: value" line of a Helm values text (no indentation), else None."""
+    for line in text.splitlines() if isinstance(text, str) else []:
+        match = NAME_OVERRIDE_LINE_RE.match(line)
+        if match:
+            name = _simple_name(_unquote((match.group(1) or "").strip()))
+            if name:
+                return name
+    return None
+
+
+def name_override(source):
+    """spec.source of an Application -> its root Helm nameOverride when it is a simple name, else None. Argo CD and
+    Helm precedence: helm.parameters (name exactly nameOverride), then helm.valuesObject (root key), then
+    helm.values (a line without indentation); an invalid value is skipped and the next place is tried (SPEC-0076)."""
+    helm = _dict(_dict(source).get("helm"))
+    for item in _list(helm.get("parameters")):
+        item = _dict(item)
+        if item.get("name") == "nameOverride":
+            name = _simple_name(item.get("value"))
+            if name:
+                return name
+    name = _simple_name(_dict(helm.get("valuesObject")).get("nameOverride"))
+    return name or _name_override_in_text(helm.get("values"))
+
+
 def service_and_environment(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL):
-    """Application -> (service, environment): the label when present; else the Application name and the
-    destination namespace (None when the destination has no namespace)."""
+    """Application -> (service, environment). Service: the service label; else the root Helm nameOverride of the
+    first source (spec.source, then spec.sources) with a valid one (name_override, SPEC-0076); else the Application
+    name. Environment: the environment label; else the destination namespace (None when there is none)."""
     app = _dict(app)
     metadata = _dict(app.get("metadata"))
     labels = _dict(metadata.get("labels"))
-    destination = _dict(_dict(app.get("spec")).get("destination"))
-    service = _text(labels.get(service_label)) or _text(metadata.get("name"))
+    spec = _dict(app.get("spec"))
+    destination = _dict(spec.get("destination"))
+    service = _text(labels.get(service_label))
+    for source in _sources(spec) if not service else []:
+        service = name_override(source)
+        if service:
+            break
+    service = service or _text(metadata.get("name"))
     environment = _text(labels.get(env_label)) or _text(destination.get("namespace"))
     return service, environment
 
