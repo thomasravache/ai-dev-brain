@@ -1,0 +1,6 @@
+{
+  "entities": [
+    {"kind": "queue", "id": "orders", "name": "orders", "attrs": {}}
+  ],
+  "relations": []
+}

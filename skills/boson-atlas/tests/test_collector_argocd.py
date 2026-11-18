@@ -1,10 +1,12 @@
-"""Coletor argocd da boson-atlas (SPEC-0035: UT-01 a UT-04, IT-01 a IT-03 e CT-01).
+"""Coletor argocd da boson-atlas (SPEC-0035: UT-01 a UT-04, IT-01 a IT-03 e CT-01; SPEC-0076: UT-01 a UT-05
+e IT-01).
 
 Contrato esperado de assets/collectors/argocd.py (o Implementer segue estes testes):
 
     argocd.py --from argocd|kubectl [--env-label CHAVE (padrão env)]
               [--service-label CHAVE (padrão app.kubernetes.io/part-of)]
-              [--ref-suffixes _HOST,_URL,_DSN,_ADDR,_QUEUE,_TOPIC,_BUCKET (padrão)] [--input ARQUIVO]
+              [--ref-suffixes HOST,URL,URI,ENDPOINT,DSN,ADDR,_QUEUE,_TOPIC,_BUCKET (padrão, SPEC-0076)]
+              [--input ARQUIVO]
         stdout: um objeto boson-atlas/collector@1 com collector "argocd", category "delivery", collected_at ISO 8601
         UTC e source "argocd" em cada entidade e relação; exit 0.
         entidades: deployment:<metadata.name> {project, namespace (de destino), sync_status, health_status,
@@ -15,7 +17,9 @@ Contrato esperado de assets/collectors/argocd.py (o Implementer segue estes test
                    deployment -> cluster (runs_in); deployment -> repository:<owner>/<repo> (sourced_from), só
                    quando o repoURL é do GitHub (https, https sem .git, ssh scp-like ou ssh://, com ou sem
                    credencial na URL)
-        serviço: label --service-label da Application; sem ele, metadata.name.
+        serviço: label --service-label da Application; sem ele, o nameOverride da raiz dos values do Helm
+            (valuesObject, linha sem indentação de values ou parâmetro nameOverride; só um nome simples,
+            SPEC-0076); sem ele, metadata.name.
         ambiente: label --env-label; sem ele, spec.destination.namespace.
         config_refs: lista ordenada e sem repetição de "CHAVE=host", de spec.source.helm.parameters (nome com
             pontos: a CHAVE é o último segmento, env.DB_URL -> DB_URL), helm.values (texto YAML: linhas
@@ -845,6 +849,266 @@ class MixedCaseScanTest(ArgocdCase):
         self.assertEqual(len(sourced), 2, sourced)
         self.assertEqual([ref for ref in sourced if ref not in known], [],
                          "sourced_from para repositório que não existe nos snapshots")
+
+
+# --------------------------------------------------------------------------- SPEC-0076
+
+ACCOUNT_ID = "123456789012"
+NAME_OVERRIDE = FIXTURES / "name-override.json"
+NAME_OVERRIDE_FACTS = FIXTURES / "name-override-facts.json"
+NEW_DEFAULT_SUFFIXES = ("HOST", "URL", "URI", "ENDPOINT", "DSN", "ADDR", "_QUEUE", "_TOPIC", "_BUCKET")
+
+
+def bare_application(name="dev-account", source=None, sources=None, labels=None):
+    """Application mínima, sem rótulo de serviço (a não ser que labels traga um)."""
+    spec = {"project": "core", "destination": {"server": IN_CLUSTER, "namespace": "dev"}}
+    if source is not None:
+        spec["source"] = source
+    if sources is not None:
+        spec["sources"] = sources
+    metadata = {"name": name, "namespace": "argocd"}
+    if labels is not None:
+        metadata["labels"] = labels
+    return {"metadata": metadata, "spec": spec}
+
+
+def helm(**fields):
+    return {"repoURL": "https://charts.interno/helm", "chart": "account", "helm": fields}
+
+
+class NameOverrideTest(unittest.TestCase):
+    def assert_service(self, app, want):
+        service, _ = function("service_and_environment")(app)
+        self.assertEqual(service, want)
+        _, relations = function("map_application")(app)
+        self.assertIn(relation(f"deployment:{app['metadata']['name']}", f"service:{want}", "deploys"), relations)
+
+    def test_name_override_in_values_object_values_text_and_parameters(self):
+        """SPEC-0076:UT-01 — sem o rótulo de serviço, nameOverride: account em helm.valuesObject, numa linha sem
+        indentação de helm.values ou no parâmetro nameOverride de helm.parameters dá service:account."""
+        cases = {
+            "valuesObject": helm(valuesObject={"nameOverride": "account", "replicaCount": 2}),
+            "values": helm(values="replicaCount: 2\nnameOverride: account\nenv:\n  LOG_LEVEL: info\n"),
+            "values com aspas": helm(values="nameOverride: \"account\"\n"),
+            "parameters": helm(parameters=[{"name": "image.tag", "value": "1.2.3"},
+                                           {"name": "nameOverride", "value": "account"}]),
+        }
+        for where, source in cases.items():
+            with self.subTest(where=where):
+                self.assert_service(bare_application(source=source), "account")
+
+    def test_name_override_from_the_first_source_that_declares_it(self):
+        """SPEC-0076:UT-01 — a origem é spec.source e depois spec.sources: vale a primeira que declara o
+        nameOverride."""
+        only_in_sources = bare_application(source={"repoURL": "https://github.com/acme/iac.git", "path": "k8s"},
+                                           sources=[{"repoURL": "https://github.com/acme/iac.git", "ref": "values"},
+                                                    helm(valuesObject={"nameOverride": "account"})])
+        self.assert_service(only_in_sources, "account")
+        source_first = bare_application(source=helm(valuesObject={"nameOverride": "account"}),
+                                        sources=[helm(valuesObject={"nameOverride": "other"})])
+        self.assert_service(source_first, "account")
+        multi = bare_application(sources=[helm(values="replicaCount: 1\n"),
+                                          helm(parameters=[{"name": "nameOverride", "value": "account"}]),
+                                          helm(valuesObject={"nameOverride": "other"})])
+        self.assert_service(multi, "account")
+
+    def test_label_wins_and_invalid_name_override_falls_back_to_the_application_name(self):
+        """SPEC-0076:UT-02 — com o rótulo de serviço, vale o rótulo; nameOverride fora da raiz (indentado), vazio,
+        com template do Helm ou ${NAME}, ou com espaço: vale o nome da Application."""
+        labelled = bare_application(source=helm(valuesObject={"nameOverride": "account"}),
+                                    labels={"app.kubernetes.io/part-of": "ledger"})
+        self.assert_service(labelled, "ledger")
+        invalid = {
+            "values indentado": helm(values="chart:\n  nameOverride: account\n"),
+            "values em lista": helm(values="items:\n  - nameOverride: account\n"),
+            "valuesObject aninhado": helm(valuesObject={"chart": {"nameOverride": "account"}}),
+            "parâmetro fora da raiz": helm(parameters=[{"name": "chart.nameOverride", "value": "account"}]),
+            "values vazio": helm(values="nameOverride:\n"),
+            "values com aspas vazias": helm(values="nameOverride: \"\"\n"),
+            "valuesObject vazio": helm(valuesObject={"nameOverride": ""}),
+            "parâmetro vazio": helm(parameters=[{"name": "nameOverride", "value": ""}]),
+            "template do Helm": helm(values="nameOverride: \"{{ .Values.app }}\"\n"),
+            "template no valuesObject": helm(valuesObject={"nameOverride": "{{ .Release.Name }}"}),
+            "${NAME}": helm(valuesObject={"nameOverride": "${NAME}"}),
+            "${NAME} no parâmetro": helm(parameters=[{"name": "nameOverride", "value": "${NAME}"}]),
+            "com espaço": helm(valuesObject={"nameOverride": "my account"}),
+            "com espaço no values": helm(values="nameOverride: \"my account\"\n"),
+            "não é texto": helm(valuesObject={"nameOverride": {"value": "account"}}),
+        }
+        for where, source in invalid.items():
+            with self.subTest(where=where):
+                self.assert_service(bare_application(source=source), "dev-account")
+
+
+class DotnetSuffixesTest(unittest.TestCase):
+    KEYS = types.MappingProxyType({
+        "BM.Account__RouterEndpoint": "http://account",
+        "ServiceUrl": "https://pay.interno/x",
+        "CallbackUri": "https://cb.interno",
+        "Db_Host": "db.interno",
+        "LOG_LEVEL": "debug",
+        "DB_PASSWORD": "fake-pass",
+        "API_TOKEN": "not-a-real-token",
+    })
+    WANT = ("BM.Account__RouterEndpoint=account", "CallbackUri=cb.interno", "Db_Host=db.interno",
+            "ServiceUrl=pay.interno")
+
+    def test_default_suffixes_are_the_new_superset(self):
+        """SPEC-0076:UT-03 — os sufixos padrão são HOST,URL,URI,ENDPOINT,DSN,ADDR,_QUEUE,_TOPIC,_BUCKET (superconjunto
+        do padrão antigo), também no padrão do --ref-suffixes."""
+        self.assertEqual(tuple(collector().DEFAULT_REF_SUFFIXES), NEW_DEFAULT_SUFFIXES)
+        args = function("build_parser")().parse_args(["--from", "argocd"])
+        self.assertEqual(function("parse_suffixes")(args.ref_suffixes), NEW_DEFAULT_SUFFIXES)
+
+    def test_dotnet_keys_with_the_default_suffixes(self):
+        """SPEC-0076:UT-03 — com os sufixos padrão, BM.Account__RouterEndpoint, ServiceUrl, CallbackUri e Db_Host
+        saem (account, pay.interno, cb.interno, db.interno), em valuesObject e em plugin.env; LOG_LEVEL,
+        DB_PASSWORD e API_TOKEN continuam fora."""
+        extract = function("extract_config_refs")
+        sources = {
+            "valuesObject": {"helm": {"valuesObject": {"env": dict(self.KEYS)}}},
+            "plugin.env": {"plugin": {"env": [{"name": k, "value": v} for k, v in self.KEYS.items()]}},
+        }
+        for where, source in sources.items():
+            with self.subTest(where=where):
+                refs = extract(source)
+                self.assertEqual(refs, list(self.WANT))
+                text = json.dumps(refs)
+                for fragment in ("LOG_LEVEL", "DB_PASSWORD", "API_TOKEN", "fake-pass", "not-a-real-token", "/x"):
+                    self.assertNotIn(fragment, text)
+
+    def test_case_insensitive_suffixes_at_the_end_of_the_key(self):
+        """SPEC-0076:UT-03 — a comparação não diferencia caixa e é só pelo fim da chave: HostName e UrlPrefix
+        ficam de fora; serviceurl e DB_HOST entram."""
+        source = {"helm": {"valuesObject": {"serviceurl": "https://pay.interno", "DB_HOST": "db.interno",
+                                            "HostName": "h.interno", "UrlPrefix": "https://x.interno"}}}
+        self.assertEqual(function("extract_config_refs")(source), ["DB_HOST=db.interno", "serviceurl=pay.interno"])
+
+
+class AwsQueueTopicTest(unittest.TestCase):
+    VALUES = types.MappingProxyType({
+        "ORDERS_QUEUE_URL": ("https://sqs.us-east-1.amazonaws.com/123456789012/orders", "orders"),
+        "BILLING_QUEUE_URL": ("https://us-east-1.queue.amazonaws.com/123456789012/billing.fifo", "billing.fifo"),
+        "EVENTS_TOPIC": ("arn:aws:sns:us-east-1:123456789012:orders-events", "orders-events"),
+        "DLQ_QUEUE": ("arn:aws:sqs:sa-east-1:123456789012:orders-dlq", "orders-dlq"),
+    })
+    # "@" em qualquer posição, nome fora de HOST_RE, caminho extra, ARN de outro serviço
+    NO_REF = (
+        "https://user@sqs.us-east-1.amazonaws.com/123456789012/orders",
+        "https://u:fake-pass@sqs.us-east-1.amazonaws.com/123456789012/orders",
+        "https://sqs.us-east-1.amazonaws.com/123456789012/orders@x",
+        "https://sqs.us-east-1.amazonaws.com/123456789012@/orders",
+        "https://us-east-1.queue.amazonaws.com/123456789012/billing@fifo",
+        "arn:aws:sns:us-east-1:123456789012:orders@events",
+        "arn:aws:sqs:sa-east-1:123456789012:@orders-dlq",
+        "arn:aws:sns:us-east-1:fake@123456789012:orders-events",
+        "https://sqs.us-east-1.amazonaws.com/123456789012/orders_",
+        "https://sqs.us-east-1.amazonaws.com/123456789012/-orders",
+        "https://sqs.us-east-1.amazonaws.com/123456789012/orders%2Fx",
+        "arn:aws:sns:us-east-1:123456789012:orders!events",
+        "arn:aws:sqs:sa-east-1:123456789012:orders:dlq",
+        "https://sqs.us-east-1.amazonaws.com/123456789012/orders/x",
+        "https://us-east-1.queue.amazonaws.com/123456789012/billing.fifo/x",
+        "arn:aws:s3:::bucket",
+        "arn:aws:iam::123456789012:role/x",
+    )
+
+    def test_host_of_gives_the_queue_or_topic_name(self):
+        """SPEC-0076:UT-04 — URL de fila do SQS (formato novo e antigo) e ARN do SQS e do SNS dão só o nome da fila
+        ou do tópico, sem a conta, a região e o resto da URL."""
+        host_of = function("host_of")
+        cases = {value: want for value, want in self.VALUES.values()}
+        cases["arn:aws-cn:sns:cn-north-1:123456789012:orders-events"] = "orders-events"
+        cases["arn:aws-us-gov:sqs:us-gov-west-1:123456789012:orders.fifo"] = "orders.fifo"
+        for value, want in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(host_of(value), want)
+
+    def test_config_refs_with_sqs_and_sns(self):
+        """SPEC-0076:UT-04 — ORDERS_QUEUE_URL, o formato antigo da URL, EVENTS_TOPIC (ARN do SNS) e DLQ_QUEUE (ARN do
+        SQS) viram orders, billing.fifo, orders-events e orders-dlq em config_refs."""
+        source = {"helm": {"valuesObject": {"env": {k: v for k, (v, _) in self.VALUES.items()}}}}
+        refs = function("extract_config_refs")(source)
+        self.assertEqual(refs, ["BILLING_QUEUE_URL=billing.fifo", "DLQ_QUEUE=orders-dlq",
+                                "EVENTS_TOPIC=orders-events", "ORDERS_QUEUE_URL=orders"])
+        text = json.dumps(refs)
+        for fragment in (ACCOUNT_ID, "us-east-1", "sa-east-1", "amazonaws", "arn:"):
+            self.assertNotIn(fragment, text)
+
+    def test_unsafe_or_foreign_values_give_no_reference(self):
+        """SPEC-0076:UT-05 — SQS e SNS com "@" em qualquer posição, nome fora de HOST_RE, caminho extra ou ARN de
+        outro serviço (S3, IAM): host_of devolve None e config_refs fica vazio."""
+        host_of = function("host_of")
+        for value in self.NO_REF:
+            with self.subTest(value=value):
+                self.assertIsNone(host_of(value))
+        source = {"helm": {"valuesObject": {"env": {f"Q{i}_QUEUE_URL": v for i, v in enumerate(self.NO_REF)}}}}
+        self.assertEqual(function("extract_config_refs")(source), [])
+
+
+class AwsAccountNeverLeavesTest(ArgocdCase):
+    def test_account_id_never_appears_in_the_collector_output(self):
+        """SPEC-0076:UT-05 — pela CLI (--input), uma Application com os valores de SQS e SNS válidos e inválidos:
+        os inválidos não dão referência e o id da conta não aparece em lugar nenhum da saída do coletor."""
+        valid = {k: v for k, (v, _) in AwsQueueTopicTest.VALUES.items()}
+        invalid = {f"Q{i}_QUEUE_URL": v for i, v in enumerate(AwsQueueTopicTest.NO_REF)}
+        apps = [bare_application("dev-valid", source=helm(valuesObject={"env": valid})),
+                bare_application("dev-invalid", source=helm(valuesObject={"env": invalid}))]
+        path = self.tmp / "aws.json"
+        path.write_text(json.dumps(apps), encoding="utf-8")
+        data, result = self.collect("--from", "argocd", "--input", path)
+        self.assertNotIn(ACCOUNT_ID, output(result))
+        refs = {e["id"]: e["attrs"]["config_refs"] for e in data["entities"] if e["kind"] == "deployment"}
+        self.assertEqual(refs, {"dev-valid": ["BILLING_QUEUE_URL=billing.fifo", "DLQ_QUEUE=orders-dlq",
+                                              "EVENTS_TOPIC=orders-events", "ORDERS_QUEUE_URL=orders"],
+                                "dev-invalid": []})
+
+
+class NameOverrideScanTest(ArgocdCase):
+    def test_scan_and_build_link_router_to_account_and_to_the_queue(self):
+        """SPEC-0076:IT-01 — --input gravado com dev-account (nameOverride: account) e dev-router
+        (BM.Router__AccountEndpoint=http://account e ORDERS_QUEUE_URL do SQS), mais um generic com queue:orders:
+        scan e build num atlas temporário dão service:account (não service:dev-account), service:dev-router
+        depends_on service:account e depends_on queue:orders (inferidas), sem o id da conta nos snapshots."""
+        sandbox = Sandbox()
+        self.addCleanup(sandbox.cleanup)
+        out = sandbox.init(mode="local")
+        self.assertEqual(out.returncode, 0, output(out))
+        config = atlas_config([
+            ("argocd", "delivery", ["python3", "{skill}/assets/collectors/argocd.py", "--from", "argocd",
+                                    "--input", "{skill}/tests/fixtures/argocd/name-override.json"]),
+            ("queues", "delivery", ["python3", "{skill}/assets/collectors/generic.py", "--facts",
+                                    "{skill}/tests/fixtures/argocd/name-override-facts.json",
+                                    "--category", "delivery"]),
+        ])
+        (sandbox.atlas / "atlas-config.yml").write_text(config, encoding="utf-8")
+        result = sandbox.run("scan")
+        text = output(result)
+        self.assertEqual(result.returncode, 0, text)
+        self.assertNotIn("Traceback", text)
+        self.assertRegex(text, re.compile(r"^OK argocd — ", re.MULTILINE))
+        self.assertRegex(text, re.compile(r"^OK queues — ", re.MULTILINE))
+        build = sandbox.run("build")
+        self.assertEqual(build.returncode, 0, output(build))
+        graph = json.loads((sandbox.atlas / "graph.json").read_text(encoding="utf-8"))
+        keys = {node["key"] for node in graph["nodes"]}
+        self.assertIn("service:account", keys)
+        self.assertNotIn("service:dev-account", keys)
+        self.assertIn("queue:orders", keys)
+        edges = {(e["from"], e["type"], e["to"]): e for e in graph["edges"]}
+        self.assertIn(("deployment:dev-account", "deploys", "service:account"), edges)
+        for target in ("service:account", "queue:orders"):
+            with self.subTest(target=target):
+                edge = edges.get(("service:dev-router", "depends_on", target))
+                self.assertIsNotNone(edge, f"falta service:dev-router depends_on {target}")
+                self.assertTrue(edge["inferred"])
+        self.assertEqual(edges[("service:dev-router", "depends_on", "queue:orders")]["evidence"],
+                         "ORDERS_QUEUE_URL=orders")
+        for path in sorted((sandbox.atlas / "snapshots").rglob("*")):
+            if path.is_file():
+                with self.subTest(snapshot=path.name):
+                    self.assertNotIn(ACCOUNT_ID, path.read_text(encoding="utf-8"))
+        self.assertNotIn(ACCOUNT_ID, (sandbox.atlas / "graph.json").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
