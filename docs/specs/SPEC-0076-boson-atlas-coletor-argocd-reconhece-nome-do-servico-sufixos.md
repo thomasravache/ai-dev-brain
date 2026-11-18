@@ -4,7 +4,7 @@ title: "boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, fi
 tier: lite
 type: fix
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-17
 parent:
 depends_on: []
@@ -110,7 +110,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 7816492 | 2026-11-18 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-18 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-18 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — f153812 | 2026-11-18 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-18 — rodada 2: CHANGES_REQUESTED — 1 major (string de conexão com esquema deixa sair parte da senha), 2 minors (booleanos YAML 1.1, formas de VPC endpoint) — c2497c1
