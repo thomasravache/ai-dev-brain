@@ -36,7 +36,10 @@ padrão), ATLAS_NAME sempre tirado do ambiente salvo quando o teste o define. Or
 coletor generic com fatos locais; sem rede.
 """
 import json
+import os
+import re
 import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -561,6 +564,175 @@ class TwoOrganizationsJourneyTest(MultiAtlasCase):
 
         self.assertExit(self.cli("config", "--set-default", "globex"), 0)  # 6
         self.assertEqual(self.context_services(), globex_services)
+
+
+# ---------------------------------------------------------------- Emenda v4 (UT-09, UT-10, IT-02 ampliado)
+
+HAS_GIT = shutil.which("git") is not None
+CI_SCRIPT = Path("ci") / "atlas-scan.sh"
+CI_ASSETS = Path(__file__).resolve().parent.parent / "assets" / "ci"
+ATLAS_CALL = re.compile(r"atlas\.py\s+(scan|lint)\b")
+PINNED = '--atlas "$PWD"'
+ENV_SPY = "{skill}/tests/fixtures/fake-collectors/env_names.py"
+
+
+def spy_config(organization: str) -> str:
+    """atlas-config.yml com o coletor envspy, que grava em <atlas>/../<pasta>-env-seen.txt os nomes *_TOKEN."""
+    command = ["python3", ENV_SPY, "{atlas}/../" + organization.lower() + "-env-seen.txt", "envspy"]
+    return (f"version: 1\norganization: {organization}\nmode: repo\nlanguage: auto\nstale_days: 14\n"
+            "categories: [code, delivery]\ncollectors:\n  - id: envspy\n    category: code\n"
+            "    command: [" + ", ".join(json.dumps(a) for a in command) + "]\n    timeout: 60\n"
+            "redaction: {extra_patterns: []}\n")
+
+
+A_ONLY = {"facts": {"env": ["A_TOKEN"]}}
+
+
+class InitCompatibilityTest(MultiAtlasCase):
+    def fresh(self):
+        """Sandbox novo para cada caso: nenhum .bak nem entrada de um caso vaza para o outro."""
+        self.box = Sandbox()
+        self.addCleanup(self.box.cleanup)
+        self.local = self.box.config_home / "config.yml"
+
+    def single(self, path: Path) -> bytes:
+        self.box.write_local(fn("render_local_config")(str(path), A_ONLY))
+        return self.local.read_bytes()
+
+    def assertSingle(self, path: Path):
+        self.assertEqual(parse(self.local), {"atlas": str(path), "credentials": A_ONLY},
+                         "forma de um atlas só, reapontada, com as mesmas credenciais")
+        self.assertFalse(self.local.with_name("config.yml.bak").exists(), "uma entrada: sem .bak")
+
+    def test_init_keeps_previous_behaviour_for_moved_and_reconfigured_atlases(self):
+        """SPEC-0079:UT-09 — mv + init --join reaponta; outra pasta da mesma organização reaponta; --force mantém o
+        nome; forma de um atlas só sem atlas: é preenchida."""
+        with self.subTest(caso="mv + init --join"):  # Emenda v4, item 11
+            self.fresh()
+            old = self.box.root / "work" / "acme-atlas"
+            old.mkdir(parents=True)
+            self.assertExit(self.box.init(atlas=old), 0)
+            self.single(old)
+            moved = self.box.root / "moved" / "acme-atlas"
+            moved.parent.mkdir(parents=True)
+            shutil.move(str(old), str(moved))
+            out = self.cli("init", "--join", "--atlas", moved)
+            self.assertExit(out, 0)
+            self.assertSingle(moved)
+            data = self.config_json()
+            self.assertEqual((data.get("atlas_name"), data.get("selected_by")), ("acme", "single"))
+            self.assertEqual(data["values"]["atlas"], str(moved))
+
+        with self.subTest(caso="outra pasta da mesma organização"):  # Emenda v3, item 8
+            self.fresh()
+            first = self.make_atlas(self.box.root / "work" / "acme-first", "Acme")
+            second = self.make_atlas(self.box.root / "work" / "acme-second", "Acme")
+            self.single(first)
+            self.assertExit(self.cli("init", "--join", "--atlas", second), 0)
+            self.assertSingle(second)
+
+        with self.subTest(caso="--force de outra organização numa pasta configurada"):  # Emenda v3, item 9
+            self.fresh()
+            self.two_atlases(acme_credentials=A_CREDENTIALS)
+            out = self.cli("init", "--atlas", self.acme, "--org", "Initech", "--mode", "repo", "--force")
+            self.assertExit(out, 0)
+            data = parse(self.local)
+            self.assertEqual(sorted(data.get("atlases") or {}), ["acme", "globex"], "a pasta mantém o nome")
+            self.assertEqual(data["atlases"]["acme"], {"atlas": str(self.acme), "credentials": A_ONLY})
+
+        with self.subTest(caso="forma de um atlas só sem atlas:"):  # Emenda v3, item 10
+            self.fresh()
+            target = self.box.root / "work" / "acme-filled"
+            target.mkdir(parents=True)
+            self.box.write_local("credentials:\n  facts: {env: [A_TOKEN]}\n")
+            self.assertExit(self.box.init(atlas=target), 0)
+            self.assertSingle(target)
+
+
+@unittest.skipUnless(HAS_GIT, "git não está no PATH")
+class AtlasCiScriptTest(MultiAtlasCase):
+    def git(self, *args):
+        env = dict(os.environ, HOME=str(self.box.home), GIT_CONFIG_NOSYSTEM="1",
+                   GIT_AUTHOR_NAME="Teste", GIT_AUTHOR_EMAIL="teste@example.invalid",
+                   GIT_COMMITTER_NAME="Teste", GIT_COMMITTER_EMAIL="teste@example.invalid")
+        out = subprocess.run(["git", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", *args],
+                             cwd=self.globex, capture_output=True, text=True, env=env, check=False)
+        self.assertEqual(out.returncode, 0, output(out))
+        return out
+
+    def commit(self, message):
+        self.git("add", "-A")
+        self.git("commit", "-q", "--allow-empty", "-m", message)
+
+    def run_script(self, env):
+        environ = {k: v for k, v in os.environ.items() if k not in ("ATLAS_CONFIG_HOME", "ATLAS_NAME")}
+        environ.update(HOME=str(self.box.home), XDG_CONFIG_HOME=str(self.box.home / ".config"),
+                       TMPDIR=str(self.tmp), **env)
+        return subprocess.run(["bash", str(CI_SCRIPT)], cwd=self.globex, capture_output=True, text=True,
+                              env=environ, check=False, timeout=300)
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = self.box.root / "tmp"
+        self.tmp.mkdir()
+        self.acme = self.make_atlas(self.box.root / "work" / "acme-atlas", "Acme", service="payments-api")
+        # ERRO de lint só no acme: um lint que olhe o acme faz o script sair com 1
+        token = "gh" + "p_" + "A1b2" * 9
+        (self.acme / "process" / "notes.md").write_text(f"token colado: {token}\n", encoding="utf-8")
+        self.globex = self.make_atlas(self.box.root / "work" / "globex-atlas", "Globex", service="billing-api")
+        scratch = self.box.root / "scratch" / "globex-atlas"
+        self.assertExit(self.cli("vendor", "--ci", "generic", config_home=scratch), 0)
+        self.assertTrue((self.globex / CI_SCRIPT).is_file(), "fixture: vendor não gerou o script")
+        self.git("init", "-q")
+        self.commit("atlas globex")
+
+    def test_ci_script_always_scans_and_lints_the_atlas_of_the_repository(self):
+        """SPEC-0079:UT-10 — atlas-scan.sh com ATLAS_CONFIG_HOME já com acme (default) e com ATLAS_NAME=acme varre
+        globex; os modelos de CI passam --atlas "$PWD" em todo scan e lint."""
+        with self.subTest(caso="ATLAS_CONFIG_HOME com acme como default"):
+            preset = self.box.root / "preset"
+            self.box.write_local(fn("render_local_config")(str(self.acme), {}), config_home=preset)
+            out = self.run_script({"ATLAS_CONFIG_HOME": str(preset)})
+            self.assertNotIn("secret-leak", output(out), "o lint da CI olhou o atlas acme")
+            self.assertEqual(out.returncode, 10, f"o scan do globex muda a árvore e o lint do globex passa: "
+                                                 f"{output(out)}")
+            self.assertTrue((self.globex / "snapshots" / "facts.json").is_file(), output(out))
+            self.assertFalse((self.acme / "snapshots" / "facts.json").exists(), "a CI varreu o atlas acme")
+            self.git("checkout", "-q", "--", ".")
+            self.git("clean", "-qfd")
+
+        with self.subTest(caso="ATLAS_NAME=acme exportado"):
+            out = self.run_script({"ATLAS_NAME": "acme"})
+            self.assertNotIn("atlas não configurado", output(out), "ATLAS_NAME exportado não vence o atlas da CI")
+            self.assertNotEqual(out.returncode, 3, output(out))
+            self.assertIn(out.returncode, (0, 10), output(out))
+            self.assertTrue((self.globex / "snapshots" / "facts.json").is_file(), output(out))
+
+        for name in ("atlas-scan.sh", "github-atlas-scan.yml"):
+            with self.subTest(modelo=name):
+                lines = [line for line in (CI_ASSETS / name).read_text(encoding="utf-8").splitlines()
+                         if ATLAS_CALL.search(line) and not line.lstrip().startswith("#")]
+                self.assertTrue(lines, f"{name} sem scan nem lint")
+                self.assertEqual([line for line in lines if PINNED not in line], [],
+                                 f"todo scan e lint de {name} passa {PINNED}")
+
+
+class CollectorEnvironmentTest(MultiAtlasCase):
+    def test_collector_of_one_atlas_never_receives_variables_declared_only_by_another(self):
+        """SPEC-0079:IT-02 — Emenda v4: com A_TOKEN e B_TOKEN exportados, o coletor de globex recebe B_TOKEN e não
+        A_TOKEN (o coletor de teste grava só os nomes)."""
+        self.two_atlases(acme_credentials="\n      envspy: {env: [A_TOKEN]}",
+                         globex_credentials="\n      envspy: {env: [B_TOKEN]}")
+        (self.globex / "atlas-config.yml").write_text(spy_config("Globex"), encoding="utf-8")
+        seen = self.globex.parent / "globex-env-seen.txt"
+        env = {"A_TOKEN": "acme-test-value-0079", "B_TOKEN": "globex-test-value-0079"}
+        out = self.cli("scan", "--atlas", "globex", env=env)
+        self.assertExit(out, 0)
+        self.assertTrue(seen.is_file(), output(out))
+        names = seen.read_text(encoding="utf-8").split()
+        self.assertIn("B_TOKEN", names, "a variável declarada pelo atlas escolhido chega ao coletor")
+        self.assertNotIn("A_TOKEN", names, "a variável declarada só pelo outro atlas não chega ao coletor")
+        self.assertNotIn(env["A_TOKEN"], seen.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
