@@ -15,6 +15,8 @@ Todas têm `annotations.readOnlyHint: true` e `inputSchema` fechado (`additional
 | `atlas_context` | `query` (texto, 1 a 500, obrigatório), `hops` (0 a 2), `limit` (1 a 200), `max_chars` (500 a 200000) | `atlas.py context [--hops H] [--limit L] [--max-chars M] --json -- <palavras da query>` |
 | `atlas_lint` | `only` (lista de nomes de regra `[a-z-]+`) | `atlas.py lint --json [--only a,b]` |
 | `atlas_curate_list` | `status` (`inferred`, `confirmed` ou `rejected`) | `atlas.py curate list --json [--status S]` |
+
+As cinco `atlas_*` aceitam também `atlas` (texto opcional, 1 a 200 caracteres, sem nenhum caractere de controle, nem tab ou quebra de linha): o nome ou a pasta de um atlas desta máquina, passado colado à CLI como `--atlas=<valor>` (antes do `--` do `atlas_context`). Elas rodam a CLI com a pasta corrente em `<projeto>` (abaixo), então, sem `atlas`, vale a ordem de escolha da CLI naquela pasta: `ATLAS_NAME`, o atlas cujo `remotes:` casa o remote `origin` do projeto, o `default` e o único configurado (SPEC-0080, ADR-0021). Com vários atlas e nenhum escolhido (exit 2), a tool devolve `isError: true` com a mensagem da CLI.
 | `brain_config` | nenhum | `brain.py config --json` |
 | `brain_doctor` | nenhum | `brain.py doctor --json` |
 | `brain_search` | `query` (texto, 1 a 500, obrigatório), `context` (1 a 100), `type` (1 a 50), `tag` (1 a 100), `limit` (1 a 100) | `brain.py search [--context=C] [--type=T] [--tag=G] [--limit=L] --json -- <palavras da query>` |
@@ -31,7 +33,7 @@ Todas têm `annotations.readOnlyHint: true` e `inputSchema` fechado (`additional
 | `sdd_whats_new` | nenhum | `spec_graph.py --root <projeto> whats-new` |
 | `fermion_doctor` | nenhum | `scripts/fermion_doctor.py --project <projeto> --json` |
 
-Nas `sdd_*` e na `fermion_doctor`, `<projeto>` é o valor de `CLAUDE_PROJECT_DIR` quando a variável não está vazia, senão a pasta corrente do servidor. Os dois são lidos a cada chamada, nunca vêm do agente.
+Nas `atlas_*` (pasta corrente da CLI), nas `sdd_*` e na `fermion_doctor`, `<projeto>` é o valor de `CLAUDE_PROJECT_DIR` quando a variável não está vazia, senão a pasta corrente do servidor. Os dois são lidos a cada chamada, nunca vêm do agente.
 
 Como o resultado é montado:
 

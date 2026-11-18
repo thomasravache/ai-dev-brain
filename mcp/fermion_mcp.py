@@ -12,7 +12,8 @@ Cada tool vira uma linha de comando da CLI de uma skill (`atlas.py` da boson-atl
 servidor não importa código das skills e não interpreta a saída da CLI; só expõe leitura (confirmar ou rejeitar
 convenção é de pessoas, ADR-0012) e nunca pede notas confidenciais do cérebro (ADR-0014). Toda opção com valor
 das brain_* vai colada (--opção=valor) e o texto livre só depois de `--`. As sdd_* nunca gravam (sem --ack, --apply,
---create nem --out) e o projeto vem de CLAUDE_PROJECT_DIR ou do cwd do servidor, lidos a cada chamada. A
+--create nem --out) e o projeto vem de CLAUDE_PROJECT_DIR ou do cwd do servidor, lidos a cada chamada. As atlas_*
+rodam com cwd nessa pasta do projeto (o remote dela escolhe o atlas) e aceitam "atlas" (--atlas=valor, SPEC-0080). A
 fermion_doctor roda `scripts/fermion_doctor.py --project <projeto> --json` do plugin, que só lê (ADR-0019).
 
 stdout é reservado ao protocolo; diagnóstico vai para o stderr, sem argumentos nem saída da CLI.
@@ -73,6 +74,13 @@ LONE_SURROGATE = re.compile("[\ud800-\udfff]")
 READ_ONLY = {"readOnlyHint": True}
 # texto sem caracteres de controle, exceto tab, LF e CR (o mesmo padrão da query da SPEC-0054)
 TEXT_PATTERN = "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$"
+# atlas escolhido (nome ou caminho, SPEC-0080): nenhum caractere de controle, nem tab, LF ou CR, porque vira argv
+ATLAS_PATTERN = "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+ATLAS_PARAM = {"type": "string", "minLength": 1, "maxLength": 200, "pattern": ATLAS_PATTERN,
+               "description": ("Atlas a usar (nome da configuração local ou caminho), como --atlas da CLI. Sem ele, "
+                               "vale a ordem de escolha da CLI na pasta do projeto: ATLAS_NAME, remote do projeto, "
+                               "default, único.")}
+CHOICE_EXIT = 2  # vários atlas e nenhum escolhido (SPEC-0079): erro da tool com a mensagem da CLI
 RULE_NAMES = {"type": "array", "items": {"type": "string", "pattern": "^[a-z-]+$"},
               "description": "Só estas regras do lint (nomes em minúsculas com hífen)."}
 
@@ -91,6 +99,11 @@ def _text(low, high, description):
             "description": description}
 
 
+def _atlas_object(properties=None, required=None):
+    """Schema de uma tool atlas_*: as propriedades dela mais o parâmetro opcional "atlas" (SPEC-0080)."""
+    return _object(dict(properties or {}, atlas=ATLAS_PARAM), required)
+
+
 def _int(low, high, description):
     return {"type": "integer", "minimum": low, "maximum": high, "description": description}
 
@@ -107,20 +120,20 @@ TOOLS = (
     {
         "name": "atlas_config",
         "description": "Configuração efetiva do atlas da organização nesta máquina (atlas.py config --json).",
-        "inputSchema": _object(),
+        "inputSchema": _atlas_object(),
         "annotations": READ_ONLY,
     },
     {
         "name": "atlas_doctor",
         "description": "Diagnóstico do atlas: configuração, pasta, coletores e frescor (atlas.py doctor --json).",
-        "inputSchema": _object(),
+        "inputSchema": _atlas_object(),
         "annotations": READ_ONLY,
     },
     {
         "name": "atlas_context",
         "description": ("Contexto do atlas para uma consulta em texto livre: serviços, times, convenções e vizinhos "
                         "no grafo (atlas.py context --json)."),
-        "inputSchema": _object({
+        "inputSchema": _atlas_object({
             "query": {"type": "string", "minLength": 1, "maxLength": 500,
                       "pattern": TEXT_PATTERN,
                       "description": "Termos da consulta, separados por espaço (tab e quebra de linha contam como espaço)."},
@@ -137,7 +150,7 @@ TOOLS = (
         "name": "atlas_lint",
         "description": ("Checagens de qualidade do atlas (atlas.py lint --json). Achados de ERRO vêm no relatório, "
                         "não como erro da tool."),
-        "inputSchema": _object({
+        "inputSchema": _atlas_object({
             "only": RULE_NAMES,
         }),
         "annotations": READ_ONLY,
@@ -146,7 +159,7 @@ TOOLS = (
         "name": "atlas_curate_list",
         "description": ("Convenções do atlas e o estado de curadoria de cada uma (atlas.py curate list --json). "
                         "Confirmar ou rejeitar convenção é só de pessoas, fora do MCP."),
-        "inputSchema": _object({
+        "inputSchema": _atlas_object({
             "status": {"type": "string", "enum": ["inferred", "confirmed", "rejected"],
                        "description": "Só convenções neste estado."},
         }),
@@ -292,9 +305,9 @@ class ProtocolError(Exception):
         self.code, self.message, self.data = code, message, data
 
 
-def run_cli(argv, timeout):
+def run_cli(argv, timeout, cwd=None):
     """Único ponto que abre processo: argv em lista, sem shell, ambiente herdado. Não engole exceções."""
-    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False, cwd=cwd)
 
 
 def log(message):
@@ -476,12 +489,22 @@ def sdd_command_args(name, arguments):
 
 def command_args(name, arguments):
     """Argumentos da CLI (depois de `atlas.py`, `brain.py` ou `spec_graph.py`) para uma tool já validada."""
+    if name.startswith("atlas_"):
+        args = atlas_command_args(name, arguments)
+        if "atlas" in arguments:  # colado e antes do "--" do context: um valor com "-" nunca vira opção
+            args.insert(args.index("--") if "--" in args else len(args), f"--atlas={arguments['atlas']}")
+        return args
     if name.startswith("brain_"):
         return brain_command_args(name, arguments)
     if name.startswith("sdd_"):
         return ["--root", project_dir()] + sdd_command_args(name, arguments)
     if name == "fermion_doctor":
         return ["--project", project_dir(), "--json"]
+    raise ProtocolError(INVALID_PARAMS, f"tool desconhecida: {name}")
+
+
+def atlas_command_args(name, arguments):
+    """Argumentos da CLI (depois de `atlas.py`) para uma tool atlas_* já validada, sem o --atlas."""
     if name == "atlas_config":
         return ["config", "--json"]
     if name == "atlas_doctor":
@@ -550,6 +573,8 @@ def map_output(name, completed):
         return _text_result(stdout, False, _json_object(stdout))
     if code == NOT_CONFIGURED_EXIT:
         return _text_result(_with_stderr(BRAIN_NOT_CONFIGURED if brain else NOT_CONFIGURED, completed.stderr), True)
+    if code == CHOICE_EXIT and not brain and (completed.stderr or "").strip():
+        return _text_result(completed.stderr.strip(), True)
     script = "brain.py" if brain else "atlas.py"
     return _text_result(_with_stderr(f"{script} saiu com o código {code}", completed.stderr), True)
 
@@ -668,7 +693,10 @@ class Server:
             return _text_result(f"CLI {owner} não encontrada em {cli}", True)
         argv = [python_executable(), str(cli)] + args
         try:
-            completed = self.runner(argv, CLI_TIMEOUT)
+            if family == "atlas":  # a escolha do atlas (remote do projeto) depende da pasta (SPEC-0080)
+                completed = self.runner(argv, CLI_TIMEOUT, cwd=project_dir())
+            else:
+                completed = self.runner(argv, CLI_TIMEOUT)
         except subprocess.TimeoutExpired:
             log(f"{name}: timeout da CLI")
             return _text_result(timeout_text, True)

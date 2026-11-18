@@ -9,6 +9,17 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.11] - 2026-11-18
+
+### Added
+- Chave opcional `remotes:` no `atlas-config.yml` compartilhado: prefixos `host/caminho` dos repositórios da organização (`github.com/acme`). Cada item em minúsculas, sem esquema, `@`, `:`, espaço, `..` nem barra no início ou no fim; um item fora disso faz os comandos saírem com 2 citando o item, e o `lint` aponta o mesmo problema. `init --remote <prefixo>` (repetível) grava a lista no atlas novo; o modelo `assets/atlas-config.yml` traz o exemplo comentado (SPEC-0080, ADR-0021).
+- Passo "remote do projeto" na ordem de escolha, entre `ATLAS_NAME` e o `default`: o `origin` da pasta atual (`git config --get remote.origin.url`, só leitura, `GIT_OPTIONAL_LOCKS=0`, prazo de 5 s) normalizado para `host/caminho` em minúsculas, sem esquema, credenciais, porta nem `.git`, casado por segmentos inteiros com `remotes:` de cada atlas; vale o prefixo mais longo, e um empate pula o passo. `config --json` traz `"selected_by": "remote"` e o texto `escolhido por: remote do projeto`. Pasta sem git, sem `origin` ou sem `git` no `PATH` pula o passo sem erro; o remote e as credenciais dele nunca aparecem na saída (SPEC-0080, ADR-0021).
+- `doctor`: AVISO `remote do projeto` quando o remote da pasta casa com mais de um atlas no mesmo comprimento, só com os nomes dos atlas (SPEC-0080).
+- Tools MCP `atlas_*` com o parâmetro opcional `atlas` (`--atlas=<valor>`), rodando a CLI na pasta do projeto; o início da sessão diz qual atlas vale para o projeto e por quê (SPEC-0080).
+
+### Changed
+- **Atualize todas as máquinas antes de declarar `remotes:`:** a versão anterior (2026.11.10) ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: remotes`. Rollback: tire `remotes:` do `atlas-config.yml` (SPEC-0080).
+
 ## [2026.11.10] - 2026-11-18
 
 ### Added
