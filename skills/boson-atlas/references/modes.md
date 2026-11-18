@@ -135,8 +135,9 @@ Sem CI, quem garante é o aviso de envelhecimento: o `context` abre com `## Avis
 Revise o diff (`git diff`) e faça commit na pasta do atlas.
 
 Com vários atlas nesta máquina (SPEC-0079), diga qual cada agendamento roda: `atlas.py scan --atlas acme` (ou
-`ATLAS_NAME=acme`), um agendamento por atlas, cada um só com as credenciais daquele atlas. Sem escolha e sem
-`default`, o `scan` sai com 2.
+`ATLAS_NAME=acme`), um agendamento por atlas, cada um só com as credenciais daquele atlas. Os coletores não recebem as
+variáveis declaradas em `env` só por outros atlas; profiles e arquivos de credencial dependem do coletor
+(`references/config.md`). Sem escolha e sem `default`, o `scan` sai com 2.
 
 ## Duas organizações na mesma máquina
 
@@ -150,7 +151,10 @@ Cada organização tem o seu atlas, num modo ou noutro, e a máquina guarda os d
 4. Escolha por comando com `--atlas globex` ou `ATLAS_NAME=globex`; troque o padrão com `config --set-default globex`;
    `config --list` mostra os dois e qual vale agora.
 
-A CI de um atlas no modo repo não muda: o workflow liga só aquele atlas num `ATLAS_CONFIG_HOME` temporário.
+A CI de um atlas no modo repo varre sempre o atlas do repositório: o workflow e o `ci/atlas-scan.sh` passam
+`--atlas "$PWD"` em todo `scan` e `lint`, então um `ATLAS_CONFIG_HOME` que já tenha outro atlas (mesmo como `default`)
+ou um `ATLAS_NAME` exportado não mudam o atlas varrido. Arquivos de CI gerados antes desta versão: regrave com
+`vendor --ci <ci> --force` (ou acrescente `--atlas "$PWD"` à mão).
 
 ## Migração local → repositório
 

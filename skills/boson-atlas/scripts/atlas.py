@@ -647,7 +647,7 @@ def render_atlases(entries: dict, default) -> str:
         return render_local_config(entry_atlas(entry), entry.get("credentials") or {})
     data = {"default": default} if default else {}
     data["atlases"] = {name: {"atlas": entry_atlas(entry), "credentials": entry.get("credentials") or {}}
-                       for name, entry in entries.items()}
+                       for name, entry in sorted(entries.items())}
     return LOCAL_HEADER + dump_yaml(data)
 
 
@@ -676,7 +676,8 @@ def updated_local(atlas_path: str, name, organization, make_default=False) -> di
 
     Compatibility with the one-atlas form (ADR-0020, SPEC-0070 UT-03/UT-04): without --name, when the only entry
     has the derived name, init/init --join of another folder re-points that entry (as the previous version did,
-    credentials kept) instead of failing; a second atlas of another organization is added."""
+    credentials kept) instead of failing; a second atlas of another organization is added. The same happens when the
+    folder of the only entry is gone or its organization cannot be read (an atlas moved with mv, SPEC-0079 v4)."""
     if name not in (None, "") and not ATLAS_NAME_RE.match(name):
         raise AtlasError(f"--name inválido: {name} — use [a-z0-9][a-z0-9-]{{0,62}}", 2)
     read = local_config_path()  # full configuration, maybe from the old folder
@@ -687,7 +688,9 @@ def updated_local(atlas_path: str, name, organization, make_default=False) -> di
     repoint = False
     if name in (None, ""):
         name = same[0] if same else atlas_name_of(organization)
-        repoint = config["form"] == "single" and not same and name in entries  # same organization, other folder
+        only = entry_atlas(next(iter(entries.values()), {}))
+        lost = bool(only) and organization_of(only) is None  # moved with mv (or unreadable): nothing to keep apart
+        repoint = config["form"] == "single" and not same and (name in entries or lost)  # same org, other folder
     if config["form"] == "single" and (repoint or not entry_atlas(next(iter(entries.values()), {}))):
         entries = {name: next(iter(entries.values()))}  # this init fills or re-points it (credentials kept)
         same = [name]
@@ -1200,14 +1203,14 @@ def _kill(proc) -> None:
         pass
 
 
-def run_collector(argv, timeout=COLLECTOR_TIMEOUT) -> tuple:
+def run_collector(argv, timeout=COLLECTOR_TIMEOUT, env=None) -> tuple:
     """The only function of atlas.py that runs an external process (ADR-0010): argv as a list, never a shell, in a
     temporary folder and its own process group, with a timeout (the whole group is killed when it expires) and the
-    output captured. Returns (stdout, stderr); exit ≠ 0, timeout or missing executable = CollectorError."""
+    output captured; env = its environment (None = this process's). Returns (stdout, stderr); exit ≠ 0, timeout or missing executable = CollectorError."""
     with tempfile.TemporaryDirectory(prefix="atlas-collector-") as tmp:
         try:
             proc = subprocess.Popen(argv, cwd=tmp, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
+                                    stderr=subprocess.PIPE, encoding="utf-8", errors="replace", env=env,
                                     start_new_session=os.name != "nt")
         except FileNotFoundError as e:
             raise CollectorError(f"executável não encontrado: {argv[0]}") from e
@@ -1272,7 +1275,7 @@ def identity_violations(data, collector: dict) -> list:
     return []
 
 
-def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
+def scan_one(collector: dict, atlas: Path, extras: list, today: str, env=None) -> dict:
     """Runs, validates, redacts, normalizes and writes one collector; returns its report (never raises for a
     failure of the collector: the previous snapshot is kept)."""
     cid = collector["id"]
@@ -1280,7 +1283,7 @@ def scan_one(collector: dict, atlas: Path, extras: list, today: str) -> dict:
               "redacted": 0, "diff": None}
     try:
         argv = resolve_command(collector["command"], SKILL_DIR, atlas)
-        stdout, _ = run_collector(argv, collector["timeout"])
+        stdout, _ = run_collector(argv, collector["timeout"], env)
     except CollectorError as e:
         report["reason"] = _redact_text(e.reason, extras)[0]
         report["stderr"] = stderr_tail(e.stderr, extras)
@@ -1357,6 +1360,28 @@ def scan_config(choice=None):
     return Path(atlas), read_yaml(shared_path)
 
 
+def declared_env_names(entry) -> set:
+    """Variable names declared (env) in the credentials of one entry of the local layer, whatever the collector."""
+    credentials = entry.get("credentials") if isinstance(entry, dict) else None
+    if not isinstance(credentials, dict):
+        return set()
+    return {n for value in credentials.values() for n in env_names(value) if isinstance(n, str) and n}
+
+
+def collector_environment(choice=None) -> dict:
+    """Environment of the collectors of the chosen atlas (SPEC-0079 v4): this process's environment without the
+    variables declared (env) only in the credentials of other atlases; a name also declared by the chosen atlas
+    stays. Profiles and credential files are not touched: they depend on each collector's configuration."""
+    config, name, _ = chosen_atlas(choice=choice)
+    mine = declared_env_names(config["entries"][name])
+    others = set()
+    for other, entry in config["entries"].items():
+        if other != name:
+            others |= declared_env_names(entry)
+    hidden = others - mine
+    return {k: v for k, v in os.environ.items() if k not in hidden}
+
+
 def selected_collectors(collectors: list, only) -> list:
     if not only:
         return [c for c in collectors if c["enabled"]]
@@ -1397,8 +1422,9 @@ def cmd_scan(only=None, as_json=False, choice=None):
     state = state if isinstance(state, dict) else {}
     today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     reports = []
+    env = collector_environment(choice)
     for collector in selected:
-        report = scan_one(collector, atlas, extras, today)
+        report = scan_one(collector, atlas, extras, today, env)
         previous = state.get(collector["id"]) if isinstance(state.get(collector["id"]), dict) else {}
         if report["status"] == "ok":
             state[collector["id"]] = {"seen_at": today, "status": "ok", "entities": report["entities"],

@@ -38,7 +38,9 @@ atlases:
 
 - A forma de um atlas só (`atlas:` + `credentials:`) continua valendo e é a gravada enquanto houver um atlas. O nome dessa entrada é a `organization` do `atlas-config.yml` em minúsculas, com o que não for `[a-z0-9-]` trocado por `-` (vários `-` viram um, sem `-` nas pontas, até 63 caracteres; `Acme Corp` → `acme-corp`); se a `organization` não puder ser lida, o nome é `default`.
 - As duas formas no mesmo arquivo, um nome inválido, um `default` que não está em `atlases` ou uma chave desconhecida numa entrada (só `atlas` e `credentials`) fazem todos os comandos saírem com 2, citando a chave.
-- As credenciais de um atlas nunca são usadas por outro: `scan`, `config` e `doctor` leem só as do atlas escolhido.
+- As credenciais de um atlas nunca são usadas por outro: `scan`, `config` e `doctor` leem e checam só as do atlas escolhido.
+- O que o isolamento cobre: no `scan`, os coletores recebem o ambiente do shell **sem** as variáveis declaradas em `env` só nas credenciais de outros atlas (uma variável declarada também pelo atlas escolhido continua). Variáveis que nenhum atlas declara chegam como antes. Credenciais por `profile` ou por arquivo (por exemplo `~/.aws/credentials` ou o login do `gh`) não são isoladas pelo `atlas.py`: dependem da configuração de cada coletor, então aponte o coletor de cada atlas para o seu profile.
+- A forma de vários atlas é gravada com as entradas em ordem de nome.
 
 ### Ordem de escolha
 
@@ -58,7 +60,7 @@ Um nome ou uma pasta que não está no `config.yml` sai com 3: `atlas não confi
 
 - `init --atlas <pasta> --org O --mode M [--name N] [--default]` e `init --join --atlas <pasta> [--name N] [--default]` acrescentam ou atualizam a entrada `N` sem mudar as outras. Sem `--name`, vale o nome que a pasta já tem nesta máquina, senão o nome derivado da `organization`. A primeira entrada vira o `default`; `--default` torna `N` o padrão. Uma entrada nova começa com `credentials: {}`; o mesmo nome e a mesma pasta atualizam a entrada e mantêm as credenciais dela.
 - Um nome já usado por outra pasta, ou uma pasta já configurada com outro nome, sai com 2 sem mudar o arquivo.
-- Com um atlas só e sem `--name`, o `init`/`init --join` de outra pasta da mesma organização (mesmo nome derivado) só troca a pasta da entrada, como na versão anterior.
+- Com um atlas só e sem `--name`, o `init`/`init --join` de outra pasta da mesma organização (mesmo nome derivado) só troca a pasta da entrada, como na versão anterior. O mesmo vale quando a pasta da única entrada não existe mais ou a `organization` dela não pode ser lida (o atlas foi movido com `mv`): a entrada é reapontada, mantém as credenciais e nenhum `.bak` é gravado.
 - Ao passar da forma de um atlas só para a de vários, o `init` guarda o arquivo anterior em `config.yml.bak` (ou `.bak.1`, `.bak.2`…).
 - `config --list [--json]` lista todos os atlas (nome, pasta, `organization` e `[default]`) e, na última linha, qual seria escolhido agora (`escolhido: acme (default)`) ou `escolhido: nenhum`; não falha com vários atlas sem escolha. O `--json` imprime `{"atlases": [{"name", "atlas", "default", "organization"}], "atlas_name", "selected_by"}`.
 - `config --set-default <nome>` grava o `default`; um nome que não existe sai com 2, e com um atlas só o arquivo não muda.
