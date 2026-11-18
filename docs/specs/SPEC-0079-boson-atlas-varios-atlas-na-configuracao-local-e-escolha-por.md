@@ -251,11 +251,14 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=53, skipped=1)) — c948e4c | 2026-11-18 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — d560a70 | 2026-11-18 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 5d430cf | 2026-11-18 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | rodada 1: CHANGES_REQUESTED — 2 major (mv + join cria entrada quebrada; CI do atlas pode varrer o atlas errado com ATLAS_CONFIG_HOME/ATLAS_NAME), 3 minor (isolamento de env dos coletores, ordem de gravação, testes da Emenda v3) | 2026-11-18 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-18 — rodada 1: CHANGES_REQUESTED — 2 major (mv + join cria entrada quebrada; CI do atlas pode varrer o atlas errado com ATLAS_CONFIG_HOME/ATLAS_NAME), 3 minor (isolamento de env dos coletores, ordem de gravação, testes da Emenda v3) — 1e336c4
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
