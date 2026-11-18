@@ -260,7 +260,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=4)) — ffa2016 | 2026-11-18 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — fef4163 | 2026-11-18 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 9d183ad | 2026-11-18 |
-| G4 Review | FAIL | rodada 2: CHANGES_REQUESTED — 1 major (userinfo sem esquema e query/fragment não mascarados), 1 minor (item válido aceita ?, # e =) | 2026-11-18 |
+| G4 Review | FAIL | rodada 3: CHANGES_REQUESTED — 1 major (? ou # dentro da senha deixa sair parte dela na máscara) | 2026-11-18 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -271,6 +271,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - G2 PASS 2026-11-18 — depois de 1 reprovação(ões)
 - G4 FAIL 2026-11-18 — rodada 1: CHANGES_REQUESTED — 1 blocker de processo (arquivo fora de touches), 2 major (item de remotes com token sem máscara; remotes inválido num atlas derruba os outros), 5 minor — f95ff16
 - G4 FAIL 2026-11-18 — rodada 2: CHANGES_REQUESTED — 1 major (userinfo sem esquema e query/fragment não mascarados), 1 minor (item válido aceita ?, # e =) — 89bb1a5
+- G4 FAIL 2026-11-18 — rodada 3: CHANGES_REQUESTED — 1 major (? ou # dentro da senha deixa sair parte dela na máscara) — 7eac523
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
