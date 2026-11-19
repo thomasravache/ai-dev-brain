@@ -262,8 +262,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [x] Green: `remotes:` (validação, `init --remote`, modelo), passo do remote em `project_remote_choice`, aviso de empate no `doctor`; parâmetro `atlas` e `cwd` do projeto nas tools `atlas_*`; linha do hook; docs, CHANGELOG, `ATLAS_VERSION` e `plugin.json`
 - [x] Validar: suíte completa + arquitetura (G2/G3)
 - [x] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega, docs e CHANGELOG (G7)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega, docs e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -297,37 +297,84 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- **Escolha pelo remote:** o projeto usa o atlas da sua organização sem nenhuma opção. A chave `remotes:` do `atlas-config.yml` compartilhado declara os prefixos (`github.com/acme`), e a CLI casa o `origin` da pasta atual por segmentos inteiros. Vale o prefixo mais longo, e um empate cai no `default` com aviso do `doctor`. A ordem fica `--atlas` → `ATLAS_NAME` → remote do projeto → `default` → atlas único.
+- **Tools MCP:** as cinco tools `atlas_*` aceitam o parâmetro `atlas`, passado como `--atlas=<valor>` e recusando caractere de controle. Elas rodam na pasta do projeto quando ela existe.
+- **Início da sessão:** o hook diz qual atlas vale para o projeto e por quê. Com vários atlas e nenhum escolhido, diz o passo. Com um atlas só, a linha não muda.
+- **Robustez e privacidade:**
+  - um atlas com `remotes:` inválido não derruba os outros;
+  - mensagens sobre um item inválido citam só a posição e o motivo, nunca o item (Emenda v5, decisão do IMP-01);
+  - o remote e as credenciais dele nunca aparecem na saída;
+  - pasta removida, `git` ausente e `CLAUDE_PROJECT_DIR` inexistente pulam o passo sem erro.
+- **Docs e versões:** `init --remote`, `references/config.md`, `references/modes.md`, `mcp/README.md`, CHANGELOG `[2026.11.11]` (com o aviso de atualizar todas as máquinas antes de declarar `remotes:`), `ATLAS_VERSION` 2026.11.11 e o plugin 2026.11.23.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **Testes:**
+  - b1b769a: caracterização (CH-01);
+  - f730c46: plano;
+  - fb2ee85: ajuste de dois testes antigos ao contrato da SPEC-0079;
+  - 0b21d2c: Emenda v3;
+  - 15b48f6: Emenda v4;
+  - c6d9fd0: Emenda v5.
+- **Implementação:**
+  - 8945fa1: `remotes:`, `project_remote_choice`, MCP e hook;
+  - 8d95eb7: Emenda v3;
+  - 3ab88b5: Emenda v4;
+  - 687f10e: Emenda v5, em que a máscara saiu e as mensagens passaram a citar posição e motivo.
+- **Emendas:**
+  - v2: esclarecimentos do test-writer;
+  - v3: achados da rodada 1 do G4, com `touches` ganhando `tests/plugin/**`;
+  - v4: máscara sempre aplicada;
+  - v5: decisão de thomas no IMP-01.
+- **Revisão G4:**
+  - rodadas 1 a 3: CHANGES_REQUESTED, sempre por vazamento de token em itens inválidos de `remotes:`;
+  - impedimento IMP-01 (falha), resolvido por thomas em 2026-11-19 ("Não citar o item");
+  - rodada 4: APPROVED, sem nenhum texto de item em 19 casos adversariais.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Hook e tools `atlas_*` com um atlas iguais à versão anterior | PASS | `test_atlas_remote_server.py`, `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-01 | Remote casa com o `remotes:` de um atlas | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-02 | Normalização do remote sem credenciais | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-03 | Segmento inteiro, prefixo mais longo, empate | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-04 | `--atlas` e `ATLAS_NAME` vencem o remote | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-05 | Sem git, sem `origin`, sem `git` no PATH | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-06 | Aviso de empate no `doctor` | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-07 | `remotes:` inválido com posição e motivo; `init --remote` | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-08 | Parâmetro `atlas` das tools MCP | PASS | `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| UT-09 | Linhas do hook | PASS | `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
+| UT-10 | Token de item inválido não sai em nenhuma saída | PASS | `test_atlas_remotes.py`, `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| UT-11 | Atlas com `remotes:` inválido não derruba os outros | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-12 | Casos de borda da Emenda v3 | PASS | `test_atlas_remotes.py`, `test_atlas_remote_server.py`, `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
+| UT-13 | Itens com token sem esquema, query, fragmento; `?`, `#`, `=` recusados | PASS | `test_atlas_remotes.py`, `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| IT-01 | CLI escolhe o atlas certo em cada repositório | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| IT-02 | Servidor MCP por stdio escolhe pelo remote | PASS | `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| CT-01 | Hook e MCP leem o contrato SPEC-0079@1 mais `remote` | PASS | `test_atlas_remote_server.py`, `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
+| E2E-01 | Jornada com duas organizações: hook, `atlas_context` e default | PASS | `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 4
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0021
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — privacidade (UT-02, UT-10, UT-13), resiliência (UT-05, UT-11, UT-12), prazo do git (UT-05)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — `selected_by`, aviso do `doctor`, motivo no hook; rollback no CHANGELOG
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — `ATLAS_VERSION` 2026.11.11, plugin 2026.11.23, PR #57.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Ficam como nits sem spec:
+- uma fixture de teste do hook (`INVALID_CHOSEN_CLI`) ainda mostra o formato antigo da mensagem (só stderr falso);
+- os minors da SPEC-0079 continuam valendo.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0080`. -->
