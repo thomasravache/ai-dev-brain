@@ -435,11 +435,8 @@ def validate_ci(ci) -> None:
         raise AtlasError("ci.schedule precisa ser uma expressão cron de 5 campos (ex.: \"0 6 * * 1\")", 2)
 
 
-REMOTES_PROBLEM = ("remotes aceita só prefixos host/caminho em minúsculas, sem esquema, \"@\", \":\", \"?\", \"#\", "
-                   "\"=\", espaço, caractere de controle, \"..\" nem barra no início ou no fim (ex.: github.com/acme)")
-
-
-SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:/+")  # https://, ssh://, and a malformed https:/
+SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")  # https://, ssh://, git+ssh://
+REMOTES_HINT = "use host/caminho, como github.com/acme"
 
 
 def is_control(c: str) -> bool:
@@ -447,47 +444,42 @@ def is_control(c: str) -> bool:
     return ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F
 
 
-def masked_remote_item(item) -> str:
-    """An item of `remotes:` as it may appear in a message (SPEC-0080, Emenda v3 items 7 and 13, Emenda v4 item 14):
-    whatever follows "?" or "#" becomes ***, any userinfo becomes ***@ (https://***@host/..., ***@host:g/r), with or
-    without a scheme and with or without ":", and control characters are escaped (\\xNN), so no token nor raw escape
-    sequence leaves the CLI. The mask covers up to the last "@" (a superset of the userinfo before the first "/")."""
-    text = str(item)
-    cut = min((i for i in (text.find("?"), text.find("#")) if i >= 0), default=-1)
-    if cut >= 0:
-        text = text[:cut + 1] + "***"
-    scheme = SCHEME_RE.match(text)
-    head = scheme.group(0) if scheme else ""
-    rest = text[len(head):]
-    if "@" in rest:
-        rest = "***@" + rest.rsplit("@", 1)[1]
-    return "".join(f"\\x{ord(c):02x}" if is_control(c) else c for c in head + rest)
-
-
-def remote_item_problem(item) -> bool:
-    """True when an item of `remotes:` is not a lowercase host/path prefix (SPEC-0080); "?", "#" and "=" are refused
-    too, since they never match a normalized remote and may carry a token (Emenda v4, item 15)."""
-    if not isinstance(item, str) or not item or item != item.lower():
-        return True
-    if any(is_control(c) for c in item):
-        return True
-    if any(c in item for c in "@:\\?#=") or any(c.isspace() for c in item) or ".." in item:
-        return True
-    if item.startswith(("/", "~")) or item.endswith("/"):
-        return True
-    return any(segment in ("", ".") for segment in item.split("/"))
+def remote_item_problem(item):
+    """Reason why an item of `remotes:` is not a lowercase host/path prefix, the first that applies (SPEC-0080,
+    Emenda v5 item 17), or None for a valid item. The reason is fixed text and never quotes the item (item 16)."""
+    if not isinstance(item, str):
+        return "não é texto"
+    if not item:
+        return "vazio"
+    if SCHEME_RE.match(item):
+        return "tem esquema (ex.: https://)"
+    if "@" in item:
+        return "tem credenciais (@)"
+    if any(c in item for c in "?#="):
+        return "tem ? , # ou ="
+    if ":" in item:
+        return "tem : (porta ou formato scp)"
+    if any(is_control(c) or c.isspace() for c in item):
+        return "tem espaço ou caractere de controle"
+    if item != item.lower():
+        return "tem maiúsculas"
+    if (item.startswith(("/", "~")) or item.endswith("/") or "\\" in item or ".." in item
+            or any(segment in ("", ".", "..") for segment in item.split("/"))):
+        return "tem barra no início ou no fim, // ou segmento . ou .."
+    return None
 
 
 def validate_remotes(remotes) -> list:
-    """remotes = [host/path, ...] of atlas-config.yml (SPEC-0080): the list, or AtlasError (code 2) naming the
-    first invalid item."""
+    """remotes = [host/path, ...] of atlas-config.yml (SPEC-0080): the list, or AtlasError (code 2) with the
+    position (from 1) and the reason of the first invalid item, never its text (Emenda v5)."""
     if remotes in ("", None):
         return []
     if not isinstance(remotes, list):
         raise AtlasError("remotes precisa ser uma lista de prefixos host/caminho (ex.: [github.com/acme])", 2)
-    for item in remotes:
-        if remote_item_problem(item):
-            raise AtlasError(f"item inválido em remotes: {masked_remote_item(item)} — {REMOTES_PROBLEM}", 2)
+    for position, item in enumerate(remotes, start=1):
+        reason = remote_item_problem(item)
+        if reason:  # position and reason only: no text of the item, masked or not (Emenda v5, item 16)
+            raise AtlasError(f"remotes: item {position} inválido — {reason}; {REMOTES_HINT}", 2)
     return list(remotes)
 
 
