@@ -290,7 +290,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
-| IMP-01 | 2026-11-18 | G4 | falha | 3 reprovações seguidas do G4, todas na máscara de itens inválidos de remotes: cada regra de máscara nova deixa outra forma de token passar | Emendas v3 (máscara com esquema) e v4 (máscara sempre, query e fragment); rodada 3 achou ? ou # dentro da senha | thomas |  |  |
+| IMP-01 | 2026-11-18 | G4 | falha | 3 reprovações seguidas do G4, todas na máscara de itens inválidos de remotes: cada regra de máscara nova deixa outra forma de token passar | Emendas v3 (máscara com esquema) e v4 (máscara sempre, query e fragment); rodada 3 achou ? ou # dentro da senha | thomas | Emenda v5 — decisão de thomas em 2026-11-19: as mensagens de remotes citam só a posição e o motivo, nunca o item | 2026-11-19 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
