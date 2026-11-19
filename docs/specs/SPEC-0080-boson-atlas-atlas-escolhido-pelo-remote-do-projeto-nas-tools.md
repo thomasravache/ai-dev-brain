@@ -147,6 +147,19 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 14. **Máscara sempre aplicada:** toda mensagem que cita um item de `remotes:` mostra `***@` no lugar de tudo o que vem antes do último `@` (depois do esquema), com ou sem esquema e com ou sem `:` (`TOK@github.com/acme` → `***@github.com/acme`, `git@host:g/r` → `***@host:g/r`). Também troca o que vem depois de `?` ou `#` por `***`. O UT-07 deixa de esperar `user@github.com/acme` sem máscara.
 15. **Item com `?`, `#` ou `=`:** é recusado (exit 2), porque nunca casaria com um remote normalizado e poderia carregar um token.
 
+**Decisão do impedimento IMP-01 (Emenda v5, thomas, 2026-11-19):**
+16. **Mensagens sobre `remotes:` não citam o item.** Toda mensagem sobre um item inválido diz só a posição (a partir de 1) e o motivo, por exemplo `remotes: item 2 inválido — tem esquema (https://); use host/caminho, como github.com/acme`. Isso vale para CLI, `doctor`, `lint` e, por consequência, MCP. Nenhum texto do item aparece em nenhuma saída, mascarado ou não. Esta regra substitui os itens 7 e 14: a máscara deixa de existir nas mensagens de `remotes:`.
+17. **Motivos, um por item (o primeiro que se aplica):**
+    - `tem esquema`
+    - `tem credenciais (@)`
+    - `tem ? , # ou =`
+    - `tem : (porta ou formato scp)`
+    - `tem espaço ou caractere de controle`
+    - `tem maiúsculas`
+    - `tem barra no início ou no fim, // ou segmento . ou ..`
+    - `vazio`
+    - `não é texto`
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -319,6 +332,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0080`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-19 | Emenda v5: as mensagens sobre `remotes:` citam só a posição e o motivo, nunca o item; a máscara (itens 7 e 14) sai; UT-07, UT-10 e UT-13 passam a conferir a posição e o motivo e a ausência de qualquer texto do item | IMP-01 (falha): 3 reprovações seguidas do G4, cada regra de máscara deixava outra forma de token passar; decisão de thomas em 2026-11-19 ("Não citar o item") | nenhuma | thomas, 2026-11-19 |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v4: a máscara de userinfo vale sempre (com e sem esquema), e query/fragment também viram `***`; itens com `?`, `#` ou `=` são recusados; UT-07 ajustado; UT-13 novo | G4 rodada 2 (1 major, 1 minor): `TOK@github.com/acme` e `?access_token=` ainda saíam sem máscara | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v3: item inválido de `remotes:` mascarado; atlas com `remotes:` inválido não derruba os outros (AVISO no `doctor`); hook só diz "nenhum escolhido" com `atlas_name` nulo; README; `CLAUDE_PROJECT_DIR` inexistente e pasta removida pulam o passo; caractere de controle recusado; `touches` ganha `tests/plugin/**`; UT-10 a UT-12 novos | G4 rodada 1 (1 blocker de processo, 2 major, 5 minor) | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
 | 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece de onde o hook tira os nomes no exit 2 (`config --list --json`), o formato e os textos do motivo, a recusa de qualquer caractere de controle no parâmetro `atlas`, o `--atlas=<valor>` colado e onde `remotes:` é validado | G1 (test-writer): seis pontos sem definição no contrato | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
