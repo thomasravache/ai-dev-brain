@@ -9,6 +9,14 @@ sdd-config; o spec_graph.py não chama o atlas (ADR-0001, ADR-0010). Por isso os
   (missing_config_keys, SPEC-0013); o comentário em linha não é lido.
 - UT-02: a seção DISCOVER do SKILL.md cita `org_context` e `atlas.py context`.
 
+SPEC-0081 (vários atlas por máquina, contrato SPEC-0079@1): o DISCOVER passa o `org_context` (nome do atlas ou
+caminho) como `--atlas` ao `atlas.py config --json` e ao `context`, trata o exit 3 com `init --join ... --name` e, sem
+`org_context`, relata `atlas_name`/`selected_by`. Sai a comparação manual de caminhos e o conselho de trocar
+`ATLAS_CONFIG_HOME`; os testes da SPEC-0041 que exigiam isso foram ajustados.
+
+- UT-01: o item "Org context" do SKILL.md e o "Organization context" do references/brownfield.md seguem o texto novo.
+- UT-02: o `whats-new` mostra `org_context` com o comentário novo (nome do atlas ou caminho relativo/~, nunca absoluto).
+
 Os testes de CLI rodam em repositórios temporários com o registro do usuário isolado (SDD_CONFIG_HOME).
 """
 import os
@@ -86,6 +94,24 @@ def paragraphs(text: str) -> list:
     return blocks
 
 
+def org_context_item(text: str, marker: str) -> str:
+    """Item de lista de topo que começa com `marker` (ex.: "- **Org context:**"), com seus subitens e continuações."""
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith(marker)), None)
+    if start is None:
+        raise AssertionError(f"item {marker!r} não encontrado")
+    end = next((i for i in range(start + 1, len(lines))
+                if lines[i].startswith(("- ", "#")) or (lines[i].strip() and not lines[i][0].isspace())), len(lines))
+    return "\n".join(lines[start:end])
+
+
+def org_context_texts() -> dict:
+    """{origem: texto} das instruções de contexto da organização no SKILL.md e no references/brownfield.md."""
+    brownfield = (SKILL / "references" / "brownfield.md").read_text(encoding="utf-8")
+    return {"SKILL.md": org_context_item(discover_section(), "- **Org context:**"),
+            "references/brownfield.md": org_context_item(brownfield, "- **Organization context:**")}
+
+
 class TemplateKeyTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp()).resolve()
@@ -127,8 +153,9 @@ class DiscoverInstructionTest(unittest.TestCase):
             self.assertIn(fragment, section, f"seção DISCOVER do SKILL.md não cita {fragment!r}")
 
     def test_atlas_identity_is_checked_against_local_org_atlas_config(self):
-        """SPEC-0041:UT-02 (revisão G4 M1: `atlas.py context` lê o atlas da config local da boson-atlas; o DISCOVER
-        confere `atlas.py config --json` contra `org_context` e o modelo diz que a config local decide o atlas lido)"""
+        """SPEC-0041:UT-02 (revisão G4 M1: o DISCOVER confere o atlas com `atlas.py config --json` junto com
+        `org_context`). Ajustado pela SPEC-0081: o atlas não é mais comparado à mão com a config local; o
+        `org_context` vai como `--atlas` (coberto por SPEC-0081:UT-01)."""
         section = discover_section()
         self.assertIn("atlas.py config", section, "seção DISCOVER do SKILL.md não cita 'atlas.py config'")
         near = [para for para in paragraphs(section) if "atlas.py config" in para]
@@ -137,14 +164,48 @@ class DiscoverInstructionTest(unittest.TestCase):
 
         comments = dict(sg.missing_config_keys(TEMPLATE.read_text(encoding="utf-8"), {}))
         self.assertIn("org_context", comments, "references/sdd-config.template.yml sem a chave org_context")
-        comment = re.sub(r"sdd-config", "", comments["org_context"])
-        self.assertIn("atlas", comment, f"comentário de org_context sem 'atlas': {comment!r}")
-        self.assertRegex(comment, r"\bconfig", "comentário de org_context não diz que a config local da boson-atlas "
-                         f"decide o atlas lido: {comment!r}")
+        self.assertIn("atlas", comments["org_context"], f"comentário de org_context sem 'atlas': {comments['org_context']!r}")
 
         brownfield = (SKILL / "references" / "brownfield.md").read_text(encoding="utf-8")
         self.assertIn("atlas.py config", brownfield, "references/brownfield.md não cita 'atlas.py config'")
 
+
+class AtlasSelectionInstructionTest(unittest.TestCase):
+    def test_org_context_is_passed_as_atlas_option(self):
+        """SPEC-0081:UT-01 — SKILL.md e brownfield.md: `config --json --atlas <org_context>` e
+        `context --atlas <org_context>`, exit 3 com `init --join ... --name`, `atlas_name`/`selected_by` sem
+        `org_context` e nada de `ATLAS_CONFIG_HOME` como saída."""
+        for origin, text in org_context_texts().items():
+            with self.subTest(arquivo=origin):
+                self.assertRegex(text, r"atlas\.py config --json --atlas [\"'<]*org_context",
+                                 f"{origin}: não manda rodar `atlas.py config --json --atlas <org_context>`")
+                self.assertRegex(text, r"atlas\.py context --atlas [\"'<]*org_context",
+                                 f"{origin}: não manda rodar `atlas.py context --atlas <org_context>`")
+                exit3 = [para for para in paragraphs(text) if re.search(r"\b[Ee]xit 3\b", para)]
+                self.assertTrue(any(re.search(r"init --join --atlas \S+ --name\b", para) for para in exit3),
+                                f"{origin}: exit 3 sem o passo `atlas.py init --join --atlas <caminho> --name <nome>`")
+                self.assertTrue(any("atlas_name" in para and "selected_by" in para for para in paragraphs(text)),
+                                f"{origin}: não cita `atlas_name` e `selected_by` (caso sem org_context)")
+                self.assertNotIn("ATLAS_CONFIG_HOME", text,
+                                 f"{origin}: ainda cita ATLAS_CONFIG_HOME como saída (comparação manual removida)")
+
+    def test_whats_new_shows_new_org_context_comment(self):
+        """SPEC-0081:UT-02 — projeto sem org_context: o whats-new mostra a chave com o comentário novo (nome do
+        atlas, recomendado, ou caminho relativo ou com ~, nunca absoluto)."""
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        p = Project(tmp / "projeto")
+        res = p.run("whats-new")
+        out = res.stdout + res.stderr
+        self.assertEqual(res.returncode, 0, out)
+        lines = [line for line in new_keys(res.stdout) if line.startswith("- org_context:")]
+        self.assertEqual(len(lines), 1, f"org_context fora das configurações novas:\n{out}")
+        comment = re.sub(r"[\"'`]", "", lines[0][len("- org_context:"):]).strip()
+        self.assertIn("nome do atlas", comment, f"comentário de org_context sem 'nome do atlas': {comment!r}")
+        self.assertRegex(comment, r"caminho relativo\s*(?:/|ou com)\s*~",
+                         f"comentário de org_context sem 'caminho relativo ou com ~': {comment!r}")
+        self.assertRegex(comment, r"\bnunca\b[^.]*\babsoluto",
+                         f"comentário de org_context não proíbe caminho absoluto: {comment!r}")
 
 if __name__ == "__main__":
     unittest.main()
