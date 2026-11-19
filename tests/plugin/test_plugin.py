@@ -517,6 +517,19 @@ class PluginEntryPointsContractTest(unittest.TestCase):
                         "o roteiro tem de conferir o atlas pela CLI (`atlas.py config --json`) quando o contexto "
                         "da sessão não diz nada (Emenda v2)")
 
+    def test_deliver_passes_org_context_as_atlas_and_asks_on_exit_2(self):
+        """SPEC-0081:UT-03 — commands/deliver.md, passo 2: usa o `org_context` do projeto como `--atlas` e, no
+        exit 2 (vários atlas sem escolha), pergunta à pessoa qual atlas usar, sem adivinhar."""
+        body = markdown_body(read_repo_file(self, "commands/deliver.md"))
+        step = next((line for line in body.splitlines() if re.match(r"^2\.\s", line)), None)
+        self.assertIsNotNone(step, "commands/deliver.md sem o passo 2")
+        self.assertIn("--atlas", step, "passo 2 não passa `--atlas` ao atlas.py")
+        self.assertRegex(step, r"--atlas[^\n]*org_context|org_context[^\n]*--atlas",
+                         "passo 2 não usa o `org_context` do projeto como `--atlas`")
+        self.assertRegex(step, r"\b[Ee]xit 2\b", "passo 2 não trata o exit 2 (vários atlas sem escolha)")
+        self.assertRegex(step, r"\b[Ee]xit 2\b[^\n]{0,200}(?:[Pp]ergunt|[Pp]e[çc]a)",
+                         "passo 2 não pede à pessoa qual atlas usar no exit 2")
+
 
 # ---------------------------------------------------------------- UT-03
 

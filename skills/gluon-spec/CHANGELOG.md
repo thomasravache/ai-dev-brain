@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.8] - 2026-11-19
+
+### Changed
+- `org_context` aceita o nome do atlas (recomendado, igual em todas as máquinas do time) ou um caminho com `~` ou relativo à raiz do repositório escrito como `./x` ou `../x` (sem `/` e sem começar com `.` ou `~`, o valor é lido como nome), nunca absoluto. O DISCOVER passa esse valor como `--atlas` ao `atlas.py config --json` e ao `atlas.py context`; no exit 3 (atlas não configurado nesta máquina) avisa com `atlas.py init --join --atlas <caminho> --name <nome>` e segue só pelo repositório, nunca por outro atlas. No exit 2, lê a mensagem da CLI e só pergunta qual atlas quando ela lista vários sem escolha; senão, repassa o erro. Sai a comparação manual de caminhos e o conselho de trocar a configuração local. Sem `org_context`, o DISCOVER roda sem `--atlas` e relata `atlas_name` e `selected_by`. O comentário do `org_context` no modelo do `sdd-config.yml` (mostrado pelo `whats-new`) e o passo 2 do `/fermion:deliver` (`--atlas <org_context>`) seguem a mesma regra (SPEC-0081, ADR-0021).
+
 ## [2026.11.7] - 2026-11-17
 
 ### Added
