@@ -3,7 +3,7 @@ id: SPEC-0077
 title: "boson-atlas: mais de uma organização por máquina"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-11-17
 depends_on: []
 adrs: [ADR-0010, ADR-0020, ADR-0021]
@@ -83,10 +83,10 @@ Quem tem um atlas só não percebe mudança nenhuma: o arquivo, os comandos e as
 - **Remote de um projeto casar com dois atlas:** vale o prefixo mais longo. Se houver empate, não há escolha automática (cai no `default`), e o `doctor` avisa (SPEC-0080).
 
 ## 7. Critérios de Aceite do Épico
-- [ ] Numa máquina com dois atlas, `--atlas` e `ATLAS_NAME` escolhem o atlas, e cada um usa só as próprias credenciais — SPEC-0079:E2E-01
-- [ ] A configuração de um atlas só, gravada pela versão anterior, funciona igual e continua na forma antiga depois de `init --join` no mesmo atlas — SPEC-0079:IT-01
-- [ ] Num projeto cujo remote casa com o `remotes:` de um atlas, a CLI, as tools MCP e o hook usam esse atlas sem nenhuma opção — SPEC-0080:E2E-01
-- [ ] O DISCOVER da `gluon-spec` passa o `org_context` ao `atlas.py` com `--atlas` — SPEC-0081:UT-01
+- [x] Numa máquina com dois atlas, `--atlas` e `ATLAS_NAME` escolhem o atlas, e cada um usa só as próprias credenciais — SPEC-0079:E2E-01
+- [x] A configuração de um atlas só, gravada pela versão anterior, funciona igual e continua na forma antiga depois de `init --join` no mesmo atlas — SPEC-0079:IT-01
+- [x] Num projeto cujo remote casa com o `remotes:` de um atlas, a CLI, as tools MCP e o hook usam esse atlas sem nenhuma opção — SPEC-0080:E2E-01
+- [x] O DISCOVER da `gluon-spec` passa o `org_context` ao `atlas.py` com `--atlas` — SPEC-0081:UT-01
 
 ## 8. Questões em Aberto
 - [x] Um arquivo com vários atlas, um arquivo por atlas (vários `ATLAS_CONFIG_HOME`) ou um arquivo no repositório do projeto? — Um arquivo local com `atlases:`. O `ATLAS_CONFIG_HOME` continua valendo para quem quer separar tudo, e um arquivo no repositório levaria caminhos da máquina para o repositório do time (ADR-0021; recomendação do arquiteto, aceita no piloto automático autorizado por thomas em 2026-11-17: "beleza, segue no piloto automático até o merge"; revisável no H1)
@@ -103,6 +103,48 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico: o que foi entregue, como (ondas e deploys com versão/data), resultado dos critérios de aceite com os testes que os provam, métricas pós-release, pendências como novas specs. `spec_graph.py report SPEC-0077` ajuda a montar. -->
+
+### O que foi entregue
+- **SPEC-0079 (PR #55, boson-atlas 2026.11.10, plugin 2026.11.22):**
+  - vários atlas nomeados na configuração local (`atlases:` + `default:`), com a forma de um atlas só ainda lida e gravada;
+  - `--atlas` e `ATLAS_NAME` em todos os comandos;
+  - `init`/`init --join` com `--name` e `--default`;
+  - `config --list` e `config --set-default`;
+  - `doctor` com todos os atlas;
+  - credenciais isoladas, inclusive no ambiente dos coletores, e CI do atlas presa ao próprio repositório.
+- **SPEC-0080 (PR #57, boson-atlas 2026.11.11, plugin 2026.11.23):**
+  - escolha pelo remote do projeto, com `remotes:` no `atlas-config.yml`;
+  - parâmetro `atlas` nas tools MCP, que rodam na pasta do projeto;
+  - hook dizendo qual atlas vale e por quê;
+  - um atlas com `remotes:` inválido não derruba os outros;
+  - mensagens sobre um item inválido citam só a posição e o motivo.
+- **SPEC-0081 (PR #58, gluon-spec 2026.11.8, plugin 2026.11.24):**
+  - o DISCOVER e o `/fermion:deliver` passam o `org_context` com `--atlas`;
+  - o `org_context` aceita o nome do atlas;
+  - sem fallback para o atlas de outra organização.
+- **ADR-0021:** vários atlas num arquivo local, com ordem de escolha fixa.
+
+### Como
+- As três filhas rodaram em sequência (0079 → 0080 → 0081), porque todas tocam o `plugin.json` e a 0080 depende da 0079 no `atlas.py`.
+- Cada filha passou por test-writer, implementer e reviewer independentes, com emendas registradas: v2 a v4 na 0079, v2 a v5 na 0080 e v2 e v3 na 0081.
+- **SPEC-0080:** o G4 reprovou 3 vezes seguidas na máscara de itens de `remotes:`. Isso abriu o impedimento IMP-01 (falha), que thomas resolveu em 2026-11-19 com a decisão de nunca citar o item (Emenda v5). A quarta rodada aprovou.
+- Distribuição pelo plugin, sem deploy (G6 N/A).
+
+### Critérios de aceite
+| Critério | Prova | Resultado |
+|---|---|---|
+| Com dois atlas, `--atlas` e `ATLAS_NAME` escolhem, e cada um usa só as próprias credenciais | SPEC-0079:E2E-01 e IT-02 (CI do PR #55) | PASS |
+| A configuração de um atlas só da versão anterior funciona igual e continua na forma antiga | SPEC-0079:IT-01 e CH-01 (CI do PR #55) | PASS |
+| Num projeto cujo remote casa, a CLI, as tools MCP e o hook usam o atlas certo sem opção | SPEC-0080:E2E-01, IT-01 e IT-02 (CI do PR #57) | PASS |
+| O DISCOVER passa o `org_context` com `--atlas` | SPEC-0081:UT-01 (CI do PR #58) | PASS |
+
+### Métricas pós-release
+A acompanhar no uso real do autor com dois atlas: o `context` de cada projeto deve usar o atlas certo sem `ATLAS_CONFIG_HOME`, e o `doctor` deve ficar sem ERRO. Nenhuma medida existe ainda, porque a versão acabou de sair.
+
+### Pendências
+- Nenhuma spec nova. Os nits das filhas estão nos relatórios de cada uma.
+- A cópia em `tools/sdd/` deste repositório continua em 2026.11.7 até um `vendor --force`.
+- Os achados do uso real que vieram depois (serviço pelo código, IaC, contas, conhecimento) estão no radar como SPEC-0082 a 0085.
 
 ## 12. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

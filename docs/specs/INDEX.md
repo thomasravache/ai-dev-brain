@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **7 erro(s), 28 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **7 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 4, approved 1, implemented 68
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
@@ -54,7 +54,7 @@ Perfil: **minimo**
 | SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | implemented | 2/2 implementadas |
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
 | SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | proposed | 0/0 implementadas |
-| SPEC-0077 | boson-atlas: mais de uma organização por máquina | approved | 3/3 implementadas |
+| SPEC-0077 | boson-atlas: mais de uma organização por máquina | implemented | 3/3 implementadas |
 | SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
 
 ## Grafo de Dependências
@@ -172,7 +172,7 @@ flowchart LR
 | [SPEC-0074](SPEC-0074-gluon-spec-retrospectiva-entre-projetos-spec-graph-py-retro.md) | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | implemented | 2026-11-17 | SPEC-0066 | — | — |
 | [SPEC-0075](SPEC-0075-boson-atlas-mapa-de-acesso-observabilidade-e-validacao-por-a.md) | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | epic | feature | proposed | 2026-11-17 | — | — | — |
 | [SPEC-0076](SPEC-0076-boson-atlas-coletor-argocd-reconhece-nome-do-servico-sufixos.md) | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite | fix | implemented | 2026-11-17 | — | — | — |
-| [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | approved | 2026-11-17 | — | — | — |
+| [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | implemented | 2026-11-17 | — | — | — |
 | [SPEC-0078](SPEC-0078-gluon-spec-ajustes-do-processo-apontados-pela-primeira-retro.md) | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | full | feature | implemented | 2026-11-17 | SPEC-0066 | SPEC-0074 | — |
 | [SPEC-0079](SPEC-0079-boson-atlas-varios-atlas-na-configuracao-local-e-escolha-por.md) | boson-atlas: vários atlas na configuração local e escolha por --atlas | full | feature | implemented | 2026-11-18 | SPEC-0077 | — | — |
 | [SPEC-0080](SPEC-0080-boson-atlas-atlas-escolhido-pelo-remote-do-projeto-nas-tools.md) | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full | feature | implemented | 2026-11-18 | SPEC-0077 | SPEC-0079 | SPEC-0079@1 |
