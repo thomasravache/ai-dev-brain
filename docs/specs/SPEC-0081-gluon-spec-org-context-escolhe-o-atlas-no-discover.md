@@ -4,7 +4,7 @@ title: "gluon-spec: org_context escolhe o atlas no DISCOVER"
 tier: lite
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: []
@@ -99,7 +99,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 8351165 | 2026-11-19 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-19 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-19 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 4b96bfb | 2026-11-19 |
 
 ### Histórico de reprovações
 - G1 FAIL 2026-11-19 — verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0081:CT-01 — 1dad991
