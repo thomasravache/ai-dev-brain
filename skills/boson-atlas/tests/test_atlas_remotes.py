@@ -288,39 +288,54 @@ class DoctorTieTest(RemoteCase):
 
 # ---------------------------------------------------------------- UT-07
 
+# Emenda v5, item 17: motivo de cada item inválido (o primeiro que se aplica); a mensagem é
+# "remotes: item N inválido — <motivo>..." e nunca cita o item, nem mascarado (item 16)
+R_SCHEME = "tem esquema"
+R_AT = "tem credenciais (@)"
+R_QUERY = "tem ? , # ou ="
+R_COLON = "tem : (porta ou formato scp)"
+R_SPACE = "tem espaço ou caractere de controle"
+R_UPPER = "tem maiúsculas"
+R_SLASH = "tem barra no início ou no fim, // ou segmento . ou .."
+
 INVALID_REMOTES = (
-    "https://github.com/acme",
-    "user@github.com/acme",
-    "github.com/ac me",
-    "github.com/../acme",
-    "/github.com/acme",
-    "github.com/acme/",
-    "github.com:acme",
-    "GitHub.com/acme",
+    ("https://github.com/acme", R_SCHEME),
+    ("user@github.com/acme", R_AT),
+    ("github.com/ac me", R_SPACE),
+    ("github.com/../acme", R_SLASH),
+    ("/github.com/acme", R_SLASH),
+    ("github.com/acme/", R_SLASH),
+    ("github.com:acme", R_COLON),
+    ("GitHub.com/acme", R_UPPER),
 )
 
-# Emenda v4, item 14: o userinfo antes da primeira "/" vira "***@", com ou sem esquema
-SHOWN_AS = {"user@github.com/acme": "***@github.com/acme"}
+
+def assert_item_message(case, result, position, reason=None):
+    """A mensagem cita a posição (a partir de 1) e, quando dado, o motivo; nunca a máscara do item."""
+    text = output(result)
+    case.assertIn(f"item {position} inválido", text)
+    if reason is not None:
+        case.assertIn(reason, text)
+    case.assertNotIn("***", text, "a mensagem não cita o item, nem mascarado (Emenda v5)")
 
 
 class RemotesValidationTest(RemoteCase):
     def test_invalid_items_exit_2_and_init_writes_the_list(self):
         """SPEC-0080:UT-07 — item de remotes: com esquema, "@", espaço, "..", absoluto, barra final, ":" ou
-        maiúscula → exit 2 com o item; init --remote grava a lista; lista válida não é chave desconhecida."""
+        maiúscula → exit 2 com a posição e o motivo, sem o item (Emenda v5); init --remote grava a lista; lista válida não é chave desconhecida."""
         atlas = self.make_atlas("acme", ["github.com/acme"])
         self.configure()
         with self.subTest(caso="lista válida"):
             self.assertExit(self.cli("config", "--json"), 0)
             lint = self.cli("lint")
             self.assertNotIn("chave desconhecida: remotes", output(lint))
-        for item in INVALID_REMOTES:
+        for item, reason in INVALID_REMOTES:
             with self.subTest(item=item):
                 self.set_remotes(atlas, ["github.com/globex", item])
                 out = self.cli("config", "--json")
                 self.assertExit(out, 2)
-                self.assertIn(SHOWN_AS.get(item, item), output(out))
-                if item in SHOWN_AS:
-                    self.assertNotIn(item, output(out), "o userinfo do item aparece sem máscara (Emenda v4)")
+                assert_item_message(self, out, 2, reason)
+                self.assertNotIn(item, output(out), "a mensagem não cita o item (Emenda v5)")
         with self.subTest(caso="init --remote"):
             new = self.box.root / "work" / "globex-atlas"
             new.mkdir(parents=True)
@@ -355,17 +370,20 @@ class TwoRepositoriesTest(RemoteCase):
 
 SECRET = "SECRETTOK"
 LEAKY_REMOTE = f"https://u:{SECRET}@github.com/globex"
-MASKED_REMOTE = "https://***@github.com/globex"
+# pedaços do item que nunca podem sair (token, userinfo e o resto depois do "@")
+LEAKY_PIECES = (SECRET, f"u:{SECRET}", "@github.com/globex")
 
 
 class MaskedRemoteTest(RemoteCase):
     def assertNoSecret(self, result):
         self.assertNotIn("Traceback", output(result))
-        self.assertNotIn(SECRET, output(result), "o token do item de remotes: vazou")
+        for piece in LEAKY_PIECES:
+            self.assertNotIn(piece, output(result), "texto do item de remotes: na saída")
 
     def test_invalid_item_with_credentials_is_masked_everywhere(self):
         """SPEC-0080:UT-10 — remotes: com https://u:SECRETTOK@github.com/globex: config --json, config --list
-        --json, doctor --json e lint --json nunca mostram o token; onde o item aparece, aparece mascarado."""
+        --json, doctor --json e lint --json nunca mostram o token nem o userinfo; onde há mensagem, ela dá a
+        posição e o motivo (Emenda v5)."""
         self.make_atlas("acme", ["github.com/acme"])
         self.make_atlas("globex", [LEAKY_REMOTE])
         self.configure(default="globex")
@@ -373,12 +391,12 @@ class MaskedRemoteTest(RemoteCase):
             out = self.cli("config", "--json")
             self.assertNoSecret(out)
             self.assertExit(out, 2)
-            self.assertIn(MASKED_REMOTE, output(out))
+            assert_item_message(self, out, 1, R_SCHEME)
         with self.subTest(comando="config --json --atlas globex"):
             out = self.cli("config", "--json", "--atlas", "globex")
             self.assertNoSecret(out)
             self.assertExit(out, 2)
-            self.assertIn(MASKED_REMOTE, output(out))
+            assert_item_message(self, out, 1, R_SCHEME)
         with self.subTest(comando="config --list --json"):
             out = self.cli("config", "--list", "--json")
             self.assertNoSecret(out)
@@ -388,14 +406,14 @@ class MaskedRemoteTest(RemoteCase):
         with self.subTest(comando="lint --json"):
             out = self.cli("lint", "--json")
             self.assertNoSecret(out)
-            self.assertIn(MASKED_REMOTE, output(out))
+            assert_item_message(self, out, 1, R_SCHEME)
 
 
 class InvalidRemotesIsolationTest(RemoteCase):
     def test_atlas_with_invalid_remotes_does_not_break_the_others(self):
         """SPEC-0080:UT-11 — acme (default) e globex com remotes: inválido: fora e dentro de um repositório git,
-        config --json, context e lint usam acme (exit 0) e config --list sai 0; --atlas globex → exit 2 com o item
-        mascarado; o doctor tem um AVISO citando globex, sem o item."""
+        config --json, context e lint usam acme (exit 0) e config --list sai 0; --atlas globex → exit 2 com a posição e o
+        motivo, sem o item; o doctor tem um AVISO citando globex, sem o item."""
         self.make_atlas("acme", ["github.com/acme"], service="payments-api")
         self.make_atlas("globex", [LEAKY_REMOTE])
         self.configure(default="acme")
@@ -424,8 +442,9 @@ class InvalidRemotesIsolationTest(RemoteCase):
             with self.subTest(pasta=label, comando="config --json --atlas globex"):
                 out = self.cli("config", "--json", "--atlas", "globex", cwd=cwd)
                 self.assertExit(out, 2)
-                self.assertIn(MASKED_REMOTE, output(out))
-                self.assertNotIn(SECRET, output(out))
+                assert_item_message(self, out, 1, R_SCHEME)
+                for piece in LEAKY_PIECES:
+                    self.assertNotIn(piece, output(out))
         with self.subTest(comando="doctor"):
             out = self.cli("doctor", cwd=places["repo da globex"][0])
             self.assertNotIn("Traceback", output(out))
@@ -467,46 +486,59 @@ class AmendmentEdgeCasesTest(RemoteCase):
                 out = self.cli("config", "--json")
                 self.assertExit(out, 2)
                 self.assertNotIn("\x1b", output(out), "o caractere de controle volta cru na mensagem")
+                assert_item_message(self, out, 1, R_SPACE)
 
 
 # ---------------------------------------------------------------- Emenda v4 (UT-13)
 
 TOK = "TOKZ9Q"
+# (item, pedaços que nunca podem sair, motivo); None quando o motivo não está fixado pelo contrato
+# ("https:/" não é "esquema://": o primeiro motivo pode ser o esquema ou o "@")
 TOKEN_ITEMS = (
-    f"{TOK}@github.com/acme",
-    f"ghp_{TOK}@github.com:acme/x",
-    f"https://github.com/acme?access_token={TOK}",
-    f"https://github.com/acme#{TOK}",
-    f"https:/u:{TOK}@h/x",
+    (f"{TOK}@github.com/acme", (TOK, "@github.com/acme"), R_AT),
+    (f"ghp_{TOK}@github.com:acme/x", (f"ghp_{TOK}", TOK, "@github.com:acme"), R_AT),
+    (f"https://github.com/acme?access_token={TOK}", ("access_token", TOK), R_SCHEME),
+    (f"https://github.com/acme#{TOK}", (f"#{TOK}", TOK), R_SCHEME),
+    (f"https:/u:{TOK}@h/x", (f"u:{TOK}", TOK), None),
+    # regressão da rodada 3 do G4: "?" ou "#" dentro do userinfo cortava a máscara no meio
+    ("https://u:QXW?KZJ@host/x", ("QXW", "KZJ", "@host/x"), R_SCHEME),
+    ("https://u:VYB#QTZ@host/x", ("VYB", "QTZ", "@host/x"), R_SCHEME),
 )
 QUERY_ITEMS = ("github.com/acme?token=x", "github.com/acme#x", "github.com/a=b")
 
 
 class TokenInRemotesTest(RemoteCase):
     def test_token_never_leaves_and_query_fragment_or_equals_are_refused(self):
-        """SPEC-0080:UT-13 — itens com userinfo sem esquema, scp-like, query, fragment ou esquema torto: config,
-        doctor e lint nunca mostram o token; itens com "?", "#" ou "=" dão exit 2 (Emenda v4)."""
+        """SPEC-0080:UT-13 — itens com userinfo sem esquema, scp-like, query, fragment, esquema torto ou "?"/"#" no
+        userinfo: config, doctor e lint nunca mostram nenhum pedaço do token ou do userinfo, e a mensagem dá a
+        posição e o motivo; itens com "?", "#" ou "=" dão exit 2 (Emendas v4 e v5)."""
         self.make_atlas("acme", ["github.com/acme"])
         globex = self.make_atlas("globex", ["github.com/globex"])
         self.configure(default="acme")
         commands = (
-            (("config", "--json", "--atlas", "globex"), 2),
-            (("config", "--list", "--json"), 0),
-            (("doctor",), None),
-            (("doctor", "--json"), None),
-            (("lint", "--json"), None),
-            (("lint", "--json", "--atlas", "globex"), None),
+            (("config", "--json", "--atlas", "globex"), 2, True),
+            (("config", "--list", "--json"), 0, False),
+            (("doctor",), None, False),
+            (("doctor", "--json"), None, False),
+            (("lint", "--json"), None, False),
+            (("lint", "--json", "--atlas", "globex"), None, True),
         )
-        for item in TOKEN_ITEMS:
+        for item, pieces, reason in TOKEN_ITEMS:
             self.set_remotes(globex, [item])
-            for args, code in commands:
+            for args, code, message in commands:
                 with self.subTest(item=item, comando=" ".join(args)):
                     out = self.cli(*args)
                     self.assertNotIn("Traceback", output(out))
-                    self.assertNotIn(TOK, output(out), "o token do item de remotes: vazou")
+                    for piece in pieces:
+                        self.assertNotIn(piece, output(out), "texto do item de remotes: na saída")
+                    self.assertNotIn("***", output(out), "a mensagem não cita o item, nem mascarado")
                     if code is not None:
                         self.assertExit(out, code)
+                    if message:
+                        assert_item_message(self, out, 1, reason)
         for item in QUERY_ITEMS:
             with self.subTest(item=item, comando="config --json --atlas globex"):
                 self.set_remotes(globex, [item])
-                self.assertExit(self.cli("config", "--json", "--atlas", "globex"), 2)
+                out = self.cli("config", "--json", "--atlas", "globex")
+                self.assertExit(out, 2)
+                assert_item_message(self, out, 1, R_QUERY)

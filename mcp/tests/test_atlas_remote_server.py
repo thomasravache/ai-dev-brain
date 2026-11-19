@@ -322,7 +322,16 @@ class ProjectFolderTest(ProjectFolderCase):
 
 SECRET = "SECRETTOK"
 LEAKY_REMOTE = f"https://u:{SECRET}@github.com/globex"
-MASKED_REMOTE = "https://***@github.com/globex"
+# pedaços do item que nunca podem sair (token, userinfo e o resto depois do "@"); a mensagem dá só a posição e o
+# motivo (Emenda v5, itens 16 e 17)
+LEAKY_PIECES = (SECRET, f"u:{SECRET}", "@github.com/globex")
+
+
+def assert_item_message(case, text, position, reason=None):
+    case.assertIn(f"item {position} inválido", text)
+    if reason is not None:
+        case.assertIn(reason, text)
+    case.assertNotIn("***", text, "a mensagem não cita o item, nem mascarado (Emenda v5)")
 
 
 class AmendmentCase(ProjectFolderCase):
@@ -349,13 +358,14 @@ class AmendmentCase(ProjectFolderCase):
 class AmendmentServerTest(AmendmentCase):
     def test_atlas_config_never_shows_the_token_of_an_invalid_remote(self):
         """SPEC-0080:UT-10 — globex com remotes: https://u:SECRETTOK@github.com/globex: atlas_config com atlas
-        "globex" é erro da tool com o item mascarado, sem o token."""
+        "globex" é erro da tool com a posição e o motivo, sem o token nem o userinfo (Emenda v5)."""
         self.configure(default="acme", globex_remote=LEAKY_REMOTE)
         result = self.atlas_config(self.root, {"atlas": "globex"})
         text = json.dumps(result, ensure_ascii=False)
-        self.assertNotIn(SECRET, text, "o token do item de remotes: vazou pela tool")
+        for piece in LEAKY_PIECES:
+            self.assertNotIn(piece, text, "texto do item de remotes: vazou pela tool")
         self.assertIs(result.get("isError"), True, result)
-        self.assertIn(MASKED_REMOTE, text_of(result))
+        assert_item_message(self, text_of(result), 1, "tem esquema")
 
     def test_missing_project_dir_falls_back_to_the_server_folder(self):
         """SPEC-0080:UT-12 — atlas_config com CLAUDE_PROJECT_DIR numa pasta que não existe: usa o cwd do servidor,
@@ -371,27 +381,34 @@ class AmendmentServerTest(AmendmentCase):
 # ---------------------------------------------------------------- Emenda v4 (UT-13)
 
 TOK = "TOKZ9Q"
+# (item, pedaços que nunca podem sair), como no UT-13 da boson-atlas, com a regressão da rodada 3 do G4
 TOKEN_ITEMS = (
-    f"{TOK}@github.com/acme",
-    f"ghp_{TOK}@github.com:acme/x",
-    f"https://github.com/acme?access_token={TOK}",
-    f"https://github.com/acme#{TOK}",
-    f"https:/u:{TOK}@h/x",
+    (f"{TOK}@github.com/acme", (TOK, "@github.com/acme")),
+    (f"ghp_{TOK}@github.com:acme/x", (f"ghp_{TOK}", TOK, "@github.com:acme")),
+    (f"https://github.com/acme?access_token={TOK}", ("access_token", TOK)),
+    (f"https://github.com/acme#{TOK}", (f"#{TOK}", TOK)),
+    (f"https:/u:{TOK}@h/x", (f"u:{TOK}", TOK)),
+    ("https://u:QXW?KZJ@host/x", ("QXW", "KZJ", "@host/x")),
+    ("https://u:VYB#QTZ@host/x", ("VYB", "QTZ", "@host/x")),
 )
 
 
 class TokenInRemotesServerTest(AmendmentCase):
     def test_atlas_config_never_shows_a_token_of_remotes(self):
         """SPEC-0080:UT-13 — globex com cada item que carrega um token (userinfo sem esquema, scp-like, query,
-        fragment, esquema torto): atlas_config com atlas "globex" é erro da tool e o token não aparece."""
+        fragment, esquema torto, "?"/"#" no userinfo): atlas_config com atlas "globex" é erro da tool com a posição
+        e nenhum pedaço do token ou do userinfo aparece (Emenda v5)."""
         self.configure(default="acme")
         server = ServerProcess(self.sandbox, env=self.environ(self.root))
         self.addCleanup(server.close)
-        for id, item in enumerate(TOKEN_ITEMS, start=1):
+        for id, (item, pieces) in enumerate(TOKEN_ITEMS, start=1):
             with self.subTest(item=item):
                 (self.globex / "atlas-config.yml").write_text(
                     generic_config("Globex") + f"remotes:\n  - {json.dumps(item)}\n", encoding="utf-8")
                 response, _ = server.ask(call("atlas_config", {"atlas": "globex"}, id=id), timeout=PROCESS_TIMEOUT)
                 result = result_of(self, response, id=id)
-                self.assertNotIn(TOK, json.dumps(result, ensure_ascii=False), "o token vazou pela tool")
+                text = json.dumps(result, ensure_ascii=False)
+                for piece in pieces:
+                    self.assertNotIn(piece, text, "texto do item de remotes: vazou pela tool")
                 self.assertIs(result.get("isError"), True, result)
+                assert_item_message(self, text_of(result), 1)
