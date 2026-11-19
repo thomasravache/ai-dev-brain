@@ -276,7 +276,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer (subagente), rodada 4: APPROVED — 0 blocker, 0 major, 2 minor (fixture de teste com o formato antigo; redação do CHANGELOG) — f50b089 | 2026-11-19 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 661e4e1 | 2026-11-19 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-19 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-19 |
 | G7 Pronto & Docs | PENDING | | |
 
 ### Histórico de reprovações
