@@ -148,7 +148,7 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 15. **Item com `?`, `#` ou `=`:** é recusado (exit 2), porque nunca casaria com um remote normalizado e poderia carregar um token.
 
 **Decisão do impedimento IMP-01 (Emenda v5, thomas, 2026-11-19):**
-16. **Mensagens sobre `remotes:` não citam o item.** Toda mensagem sobre um item inválido diz só a posição (a partir de 1) e o motivo, por exemplo `remotes: item 2 inválido — tem esquema (https://); use host/caminho, como github.com/acme`. Isso vale para CLI, `doctor`, `lint` e, por consequência, MCP. Nenhum texto do item aparece em nenhuma saída, mascarado ou não. Esta regra substitui os itens 7 e 14: a máscara deixa de existir nas mensagens de `remotes:`.
+16. **Mensagens sobre `remotes:` não citam o item.** Toda mensagem sobre um item inválido diz só a posição (a partir de 1) e o motivo, por exemplo `remotes: item 2 inválido — tem esquema (ex.: https://); use host/caminho, como github.com/acme`. Isso vale para CLI, `doctor`, `lint` e, por consequência, MCP. Nenhum texto do item aparece em nenhuma saída, mascarado ou não. Esta regra substitui os itens 7 e 14: a máscara deixa de existir nas mensagens de `remotes:`.
 17. **Motivos, um por item (o primeiro que se aplica):**
     - `tem esquema`
     - `tem credenciais (@)`
@@ -156,7 +156,7 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
     - `tem : (porta ou formato scp)`
     - `tem espaço ou caractere de controle`
     - `tem maiúsculas`
-    - `tem barra no início ou no fim, // ou segmento . ou ..`
+    - `tem barra no início ou no fim, // ou segmento . ou ..` (inclui `~` no início e `\`)
     - `vazio`
     - `não é texto`
 
