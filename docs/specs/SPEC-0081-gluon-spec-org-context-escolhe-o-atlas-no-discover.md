@@ -4,7 +4,7 @@ title: "gluon-spec: org_context escolhe o atlas no DISCOVER"
 tier: lite
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: []
@@ -71,6 +71,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01, UT-02 e UT-03 com a tag `SPEC-0081:<ID>`, falhando pelo motivo certo
+- [ ] Green: `SKILL.md`, `references/brownfield.md`, comentário do `org_context` no `sdd-config.template.yml`, `commands/deliver.md`; CHANGELOG da gluon-spec, `SDD_TOOL_VERSION` e `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->

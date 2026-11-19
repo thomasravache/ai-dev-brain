@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **7 erro(s), 28 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 4, approved 2, implemented 67
+- Validação (G0): **7 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 4, approved 1, in-progress 1, implemented 67
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -29,15 +29,15 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0081  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0081
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 2d) |  |
-| 2 | SPEC-0081 | gluon-spec: org_context escolhe o atlas no DISCOVER | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 1 | SPEC-0081 | gluon-spec: org_context escolhe o atlas no DISCOVER | lite/S | in-progress | 🔄 em andamento |  |
+| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
+| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 2d) | saiu da onda 1: arquivos em comum com SPEC-0081 |
 | 3 | SPEC-0082 | boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
 | 4 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
 | 5 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo |
@@ -80,7 +80,7 @@ flowchart LR
   end
   subgraph E0077["SPEC-0077 · boson-atlas: mais de uma organização por máquina"]
     S0079["SPEC-0079<br/>boson-atlas: vários atlas na configuraç…"]:::implemented
-    S0081["SPEC-0081<br/>gluon-spec: org_context escolhe o atlas…"]:::approved
+    S0081["SPEC-0081<br/>gluon-spec: org_context escolhe o atlas…"]:::inprogress
   end
   S0023 --> S0028
   S0070 --> S0071
@@ -182,7 +182,7 @@ flowchart LR
 | [SPEC-0078](SPEC-0078-gluon-spec-ajustes-do-processo-apontados-pela-primeira-retro.md) | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | full | feature | implemented | 2026-11-17 | SPEC-0066 | SPEC-0074 | — |
 | [SPEC-0079](SPEC-0079-boson-atlas-varios-atlas-na-configuracao-local-e-escolha-por.md) | boson-atlas: vários atlas na configuração local e escolha por --atlas | full | feature | implemented | 2026-11-18 | SPEC-0077 | — | — |
 | [SPEC-0080](SPEC-0080-boson-atlas-atlas-escolhido-pelo-remote-do-projeto-nas-tools.md) | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full | feature | implemented | 2026-11-18 | SPEC-0077 | SPEC-0079 | SPEC-0079@1 |
-| [SPEC-0081](SPEC-0081-gluon-spec-org-context-escolhe-o-atlas-no-discover.md) | gluon-spec: org_context escolhe o atlas no DISCOVER | lite | feature | approved | 2026-11-18 | SPEC-0077 | — | SPEC-0079@1 |
+| [SPEC-0081](SPEC-0081-gluon-spec-org-context-escolhe-o-atlas-no-discover.md) | gluon-spec: org_context escolhe o atlas no DISCOVER | lite | feature | in-progress | 2026-11-18 | SPEC-0077 | — | SPEC-0079@1 |
 | [SPEC-0082](SPEC-0082-boson-atlas-servico-ligado-ao-repositorio-do-codigo-pela-ima.md) | boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build | full | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0083](SPEC-0083-boson-atlas-coletor-de-infraestrutura-como-codigo-stacks-pro.md) | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0084](SPEC-0084-boson-atlas-contas-de-nuvem-operacao-fornecedores-e-ciclo-de.md) | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | epic | feature | proposed | 2026-11-19 | — | — | — |
