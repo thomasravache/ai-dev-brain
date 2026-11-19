@@ -84,8 +84,8 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 - [x] Green: `SKILL.md`, `references/brownfield.md`, comentário do `org_context` no `sdd-config.template.yml`, `commands/deliver.md`; CHANGELOG da gluon-spec, `SDD_TOOL_VERSION` e `plugin.json`
 - [x] Validar: suíte completa + arquitetura (G2/G3)
 - [x] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -114,28 +114,48 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+- **DISCOVER da `gluon-spec`:** passa o `org_context` do projeto ao `atlas.py` com `--atlas`. Roda `config --json --atlas <org_context>` e, com exit 0, `context --atlas <org_context>`.
+  - **Exit 3:** avisa com o passo `init --join --atlas <caminho> --name <nome>` e segue só pelo repositório, nunca pelo atlas de outra organização.
+  - **Exit 2:** lê a mensagem da CLI e só pergunta qual atlas usar quando há vários sem escolha.
+  - **Sem `org_context`:** roda sem `--atlas` e relata `atlas_name`/`selected_by`.
+  - Sai o conselho de trocar `ATLAS_CONFIG_HOME`.
+- **`org_context`:** aceita o nome do atlas (recomendado) ou um caminho relativo (`./x`, `../x`) ou com `~`, nunca absoluto. O comentário do `sdd-config.template.yml` diz isso, e o `whats-new` mostra o comentário aos projetos que ainda não têm a chave.
+- **`/fermion:deliver`:** usa `--atlas <org_context>` no passo de contexto da organização, com as mesmas regras de exit 2 e exit 3.
+- **Versões:** CHANGELOG da gluon-spec `[2026.11.8]`, `SDD_TOOL_VERSION` 2026.11.8 e o plugin 2026.11.24.
 
 ### Como foi feito
+- **Testes:** 93a11f4, com UT-01 e UT-02 em `skills/gluon-spec/tests/test_org_context.py` e UT-03 em `tests/plugin/test_plugin.py`. Um teste da SPEC-0041 que exigia a comparação manual foi ajustado.
+- **Implementação:** d955411, que mudou `SKILL.md`, `references/brownfield.md`, `sdd-config.template.yml` e `commands/deliver.md`; e d2315a1, com a Emenda v3.
+- **Emendas:**
+  - v2: redação do comentário e linha "sem `org_context`", vindas do test-writer;
+  - v3: exit 3 sem atlas de outra organização, caminho relativo com `./` e leitura da mensagem no exit 2, vindas dos minors do G4.
+- **Revisão G4:** rodada 1 APPROVED com 4 minors (viraram a Emenda v3); rodada 2 APPROVED.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes (93a11f4):** os 3 testes falhavam por asserção. Nem o `SKILL.md` nem o `brownfield.md` tinham `atlas.py config --json --atlas`, o comentário do template não dizia "nome do atlas", e o passo 2 do `deliver.md` não tinha `--atlas`.
+- **Depois (d2315a1):** suíte completa verde.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | `SKILL.md` e `brownfield.md` passam o `org_context` com `--atlas`, tratam exit 3 e citam `atlas_name`/`selected_by` | PASS | `test_org_context.py` — CI do PR #58 (run 44613353901, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-02 | `whats-new` mostra o comentário novo do `org_context` | PASS | `test_org_context.py` — CI do PR #58 (run 44613353901) |
+| UT-03 | `deliver.md` passa `--atlas` com o `org_context` e pergunta no exit 2 | PASS | `tests/plugin/test_plugin.py` — CI do PR #58 (run 44613353901) |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção — 93a11f4 vermelho, d955411/d2315a1 verdes
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão existente mantido — instruções da SPEC-0041; a `gluon-spec` continua usando o atlas só pela CLI (ADR-0010, ADR-0021)
+- [x] Disponível no ambiente-alvo via pipeline (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7) — `SKILL.md`, `brownfield.md`, `sdd-config.template.yml`, `deliver.md`, CHANGELOG `[2026.11.8]`
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma) — nenhuma: o `deliver.md` entrou nesta spec
 
 ### Deploy
+N/A — `SDD_TOOL_VERSION` 2026.11.8, plugin 2026.11.24, PR #58. A cópia em `tools/sdd/` deste repositório continua em 2026.11.7 até um `vendor --force` (chore separado).
 
 ### Pendências
+Nenhuma spec nova. Ficam como nits sem spec: os parênteses aninhados no passo 2 do `deliver.md` e a dica `./x` no comentário do template.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
