@@ -64,7 +64,7 @@ A instrução foi escrita para a configuração de um atlas por máquina (SPEC-0
 - **UT-01** — Dados o `SKILL.md` e o `references/brownfield.md`, quando a seção de contexto da organização é lida, então ela manda rodar `atlas.py config --json --atlas <org_context>` e `atlas.py context --atlas <org_context>`, trata o exit 3 com o passo `init --join ... --name`, cita `atlas_name`/`selected_by` para o caso sem `org_context`, e não cita mais `ATLAS_CONFIG_HOME` como saída.
 - **UT-02** — Dado um projeto sem `org_context` no `sdd-config.yml`, quando o `whats-new` roda, então a chave aparece com o comentário novo ("nome do atlas" e "caminho relativo ou com ~", nunca absoluto).
 - **UT-03** — Dado o `commands/deliver.md`, quando o passo de contexto da organização é lido, então ele cita `--atlas` com o `org_context` e o exit 2 com a pergunta à pessoa, nos testes do plugin (`tests/plugin/`).
-- Integração/E2E: N/A — o `spec_graph.py` não chama o atlas (ADR-0010). O comportamento é instrução ao agente, coberta pelos testes de texto. A escolha do atlas pela CLI é testada na SPEC-0079 (CT-01).
+- Integração/E2E: N/A — o `spec_graph.py` não chama o atlas (ADR-0010). O comportamento é instrução ao agente, coberta pelos testes de texto. A escolha do atlas pela CLI é testada pelo teste de contrato da SPEC-0079.
 
 ## 5. Questões em Aberto
 - [x] O `org_context` passa a aceitar nome do atlas? — Sim, e é o recomendado: o nome é igual em todas as máquinas do time, enquanto o caminho muda. O caminho continua aceito (recomendação do arquiteto, aceita no piloto automático autorizado por thomas em 2026-11-17: "beleza, segue no piloto automático até o merge"; revisável no H1)
