@@ -28,3 +28,9 @@ curation: {min_share: 0.6, min_total: 20, min_repos: 3}
 #   ci:
 #     env: [GH_TOKEN, ARGOCD_AUTH_TOKEN]   # só NOMES (^[A-Z_][A-Z0-9_]*$); o valor fica nos secrets da plataforma
 #     schedule: "0 6 * * 1"               # cron em UTC (padrão: segunda 06:00); vendor --schedule tem precedência
+# remotes: prefixos host/caminho dos repositórios da organização (init --remote; references/config.md). Opcional.
+# Num repositório cujo remote `origin` casa um prefixo (por segmentos inteiros; vale o mais longo), os comandos, as
+# tools MCP e o início da sessão usam este atlas sem --atlas. Minúsculas, sem esquema, "@", ":", espaço nem "..". Ex.:
+#   remotes:
+#     - github.com/acme
+#     - gitlab.acme.interno/plataforma

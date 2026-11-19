@@ -28,7 +28,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.10"
+ATLAS_VERSION = "2026.11.11"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -38,7 +38,7 @@ SHARED_FILE = "atlas-config.yml"
 MODES = ("repo", "local")
 LOCAL_KEYS = ("atlas", "credentials")
 SHARED_KEYS = ("version", "organization", "mode", "language", "stale_days", "categories", "collectors",
-               "redaction", "curation", "ci")
+               "redaction", "curation", "ci", "remotes")
 REQUIRED_SHARED = ("version", "organization", "mode")
 SHARED_VERSION = "1"
 STRUCTURE_DIRS = ("services", "platform", "conventions", "process", "snapshots")
@@ -355,10 +355,12 @@ def _set_value(text: str, key: str, value: str) -> str:
     raise AtlasError(f"{DEFAULT_SHARED_CONFIG} sem a chave {key}", 1)
 
 
-def render_atlas_config(organization, mode) -> str:
+def render_atlas_config(organization, mode, remotes=None) -> str:
     """Text of the atlas-config.yml that init writes: assets/atlas-config.yml with its comments; only
-    organization and mode change. Never holds an absolute path."""
+    organization and mode change, plus `remotes:` at the end when init --remote is given (SPEC-0080). Never holds
+    an absolute path."""
     validate_mode(mode)
+    remotes = validate_remotes(remotes)
     organization = str(organization or "").strip()
     if not organization:
         raise AtlasError("organização vazia — passe --org NOME", 2)
@@ -367,6 +369,9 @@ def render_atlas_config(organization, mode) -> str:
     text = DEFAULT_SHARED_CONFIG.read_text(encoding="utf-8")
     expected = dict(parse_yaml(text), organization=organization, mode=mode)
     text = _set_value(_set_value(text, "organization", organization), "mode", mode)
+    if remotes:
+        expected["remotes"] = remotes
+        text = text.rstrip("\n") + "\nremotes:\n" + "".join(f"  - {fmt_scalar(item)}\n" for item in remotes)
     if parse_yaml(text) != expected:
         raise AtlasError(f"não consegui gerar o atlas-config.yml a partir de {DEFAULT_SHARED_CONFIG}", 1)
     return text
@@ -430,6 +435,54 @@ def validate_ci(ci) -> None:
         raise AtlasError("ci.schedule precisa ser uma expressão cron de 5 campos (ex.: \"0 6 * * 1\")", 2)
 
 
+SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")  # https://, ssh://, git+ssh://
+REMOTES_HINT = "use host/caminho, como github.com/acme"
+
+
+def is_control(c: str) -> bool:
+    """C0 (below 0x20), DEL and C1 (0x7f to 0x9f) control characters (SPEC-0080, Emenda v3 item 13)."""
+    return ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F
+
+
+def remote_item_problem(item):
+    """Reason why an item of `remotes:` is not a lowercase host/path prefix, the first that applies (SPEC-0080,
+    Emenda v5 item 17), or None for a valid item. The reason is fixed text and never quotes the item (item 16)."""
+    if not isinstance(item, str):
+        return "não é texto"
+    if not item:
+        return "vazio"
+    if SCHEME_RE.match(item):
+        return "tem esquema (ex.: https://)"
+    if "@" in item:
+        return "tem credenciais (@)"
+    if any(c in item for c in "?#="):
+        return "tem ? , # ou ="
+    if ":" in item:
+        return "tem : (porta ou formato scp)"
+    if any(is_control(c) or c.isspace() for c in item):
+        return "tem espaço ou caractere de controle"
+    if item != item.lower():
+        return "tem maiúsculas"
+    if (item.startswith(("/", "~")) or item.endswith("/") or "\\" in item or ".." in item
+            or any(segment in ("", ".", "..") for segment in item.split("/"))):
+        return "tem barra no início ou no fim, // ou segmento . ou .."
+    return None
+
+
+def validate_remotes(remotes) -> list:
+    """remotes = [host/path, ...] of atlas-config.yml (SPEC-0080): the list, or AtlasError (code 2) with the
+    position (from 1) and the reason of the first invalid item, never its text (Emenda v5)."""
+    if remotes in ("", None):
+        return []
+    if not isinstance(remotes, list):
+        raise AtlasError("remotes precisa ser uma lista de prefixos host/caminho (ex.: [github.com/acme])", 2)
+    for position, item in enumerate(remotes, start=1):
+        reason = remote_item_problem(item)
+        if reason:  # position and reason only: no text of the item, masked or not (Emenda v5, item 16)
+            raise AtlasError(f"remotes: item {position} inválido — {reason}; {REMOTES_HINT}", 2)
+    return list(remotes)
+
+
 def ci_env_names(ci) -> list:
     names = ci.get("env") if isinstance(ci, dict) else None
     return [] if names in ("", None) else [names] if isinstance(names, str) else list(names)
@@ -449,7 +502,8 @@ ATLAS_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}\Z")
 ATLAS_NAME_MAX = 63
 MULTI_KEYS = ("default", "atlases")
 DEFAULT_NAME = "default"  # name of the one-atlas entry whose organization cannot be read
-SELECTED_BY_TEXT = {"option": "--atlas", "env": "ATLAS_NAME", "default": "default", "single": "único"}
+SELECTED_BY_TEXT = {"option": "--atlas", "env": "ATLAS_NAME", "remote": "remote do projeto", "default": "default",
+                    "single": "único"}
 UNKNOWN_ATLAS = ("atlas não configurado nesta máquina: {typed} — rode init --join --atlas <caminho> "
                  "(atlas configurados: {names})")
 NO_CHOICE = ("vários atlas configurados ({names}) e nenhum escolhido — use --atlas <nome>, ATLAS_NAME ou "
@@ -568,15 +622,111 @@ def _find_atlas(config: dict, typed: str) -> str:
     return found[0]
 
 
-def project_remote_choice(config: dict):
-    """Step 3 of the order of choice (ADR-0021), reserved for SPEC-0080: the `origin` remote of the current project
-    matched against the `remotes:` of each atlas. Not implemented yet: always None, so the order goes on to the
-    default. When implemented, it returns (name, selected_by) or None (no match, or a tie)."""
+GIT_TIMEOUT = 5
+SCP_REMOTE_RE = re.compile(r"^(?:[^@/]+@)?([^:/]+):(.*)$")  # [user@]host:path (scp-like, never a scheme)
+_REMOTE_CACHE = {}
+
+
+def normalize_remote(url):
+    """host/path of a git remote, lowercase, without scheme, credentials, port, ".git" nor slashes at the ends
+    (SPEC-0080); None for a local path or anything without a host. Credentials never reach the result."""
+    url = str(url or "").strip()
+    if "://" in url:
+        try:
+            parts = urllib.parse.urlsplit(url)
+            host = parts.hostname or ""
+        except ValueError:
+            return None
+        path = parts.path
+    else:
+        match = SCP_REMOTE_RE.match(url)
+        if not match or len(match.group(1)) == 1:  # C:/... is a Windows path, not host:path
+            return None
+        host, path = match.group(1), match.group(2)
+    segments = [segment for segment in path.split("/") if segment]
+    if segments and segments[-1].lower().endswith(".git"):
+        segments[-1] = segments[-1][:-len(".git")]
+    segments = [segment for segment in segments if segment]
+    host = host.strip().lower()
+    if not host or any(c.isspace() or c in "@:" for c in host):
+        return None
+    return "/".join([host] + segments).lower()
+
+
+def project_remote(cwd=None):
+    """Normalized `origin` remote of the folder (git config --get remote.origin.url, GIT_OPTIONAL_LOCKS=0, 5 s), or
+    None: no git, no repository, no origin, timeout. Never raises and never prints (the remote is not shown)."""
+    try:
+        cwd = os.getcwd() if cwd is None else str(cwd)
+    except OSError:  # the current folder was removed: the remote step is skipped (Emenda v3, item 12)
+        return None
+    if cwd in _REMOTE_CACHE:
+        return _REMOTE_CACHE[cwd]
+    try:  # run_collector: the only process runner of atlas.py (argv list, no shell, timeout, output captured)
+        stdout, _ = run_collector(["git", "-C", cwd, "config", "--get", "remote.origin.url"], timeout=GIT_TIMEOUT,
+                                  env=dict(os.environ, GIT_OPTIONAL_LOCKS="0"))
+        remote = normalize_remote(stdout)
+    except (CollectorError, OSError, ValueError):
+        remote = None
+    _REMOTE_CACHE[cwd] = remote
+    return remote
+
+
+def atlas_remotes(entry) -> list:
+    """`remotes:` of the atlas-config.yml of an entry; [] when the atlas cannot be read. Invalid items = AtlasError
+    (code 2) naming the item."""
+    atlas = entry_atlas(entry)
+    if not atlas:
+        return []
+    try:
+        shared = read_yaml(Path(atlas) / SHARED_FILE)
+    except (AtlasError, OSError, ValueError):
+        return []
+    return validate_remotes(shared.get("remotes") if isinstance(shared, dict) else None)
+
+
+def usable_remotes(entry):
+    """atlas_remotes, or None when the atlas's `remotes:` is invalid: in the remote step such an atlas counts as
+    having no remotes, so it never breaks the choice of another atlas (SPEC-0080, Emenda v3 item 8)."""
+    try:
+        return atlas_remotes(entry)
+    except AtlasError:
+        return None
+
+
+def remote_matches(config: dict, cwd=None) -> list:
+    """Names of the atlases whose longest `remotes:` prefix matches the project's remote by whole segments, all at
+    the same (greatest) length; [] without remotes, without a remote or without a match. An atlas with an invalid
+    `remotes:` counts as having none."""
+    declared = {name: usable_remotes(entry) or [] for name, entry in config["entries"].items()}
+    if not any(declared.values()):
+        return []  # no git call when no atlas declares remotes:
+    remote = project_remote(cwd)
+    if not remote:
+        return []
+    segments = remote.split("/")
+    best, names = 0, []
+    for name in sorted(declared):
+        length = max((len(item.split("/")) for item in declared[name]
+                      if segments[:len(item.split("/"))] == item.split("/")), default=0)
+        if length and length > best:
+            best, names = length, [name]
+        elif length and length == best:
+            names.append(name)
+    return names
+
+
+def project_remote_choice(config: dict, cwd=None):
+    """Step 3 of the order of choice (ADR-0021, SPEC-0080): the `origin` remote of the current folder matched
+    against the `remotes:` of each atlas; (name, "remote") for the longest prefix, None without a match or with a
+    tie (the order goes on to the default; doctor warns about the tie)."""
+    names = remote_matches(config, cwd)
+    return (names[0], "remote") if len(names) == 1 else None
 
 
 def select_atlas(config: dict, choice=None, environ=None) -> tuple:
     """(name, selected_by) of the entry used by every command but init, the first that applies (ADR-0021):
-    1. --atlas <name|folder> ("option"); 2. ATLAS_NAME ("env"); 3. the project's remote (reserved, SPEC-0080);
+    1. --atlas <name|folder> ("option"); 2. ATLAS_NAME ("env"); 3. the project's remote ("remote", SPEC-0080);
     4. `default:` ("default"); 5. the only atlas ("single"). A name or folder that is not configured = AtlasError
     (code 3) with the list and the step; several atlases and no choice = NoAtlasChosen (code 2)."""
     environ = os.environ if environ is None else environ
@@ -626,7 +776,8 @@ def load_config(config_home=None, choice=None) -> dict:
     shared_path = Path(values["atlas"]) / SHARED_FILE if values["atlas"] else None
     shared = read_yaml(shared_path) if shared_path and shared_path.is_file() else {}
     validate_ci(shared.get("ci"))
-    defaults = dict(default_shared(), organization="", mode="")
+    validate_remotes(shared.get("remotes"))
+    defaults = dict(default_shared(), organization="", mode="", remotes=[])
     for key in SHARED_KEYS:
         found = key in shared
         values[key] = shared[key] if found else defaults.get(key, "")
@@ -3658,15 +3809,15 @@ def cmd_init(args):
     atlas_path = absolute(args.atlas)
     local_path = local_config_write_path()  # always the new folder (SPEC-0070); credentials come from the read path
     if args.join:
-        extra = [flag for flag, given in (("--org", args.org), ("--mode", args.mode), ("--force", args.force))
-                 if given]
+        extra = [flag for flag, given in (("--org", args.org), ("--mode", args.mode), ("--force", args.force),
+                                          ("--remote", args.remote)) if given]
         if extra:
             raise AtlasError(f"init --join não aceita {', '.join(extra)}: a organização e o modo vêm do "
                              "atlas-config.yml do atlas", 2)
         return join_atlas(atlas_path, local_path, args.name, args.default)
     if not args.org or not args.mode:
         raise AtlasError("init precisa de --org NOME e --mode repo|local (ou --join para um atlas existente)", 2)
-    shared_text = render_atlas_config(args.org, args.mode)
+    shared_text = render_atlas_config(args.org, args.mode, args.remote)
     atlas = Path(atlas_path)
     shared = atlas / SHARED_FILE
     if atlas.exists() and not atlas.is_dir():
@@ -3811,6 +3962,11 @@ def check_shared(data: dict) -> list:
             validate_ci(data["ci"])
         except AtlasError as e:
             problems.append(str(e))
+    if "remotes" in data:
+        try:
+            validate_remotes(data["remotes"])
+        except AtlasError as e:
+            problems.append(str(e))
     problems += [f"caminho absoluto em {key}" for key, _ in absolute_values(data)]
     return problems
 
@@ -3927,11 +4083,34 @@ def other_atlas_items(config: dict, chosen) -> list:
     return rows
 
 
+def remote_tie_items(config: dict) -> list:
+    """doctor AVISO when the folder's remote matches more than one atlas at the same length (the remote step is
+    skipped); names only, never the remote (SPEC-0080)."""
+    names = remote_matches(config)
+    if len(names) < 2:
+        return []
+    detail = (f"o remote desta pasta casa com mais de um atlas no mesmo comprimento ({', '.join(names)}) e não "
+              "escolhe nenhum — deixe o prefixo em remotes: de um só atlas ou use --atlas")
+    return [("AVISO", "remote do projeto", detail)]
+
+
+def invalid_remotes_items(config: dict) -> list:
+    """doctor AVISO for each atlas whose `remotes:` is invalid (the remote step ignores it); the name only, never the
+    item (SPEC-0080, Emenda v3 item 8)."""
+    rows = []
+    for name in sorted(config["entries"]):
+        if usable_remotes(config["entries"][name]) is None:
+            detail = ("remotes: inválido no atlas-config.yml — o passo do remote ignora este atlas; rode lint com "
+                      f"--atlas {name} para ver o item")
+            rows.append(("AVISO", f"remotes do atlas {name}", detail))
+    return rows
+
+
 def doctor_rows(config_home=None, choice=None) -> list:
     """(status, item, detail) for each item of the contract, for the chosen atlas (select_atlas) and only its
     credentials; raises AtlasError(NOT_CONFIGURED, 3) without the local layer and AtlasError (code 3) for a name or
-    folder that is not configured. Several atlases without a choice = an ERRO row. Never runs a process and never
-    prints a variable's value."""
+    folder that is not configured. Several atlases without a choice = an ERRO row. Runs no process but the read-only
+    `git config` of the remote step (only when an atlas declares remotes:) and never prints a variable's value."""
     path, raw = read_local(config_home)
     config = local_atlases(path, raw)
     try:
@@ -3950,6 +4129,7 @@ def doctor_rows(config_home=None, choice=None) -> list:
     entries = config["entries"]
     rows.append(("OK", "Atlas configurados", f"{len(entries)} ({_names(entries)})"))
     rows += other_atlas_items(config, name)
+    rows += invalid_remotes_items(config) + remote_tie_items(config)
     if name is None:
         rows.append(("ERRO", "atlas escolhido", no_choice))
         return rows
@@ -4008,8 +4188,8 @@ def cmd_doctor(as_json, choice=None):
 
 def add_atlas_option(parser) -> None:
     """--atlas <name|folder> of every command but init (select_atlas, ADR-0021)."""
-    parser.add_argument("--atlas", help=("atlas desta máquina (nome ou pasta); sem ele: ATLAS_NAME, o default ou o "
-                                         "único configurado"))
+    parser.add_argument("--atlas", help=("atlas desta máquina (nome ou pasta); sem ele: ATLAS_NAME, o remote do "
+                                         "projeto, o default ou o único configurado"))
 
 
 def main(argv=None):
@@ -4024,6 +4204,8 @@ def main(argv=None):
     p.add_argument("--join", action="store_true", help="atlas já configurado: grava só a configuração local")
     p.add_argument("--name", help="nome do atlas nesta máquina (padrão: derivado da organização)")
     p.add_argument("--default", action="store_true", help="torna este atlas o padrão desta máquina")
+    p.add_argument("--remote", action="append", metavar="PREFIXO",
+                   help="prefixo host/caminho dos repositórios da organização (remotes:); pode repetir")
     p = sub.add_parser("config", help="configuração efetiva e a origem de cada valor (local | atlas | padrão)")
     p.add_argument("--json", action="store_true")
     add_atlas_option(p)

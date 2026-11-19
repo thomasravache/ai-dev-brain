@@ -14,7 +14,7 @@ A skill é **agnóstica de organização, de provedor e de agente**: o `atlas.py
 
 ## Ferramenta
 
-Rode `python3 <skill-dir>/scripts/atlas.py <comando>`, onde `<skill-dir>` é a pasta deste `SKILL.md`. Com vários atlas nesta máquina (uma organização cada), todo comando menos o `init` aceita `--atlas <nome|pasta>`; sem ele vale `ATLAS_NAME`, depois o `default` e depois o único configurado (`references/config.md`).
+Rode `python3 <skill-dir>/scripts/atlas.py <comando>`, onde `<skill-dir>` é a pasta deste `SKILL.md`. Com vários atlas nesta máquina (uma organização cada), todo comando menos o `init` aceita `--atlas <nome|pasta>`; sem ele vale `ATLAS_NAME`, depois o atlas cujo `remotes:` casa o remote `origin` da pasta atual, depois o `default` e depois o único configurado (`references/config.md`).
 
 | Comando | Uso |
 |---|---|

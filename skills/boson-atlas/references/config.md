@@ -48,13 +48,32 @@ Todos os comandos menos o `init` (`scan`, `build`, `context`, `curate`, `vendor`
 
 1. `--atlas <nome|pasta>` — é pasta quando tem `/` ou começa com `~` ou `.` (casa pela pasta resolvida);
 2. a variável `ATLAS_NAME=<nome|pasta>`;
-3. (reservado: o remote do projeto, SPEC-0080);
+3. o remote do projeto: o `origin` da pasta atual casado com `remotes:` do `atlas-config.yml` de cada atlas (abaixo, SPEC-0080);
 4. o `default`;
 5. o único atlas configurado.
 
 Um nome ou uma pasta que não está no `config.yml` sai com 3: `atlas não configurado nesta máquina: <x> — rode init --join --atlas <caminho> (atlas configurados: acme, globex)`. Vários atlas sem `default` e sem escolha saem com 2: `vários atlas configurados (acme, globex) e nenhum escolhido — use --atlas <nome>, ATLAS_NAME ou config --set-default <nome>`.
 
-`config` mostra a linha `atlas: <nome> (escolhido por: --atlas|ATLAS_NAME|default|único)`; `config --json` traz também `atlas_name`, `selected_by` (`option`, `env`, `default` ou `single`) e `atlases` (`[{"name", "atlas", "default"}]`, por nome; na forma de um atlas só, a única entrada tem `"default": true`).
+`config` mostra a linha `atlas: <nome> (escolhido por: --atlas|ATLAS_NAME|remote do projeto|default|único)`; `config --json` traz também `atlas_name`, `selected_by` (`option`, `env`, `remote`, `default` ou `single`) e `atlases` (`[{"name", "atlas", "default"}]`, por nome; na forma de um atlas só, a única entrada tem `"default": true`).
+
+### Atlas pelo remote do projeto (`remotes:`)
+
+O `atlas-config.yml` compartilhado de cada atlas pode declarar os prefixos dos repositórios da organização. Como fica no atlas, vale para toda a organização e chega a cada máquina pelo `init --join` (SPEC-0080, ADR-0021):
+
+```yaml
+remotes:                       # opcional
+  - github.com/acme
+  - gitlab.acme.interno/plataforma
+```
+
+- Cada item é `host/caminho` em minúsculas, sem esquema, `@`, `:`, `?`, `#`, `=`, espaço, caractere de controle, `..` nem barra no início ou no fim. Um item fora disso faz os comandos do atlas escolhido saírem com 2; o `lint` aponta o mesmo problema. A mensagem nunca cita o item (nem mascarado): diz só a posição, a partir de 1, e o primeiro motivo que se aplica, por exemplo `remotes: item 2 inválido — tem esquema (ex.: https://); use host/caminho, como github.com/acme`. Os motivos, nesta ordem: `não é texto`, `vazio`, `tem esquema`, `tem credenciais (@)`, `tem ? , # ou =`, `tem : (porta ou formato scp)`, `tem espaço ou caractere de controle`, `tem maiúsculas` e `tem barra no início ou no fim, // ou segmento . ou ..` (que também cobre `~` no início e `\`).
+- Um atlas com `remotes:` inválido conta como sem `remotes:` no passo 3 e não atrapalha os outros: o exit 2 só acontece quando ele é o escolhido, o `config --list` não falha por isso e o `doctor` mostra `AVISO remotes do atlas <nome>`, sem o item.
+- `init --atlas <pasta> --org O --mode M --remote github.com/acme [--remote ...]` grava a lista no atlas novo (o `init --join` não aceita `--remote`: a lista já vem do atlas).
+- No passo 3, a CLI lê `git -C <pasta atual> config --get remote.origin.url` (só leitura, `GIT_OPTIONAL_LOCKS=0`, prazo de 5 s) e o normaliza para `host/caminho` em minúsculas, sem esquema, usuário, senha ou token, porta nem `.git`: `https://usuario:token@GitHub.com/Acme/API.git` e `git@github.com:Acme/API.git` viram `github.com/acme/api`; `ssh://git@host:2222/g/r.git` vira `host/g/r`.
+- Um item casa quando é igual ao remote ou prefixo dele por segmentos inteiros: `github.com/acme` casa `github.com/acme/api`, mas não `github.com/acme-labs/x`. Com mais de um atlas casando, vale o prefixo mais longo; empate no mesmo comprimento pula o passo (vale o `default`) e o `doctor` mostra um AVISO com os nomes dos atlas.
+- Pasta sem git, sem `origin`, sem `git` no `PATH`, pasta atual removida ou prazo estourado: o passo é pulado sem erro. Sem nenhum atlas com `remotes:`, o `git` nem é chamado.
+- O remote nunca aparece na saída: `selected_by` diz só `remote`, e o AVISO do `doctor` traz só os nomes dos atlas.
+- Atualize todas as máquinas antes de declarar `remotes:`: a versão anterior ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: remotes`.
 
 ### Acrescentar, listar e trocar o padrão
 
@@ -68,7 +87,7 @@ Um nome ou uma pasta que não está no `config.yml` sai com 3: `atlas não confi
 Onboarding com duas organizações:
 
 ```bash
-python3 scripts/atlas.py init --atlas ~/acme-atlas --org Acme --mode repo        # vira o default
+python3 scripts/atlas.py init --atlas ~/acme-atlas --org Acme --mode repo --remote github.com/acme   # vira o default
 python3 scripts/atlas.py init --join --atlas ~/globex-atlas --name globex        # acrescenta; grava config.yml.bak
 python3 scripts/atlas.py config --list
 python3 scripts/atlas.py context "pagamentos" --atlas globex                      # ou ATLAS_NAME=globex
@@ -132,7 +151,7 @@ Chave ausente usa o padrão (origem `padrão` no `config`).
 | `coletor <id>` | executável encontrado | — | executável não encontrado ou sem `command` |
 | `credencial <coletor> <NOME>` | `definida` | `não definida` | — |
 
-O `doctor` não executa nenhum processo: usa só arquivos, `shutil.which` e `os.environ`. Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração local ou com `--atlas`/`ATLAS_NAME` fora da lista. Com vários atlas, o `doctor` confere só o escolhido e as credenciais dele.
+O `doctor` não executa nenhum processo além do `git config --get remote.origin.url` de leitura do passo do remote (só quando algum atlas declara `remotes:`): usa arquivos, `shutil.which` e `os.environ`. Quando o remote da pasta casa com mais de um atlas no mesmo comprimento, mostra `AVISO remote do projeto — …` com os nomes dos atlas, nunca o remote. Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração local ou com `--atlas`/`ATLAS_NAME` fora da lista. Com vários atlas, o `doctor` confere só o escolhido e as credenciais dele.
 
 `doctor --json` imprime o mesmo diagnóstico como objeto:
 

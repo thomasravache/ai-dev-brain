@@ -31,7 +31,9 @@ Todas têm `annotations.readOnlyHint: true` e `inputSchema` fechado (`additional
 | `sdd_whats_new` | nenhum | `spec_graph.py --root <projeto> whats-new` |
 | `fermion_doctor` | nenhum | `scripts/fermion_doctor.py --project <projeto> --json` |
 
-Nas `sdd_*` e na `fermion_doctor`, `<projeto>` é o valor de `CLAUDE_PROJECT_DIR` quando a variável não está vazia, senão a pasta corrente do servidor. Os dois são lidos a cada chamada, nunca vêm do agente.
+As cinco `atlas_*` aceitam também `atlas` (texto opcional, 1 a 200 caracteres, sem nenhum caractere de controle, nem tab ou quebra de linha): o nome ou a pasta de um atlas desta máquina, passado colado à CLI como `--atlas=<valor>` (antes do `--` do `atlas_context`). Elas rodam a CLI com a pasta corrente em `<projeto>` (abaixo), então, sem `atlas`, vale a ordem de escolha da CLI naquela pasta: `ATLAS_NAME`, o atlas cujo `remotes:` casa o remote `origin` do projeto, o `default` e o único configurado (SPEC-0080, ADR-0021). Com vários atlas e nenhum escolhido (exit 2), a tool devolve `isError: true` com a mensagem da CLI.
+
+Nas `atlas_*` (pasta corrente da CLI), nas `sdd_*` e na `fermion_doctor`, `<projeto>` é o valor de `CLAUDE_PROJECT_DIR` quando a variável não está vazia, senão a pasta corrente do servidor. Os dois são lidos a cada chamada, nunca vêm do agente. Nas `atlas_*`, um `CLAUDE_PROJECT_DIR` que não é uma pasta existente cai na pasta corrente do servidor.
 
 Como o resultado é montado:
 

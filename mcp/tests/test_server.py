@@ -105,7 +105,7 @@ class FakeRunner:
         self.calls = []
         self.returncode, self.stdout, self.stderr, self.raises = returncode, stdout, stderr, raises
 
-    def __call__(self, argv, timeout):
+    def __call__(self, argv, timeout, *args, **kwargs):  # extras (ex.: cwd do projeto, SPEC-0080) são aceitos
         self.calls.append((list(argv), timeout))
         if self.raises is not None:
             raise self.raises
@@ -132,6 +132,12 @@ def error_of(case, response, code, id=1):
     case.assertNotIn("result", response, response)
     case.assertEqual(response.get("error", {}).get("code"), code, response)
     return response["error"]
+
+
+def own_properties(schema):
+    """Propriedades do schema sem o parâmetro "atlas", comum às cinco atlas_* (SPEC-0080, testado em
+    test_atlas_remote_server.py)."""
+    return {k: v for k, v in schema.get("properties", {}).items() if k != "atlas"}
 
 
 def tools_by_name(case, result):
@@ -176,14 +182,14 @@ class ToolsListTest(unittest.TestCase):
         for name in ("atlas_config", "atlas_doctor"):
             with self.subTest(tool=name):
                 schema = self.tools[name]["inputSchema"]
-                self.assertEqual(schema.get("properties", {}), {})
+                self.assertEqual(own_properties(schema), {})
                 self.assertEqual(schema.get("required", []), [])
 
     def test_context_schema_has_the_contract_ranges(self):
         """SPEC-0054:UT-01"""
         schema = self.tools["atlas_context"]["inputSchema"]
         self.assertEqual(schema.get("required"), ["query"])
-        props = schema["properties"]
+        props = own_properties(schema)
         self.assertEqual(sorted(props), ["hops", "limit", "max_chars", "query"])
         query = props["query"]
         self.assertEqual((query["type"], query["minLength"], query["maxLength"]), ("string", 1, 500))
@@ -196,7 +202,7 @@ class ToolsListTest(unittest.TestCase):
         """SPEC-0054:UT-01"""
         schema = self.tools["atlas_lint"]["inputSchema"]
         self.assertEqual(schema.get("required", []), [])
-        self.assertEqual(sorted(schema["properties"]), ["only"])
+        self.assertEqual(sorted(own_properties(schema)), ["only"])
         only = schema["properties"]["only"]
         self.assertEqual(only["type"], "array")
         self.assertEqual(only["items"]["type"], "string")
@@ -210,7 +216,7 @@ class ToolsListTest(unittest.TestCase):
         """SPEC-0054:UT-01"""
         schema = self.tools["atlas_curate_list"]["inputSchema"]
         self.assertEqual(schema.get("required", []), [])
-        self.assertEqual(sorted(schema["properties"]), ["status"])
+        self.assertEqual(sorted(own_properties(schema)), ["status"])
         status = schema["properties"]["status"]
         self.assertEqual(status["type"], "string")
         self.assertEqual(sorted(status["enum"]), ["confirmed", "inferred", "rejected"])

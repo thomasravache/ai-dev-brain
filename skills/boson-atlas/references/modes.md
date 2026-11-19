@@ -148,8 +148,14 @@ Cada organização tem o seu atlas, num modo ou noutro, e a máquina guarda os d
 2. `atlas.py init --join --atlas ~/globex-atlas --name globex` (ou `init ... --org Globex --name globex`): acrescenta
    o segundo, passa o `config.yml` para a forma de vários atlas e guarda a anterior em `config.yml.bak`.
 3. Declare as credenciais de cada um dentro da sua entrada em `atlases.<nome>.credentials` (só nomes).
-4. Escolha por comando com `--atlas globex` ou `ATLAS_NAME=globex`; troque o padrão com `config --set-default globex`;
-   `config --list` mostra os dois e qual vale agora.
+4. Declare em `remotes:` do `atlas-config.yml` de cada atlas os prefixos dos repositórios da organização
+   (`github.com/acme` num, `github.com/globex` no outro; `init --remote` grava a lista num atlas novo) e faça commit
+   no atlas. Num repositório cujo `origin` casa um prefixo, todo comando, as tools MCP `atlas_*` e o início da sessão
+   usam esse atlas sem opção (`escolhido por: remote do projeto`). Atualize a skill em todas as máquinas antes: a
+   versão anterior acusa `chave desconhecida: remotes` no `lint` (SPEC-0080).
+5. Escolha por comando com `--atlas globex` ou `ATLAS_NAME=globex`, que vencem o remote; troque o padrão (usado fora
+   dos repositórios das duas organizações) com `config --set-default globex`; `config --list` mostra os dois e qual
+   vale agora.
 
 A CI de um atlas no modo repo varre sempre o atlas do repositório: o workflow e o `ci/atlas-scan.sh` passam
 `--atlas "$PWD"` em todo `scan` e `lint`, então um `ATLAS_CONFIG_HOME` que já tenha outro atlas (mesmo como `default`)

@@ -4,14 +4,14 @@ title: "boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no 
 tier: full
 type: feature
 user_facing: true
-status: approved
+status: implemented
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: [SPEC-0079]
 consumes_contract: [SPEC-0079@1]
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, mcp/fermion_mcp.py, mcp/tests/**, mcp/README.md, hooks/session_start.py, tests/plugin/test_session_start.py, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skills/boson-atlas/references/config.md, skills/boson-atlas/references/modes.md, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, mcp/fermion_mcp.py, mcp/tests/**, mcp/README.md, hooks/session_start.py, tests/plugin/**, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0021]
 external: []
 size: M
@@ -122,6 +122,44 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
   exit 3 → nada (como hoje)
 ```
 
+**Esclarecimentos (Emenda v2, achados do test-writer no G1):**
+1. **Hook com exit 2:** os `<nomes>` vêm de uma segunda chamada de leitura, `config --list --json`, que nunca falha com vários atlas e fica dentro do prazo do hook. Com 0 atlas ou `config --json` ilegível, o hook mantém a linha atual.
+2. **Formato dos nomes:** na ordem de `atlases` (por nome), separados por `, `.
+3. **Motivo no hook para `option` e `single`:** usa o texto da CLI: `--atlas` e `único`. `env` vira `ATLAS_NAME`, `default` vira `padrão` e `remote` vira `remote do projeto`.
+4. **Parâmetro `atlas` das tools:** recusa qualquer caractere de controle, inclusive TAB, LF e CR, porque o valor vira argv.
+5. **Passagem à CLI:** colada, `--atlas=<valor>`, para que um valor começando com `-` não vire opção, como as tools `brain_*` já fazem.
+6. **Validação de `remotes:` no UT-07:** acontece ao ler a configuração (`config --json` e os demais comandos), que sai com exit 2 e cita o item. Itens com `:` ou maiúsculas também são recusados, e o `lint` aceita `remotes` como chave conhecida.
+
+**Correções do G4 (Emenda v3):**
+7. **Item inválido de `remotes:` nas mensagens:** toda mensagem que cita um item inválido (CLI, `doctor`, `lint` e, por consequência, MCP) mostra o item com as credenciais trocadas por `***` (`https://***@host/...`). Nenhum token sai.
+8. **Um atlas com `remotes:` inválido não derruba os outros:**
+   - no passo do remote, um atlas cujo `remotes:` é inválido conta como sem `remotes`;
+   - o exit 2 por `remotes:` inválido só acontece quando esse atlas é o escolhido;
+   - o `config --list` nunca falha por isso;
+   - o `doctor` mostra um AVISO com o nome do atlas, sem o item.
+9. **Hook com exit 2:** a linha "nenhum escolhido" só aparece quando o `config --list --json` traz `atlas_name` nulo. Outro exit 2 (credenciais ou `ci:` inválidos no atlas escolhido) tira o bloco do atlas e manda uma linha ao stderr, como qualquer falha da CLI.
+10. **`mcp/README.md`:** o parágrafo do parâmetro `atlas` fica abaixo da tabela de tools.
+11. **`CLAUDE_PROJECT_DIR` inexistente:** as tools `atlas_*` usam a pasta do projeto como `cwd` só quando ela existe; senão usam o `cwd` do servidor, e o passo do remote usa o remote dessa pasta, se houver.
+12. **Pasta atual removida:** o passo do remote é pulado sem erro.
+13. **`remotes:` com caractere de controle:** o item é recusado (abaixo de 0x20 e de 0x7f a 0x9f).
+
+**Correções da rodada 2 do G4 (Emenda v4):**
+14. **Máscara sempre aplicada:** toda mensagem que cita um item de `remotes:` mostra `***@` no lugar de tudo o que vem antes do último `@` (depois do esquema), com ou sem esquema e com ou sem `:` (`TOK@github.com/acme` → `***@github.com/acme`, `git@host:g/r` → `***@host:g/r`). Também troca o que vem depois de `?` ou `#` por `***`. O UT-07 deixa de esperar `user@github.com/acme` sem máscara.
+15. **Item com `?`, `#` ou `=`:** é recusado (exit 2), porque nunca casaria com um remote normalizado e poderia carregar um token.
+
+**Decisão do impedimento IMP-01 (Emenda v5, thomas, 2026-11-19):**
+16. **Mensagens sobre `remotes:` não citam o item.** Toda mensagem sobre um item inválido diz só a posição (a partir de 1) e o motivo, por exemplo `remotes: item 2 inválido — tem esquema (ex.: https://); use host/caminho, como github.com/acme`. Isso vale para CLI, `doctor`, `lint` e, por consequência, MCP. Nenhum texto do item aparece em nenhuma saída, mascarado ou não. Esta regra substitui os itens 7 e 14: a máscara deixa de existir nas mensagens de `remotes:`.
+17. **Motivos, um por item (o primeiro que se aplica):**
+    - `tem esquema`
+    - `tem credenciais (@)`
+    - `tem ? , # ou =`
+    - `tem : (porta ou formato scp)`
+    - `tem espaço ou caractere de controle`
+    - `tem maiúsculas`
+    - `tem barra no início ou no fim, // ou segmento . ou ..` (inclui `~` no início e `\`)
+    - `vazio`
+    - `não é texto`
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -159,9 +197,17 @@ Hook de início de sessão (hooks/session_start.py), bloco do atlas, a partir de
 - **UT-04** — Dado um remote que casa com `a`, quando o comando roda com `--atlas b` ou `ATLAS_NAME=b`, então `b` é escolhido (`option`/`env`).
 - **UT-05** — Dada uma pasta sem git, um repositório sem `origin`, ou um `PATH` sem `git`, quando o comando roda com `default: b`, então `b` é escolhido sem erro nem aviso.
 - **UT-06** — Dados dois atlas com o mesmo prefixo que casa o remote da pasta, quando o `doctor` roda, então há um AVISO com os dois nomes, sem o remote.
-- **UT-07** — Dados itens de `remotes:` com `https://`, `@`, espaço, `..`, `/abs` e barra final, quando a configuração é lida, então exit 2 com o item. `init --remote github.com/acme --remote gitlab.acme.interno/plataforma` grava a lista.
+- **UT-07** — Dados itens de `remotes:` com `https://`, `@`, espaço, `..`, `/abs` e barra final, quando a configuração é lida, então exit 2 com `item N inválido` e o motivo, sem o texto do item (Emenda v5). `init --remote github.com/acme --remote gitlab.acme.interno/plataforma` grava a lista.
 - **UT-08** — Dado o servidor MCP, quando `atlas_context`, `atlas_config`, `atlas_doctor`, `atlas_lint` e `atlas_curate_list` recebem `atlas: "b"`, então a CLI recebe `--atlas b`. Um valor vazio, com mais de 200 caracteres ou com caractere de controle é recusado pelo esquema. O exit 2 da escolha vira erro da tool com a mensagem.
 - **UT-09** — Dado o hook, quando `config --json` devolve 1 atlas, 2 atlas com `selected_by` `remote`, `env` ou `default`, exit 2 ou exit 3, então as linhas são as do contrato, e nenhuma contém caminho, remote ou credencial.
+- **UT-10** — Dado um `remotes:` com `https://u:SECRETTOK@github.com/globex`, quando `config --json`, `config --list --json`, `doctor --json`, `lint --json` e a tool `atlas_config` rodam, então `SECRETTOK` não aparece em nenhuma saída. Nas saídas de erro (`config --json` com `globex` escolhido, `lint --json` e a tool `atlas_config`), aparecem só `item 1 inválido` e o motivo `tem esquema`, sem nenhum texto do item (Emenda v5).
+- **UT-11** — Dados os atlas `acme` (default) e `globex` com `remotes:` inválido, quando `config --json`, `context`, `lint` e `config --list --json` rodam fora e dentro de um repositório git, então `acme` funciona (exit 0) e `config --list` sai 0. Com `--atlas globex`, exit 2 com a posição e o motivo, sem o item (Emenda v5). O `doctor` mostra um AVISO citando `globex` (Emenda v3, item 8).
+- **UT-13** — Dados os itens `TOK@github.com/acme`, `ghp_TOK@github.com:acme/x`, `https://github.com/acme?access_token=TOK`, `https://github.com/acme#TOK` e `https:/u:TOK@h/x`, quando a configuração é lida (CLI, `doctor`, `lint` e tool `atlas_config`), então nenhum pedaço do item (token, userinfo, texto depois do `@`) aparece em nenhuma saída, e o erro diz a posição e o motivo. Emenda v5 acrescenta `https://u:TO?K@host/x` e `https://u:ab#TOK@host/x`, e `https:/u:TOK@h/x` tem o motivo `tem credenciais (@)`, porque `https:/` não é esquema. `github.com/acme?token=x`, `github.com/acme#x` e `github.com/a=b` dão exit 2 (Emenda v4).
+- **UT-12** — Casos de borda da Emenda v3:
+  - hook com `config --json` em exit 2 e `config --list --json` com `atlas_name: "acme"`: não mostra "nenhum escolhido" (item 9);
+  - `atlas_config` com `CLAUDE_PROJECT_DIR=/inexistente`: responde com o atlas `default` (item 11);
+  - `config --json` numa pasta atual removida: sai 0 pelo `default` (item 12);
+  - item `github.com/acme\x1b[31m`: exit 2 (item 13).
 
 ### 7.3 Testes de Integração
 - **IT-01** — Com a CLI como processo, `HOME` temporário, dois atlas com `remotes:` e dois repositórios git locais com `origin` diferentes, `context` sem opção usa o grafo do atlas certo em cada repositório.
@@ -211,63 +257,130 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [x] Fase 0: CH-01 escrito e passando no código atual, commitado antes de qualquer mudança
+- [x] Red: UT-01 a UT-09, IT-01, IT-02, CT-01 e E2E-01 com a tag `SPEC-0080:<ID>`, falhando pelo motivo certo
+- [x] Green: `remotes:` (validação, `init --remote`, modelo), passo do remote em `project_remote_choice`, aviso de empate no `doctor`; parâmetro `atlas` e `cwd` do projeto nas tools `atlas_*`; linha do hook; docs, CHANGELOG, `ATLAS_VERSION` e `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega, docs e CHANGELOG (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 7274c26 | 2026-11-18 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=4)) — ffa2016 | 2026-11-18 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 46c53c8 | 2026-11-19 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — b318cd8 | 2026-11-19 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer (subagente), rodada 4: APPROVED — 0 blocker, 0 major, 2 minor (fixture de teste com o formato antigo; redação do CHANGELOG) — f50b089 | 2026-11-19 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 661e4e1 | 2026-11-19 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-19 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-19 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 0543b3b | 2026-11-19 |
+
+### Histórico de reprovações
+- G2 FAIL 2026-11-18 — test exit 1 (FAILED (failures=7)); lint exit 0 (All checks passed!) — fb2ee85
+- G2 PASS 2026-11-18 — depois de 1 reprovação(ões)
+- G4 FAIL 2026-11-18 — rodada 1: CHANGES_REQUESTED — 1 blocker de processo (arquivo fora de touches), 2 major (item de remotes com token sem máscara; remotes inválido num atlas derruba os outros), 5 minor — f95ff16
+- G4 FAIL 2026-11-18 — rodada 2: CHANGES_REQUESTED — 1 major (userinfo sem esquema e query/fragment não mascarados), 1 minor (item válido aceita ?, # e =) — 89bb1a5
+- G4 FAIL 2026-11-18 — rodada 3: CHANGES_REQUESTED — 1 major (? ou # dentro da senha deixa sair parte dela na máscara) — 7eac523
+- G4 PASS 2026-11-19 — depois de 3 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| IMP-01 | 2026-11-18 | G4 | falha | 3 reprovações seguidas do G4, todas na máscara de itens inválidos de remotes: cada regra de máscara nova deixa outra forma de token passar | Emendas v3 (máscara com esquema) e v4 (máscara sempre, query e fragment); rodada 3 achou ? ou # dentro da senha | thomas | Emenda v5 — decisão de thomas em 2026-11-19: as mensagens de remotes citam só a posição e o motivo, nunca o item | 2026-11-19 |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- **Escolha pelo remote:** o projeto usa o atlas da sua organização sem nenhuma opção. A chave `remotes:` do `atlas-config.yml` compartilhado declara os prefixos (`github.com/acme`), e a CLI casa o `origin` da pasta atual por segmentos inteiros. Vale o prefixo mais longo, e um empate cai no `default` com aviso do `doctor`. A ordem fica `--atlas` → `ATLAS_NAME` → remote do projeto → `default` → atlas único.
+- **Tools MCP:** as cinco tools `atlas_*` aceitam o parâmetro `atlas`, passado como `--atlas=<valor>` e recusando caractere de controle. Elas rodam na pasta do projeto quando ela existe.
+- **Início da sessão:** o hook diz qual atlas vale para o projeto e por quê. Com vários atlas e nenhum escolhido, diz o passo. Com um atlas só, a linha não muda.
+- **Robustez e privacidade:**
+  - um atlas com `remotes:` inválido não derruba os outros;
+  - mensagens sobre um item inválido citam só a posição e o motivo, nunca o item (Emenda v5, decisão do IMP-01);
+  - o remote e as credenciais dele nunca aparecem na saída;
+  - pasta removida, `git` ausente e `CLAUDE_PROJECT_DIR` inexistente pulam o passo sem erro.
+- **Docs e versões:** `init --remote`, `references/config.md`, `references/modes.md`, `mcp/README.md`, CHANGELOG `[2026.11.11]` (com o aviso de atualizar todas as máquinas antes de declarar `remotes:`), `ATLAS_VERSION` 2026.11.11 e o plugin 2026.11.23.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **Testes:**
+  - b1b769a: caracterização (CH-01);
+  - f730c46: plano;
+  - fb2ee85: ajuste de dois testes antigos ao contrato da SPEC-0079;
+  - 0b21d2c: Emenda v3;
+  - 15b48f6: Emenda v4;
+  - c6d9fd0: Emenda v5.
+- **Implementação:**
+  - 8945fa1: `remotes:`, `project_remote_choice`, MCP e hook;
+  - 8d95eb7: Emenda v3;
+  - 3ab88b5: Emenda v4;
+  - 687f10e: Emenda v5, em que a máscara saiu e as mensagens passaram a citar posição e motivo.
+- **Emendas:**
+  - v2: esclarecimentos do test-writer;
+  - v3: achados da rodada 1 do G4, com `touches` ganhando `tests/plugin/**`;
+  - v4: máscara sempre aplicada;
+  - v5: decisão de thomas no IMP-01.
+- **Revisão G4:**
+  - rodadas 1 a 3: CHANGES_REQUESTED, sempre por vazamento de token em itens inválidos de `remotes:`;
+  - impedimento IMP-01 (falha), resolvido por thomas em 2026-11-19 ("Não citar o item");
+  - rodada 4: APPROVED, sem nenhum texto de item em 19 casos adversariais.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Hook e tools `atlas_*` com um atlas iguais à versão anterior | PASS | `test_atlas_remote_server.py`, `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-01 | Remote casa com o `remotes:` de um atlas | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-02 | Normalização do remote sem credenciais | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-03 | Segmento inteiro, prefixo mais longo, empate | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-04 | `--atlas` e `ATLAS_NAME` vencem o remote | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-05 | Sem git, sem `origin`, sem `git` no PATH | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-06 | Aviso de empate no `doctor` | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-07 | `remotes:` inválido com posição e motivo; `init --remote` | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-08 | Parâmetro `atlas` das tools MCP | PASS | `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| UT-09 | Linhas do hook | PASS | `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
+| UT-10 | Token de item inválido não sai em nenhuma saída | PASS | `test_atlas_remotes.py`, `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| UT-11 | Atlas com `remotes:` inválido não derruba os outros | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| UT-12 | Casos de borda da Emenda v3 | PASS | `test_atlas_remotes.py`, `test_atlas_remote_server.py`, `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
+| UT-13 | Itens com token sem esquema, query, fragmento; `?`, `#`, `=` recusados | PASS | `test_atlas_remotes.py`, `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| IT-01 | CLI escolhe o atlas certo em cada repositório | PASS | `test_atlas_remotes.py` — CI do PR #57 (run 44578904716) |
+| IT-02 | Servidor MCP por stdio escolhe pelo remote | PASS | `test_atlas_remote_server.py` — CI do PR #57 (run 44578904716) |
+| CT-01 | Hook e MCP leem o contrato SPEC-0079@1 mais `remote` | PASS | `test_atlas_remote_server.py`, `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
+| E2E-01 | Jornada com duas organizações: hook, `atlas_context` e default | PASS | `test_atlas_remote_hook.py` — CI do PR #57 (run 44578904716) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 4
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0021
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — privacidade (UT-02, UT-10, UT-13), resiliência (UT-05, UT-11, UT-12), prazo do git (UT-05)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — `selected_by`, aviso do `doctor`, motivo no hook; rollback no CHANGELOG
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — `ATLAS_VERSION` 2026.11.11, plugin 2026.11.23, PR #57.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Ficam como nits sem spec:
+- uma fixture de teste do hook (`INVALID_CHOSEN_CLI`) ainda mostra o formato antigo da mensagem (só stderr falso);
+- os minors da SPEC-0079 continuam valendo.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0080`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 1 (sem mudança de versão) | 2026-11-19 | Emenda v5: as mensagens sobre `remotes:` citam só a posição e o motivo, nunca o item; a máscara (itens 7 e 14) sai; UT-07, UT-10 e UT-13 passam a conferir a posição e o motivo e a ausência de qualquer texto do item | IMP-01 (falha): 3 reprovações seguidas do G4, cada regra de máscara deixava outra forma de token passar; decisão de thomas em 2026-11-19 ("Não citar o item") | nenhuma | thomas, 2026-11-19 |
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v4: a máscara de userinfo vale sempre (com e sem esquema), e query/fragment também viram `***`; itens com `?`, `#` ou `=` são recusados; UT-07 ajustado; UT-13 novo | G4 rodada 2 (1 major, 1 minor): `TOK@github.com/acme` e `?access_token=` ainda saíam sem máscara | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v3: item inválido de `remotes:` mascarado; atlas com `remotes:` inválido não derruba os outros (AVISO no `doctor`); hook só diz "nenhum escolhido" com `atlas_name` nulo; README; `CLAUDE_PROJECT_DIR` inexistente e pasta removida pulam o passo; caractere de controle recusado; `touches` ganha `tests/plugin/**`; UT-10 a UT-12 novos | G4 rodada 1 (1 blocker de processo, 2 major, 5 minor) | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |
+| 1 (sem mudança de versão) | 2026-11-18 | Emenda v2: esclarece de onde o hook tira os nomes no exit 2 (`config --list --json`), o formato e os textos do motivo, a recusa de qualquer caractere de controle no parâmetro `atlas`, o `--atlas=<valor>` colado e onde `remotes:` é validado | G1 (test-writer): seis pontos sem definição no contrato | nenhuma | thomas, 2026-11-18 (piloto automático com o recomendado) |

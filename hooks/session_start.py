@@ -2,7 +2,8 @@
 
 Lê o JSON do hook no stdin (só o "cwd"), roda só comandos de leitura das CLIs do próprio plugin e imprime
 `hookSpecificOutput.additionalContext` com até três blocos: o `status` do SDD (quando o projeto tem
-docs/specs/sdd-config.yml), a linha do atlas e a linha do segundo cérebro (quando `config --json` sai com 0). Depois
+docs/specs/sdd-config.yml), a linha do atlas (com vários atlas, o escolhido para o projeto e o motivo, SPEC-0080) e a
+linha do segundo cérebro (quando `config --json` sai com 0). Depois
 deles, o bloco "Instalação desatualizada" quando o doctor do plugin (scripts/fermion_doctor.py, SPEC-0061, ADR-0019)
 tem achado.
 Prazo de 10 s por CLI e 20 s no total (Emenda v2). Sempre sai com 0: CLI ou cwd que falha tira só o bloco dela e
@@ -33,6 +34,14 @@ CUT_NOTICE = "… (cortado; rode `status`)"
 ATLAS_LINE = ("Atlas da organização (boson-atlas) configurado nesta máquina: para contexto de sistemas, use a skill "
               "boson-atlas ou a tool MCP atlas_context.")
 DOCTOR_HEADER = "## Instalação desatualizada (fermion)\n"
+ATLAS_CHOSEN = ("Atlas da organização (boson-atlas) para este projeto: {name} (escolhido por: {reason}). "
+                "Outros nesta máquina: {others}. Use a skill boson-atlas ou a tool MCP atlas_context.")
+ATLAS_NO_CHOICE = ("Vários atlas nesta máquina ({names}) e nenhum escolhido para este projeto: use --atlas, o "
+                   "parâmetro atlas das tools MCP ou declare remotes: no atlas-config.yml.")
+# selected_by do `config --json` (SPEC-0079@1 e SPEC-0080) → texto do motivo; desconhecido vira o próprio valor
+ATLAS_REASONS = {"option": "--atlas", "env": "ATLAS_NAME", "remote": "remote do projeto", "default": "padrão",
+                 "single": "único"}
+CHOICE_EXIT = 2
 BRAIN_LINE = ("Segundo cérebro (photon-brain) configurado nesta máquina: para notas e decisões do usuário, use a "
               "skill photon-brain.")
 
@@ -138,6 +147,51 @@ def configured_line(runner, deadline, script, line, cwd):
     raise Unavailable(f"config saiu com {result.returncode}")
 
 
+def atlas_names(data):
+    """Nomes de `atlases` (na ordem da CLI, por nome) de um JSON do `config`; [] quando o campo não serve."""
+    atlases = data.get("atlases") if isinstance(data, dict) else None
+    if not isinstance(atlases, list):
+        return []
+    names = [item.get("name") for item in atlases if isinstance(item, dict)]
+    return [name for name in names if isinstance(name, str) and name]
+
+
+def parse_json(text):
+    try:
+        return json.loads(text or "")
+    except ValueError:
+        return None
+
+
+def atlas_line(runner, deadline, cwd):
+    """Linha do atlas (SPEC-0080): com 1 atlas (ou JSON ilegível), a linha de sempre; com 2+, o nome escolhido e o
+    motivo; exit 2 com `atlas_name` nulo em `config --list --json` (vários sem escolha), o passo que falta, com os
+    nomes da lista; outro exit 2 tira o bloco e vira uma linha no stderr (SPEC-0080, Emenda v3). Nunca mostra
+    caminho, remote nem credencial: só nomes de atlas."""
+    result = call(runner, deadline, ATLAS, ["config", "--json"], cwd)
+    if result.returncode == NOT_CONFIGURED:
+        return None
+    if result.returncode == CHOICE_EXIT:
+        listed = call(runner, deadline, ATLAS, ["config", "--list", "--json"], cwd)
+        data = parse_json(listed.stdout) if listed.returncode == 0 else None
+        names = atlas_names(data)
+        no_choice = isinstance(data, dict) and "atlas_name" in data and data["atlas_name"] is None
+        if len(names) < 2 or not no_choice:  # outro exit 2 (credenciais, ci: ou remotes: do escolhido, Emenda v3)
+            raise Unavailable(f"config saiu com {result.returncode}")
+        return ATLAS_NO_CHOICE.format(names=", ".join(names))
+    if result.returncode != 0:
+        raise Unavailable(f"config saiu com {result.returncode}")
+    data = parse_json(result.stdout)
+    names = atlas_names(data)
+    name = data.get("atlas_name") if isinstance(data, dict) else None
+    selected_by = data.get("selected_by") if isinstance(data, dict) else None
+    if len(names) < 2 or not isinstance(name, str) or not name or not isinstance(selected_by, str):
+        return ATLAS_LINE
+    others = [other for other in names if other != name]
+    reason = ATLAS_REASONS.get(selected_by, selected_by)
+    return ATLAS_CHOSEN.format(name=name, reason=reason, others=", ".join(others))
+
+
 def doctor_lines(stdout):
     """Uma linha "- <detail> → <fix>" por achado do `--json` do doctor; Unavailable quando o JSON não serve."""
     try:
@@ -197,7 +251,7 @@ def main(stdin=None, stdout=None, stderr=None, runner=run_cli, clock=time.monoto
         report(stderr, "SDD", error)
         project = cli_cwd = None
     steps = (("SDD", lambda: sdd_block(runner, deadline, project) if project else None),
-             ("Atlas", lambda: configured_line(runner, deadline, ATLAS, ATLAS_LINE, cli_cwd)),
+             ("Atlas", lambda: atlas_line(runner, deadline, cli_cwd)),
              ("Brain", lambda: configured_line(runner, deadline, BRAIN, BRAIN_LINE, cli_cwd)))
     for name, step in steps:
         try:
