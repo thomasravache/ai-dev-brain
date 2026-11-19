@@ -80,10 +80,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01, UT-02 e UT-03 com a tag `SPEC-0081:<ID>`, falhando pelo motivo certo
-- [ ] Green: `SKILL.md`, `references/brownfield.md`, comentário do `org_context` no `sdd-config.template.yml`, `commands/deliver.md`; CHANGELOG da gluon-spec, `SDD_TOOL_VERSION` e `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
+- [x] Red: UT-01, UT-02 e UT-03 com a tag `SPEC-0081:<ID>`, falhando pelo motivo certo
+- [x] Green: `SKILL.md`, `references/brownfield.md`, comentário do `org_context` no `sdd-config.template.yml`, `commands/deliver.md`; CHANGELOG da gluon-spec, `SDD_TOOL_VERSION` e `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
 - [ ] Integração + CI verde (G5) e H2
 - [ ] Relatório de Entrega (G7)
 
@@ -95,7 +95,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=3, skipped=1)) — e726cdf | 2026-11-19 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — d2315a1 | 2026-11-19 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — d19f3ea | 2026-11-19 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer (subagente), rodada 2: APPROVED — 0 blocker, 0 major, 2 nits sem mudança (parênteses no deliver.md; dica ./x no comentário do template) — 5cd83b9 | 2026-11-19 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
