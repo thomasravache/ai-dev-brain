@@ -1,18 +1,18 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-11-18 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-19 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **3 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 1, approved 2, in-progress 1, implemented 66
-- Impedimentos: **1 aberto(s)**, 29 resolvido(s)
+- Validação (G0): **7 erro(s), 28 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 4, approved 2, in-progress 1, implemented 66
+- Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
 
 | Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
 |---|---|---|---|---|---|---|---|
-| SPEC-0073 | IMP-01 | externo | — | thomas (data) | 2026-11-17 | 1d | remoção anunciada: não antes de 2027-03 (três versões mensais depois das SPEC-0069 a 0071, CHANGELOGs da photon-brain 2026.11.8 e da boson-atlas 2026.11.7/2026.11.8) |
+| SPEC-0073 | IMP-01 | externo | — | thomas (data) | 2026-11-17 | 2d | remoção anunciada: não antes de 2027-03 (três versões mensais depois das SPEC-0069 a 0071, CHANGELOGs da photon-brain 2026.11.8 e da boson-atlas 2026.11.7/2026.11.8) |
 
 ## Cobertura de Pilares
 
@@ -37,8 +37,11 @@ Perfil: **minimo**
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0080 | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 1d) | saiu da onda 1: arquivos em comum com SPEC-0080 |
+| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 2d) | saiu da onda 1: arquivos em comum com SPEC-0080 |
 | 3 | SPEC-0081 | gluon-spec: org_context escolhe o atlas no DISCOVER | lite/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0080; saiu da onda 2: arquivos em comum com SPEC-0073 |
+| 4 | SPEC-0082 | boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
+| 5 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo |
+| 6 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo |
 
 ## Épicos
 
@@ -54,6 +57,7 @@ Perfil: **minimo**
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
 | SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | proposed | 0/0 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | approved | 1/3 implementadas |
+| SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
 
 ## Grafo de Dependências
 
@@ -62,6 +66,9 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
+  S0082["SPEC-0082<br/>boson-atlas: serviço ligado ao repositó…"]:::proposed
+  S0083["SPEC-0083<br/>boson-atlas: coletor de infraestrutura …"]:::proposed
+  S0085["SPEC-0085<br/>boson-atlas: guardar o que o agente des…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
@@ -180,6 +187,10 @@ flowchart LR
 | [SPEC-0079](SPEC-0079-boson-atlas-varios-atlas-na-configuracao-local-e-escolha-por.md) | boson-atlas: vários atlas na configuração local e escolha por --atlas | full | feature | implemented | 2026-11-18 | SPEC-0077 | — | — |
 | [SPEC-0080](SPEC-0080-boson-atlas-atlas-escolhido-pelo-remote-do-projeto-nas-tools.md) | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full | feature | in-progress | 2026-11-18 | SPEC-0077 | SPEC-0079 | SPEC-0079@1 |
 | [SPEC-0081](SPEC-0081-gluon-spec-org-context-escolhe-o-atlas-no-discover.md) | gluon-spec: org_context escolhe o atlas no DISCOVER | lite | feature | approved | 2026-11-18 | SPEC-0077 | — | SPEC-0079@1 |
+| [SPEC-0082](SPEC-0082-boson-atlas-servico-ligado-ao-repositorio-do-codigo-pela-ima.md) | boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build | full | feature | proposed | 2026-11-19 | — | — | — |
+| [SPEC-0083](SPEC-0083-boson-atlas-coletor-de-infraestrutura-como-codigo-stacks-pro.md) | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full | feature | proposed | 2026-11-19 | — | — | — |
+| [SPEC-0084](SPEC-0084-boson-atlas-contas-de-nuvem-operacao-fornecedores-e-ciclo-de.md) | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | epic | feature | proposed | 2026-11-19 | — | — | — |
+| [SPEC-0085](SPEC-0085-boson-atlas-guardar-o-que-o-agente-descobre-notas-propostas.md) | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full | feature | proposed | 2026-11-19 | — | — | — |
 
 ## ADRs
 
