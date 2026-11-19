@@ -59,6 +59,11 @@ A instrução foi escrita para a configuração de um atlas por máquina (SPEC-0
 1. **Comentário do template:** uma frase só, "nome do atlas (recomendado) ou caminho relativo ou com ~, nunca absoluto", mantendo a menção a `atlas.py context` que a SPEC-0041 exige.
 2. **Linha "Without `org_context`, nothing changes" do `brownfield.md`:** passa a dizer que, sem `org_context`, o DISCOVER roda `config --json` e `context` sem `--atlas` e relata `atlas_name`/`selected_by`.
 
+**Ajustes da revisão (Emenda v3, minors do G4):**
+3. **Exit 3 sem atlas de outra organização:** o `SKILL.md` também diz, no exit 3, para nunca usar outro atlas, cujas convenções são de outra organização. No `deliver.md`, exit 3 é "atlas não configurado nesta máquina (o do `org_context`, ou nenhum)".
+4. **Caminho relativo:** o caminho é resolvido pela CLI a partir da pasta atual. As instruções mandam rodar da raiz do repositório e escrever o caminho relativo como `./x` ou `../x`, porque um valor sem `/` que não comece com `.` ou `~` é lido como nome.
+5. **Exit 2:** ler a mensagem da CLI. Só perguntar qual atlas quando ela lista vários atlas sem escolha; senão, repassar o erro (configuração inválida, `--hops`/`--limit` inválidos).
+
 ## 4. Plano de Testes (TDD)
 - Caracterização: N/A — `tests/test_org_context.py` (SPEC-0041) já cobre o texto e o `whats-new`. Os testes de lá que exigem a comparação manual são ajustados ao texto novo.
 - **UT-01** — Dados o `SKILL.md` e o `references/brownfield.md`, quando a seção de contexto da organização é lida, então ela manda rodar `atlas.py config --json --atlas <org_context>` e `atlas.py context --atlas <org_context>`, trata o exit 3 com o passo `init --join ... --name`, cita `atlas_name`/`selected_by` para o caso sem `org_context`, e não cita mais `ATLAS_CONFIG_HOME` como saída.
