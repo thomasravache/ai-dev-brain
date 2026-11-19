@@ -55,6 +55,10 @@ A instrução foi escrita para a configuração de um atlas por máquina (SPEC-0
 
 **Outras ocorrências:** o comando `commands/deliver.md` (passo 2) trata só o exit 0 do `atlas.py config --json` como "configurado". Ele passa a usar o `org_context` do projeto como `--atlas` quando existir, e a tratar o exit 2 (vários atlas sem escolha) pedindo à pessoa qual atlas usar, sem adivinhar (UT-03).
 
+**Esclarecimentos (Emenda v2, achados do test-writer no G1):**
+1. **Comentário do template:** uma frase só, "nome do atlas (recomendado) ou caminho relativo ou com ~, nunca absoluto", mantendo a menção a `atlas.py context` que a SPEC-0041 exige.
+2. **Linha "Without `org_context`, nothing changes" do `brownfield.md`:** passa a dizer que, sem `org_context`, o DISCOVER roda `config --json` e `context` sem `--atlas` e relata `atlas_name`/`selected_by`.
+
 ## 4. Plano de Testes (TDD)
 - Caracterização: N/A — `tests/test_org_context.py` (SPEC-0041) já cobre o texto e o `whats-new`. Os testes de lá que exigem a comparação manual são ajustados ao texto novo.
 - **UT-01** — Dados o `SKILL.md` e o `references/brownfield.md`, quando a seção de contexto da organização é lida, então ela manda rodar `atlas.py config --json --atlas <org_context>` e `atlas.py context --atlas <org_context>`, trata o exit 3 com o passo `init --join ... --name`, cita `atlas_name`/`selected_by` para o caso sem `org_context`, e não cita mais `ATLAS_CONFIG_HOME` como saída.
