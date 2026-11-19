@@ -272,7 +272,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — 7274c26 | 2026-11-18 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=4)) — ffa2016 | 2026-11-18 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 46c53c8 | 2026-11-19 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 9d183ad | 2026-11-18 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — b318cd8 | 2026-11-19 |
 | G4 Review | FAIL | rodada 3: CHANGES_REQUESTED — 1 major (? ou # dentro da senha deixa sair parte dela na máscara) | 2026-11-18 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
