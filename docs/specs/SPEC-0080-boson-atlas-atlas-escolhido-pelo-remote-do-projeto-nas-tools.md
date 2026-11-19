@@ -4,7 +4,7 @@ title: "boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no 
 tier: full
 type: feature
 user_facing: true
-status: in-progress
+status: implemented
 created: 2026-11-18
 parent: SPEC-0077
 depends_on: [SPEC-0079]
@@ -277,7 +277,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 661e4e1 | 2026-11-19 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-19 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-19 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 0543b3b | 2026-11-19 |
 
 ### Histórico de reprovações
 - G2 FAIL 2026-11-18 — test exit 1 (FAILED (failures=7)); lint exit 0 (All checks passed!) — fb2ee85
