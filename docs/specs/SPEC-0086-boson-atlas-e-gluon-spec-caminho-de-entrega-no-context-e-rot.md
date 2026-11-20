@@ -4,7 +4,7 @@ title: "boson-atlas e gluon-spec: caminho de entrega no context e roteiro de ver
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-20
 parent:
 depends_on: []
@@ -258,7 +258,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 4430687 | 2026-11-20 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-20 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-20 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — cfb1708 | 2026-11-20 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-20 — major: delivery.images ignora image_repositories no context (lê graph.json sem o mapa) e diverge da região da página; minors: pipeline que só faz build do serviço sem teste; valores do bloco Entrega fora de crase — 0127e18
