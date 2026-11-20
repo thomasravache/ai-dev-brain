@@ -1,18 +1,18 @@
 # Índice de Specs
 
-> Gerado por `spec_graph.py index` em 2026-11-19 — não edite manualmente.
+> Gerado por `spec_graph.py index` em 2026-11-20 — não edite manualmente.
 
 ## Saúde
 
-- Validação (G0): **7 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 4, approved 1, implemented 68
+- Validação (G0): **6 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 3, approved 1, implemented 69
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
 
 | Spec | ID | Tipo | Fase/Gate | Responsável | Aberto em | Idade | Descrição |
 |---|---|---|---|---|---|---|---|
-| SPEC-0073 | IMP-01 | externo | — | thomas (data) | 2026-11-17 | 2d | remoção anunciada: não antes de 2027-03 (três versões mensais depois das SPEC-0069 a 0071, CHANGELOGs da photon-brain 2026.11.8 e da boson-atlas 2026.11.7/2026.11.8) |
+| SPEC-0073 | IMP-01 | externo | — | thomas (data) | 2026-11-17 | 3d | remoção anunciada: não antes de 2027-03 (três versões mensais depois das SPEC-0069 a 0071, CHANGELOGs da photon-brain 2026.11.8 e da boson-atlas 2026.11.7/2026.11.8) |
 
 ## Cobertura de Pilares
 
@@ -35,11 +35,10 @@ Perfil: **minimo**
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 2d) |  |
+| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 3d) |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 3 | SPEC-0082 | boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
-| 4 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
-| 5 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo |
+| 3 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
+| 4 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
 
 ## Épicos
 
@@ -64,7 +63,6 @@ Seta contínua: depende da implementação. Seta tracejada: consome contrato.
 ```mermaid
 flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
-  S0082["SPEC-0082<br/>boson-atlas: serviço ligado ao repositó…"]:::proposed
   S0083["SPEC-0083<br/>boson-atlas: coletor de infraestrutura …"]:::proposed
   S0085["SPEC-0085<br/>boson-atlas: guardar o que o agente des…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
@@ -177,7 +175,7 @@ flowchart LR
 | [SPEC-0079](SPEC-0079-boson-atlas-varios-atlas-na-configuracao-local-e-escolha-por.md) | boson-atlas: vários atlas na configuração local e escolha por --atlas | full | feature | implemented | 2026-11-18 | SPEC-0077 | — | — |
 | [SPEC-0080](SPEC-0080-boson-atlas-atlas-escolhido-pelo-remote-do-projeto-nas-tools.md) | boson-atlas: atlas escolhido pelo remote do projeto, nas tools MCP e no início da sessão | full | feature | implemented | 2026-11-18 | SPEC-0077 | SPEC-0079 | SPEC-0079@1 |
 | [SPEC-0081](SPEC-0081-gluon-spec-org-context-escolhe-o-atlas-no-discover.md) | gluon-spec: org_context escolhe o atlas no DISCOVER | lite | feature | implemented | 2026-11-18 | SPEC-0077 | — | SPEC-0079@1 |
-| [SPEC-0082](SPEC-0082-boson-atlas-servico-ligado-ao-repositorio-do-codigo-pela-ima.md) | boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build | full | feature | proposed | 2026-11-19 | — | — | — |
+| [SPEC-0082](SPEC-0082-boson-atlas-servico-ligado-ao-repositorio-do-codigo-pela-ima.md) | boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build | full | feature | implemented | 2026-11-19 | — | — | — |
 | [SPEC-0083](SPEC-0083-boson-atlas-coletor-de-infraestrutura-como-codigo-stacks-pro.md) | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0084](SPEC-0084-boson-atlas-contas-de-nuvem-operacao-fornecedores-e-ciclo-de.md) | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | epic | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0085](SPEC-0085-boson-atlas-guardar-o-que-o-agente-descobre-notas-propostas.md) | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full | feature | proposed | 2026-11-19 | — | — | — |
@@ -206,3 +204,4 @@ flowchart LR
 | [ADR-0019](../adr/ADR-0019-auto-melhoria-do-plugin-so-le-e-avisa-nunca-atualiza-sozinha.md) | Auto-melhoria do plugin só lê e avisa, nunca atualiza sozinha | accepted | tests/plugin/test_fermion_doctor.py (SPEC-0061:UT-06) e mcp/tests/test_architecture.py |
 | [ADR-0020](../adr/ADR-0020-nomes-tecnicos-novos-com-leitura-dupla-e-remocao-anunciada.md) | Nomes técnicos novos com leitura dupla e remoção anunciada | accepted | — |
 | [ADR-0021](../adr/ADR-0021-varios-atlas-por-maquina-e-ordem-de-escolha.md) | Vários atlas por máquina e ordem de escolha | accepted | testes das SPEC-0079 e SPEC-0080 (CH-01, IT-01, IT-02, CT-01) e tests/test_architecture.py |
+| [ADR-0022](../adr/ADR-0022-servico-ligado-ao-repositorio-do-codigo-pela-imagem-sem-kind.md) | Serviço ligado ao repositório do código pela imagem, sem kind novo | proposed | testes da SPEC-0082 (CH-01, CT-01, UT-04 a UT-07) |

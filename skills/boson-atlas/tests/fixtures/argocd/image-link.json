@@ -1,0 +1,86 @@
+[
+  {
+    "metadata": {
+      "name": "dev-api",
+      "namespace": "argocd",
+      "labels": {
+        "env": "dev"
+      }
+    },
+    "spec": {
+      "project": "team-x",
+      "source": {
+        "repoURL": "https://github.com/acme/iac.git",
+        "path": "apps/api/dev",
+        "targetRevision": "main",
+        "helm": {
+          "parameters": [
+            {
+              "name": "image.tag",
+              "value": "7.7.1-rc9"
+            }
+          ]
+        }
+      },
+      "destination": {
+        "name": "cluster-dev",
+        "namespace": "api-dev"
+      }
+    },
+    "status": {
+      "sync": {
+        "status": "Synced"
+      },
+      "health": {
+        "status": "Healthy"
+      },
+      "summary": {
+        "images": [
+          "ghcr.io/acme/api:7.7.1-rc9"
+        ]
+      }
+    }
+  },
+  {
+    "metadata": {
+      "name": "qa-api",
+      "namespace": "argocd",
+      "labels": {
+        "env": "qa"
+      }
+    },
+    "spec": {
+      "project": "team-x",
+      "source": {
+        "repoURL": "https://github.com/acme/iac.git",
+        "path": "apps/api/qa",
+        "targetRevision": "main",
+        "helm": {
+          "parameters": [
+            {
+              "name": "image.tag",
+              "value": "8.8.2"
+            }
+          ]
+        }
+      },
+      "destination": {
+        "name": "cluster-qa",
+        "namespace": "api-qa"
+      }
+    },
+    "status": {
+      "sync": {
+        "status": "OutOfSync"
+      },
+      "health": {
+        "status": "Degraded"
+      },
+      "summary": {
+        "images": [
+          "ghcr.io/acme/api:8.8.2"
+        ]
+      }
+    }
+  }
+]

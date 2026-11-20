@@ -1,0 +1,45 @@
+{
+  "_comment": "SPEC-0082:UT-06 — repositórios para o mapa image_repositories (lido por build/replay.py)",
+  "entities": [
+    {
+      "kind": "repository",
+      "id": "acme/api-v1",
+      "name": "api-v1",
+      "attrs": {
+        "language": "Go",
+        "default_branch": "main",
+        "topics": [],
+        "archived": false,
+        "visibility": "private"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "repository",
+      "id": "acme/legacy-api",
+      "name": "legacy-api",
+      "attrs": {
+        "language": "Go",
+        "default_branch": "main",
+        "topics": [],
+        "archived": false,
+        "visibility": "private"
+      },
+      "source": "github"
+    },
+    {
+      "kind": "repository",
+      "id": "acme/iac",
+      "name": "iac",
+      "attrs": {
+        "language": "Go",
+        "default_branch": "main",
+        "topics": [],
+        "archived": false,
+        "visibility": "private"
+      },
+      "source": "github"
+    }
+  ],
+  "relations": []
+}

@@ -28,7 +28,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.11"
+ATLAS_VERSION = "2026.11.12"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -38,7 +38,7 @@ SHARED_FILE = "atlas-config.yml"
 MODES = ("repo", "local")
 LOCAL_KEYS = ("atlas", "credentials")
 SHARED_KEYS = ("version", "organization", "mode", "language", "stale_days", "categories", "collectors",
-               "redaction", "curation", "ci", "remotes")
+               "redaction", "curation", "ci", "remotes", "image_repositories")
 REQUIRED_SHARED = ("version", "organization", "mode")
 SHARED_VERSION = "1"
 STRUCTURE_DIRS = ("services", "platform", "conventions", "process", "snapshots")
@@ -188,6 +188,22 @@ def parse_yaml(text: str) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def _block_key(content: str):
+    """(key, rest) of a `key: value` line, the key bare or between quotes ("acme/api": x or "acme/api" : x,
+    SPEC-0082); else None."""
+    if content[:1] in "\"'":
+        try:
+            key, end = _quoted(content, 0)
+        except ValueError:
+            return None
+        rest = content[end:].lstrip(" \t")  # "acme/x" : acme/y also reads (SPEC-0082, Emenda v3)
+        if rest == ":" or rest.startswith(": "):
+            return key, rest[1:].strip()
+        return None
+    pair = KEY_RE.match(content)
+    return (pair.group(1).strip(), (pair.group(2) or "").strip()) if pair else None
+
+
 def _parse_block(rows, i: int, indent: int):
     if _is_item(rows[i][1]):
         items = []
@@ -205,11 +221,11 @@ def _parse_block(rows, i: int, indent: int):
         if rows[i][0] > indent:  # deeper line without a parent key: ignored
             i += 1
             continue
-        pair = KEY_RE.match(rows[i][1])
+        pair = _block_key(rows[i][1])
         i += 1
         if not pair:
             continue
-        key, rest = pair.group(1).strip(), (pair.group(2) or "").strip()
+        key, rest = pair
         if rest:
             data[key] = parse_scalar(rest)
         elif i < len(rows) and (rows[i][0] > indent or (rows[i][0] == indent and _is_item(rows[i][1]))):
@@ -481,6 +497,56 @@ def validate_remotes(remotes) -> list:
         if reason:  # position and reason only: no text of the item, masked or not (Emenda v5, item 16)
             raise AtlasError(f"remotes: item {position} inválido — {reason}; {REMOTES_HINT}", 2)
     return list(remotes)
+
+
+# a normalized image path (the argocd collector's rule) and a <owner>/<repository> (SPEC-0082)
+IMAGE_PATH_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*\Z")
+IMAGE_REPOSITORIES_HINT = 'use "<imagem>": <dono>/<repositório>, como "acme/legacy-api": acme/api-v1'
+
+
+def _image_name_problem(text, what):
+    """Reason why `text` (an image path or a repository) does not follow the name rule, or None. Fixed text that
+    never quotes the item (SPEC-0082, the rule of SPEC-0080)."""
+    if not isinstance(text, str):
+        return f"{what} não é texto"
+    if not text:
+        return f"{what} vazio"
+    if SCHEME_RE.match(text):
+        return f"{what} tem esquema (ex.: https://)"
+    if "@" in text:
+        return f"{what} tem @"
+    if any(is_control(c) or c.isspace() for c in text):
+        return f"{what} tem espaço ou caractere de controle"
+    if text != text.lower():
+        return f"{what} tem maiúsculas"
+    if not IMAGE_PATH_RE.match(text):
+        return f"{what} fora da regra de nome (letras minúsculas, dígitos, . _ - e / entre segmentos)"
+    return None
+
+
+def image_repository_item_problem(image, repository):
+    """Reason why an item of `image_repositories:` is invalid, the first that applies (the image, then the
+    repository, which needs exactly one "/"), or None."""
+    reason = _image_name_problem(image, "a imagem") or _image_name_problem(repository, "o repositório")
+    if reason:
+        return reason
+    if repository.count("/") != 1:
+        return "o repositório precisa ser <dono>/<nome> (exatamente uma /)"
+    return None
+
+
+def validate_image_repositories(mapping) -> dict:
+    """image_repositories = {<normalized image>: <owner>/<repository>} of atlas-config.yml (SPEC-0082): the map, or
+    AtlasError (code 2) with the position (from 1) and the reason of the first invalid item, never its text."""
+    if mapping in ("", None):
+        return {}
+    if not isinstance(mapping, dict):
+        raise AtlasError(f"image_repositories precisa ser um mapa — {IMAGE_REPOSITORIES_HINT}", 2)
+    for position, (image, repository) in enumerate(mapping.items(), start=1):
+        reason = image_repository_item_problem(image, repository)
+        if reason:  # position and reason only: no text of the item, masked or not
+            raise AtlasError(f"image_repositories: item {position} inválido — {reason}; {IMAGE_REPOSITORIES_HINT}", 2)
+    return dict(mapping)
 
 
 def ci_env_names(ci) -> list:
@@ -777,7 +843,8 @@ def load_config(config_home=None, choice=None) -> dict:
     shared = read_yaml(shared_path) if shared_path and shared_path.is_file() else {}
     validate_ci(shared.get("ci"))
     validate_remotes(shared.get("remotes"))
-    defaults = dict(default_shared(), organization="", mode="", remotes=[])
+    validate_image_repositories(shared.get("image_repositories"))
+    defaults = dict(default_shared(), organization="", mode="", remotes=[], image_repositories={})
     for key in SHARED_KEYS:
         found = key in shared
         values[key] = shared[key] if found else defaults.get(key, "")
@@ -1508,7 +1575,9 @@ def scan_config(choice=None):
     shared_path = Path(atlas) / SHARED_FILE
     if not shared_path.is_file():
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared_path}", 2)
-    return Path(atlas), read_yaml(shared_path)
+    shared = read_yaml(shared_path)
+    validate_image_repositories(shared.get("image_repositories"))  # SPEC-0082: exit 2 before any collector runs
+    return Path(atlas), shared
 
 
 def declared_env_names(entry) -> set:
@@ -1633,6 +1702,14 @@ WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10
 OWNER_SUMMARY_RE = re.compile(r"^- Chave: `([^`]+)`", re.MULTILINE)
 OWNER_INTRO_RE = re.compile(r"^Serviço `(service:[^`]+)`", re.MULTILINE)
 NONE_TEXT = "_(nenhum)_"
+# region "Do commit até o pod" of a service page: only when the service has a code repository (SPEC-0082)
+FLOW_REGION, FLOW_TITLE = "commit-to-pod", "Do commit até o pod"
+# the image_repositories map kept by infer_relations in the graph in memory, never written to graph.json
+IMAGE_MAP_KEY = "image_repositories"
+FLOW_BLOCK = f"\n## {FLOW_TITLE}\n\n<!-- atlas:begin {FLOW_REGION} -->\n<!-- atlas:end {FLOW_REGION} -->\n"
+FLOW_BLOCK_RE = re.compile(rf"\n## {FLOW_TITLE}\n\n<!-- atlas:begin {FLOW_REGION} -->.*?<!-- atlas:end {FLOW_REGION} -->\n",
+                           re.DOTALL)
+IMAGE_EVIDENCE = "image:"  # evidence of an edge of rule 4: the repository of the code (SPEC-0082)
 
 
 def _source_order(order, extra) -> list:
@@ -1708,14 +1785,44 @@ def _host_of(ref) -> str:
     return ref.split("=", 1)[1] if isinstance(ref, str) and "=" in ref else ""
 
 
-def infer_relations(graph: dict) -> dict:
+def _image_repository(image, image_map, repositories, by_name):
+    """Key of the repository an image of a deployment comes from (rule 4, SPEC-0082), or None: the image in
+    `image_map` -> that repository when it is in the graph (never a fallback: the map is the team's declaration);
+    else repository:<image> in the graph; else the last segment of the image naming exactly one repository."""
+    if image in image_map:
+        key = f"repository:{image_map[image]}"
+        return key if key in repositories else None
+    key = f"repository:{image}"
+    if "/" in image and key in repositories:
+        return key
+    found = by_name.get(image.rsplit("/", 1)[-1], [])
+    return found[0] if len(found) == 1 else None
+
+
+def _repository_lookup(nodes) -> tuple:
+    """(keys of the repositories, {last segment of the repository id: keys}) of a graph's nodes, for
+    _image_repository (rule 4)."""
+    repositories = {k for k, n in nodes.items() if n["kind"] == "repository"}
+    by_name = {}  # last segment of the repository id -> keys (rule 4, step 3)
+    for key in sorted(repositories):
+        by_name.setdefault(key.rsplit("/", 1)[-1].split(":", 1)[-1], []).append(key)
+    return repositories, by_name
+
+
+def infer_relations(graph: dict, image_repositories=None) -> dict:
     """New graph with the declared edges and the inferred ones (`inferred: true`); the input does not change.
     (1) deployment `sourced_from` repository + deployment `deploys` service -> service `sourced_from` repository;
     (2) a config_refs item (KEY=host) of a deployment whose host equals the `host` attr or the name of a datastore,
         queue, topic or bucket -> service `depends_on` that entity, with `evidence` = the item;
-    (3) a host equal to the name of another service -> `depends_on` between the services.
+    (3) a host equal to the name of another service -> `depends_on` between the services;
+    (4) after rule 1, an item I of the `images` attr of a deployment that deploys a service S and names a
+        repository of the graph (_image_repository, with the `image_repositories` map) -> S `sourced_from` that
+        repository, with `evidence` = "image:<I>" (SPEC-0082, ADR-0022).
     Only equality: an unknown or similar host creates no edge and no node. An inferred edge equal to a declared
-    one (same from, type, to) is not added; the same inferred edge from several items keeps the smallest evidence."""
+    one (same from, type, to) is not added; the same inferred edge from several items keeps the smallest evidence;
+    an edge of rule 4 equal to one of rule 1 is not added either (the edge of rule 1 stays as it is).
+    The returned graph keeps the map under IMAGE_MAP_KEY, only in memory (graph.json has only nodes and edges), so
+    the pages resolve every image of a service by the same rule (SPEC-0082, Emenda v3)."""
     nodes = {node["key"]: node for node in graph["nodes"]}
     edges = [dict(edge, sources=list(edge["sources"])) for edge in graph["edges"]]
     declared = {(e["from"], e["type"], e["to"]) for e in edges}
@@ -1761,8 +1868,22 @@ def infer_relations(graph: dict) -> dict:
                 for deploy in deploys:
                     add(deploy["to"], "depends_on", target,
                         _union(deployment["sources"], nodes[target]["sources"]), ref)
+    image_map = image_repositories if isinstance(image_repositories, dict) else {}
+    repositories, by_name = _repository_lookup(nodes)
+    before = set(inferred)
+    for key in sorted(k for k, n in nodes.items() if n["kind"] == "deployment"):
+        images = nodes[key]["attrs"].get("images")
+        deploys = [e for e in out.get((key, "deploys"), []) if e["to"].startswith("service:")]
+        for image in sorted(i for i in (images if isinstance(images, list) else []) if isinstance(i, str)):
+            target = _image_repository(image, image_map, repositories, by_name)
+            if target is None:
+                continue
+            for deploy in deploys:
+                if (deploy["to"], "sourced_from", target) not in before:
+                    add(deploy["to"], "sourced_from", target, _union(deploy["sources"], nodes[target]["sources"]),
+                        f"image:{image}")
     return {**graph, "nodes": [dict(node) for node in graph["nodes"]],
-            "edges": edges + [inferred[key] for key in sorted(inferred)]}
+            "edges": edges + [inferred[key] for key in sorted(inferred)], IMAGE_MAP_KEY: dict(image_map)}
 
 
 def _graph_node(node) -> dict:
@@ -1868,6 +1989,9 @@ class _Index:
             self.into.setdefault((edge["to"], edge["type"]), []).append(edge)
         services = [key for key, node in self.nodes.items() if node["kind"] == "service"]
         self.slugs = service_page_names(services, existing or {})
+        image_map = graph.get(IMAGE_MAP_KEY)
+        self.image_map = image_map if isinstance(image_map, dict) else {}
+        self.repositories, self.by_name = _repository_lookup(self.nodes)
 
     def targets(self, key, rtype, kind=None) -> list:
         return [e["to"] for e in self.out.get((key, rtype), []) if kind is None or e["to"].startswith(kind + ":")]
@@ -1910,9 +2034,77 @@ def _summary_lines(node) -> list:
     return lines
 
 
+def _code_edges(key, index) -> list:
+    """The `sourced_from` edges of a service to a repository inferred from an image (rule 4): the code."""
+    return [e for e in index.out.get((key, "sourced_from"), []) if e["to"].startswith("repository:")
+            and str(e.get("evidence", "")).startswith(IMAGE_EVIDENCE)]
+
+
+def _repository_lines(repositories, code, index) -> list:
+    """Lines of the "Repositório" region: the list of today without a code repository; else split into "Código"
+    (edges of rule 4) and "Configuração (GitOps)" (the others) (SPEC-0082)."""
+    if not code:
+        return [f"- {index.label(r)}" for r in repositories]
+    lines = []
+    for title, group in (("Código", code), ("Configuração (GitOps)", [r for r in repositories if r not in code])):
+        lines.append(f"- {title}:")
+        lines += [f"  - {index.label(r)}" for r in group] or [f"  - {NONE_TEXT}"]
+    return lines
+
+
+def _flow_lines(code_edges, config, by_env, index) -> list:
+    """Lines of the "Do commit até o pod" region, only from the graph and without the name of any tool: the code
+    repository, its pipelines, every image of the service's deployments that leads to it by rule 4 (not only the
+    evidence of the edge, Emenda v3), the configuration repository and one item per deployment with environment,
+    cluster and state (SPEC-0082)."""
+    code = _union([e["to"] for e in code_edges])
+    images = {e["evidence"][len(IMAGE_EVIDENCE):] for e in code_edges}
+    for deployment in {d for group in by_env.values() for d in group}:
+        attrs = index.nodes[deployment]["attrs"] if deployment in index.nodes else {}
+        found = attrs.get("images")
+        images.update(i for i in (found if isinstance(found, list) else []) if isinstance(i, str)
+                      and _image_repository(i, index.image_map, index.repositories, index.by_name) in code)
+    images = sorted(images)
+    pipelines = _union(*(index.sources(r, "builds", "pipeline") for r in code))
+    lines = ["1. Código: " + ", ".join(index.label(r) for r in code),
+             "2. Pipelines: " + (", ".join(f"{index.name(p)} (`{p.split(':', 1)[1]}`)" for p in pipelines)
+                                 or NONE_TEXT),
+             "3. Imagem: " + ", ".join(f"`{image}`" for image in images),
+             "4. Configuração: " + (", ".join(index.label(r) for r in config) or NONE_TEXT),
+             "5. Deployments:"]
+    items = []
+    for env in sorted(by_env, key=lambda e: (e == "", index.name(e) if e else "")):
+        title = index.name(env) if env else "sem ambiente"
+        for deployment in by_env[env]:
+            attrs = index.nodes[deployment]["attrs"] if deployment in index.nodes else {}
+            status = ", ".join(str(attrs[k]) for k in ("sync_status", "health_status") if attrs.get(k))
+            clusters = ", ".join(f"`{index.name(c)}`" for c in index.targets(deployment, "runs_in", "cluster"))
+            details = "; ".join(part for part in (f"cluster {clusters}" if clusters else "", status) if part)
+            items.append(f"   - **{title}**: `{index.name(deployment)}`" + (f" — {details}" if details else ""))
+    return lines + (items or [f"   - {NONE_TEXT}"])
+
+
+def _with_flow_block(text: str, wanted: bool) -> str:
+    """The page with the "Do commit até o pod" title and region when `wanted` (after the Pipelines region, else at
+    the end), and without them otherwise, so a page without a code repository stays as today (SPEC-0082)."""
+    marker = f"<!-- atlas:begin {FLOW_REGION} -->"
+    if wanted and marker not in text:
+        anchor = "<!-- atlas:end pipelines -->\n"
+        at = text.find(anchor)
+        if at < 0:
+            return text.rstrip("\n") + "\n" + FLOW_BLOCK
+        at += len(anchor)
+        return text[:at] + FLOW_BLOCK + text[at:]
+    if not wanted and marker in text:
+        return FLOW_BLOCK_RE.sub("", text, count=1)
+    return text
+
+
 def _service_regions(key, index, scans) -> dict:
     node = index.nodes[key]
     repositories = _union(index.targets(key, "sourced_from", "repository"))
+    code_edges = _code_edges(key, index)
+    code = _union([e["to"] for e in code_edges])
     deployments = index.sources(key, "deploys", "deployment")
     by_env = {}
     for deployment in deployments:
@@ -1936,9 +2128,9 @@ def _service_regions(key, index, scans) -> dict:
     for cid in node["sources"]:
         seen = (scans.get(cid) or {}).get("seen_at") if isinstance(scans.get(cid), dict) else None
         sources.append(f"- {cid}" + (f" (visto em {seen})" if seen else ""))
-    return {
+    regions = {
         "summary": _region(_summary_lines(node)),
-        "repository": _region([f"- {index.label(r)}" for r in repositories]),
+        "repository": _region(_repository_lines(repositories, code, index)),
         "deployments": _region(deployment_lines),
         "depends-on": _region([f"- {index.label(e['to'])}{_edge_note(e)}"
                                for e in sorted(depends, key=lambda e: (e["to"], e["type"]))]),
@@ -1948,6 +2140,10 @@ def _service_regions(key, index, scans) -> dict:
         "pipelines": _region([f"- {index.name(p)} (`{p.split(':', 1)[1]}`)" for p in pipelines]),
         "sources": _region(sources),
     }
+    if code:  # SPEC-0082: only with a code repository; without it the page is today's, byte for byte
+        regions[FLOW_REGION] = _region(_flow_lines(code_edges, [r for r in repositories if r not in code], by_env,
+                                                   index))
+    return regions
 
 
 def _platform_regions(category, index) -> dict:
@@ -2029,7 +2225,11 @@ def render_pages(graph: dict, existing: dict, organization: str, previous=None, 
         eid = key.split(":", 1)[1]
         title = eid if node["name"] == eid else f"{node['name']} ({eid})"
         text = existing.get(path) or _template(SERVICE_PAGE, organization, title=title, key=key)
-        pages[path] = fill_regions(text, _service_regions(key, index, scans))
+        bodies = _service_regions(key, index, scans)
+        text = _with_flow_block(text, FLOW_REGION in bodies)
+        if FLOW_REGION not in bodies and f"<!-- atlas:begin {FLOW_REGION} -->" in text:  # moved by the team
+            bodies[FLOW_REGION] = _region([])
+        pages[path] = fill_regions(text, bodies)
     previous_seen = {}
     if isinstance(previous, dict) and isinstance(previous.get("nodes"), list):
         previous_seen = {n["key"]: str(n.get("seen_at") or "") for n in previous["nodes"]
@@ -2103,7 +2303,8 @@ def build_atlas(atlas: Path, shared: dict) -> dict:
     state = read_json_file(atlas / SNAPSHOTS_DIR / SCAN_STATE)
     state = state if isinstance(state, dict) else {}
     organization = str(shared.get("organization") or "")
-    graph = infer_relations(merge_snapshots(snapshots, ids, state))
+    image_map = validate_image_repositories(shared.get("image_repositories"))
+    graph = infer_relations(merge_snapshots(snapshots, ids, state), image_map)
     today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     text = render_graph(graph, organization, today)
     graph_path = atlas / GRAPH_FILE
@@ -2632,7 +2833,7 @@ def _query_terms(query: str) -> list:
 def _team_text(text: str, template: str) -> str:
     """The text of a service page written by people: outside the generated regions and without the template's
     fixed lines (title, introduction, headings)."""
-    fixed = {line.strip() for line in template.splitlines() if line.strip()}
+    fixed = {line.strip() for line in template.splitlines() if line.strip()} | {f"## {FLOW_TITLE}"}
     outside = REGION_SUB_RE.sub("", text)
     return "\n".join(line for line in outside.splitlines() if line.strip() and line.strip() not in fixed)
 
@@ -3518,12 +3719,25 @@ def _lint_atlas(choice=None) -> Path:
     return Path(atlas)
 
 
+def _lint_image_repositories(atlas: Path) -> None:
+    """An invalid `image_repositories:` ends lint with exit 2, as config --json and build (SPEC-0082). An unreadable
+    or invalid atlas-config.yml is left to the config rule of the lint."""
+    path = atlas / SHARED_FILE
+    try:
+        shared = parse_yaml(path.read_bytes().decode("utf-8")) if path.is_file() else {}
+    except (OSError, UnicodeDecodeError, ValueError):
+        return
+    validate_image_repositories(shared.get("image_repositories"))
+
+
 def cmd_lint(args):
     """lint [--json] [--only rule,...]: read-only (never writes to the atlas). Exit 0 without ERRO, 1 with ERRO,
     2 with an unknown rule in --only, 3 not configured. Messages on stderr are masked too."""
     try:
         rules = lint_rules(args.only)
-        findings = run_lint(_lint_atlas(args.atlas), rules)
+        atlas = _lint_atlas(args.atlas)
+        _lint_image_repositories(atlas)
+        findings = run_lint(atlas, rules)
     except AtlasError as e:
         raise AtlasError(_mask_all(e, []), e.code) from None
     except OSError as e:
@@ -3965,6 +4179,11 @@ def check_shared(data: dict) -> list:
     if "remotes" in data:
         try:
             validate_remotes(data["remotes"])
+        except AtlasError as e:
+            problems.append(str(e))
+    if "image_repositories" in data:
+        try:
+            validate_image_repositories(data["image_repositories"])
         except AtlasError as e:
             problems.append(str(e))
     problems += [f"caminho absoluto em {key}" for key, _ in absolute_values(data)]

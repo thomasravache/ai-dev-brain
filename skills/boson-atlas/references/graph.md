@@ -70,6 +70,13 @@ Só **igualdade** de texto, nunca semelhança: um host desconhecido ou só parec
 1. **Repositório do serviço** — um `deployment` com `sourced_from` → `repository:R` e `deploys` → `service:S` gera a aresta `service:S` **`sourced_from`** `repository:R`. `evidence` = a chave do deployment (`deployment:api-prod`).
 2. **Dependência por configuração** — cada item `CHAVE=host` de `attrs.config_refs` de um deployment: o host é o texto depois do primeiro `=`. Se ele é igual ao `attrs.host` ou ao `name` de um `datastore`, `queue`, `topic` ou `bucket`, o serviço do deployment (`deploys`) ganha `depends_on` para essa entidade. `evidence` = o item (`DB_URL=db-prod.interno`).
 3. **Dependência entre serviços** — o mesmo host igual ao `name` de **outro** `service` gera `depends_on` entre os serviços. O próprio serviço não conta.
+4. **Repositório do código pela imagem** (depois da regra 1, SPEC-0082, ADR-0022) — cada imagem `I` de `attrs.images` de um deployment com `deploys` → `service:S` (atributo do coletor `argocd`, já sem registry, tag nem digest) gera `service:S` **`sourced_from`** o repositório escolhido nesta ordem:
+   1. `I` está no mapa `image_repositories` do `atlas-config.yml` (`references/config.md`) → o `repository:<valor>`, se ele existe no grafo; se não existe, **nada** (o mapa é a declaração do time e vence a convenção, sem cair nos passos seguintes);
+   2. senão, `repository:<I>` existe no grafo (`acme/api` → `repository:acme/api`) → esse;
+   3. senão, o último segmento de `I` é o nome de **exatamente um** repositório do grafo (o último segmento do id: `team-x/api` → `repository:acme/api`, se for o único `…/api`) → esse;
+   4. senão (nenhum ou mais de um) → nada.
+
+   `evidence` = `image:<I>` (`image:acme/api`). Uma imagem que não casa não cria aresta nem nó. Uma aresta da regra 4 igual a uma da regra 1 (o mesmo repositório traz o código e a configuração) não é adicionada: fica a da regra 1, com a evidência do deployment. Um snapshot sem `images` (coletor anterior) dá o mesmo grafo de antes.
 
 Uma aresta inferida igual a uma declarada (mesma trinca) não é adicionada: a declarada fica como está. A mesma aresta inferida por vários fatos (dois deployments do mesmo serviço, por exemplo) aparece uma vez, com a menor `evidence` em ordem alfabética e as fontes somadas. A direção (leitura ou escrita) de uma dependência nunca é inferida.
 
@@ -78,10 +85,12 @@ Uma aresta inferida igual a uma declarada (mesma trinca) não é adicionada: a d
 | Página | Regiões |
 |---|---|
 | `ATLAS.md` | `summary` (contagens por kind, links para `platform/`), `services` (lista com links), `scans` (`seen_at` e estado por coletor, de `snapshots/_scan.json`) |
-| `services/<id>.md` | `summary`, `repository`, `deployments` (por ambiente), `depends-on`, `used-by`, `owners`, `pipelines`, `sources` |
+| `services/<id>.md` | `summary`, `repository`, `deployments` (por ambiente), `depends-on`, `used-by`, `owners`, `pipelines`, `commit-to-pod` (só com repositório de código), `sources` |
 | `platform/<categoria>.md` | `entities` |
 
-- Os donos e os pipelines de um serviço chegam pelo repositório dele: `team` → `owns` → repositório (ou o próprio serviço) e `pipeline` → `builds` → repositório (ou o serviço).
+- Os donos e os pipelines de um serviço chegam pelos repositórios dele (todos os `sourced_from`, de código e de configuração): `team` → `owns` → repositório (ou o próprio serviço) e `pipeline` → `builds` → repositório (ou o serviço).
+- **Repositórios de código e de configuração** (SPEC-0082): quando o serviço tem uma aresta `sourced_from` com `evidence` `image:` (regra 4), a região `repository` separa os repositórios em `Código` (essas arestas) e `Configuração (GitOps)` (as demais). Sem nenhuma, a lista fica como antes.
+- **Do commit até o pod** (SPEC-0082): só quando o serviço tem repositório de código, a página ganha o título `## Do commit até o pod` e a região `commit-to-pod`, logo depois da região `pipelines` (ou no fim, se ela não está na página). A região sai só do grafo, sem texto fixo de ferramenta, nesta ordem: o repositório do código, as pipelines dele, as imagens (todas as de `attrs.images` dos deployments do serviço que levam, pela regra 4 e pelo mapa `image_repositories`, a um repositório de código, e não só a evidência `image:` da aresta, em ordem alfabética), o repositório de configuração e um item por deployment com ambiente, cluster, `sync_status` e `health_status`. Quando o serviço deixa de ter repositório de código, o `build` tira o título e a região que ele pôs, e a página volta a ser igual à de antes, byte a byte; se o time moveu o bloco, só a região fica vazia.
 - `depends-on` e `used-by` mostram `depends_on`, `reads`, `writes`, `publishes` e `consumes`, com a evidência das inferidas.
 - Cada kind (menos `service`) tem a sua categoria em `platform/`: `repository` e `team` → `code`; `pipeline` → `ci`; `deployment` e `environment` → `delivery`; `cluster` → `runtime`; `datastore` e `bucket` → `data`; `queue` e `topic` → `messaging`; `secret-ref` → `secrets`.
 - **Nome do arquivo de um serviço** (estável e sem colisão):

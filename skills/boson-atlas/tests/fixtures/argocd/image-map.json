@@ -1,0 +1,42 @@
+{
+  "_comment": "SPEC-0082:UT-06 — deployment com a imagem acme/legacy-api (lido por build/replay.py)",
+  "entities": [
+    {
+      "kind": "deployment",
+      "id": "dev-legacy",
+      "name": "dev-legacy",
+      "attrs": {
+        "project": "team-x",
+        "namespace": "legacy",
+        "sync_status": "Synced",
+        "health_status": "Healthy",
+        "config_refs": [],
+        "images": [
+          "acme/legacy-api"
+        ]
+      },
+      "source": "argocd"
+    },
+    {
+      "kind": "service",
+      "id": "legacy",
+      "name": "legacy",
+      "attrs": {},
+      "source": "argocd"
+    }
+  ],
+  "relations": [
+    {
+      "from": "deployment:dev-legacy",
+      "to": "service:legacy",
+      "type": "deploys",
+      "source": "argocd"
+    },
+    {
+      "from": "deployment:dev-legacy",
+      "to": "repository:acme/iac",
+      "type": "sourced_from",
+      "source": "argocd"
+    }
+  ]
+}

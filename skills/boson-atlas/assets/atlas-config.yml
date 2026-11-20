@@ -34,3 +34,9 @@ curation: {min_share: 0.6, min_total: 20, min_repos: 3}
 #   remotes:
 #     - github.com/acme
 #     - gitlab.acme.interno/plataforma
+# image_repositories: imagem → repositório do código, para quando o caminho da imagem não diz o repositório
+# (references/config.md, SPEC-0082). Opcional. O build liga o serviço ao repositório do código pela imagem que o
+# deployment roda (regra 4): primeiro este mapa, depois <dono>/<nome> igual, depois o nome único do repositório.
+# Chave = caminho da imagem sem registry, tag nem digest; valor = <dono>/<repositório>; tudo em minúsculas. Ex.:
+#   image_repositories:
+#     "acme/legacy-api": acme/api-v1

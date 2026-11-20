@@ -131,8 +131,24 @@ redaction: {extra_patterns: []}
   ```
 
 - `redaction.extra_patterns` — regex extras de mascaramento antes de gravar (SPEC-0033).
+- `remotes` — prefixos `host/caminho` dos repositórios da organização (acima, SPEC-0080).
+- `image_repositories` — mapa opcional `imagem → <dono>/<repositório>` para a regra 4 do `build` (SPEC-0082, abaixo).
 
 Chave ausente usa o padrão (origem `padrão` no `config`).
+
+### Imagem → repositório do código (`image_repositories:`)
+
+No GitOps, a Application aponta para o repositório de configuração; o repositório do código vem da imagem que o deployment roda (atributo `images` do coletor `argocd`, regra 4 do `build` em `graph.md`). Quando o caminho da imagem não diz o repositório, declare o mapa no `atlas-config.yml` compartilhado — vale para a organização e chega às máquinas pelo `init --join`:
+
+```yaml
+image_repositories:            # opcional
+  "acme/legacy-api": acme/api-v1
+```
+
+- A chave é o caminho normalizado da imagem (sem registry, tag nem digest, como em `images`); o valor é `<dono>/<repositório>`, com exatamente uma `/`. Os dois em minúsculas, só letras, dígitos, `.`, `_`, `-` e `/` entre segmentos, sem esquema, `@` nem espaço. A chave pode vir entre aspas ou sem.
+- O mapa vence a convenção: uma imagem do mapa liga só ao repositório declarado e, se ele não estiver no grafo, não liga a nada (não cai em `<dono>/<nome>` nem no nome único).
+- Um item inválido faz `config`, `scan`, `build`, `context`, `curate`, `vendor` e `lint` do atlas escolhido saírem com 2, e o `doctor` mostra o mesmo problema como ERRO no `atlas-config.yml`. A mensagem nunca cita o item: diz só a posição, a partir de 1, e o primeiro motivo, por exemplo `image_repositories: item 2 inválido — o repositório tem maiúsculas; use "<imagem>": <dono>/<repositório>, como "acme/legacy-api": acme/api-v1`. Os motivos dizem se é `a imagem` ou `o repositório` e são, nesta ordem: `não é texto`, `vazio`, `tem esquema (ex.: https://)`, `tem @`, `tem espaço ou caractere de controle`, `tem maiúsculas`, `fora da regra de nome` e, só para o repositório, `precisa ser <dono>/<nome> (exatamente uma /)`.
+- Atualize todas as máquinas antes de declarar `image_repositories:`: a versão anterior ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: image_repositories`.
 
 ## O que o `doctor` confere
 

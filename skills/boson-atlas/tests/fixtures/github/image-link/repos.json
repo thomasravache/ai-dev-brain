@@ -1,0 +1,34 @@
+[
+  {
+    "id": 3001,
+    "name": "api",
+    "full_name": "acme/api",
+    "private": true,
+    "owner": {
+      "login": "acme",
+      "type": "Organization"
+    },
+    "html_url": "https://github.com/acme/api",
+    "language": "Go",
+    "topics": [],
+    "archived": false,
+    "visibility": "private",
+    "default_branch": "main"
+  },
+  {
+    "id": 3002,
+    "name": "iac",
+    "full_name": "acme/iac",
+    "private": true,
+    "owner": {
+      "login": "acme",
+      "type": "Organization"
+    },
+    "html_url": "https://github.com/acme/iac",
+    "language": "HCL",
+    "topics": [],
+    "archived": false,
+    "visibility": "private",
+    "default_branch": "main"
+  }
+]

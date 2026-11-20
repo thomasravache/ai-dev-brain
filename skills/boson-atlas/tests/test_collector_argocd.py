@@ -87,7 +87,8 @@ GUIDE = "veja references/collectors/argocd.md"
 NO_ACCESS = "sem acesso às Applications"
 INVALID = "resposta inválida da CLI"
 IN_CLUSTER = "https://kubernetes.default.svc"
-DEPLOYMENT_ATTRS = {"project", "namespace", "sync_status", "health_status", "config_refs"}
+# SPEC-0082 (Emenda v2): os deployments das fixtures acme têm status.summary.images, logo também trazem images
+DEPLOYMENT_ATTRS = {"project", "namespace", "sync_status", "health_status", "config_refs", "images"}
 # pedaços das fixtures que nunca podem sair do coletor: credenciais, valores inteiros, chaves fora da lista,
 # anotações e o Secret listado entre os recursos da Application
 NEVER_OUT = ("fake-pass", "not-a-real-token", "fakepublickey", "sslmode", "debug=1", "5432", "/payments",
@@ -238,12 +239,13 @@ class ArgocdCase(unittest.TestCase):
 class MapApplicationTest(unittest.TestCase):
     def test_application_becomes_deployment_service_environment_and_cluster(self):
         """SPEC-0035:UT-01 — uma Application gera deployment, service, environment e cluster, com deploys e
-        runs_in (ambiente e cluster)."""
+        runs_in (ambiente e cluster); SPEC-0082:UT-01 (Emenda v2) — o deployment traz images, porque a
+        Application tem status.summary.images."""
         entities, relations = function("map_application")(application("ingress-nginx"))
         self.assertEqual(sorted(entities, key=canonical), sorted([
             {"kind": "deployment", "id": "ingress-nginx", "name": "ingress-nginx",
              "attrs": {"project": "platform", "namespace": "ingress", "sync_status": "Synced",
-                       "health_status": "Healthy", "config_refs": []},
+                       "health_status": "Healthy", "config_refs": [], "images": ["ingress-nginx/controller"]},
              "source": "argocd"},
             entity("service", "ingress-nginx"),
             entity("environment", "prod"),
@@ -257,12 +259,14 @@ class MapApplicationTest(unittest.TestCase):
 
     def test_deployment_has_only_the_contract_attributes(self):
         """SPEC-0035:UT-01 — o deployment traz só project, namespace, sync_status, health_status e config_refs,
-        com o estado de sync e de saúde da Application."""
+        com o estado de sync e de saúde da Application; SPEC-0082:UT-01 (Emenda v2) — e images, porque a
+        Application tem status.summary.images."""
         entities, _ = function("map_application")(application("api-staging"))
         deployment = next(e for e in entities if e["kind"] == "deployment")
         self.assertEqual(deployment["id"], "api-staging")
         self.assertEqual(deployment["name"], "api-staging")
         self.assertEqual(set(deployment["attrs"]), DEPLOYMENT_ATTRS)
+        self.assertEqual(deployment["attrs"]["images"], ["acme/api"])
         self.assertEqual(deployment["attrs"]["project"], "payments")
         self.assertEqual(deployment["attrs"]["namespace"], "payments-staging")
         self.assertEqual(deployment["attrs"]["sync_status"], "OutOfSync")

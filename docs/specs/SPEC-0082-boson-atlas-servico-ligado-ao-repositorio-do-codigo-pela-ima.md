@@ -3,163 +3,262 @@ id: SPEC-0082
 title: "boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build"
 tier: full
 type: feature
-user_facing: true
-status: proposed
+user_facing: false
+status: implemented
 created: 2026-11-19
 parent:
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: []
-adrs: [ADR-0011]
+touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/references/graph.md, skills/boson-atlas/references/config.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+adrs: [ADR-0011, ADR-0022]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-20
 ---
 
 # SPEC-0082 — boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build
 
-> **Radar (thomas, 2026-11-19):** achado de um uso real em que o agente explicou "como funciona o deploy" explorando os repositórios, porque o atlas só tinha as peças soltas. A detalhar antes do G0, sempre agnóstico e configurável.
-> - **Problema:**
->   - No modelo GitOps, a Application aponta para o repositório de IaC, não para o do código. O atlas liga o serviço ao repositório de GitOps (`sourced_from`), e as pipelines do repositório do código não aparecem no serviço ("Pipelines: nenhum").
->   - Sem `nameOverride` (SPEC-0076), cada ambiente vira um serviço (`dev-x`, `qa-x`), em vez de um serviço com vários deployments.
-> - **Ligação pela imagem:**
->   - o coletor de entrega lê a imagem de cada deployment (`<registry>/<dono>/<nome>`, sem tag nem digest sensível);
->   - o coletor de código diz quais repositórios publicam quais imagens (packages ou workflows de build);
->   - o `build` liga serviço → repositório do código → pipelines;
->   - um mapa explícito `imagem → repositório` no `atlas-config.yml` cobre os casos sem convenção.
-> - **Nome do serviço por padrão configurável:** mais uma fonte na ordem da SPEC-0076, um padrão de nome com o ambiente (ex.: `^(dev|qa|sandbox)-(.*)$`), declarado no `atlas-config.yml`.
-> - **Caminho de entrega no `build`:** com as ligações acima, a página do serviço ganha a seção "Do commit até o pod", gerada do grafo: repositório → pipeline → imagem → repositório de GitOps → deployment → cluster → ambiente. Nenhuma ferramenta fica fixa no texto, que vem só das arestas.
-> - **Restrições:**
->   - kind ou relação nova (imagem/artefato, `publishes`, `runs_image`) muda o contrato do coletor, com spec e ADR (ADR-0011);
->   - tag e digest não entram como dado de execução;
->   - credenciais de registry só por nome.
-> - Avaliar no DISCOVER se vira épico, com uma filha por coletor e uma para o `build`.
+> Origem: radar de 2026-11-19 (uso real com GitOps: a Application aponta para o repositório de IaC e o código mora em outro repositório); detalhada em 2026-11-20.
 
 <!-- type: feature | fix | refactor | migration | foundation. user_facing: true quando a mudança altera uma jornada do usuário (UI ou API pública) — exige teste E2E. Substitua todos os marcadores com chaves duplas: o G0 (`spec_graph.py validate`) reprova a spec enquanto restar algum. As seções de Checklist em diante são preenchidas depois da aprovação, sem marcadores. -->
 
 ## 1. Visão Geral
-{{Descrição curta da funcionalidade e do seu impacto no sistema e no usuário.}}
+O atlas passa a ligar cada serviço ao repositório do **código**, além do repositório de configuração do GitOps, pela imagem que o deployment roda. Com essa ligação, a página do serviço mostra as pipelines e os donos do repositório do código. Ela também ganha a seção "Do commit até o pod", montada só a partir do grafo. Applications nomeadas por ambiente (`dev-x`, `qa-x`) passam a cair no mesmo serviço por um padrão de nome configurável.
 
 ## 2. Motivação & Escopo
-**Motivação:** {{Por que essa mudança é necessária? Qual problema resolve ou que valor agrega?}}
+**Motivação:** no uso real com GitOps, o atlas ligava o serviço ao repositório de IaC. O `sourced_from` da Application é o `repoURL` dela, e esse é o repositório de configuração. Por isso as pipelines do repositório do código não apareciam ("Pipelines: nenhum"), e o agente teve de explorar os repositórios para explicar o caminho do commit até o pod. Sem `nameOverride` nos values (SPEC-0076), cada ambiente também virava um serviço separado.
 
 **Objetivos (dentro do escopo):**
-- {{O que será entregue nesta spec}}
+- **Coletor `argocd`, imagens:** novo atributo `images` no `deployment`, com a lista de imagens sem registry, tag nem digest. Vem de `status.summary.images` e, como reserva, da chave `image.repository` dos values do Helm.
+- **Coletor `argocd`, nome do serviço:** opção `--service-pattern REGEX`, que tira o nome do serviço do nome da Application (grupo `service`). Entra na ordem depois do rótulo e do `nameOverride`.
+- **`build`, regra 4:** uma imagem de um deployment que corresponde a um repositório conhecido dá `service sourced_from repository`, inferido, com a imagem como evidência.
+- **Mapa explícito:** chave opcional `image_repositories` no `atlas-config.yml` compartilhado, para os casos em que o caminho da imagem não diz o repositório.
+- **Página do serviço:** região gerada "Do commit até o pod" (repositório do código → pipelines → imagem → repositório de configuração → deployments por ambiente, com cluster e estado), e os repositórios separados em "Código" e "Configuração (GitOps)".
 
 **Não-objetivos (fora do escopo):**
-- {{O que explicitamente NÃO será feito — itens que poderiam ser assumidos mas não serão}}
+- Ler packages ou registries (API do GitHub Packages, ECR) e o conteúdo dos workflows. A ligação vem só do que os coletores já veem mais o mapa explícito.
+- Kind ou relação nova no contrato (ADR-0022).
+- Tag ou digest como dado: são dados de execução.
+- Coletor de IaC (SPEC-0083), contas (SPEC-0084) e notas descobertas pelo agente (SPEC-0085).
 
 ## 3. Dependências
-<!-- As dependências entre specs ficam no frontmatter. Use `depends_on` só quando a IMPLEMENTAÇÃO da outra spec for necessária; se bastar o CONTRATO, use `consumes_contract` (permite rodar em paralelo). -->
-- **Implementações necessárias:** {{SPEC-NNNN — por que precisa estar implementada | N/A}}
-- **Contratos consumidos:** {{SPEC-NNNN@versão — o que é usado do contrato | N/A}}
-- **Pré-requisitos externos:** {{pacotes, serviços, infraestrutura, feature flags | N/A}}
+- **Implementações necessárias:** N/A — SPEC-0076 (`nameOverride`) já está na main.
+- **Contratos consumidos:** N/A
+- **Pré-requisitos externos:** N/A
 
 ## 4. Decisão Arquitetural
-<!-- Projeto existente: o padrão atual é lei. Qualquer desvio (lib, framework, camada, padrão ou convenção nova) só com type: migration ou ADR aprovado. -->
-**Contexto:** {{Projeto existente: padrão atual seguido e arquivos de referência (ex: "segue src/Orders/CreateOrder/*") | Projeto novo: padrão definido nos ADRs de fundação}}
+**Contexto:** projeto existente, com os seguintes padrões de referência:
+- **coletor:** as funções puras de `assets/collectors/argocd.py` (`extract_config_refs`, `name_override`, `service_and_environment`, `map_application`) e as opções `--service-label`/`--ref-suffixes`;
+- **build:** `infer_relations` em `scripts/atlas.py` (regras 1 a 3, só igualdade de texto, evidência por aresta) e `_service_regions`, que já busca as pipelines pelos repositórios `sourced_from` do serviço;
+- **testes:** `tests/test_collector_argocd.py`, `tests/test_build.py` e o teste de coleta conjunta `MixedCaseScanTest`.
 
-**Decisão:** {{ex: novo slice no módulo Payments seguindo o padrão Command/Handler existente}}
+**Decisão:**
+- `images` é um atributo do `deployment`: uma lista de escalares, que o contrato `@1` já aceita.
+- A regra 4 roda no `build` depois da regra 1, com o casamento descrito no contrato.
+- O mapa `image_repositories` fica no arquivo compartilhado, porque vale para a organização.
+- A página separa os repositórios pela origem da aresta: a regra 1 vem de `repoURL` e é "Configuração"; a regra 4 vem de imagem e é "Código".
 
-**Justificativa:** {{por que se encaixa no contexto descoberto no DISCOVER e nos ADRs aceitos}}
+**Justificativa:**
+- O `build` rejeita o snapshot inteiro quando encontra um kind ou relação desconhecido (`read_snapshots` revalida o contrato). Um kind novo faria máquinas na versão anterior perderem todos os dados do coletor.
+- Um atributo e uma regra de inferência não mudam o contrato, e a versão anterior só ignora o atributo.
+- A página já soma as pipelines e os donos dos repositórios `sourced_from`, então a regra 4 sozinha já traz as pipelines do código.
 
-**Desvio do padrão existente:** {{Nenhum | descreva o desvio e o ADR que o aprova}}
+**Desvio do padrão existente:** nenhum. Uma regra de inferência nova e um atributo seguem o padrão das regras 1 a 3 e de `config_refs` (ADR-0022).
 
-**Alternativas descartadas:** {{o que foi considerado e por que foi rejeitado}}
+**Alternativas descartadas:**
+- **Kind `image` e relação `publishes_image`:** quebra a leitura em máquinas na versão anterior.
+- **Ler a API de packages:** precisa de permissão extra e não cobre outros registries.
+- **Ler o conteúdo dos workflows:** é frágil e específico de ferramenta.
 
-**ADRs:** {{ADR-NNNN aplicados ou criados por esta spec (liste também no frontmatter `adrs`) | N/A}}
+**ADRs:** ADR-0022 (criado por esta spec), ADR-0011.
 
 ## 5. Requisitos Não-Funcionais
-<!-- Preocupações transversais de design doc. Não omita linhas: cada uma tem requisito + como será medido, ou "N/A — motivo". -->
-- **Desempenho e escala:** {{ex: p95 < 200ms a 100 req/s — teste de carga no staging | N/A — motivo}}
-- **Segurança:** {{authN/authZ, validação de entrada, riscos OWASP relevantes — como será verificado | N/A — motivo}}
-- **Privacidade e dados pessoais:** {{LGPD/GDPR: dados coletados, base legal, retenção, mascaramento em logs | N/A — motivo}}
-- **Disponibilidade e resiliência:** {{timeouts, retries, idempotência, degradação | N/A — motivo}}
-- **Acessibilidade (UI):** {{WCAG 2.2 AA nas telas afetadas — verificação com axe/Lighthouse | N/A — motivo}}
-- **Custo:** {{impacto em infraestrutura/serviços pagos | N/A — motivo}}
+- **Desempenho e escala:** a regra 4 é linear no número de deployments e imagens, com um índice de repositórios por nome. A meta de 1.000 Applications em menos de 10 s no coletor continua valendo (fixture gerada).
+- **Segurança:** o host do registry nunca sai, porque pode conter id de conta (ex.: `<conta>.dkr.ecr.<região>.amazonaws.com`). Também nunca saem tag, digest, credenciais na URL da imagem nem valores do Helm além de `image.repository`. Uma imagem que não passa a regra de nome é descartada.
+- **Privacidade e dados pessoais:** N/A — só nomes de imagem e de repositório.
+- **Disponibilidade e resiliência:** snapshot sem `images` (coletor antigo) dá o mesmo grafo de hoje (CH-01). Um `image_repositories` inválido dá exit 2 com a chave e a posição, sem o valor (mesma regra da SPEC-0080).
+- **Acessibilidade (UI):** N/A — páginas Markdown.
+- **Custo:** N/A.
 
 ## 6. Artefato A — Contrato
-**Interface:** `{{ex: POST /api/v1/cards | evento CardAdded | ICardService.AddAsync | tela /carteira}}`
+**Interface:** atributo `images` do `deployment` (coletor `argocd`), opção `--service-pattern`, regra 4 do `build`, chave `image_repositories` do `atlas-config.yml` e regiões da página do serviço.
 
 ```text
-{{Especificação no formato idiomático do projeto (OpenAPI, AsyncAPI, Proto, assinaturas, schema, fluxo de tela). Inclua entrada, resposta de sucesso e todos os erros.}}
+Coletor argocd — atributo novo do deployment (contrato collector@1, lista de escalares)
+  images: ["acme/api", "acme/worker"]       # ordenada, sem repetição
+  fontes, nesta ordem, juntando tudo: status.summary.images; parâmetro ou chave de values "image.repository"
+  normalização de cada imagem:
+    tira o esquema (oci://, docker://), tag (":1.4.2"), digest ("@sha256:...") e o host do registry
+    (primeiro segmento com "." ou ":" ou igual a "localhost"); "docker.io/library/x" → "library/x"
+    minúsculas; o resto precisa casar ^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$, senão é descartada
+    credencial na URL ("user:pass@host/...") → descartada inteira
+
+Coletor argocd — nome do serviço
+  --service-pattern REGEX   (opcional; regex Python com o grupo nomeado "service")
+  ordem: --service-label → nameOverride (SPEC-0076) → --service-pattern sobre metadata.name → metadata.name
+  o grupo "service" precisa passar a mesma regra de nome simples do nameOverride, senão cai no próximo item
+  regex inválida ou sem o grupo "service" → exit 2: "--service-pattern inválido: <motivo>"
+
+atlas-config.yml (compartilhado) — chave opcional
+  image_repositories:
+    "acme/legacy-api": "acme/api-v1"        # caminho normalizado da imagem → <dono>/<repositório>
+  cada chave e valor seguem a regra de nome acima (valor com exatamente uma "/"); senão exit 2:
+    "image_repositories: item N inválido — <motivo>" (sem citar o item)
+
+Build — regra 4 (inferida, depois da regra 1)
+  para cada deployment D com deploys → service:S e cada imagem I de D.attrs.images:
+    1. I em image_repositories → repository:<valor>, se esse repositório existe no grafo
+    2. senão, I = "<dono>/<nome>" e repository:<dono>/<nome> existe → esse
+    3. senão, o último segmento de I é o nome de exatamente um repositório do grafo → esse
+    4. senão (nenhum ou mais de um) → nada
+  gera S sourced_from repository (inferred: true, evidence: "image:<I>"); igual a uma aresta declarada ou
+  repetida → não duplica (regras de hoje)
+
+Página do serviço (services/<id>.md, regiões do atlas)
+  "Repositórios": separados em "Código" (arestas com evidência image:) e "Configuração (GitOps)" (demais);
+    sem nenhuma image:, a lista fica como hoje
+  "Pipelines" e "Donos": como hoje (somam todos os repositórios sourced_from)
+  região nova "Do commit até o pod", só quando há repositório de Código:
+    repositório do código → pipelines dele → imagem(ns) → repositório de configuração → um item por
+    deployment com ambiente, cluster, sync_status e health_status; sem nenhum texto de ferramenta fixo
 ```
 
-**Design:** {{link do fluxo/protótipo aprovado para as telas afetadas | N/A — sem interface}}
+**Esclarecimentos (Emenda v2):**
+- Deployment sem nenhuma imagem válida não ganha o atributo `images` (nem lista vazia), para o snapshot ficar igual ao de hoje.
+- Imagem que está em `image_repositories` mas aponta para um repositório ausente do grafo não gera aresta e não cai nos passos 2 e 3: o mapa é a declaração do time e vence a convenção.
+- As chaves de `image_repositories` podem vir entre aspas, como no exemplo, e o leitor YAML do atlas passa a aceitar chave entre aspas.
+- O marcador e o título da região "Do commit até o pod" só entram na página quando há repositório de Código. Sem ele, a página é igual à de hoje, byte a byte.
+- CH-01 em processo, com os coletores reais, compara arestas, nós e as regiões do serviço, porque as fixtures `acme` já trazem imagens. Testes existentes que fixam os atributos do deployment (`DEPLOYMENT_ATTRS`, `expected-acme.json`) passam a incluir `images`.
 
-**Arquivos/módulos afetados:** ver `touches` no frontmatter. {{Detalhe arquivos a criar/alterar se ajudar o implementador | N/A}}
+**Esclarecimentos (Emenda v3):**
+- Digest aceito só como `sha256:`, `sha384:` ou `sha512:` seguido de hexadecimal. Qualquer outro texto depois de `@` descarta a imagem inteira, como `admin:secret@registry:5000`.
+- A região "Do commit até o pod" lista todas as imagens dos deployments do serviço que levam ao repositório do código, e não só a da evidência da aresta.
+- Chave entre aspas com espaço antes dos dois-pontos (`"acme/x" : acme/y`) também é lida.
+- O CHANGELOG pede para atualizar todas as máquinas do atlas antes do primeiro `build` com a região nova, porque um `build` da versão anterior não mexe nela.
+- Testes passam a fixar estes casos: os de cima; a saída da região quando o repositório de código some; o `doctor` com `image_repositories` inválido; host em maiúsculas; host sem caminho; segmento `..`; `docker.io/x`.
+
+**Design:** N/A — sem interface gráfica.
+
+**Arquivos/módulos afetados:**
+- `assets/collectors/argocd.py`: as imagens e o `--service-pattern`.
+- `scripts/atlas.py`: a regra 4, `image_repositories` (validação e `SHARED_KEYS`), as regiões da página e `ATLAS_VERSION`.
+- `assets/atlas-config.yml`: o exemplo comentado.
+- `references/collectors/argocd.md`, `references/graph.md`, `references/config.md` e `references/collector-contract.md`: o atributo `images`.
+- Testes, fixtures, CHANGELOG e `plugin.json`.
 
 ### 6.1 Mapa de Comportamentos
-<!-- Uma linha por comportamento observável (sucesso e cada erro). Toda linha referencia ao menos um teste da seção 7 — o G0 verifica. -->
 | Cenário | Condição / Entrada | Resultado esperado | Testes |
 |---|---|---|---|
-| {{Sucesso}} | {{entrada válida}} | {{ex: 201 + corpo; cartão aparece na carteira}} | {{UT-01, IT-01, E2E-01}} |
-| {{Erro de validação}} | {{entrada inválida}} | {{ex: 400 + código CARD_INVALID; mensagem no formulário}} | {{UT-02}} |
+| Imagens do deployment | `status.summary.images` e `image.repository` com host, tag, digest | `images` normalizada, ordenada, sem host, tag nem digest | UT-01 |
+| Imagem insegura ou inválida | credencial na URL, caracteres fora da regra, host com id de conta | descartada; nenhum pedaço sai | UT-02 |
+| Nome por padrão | `--service-pattern '^(dev\|qa)-(?P<service>.+)$'` sem rótulo nem `nameOverride` | `dev-api` e `qa-api` → `service:api` | UT-03 |
+| Padrão inválido | regex quebrada, sem grupo `service`, grupo que não casa ou inválido | exit 2, ou cai no nome da Application | UT-03 |
+| Regra 4 por dono/nome | imagem `acme/api` e `repository:acme/api` | `service sourced_from repository:acme/api`, evidência `image:acme/api` | UT-04 |
+| Regra 4 por nome único | `team-x/api` e um só repositório `api` | liga a ele; dois `api` → nada | UT-05 |
+| Mapa explícito | `image_repositories` | vence a convenção; item inválido → exit 2 sem o item | UT-06 |
+| Página do serviço | serviço com repositório de código e de GitOps | "Código"/"Configuração", pipelines do código, região "Do commit até o pod" | UT-07, IT-01 |
+| Compatibilidade | snapshot sem `images`; serviço sem imagem que case | grafo e páginas iguais a hoje | CH-01 |
+| Contrato | snapshot com `images` | aceito pelo validador `@1` e pela versão anterior (atributo ignorado) | CT-01 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
-<!-- Todo teste tem um ID e é escrito ANTES da implementação (Red). No código, cada teste carrega a tag `SPEC-0082:<ID>` — o G1 (`spec_graph.py verify`) verifica. Modo privado: sem tag no código; aponte o teste no fim da linha com `→ caminho::nome` (ex.: `→ tests/test_soma.py::test_soma`). Categoria sem testes: "N/A — motivo" SEM ID. Teste que protege comportamento existente e passa antes da mudança: marque `(guarda: passa antes da mudança)`. Estratégia completa: references/testing.md da skill. -->
-
 ### 7.1 Testes de Caracterização
-<!-- Projeto existente sem cobertura na área alterada: CH-xx fixam o comportamento atual e PASSAM antes da mudança. -->
-- {{CH-01 — comportamento atual que deve ser preservado | N/A — área já coberta por testes ou projeto novo}}
+- **CH-01** — Dadas as fixtures atuais de `argocd` e `github` (`acme`), quando `scan` e `build` rodam, então o `graph.json` e as páginas são iguais aos de hoje, sem região nova e sem aresta nova (guarda: passa antes da mudança).
 
 ### 7.2 Testes Unitários
-- **UT-01** — Dado {{contexto}}, quando {{ação}}, então {{resultado}}.
-- **UT-02** — Dado {{contexto inválido}}, quando {{ação}}, então {{erro/exceção}}.
+- **UT-01** — Dados `status.summary.images` com `ghcr.io/acme/api:1.4.2`, `ghcr.io/acme/api@sha256:abc`, `docker.io/library/redis:7` e o parâmetro Helm `image.repository=registry.interno:5000/acme/worker`, quando o coletor mapeia, então `images` é `["acme/api", "acme/worker", "library/redis"]`.
+- **UT-02** — Dadas imagens `user:tok@ghcr.io/acme/api`, `123456789012.dkr.ecr.us-east-1.amazonaws.com/api` (ECR), `ghcr.io/Acme/API` e `ghcr.io/acme/a b`, quando o coletor mapeia, então:
+  - a primeira e a última são descartadas;
+  - a do ECR vira `api`;
+  - `ghcr.io/Acme/API` vira `acme/api`;
+  - `tok`, `123456789012` e `amazonaws` não aparecem em nenhuma saída do coletor.
+- **UT-03** — Dado `--service-pattern '^(?:dev|qa)-(?P<service>.+)$'`, quando as Applications `dev-api`, `qa-api` e `prod-api` (sem rótulo nem `nameOverride`) são mapeadas, então dão `service:api`, `service:api` e `service:prod-api`. O rótulo e o `nameOverride` continuam vencendo. Uma regex inválida ou sem o grupo `service` dá exit 2, e um grupo que capture texto inválido cai no nome da Application.
+- **UT-04** — Dados `deployment:dev-api` (`images: [acme/api]`, `deploys service:api`, `sourced_from repository:acme/iac`) e `repository:acme/api`, quando o `build` infere, então há `service:api sourced_from repository:acme/api` com `inferred: true` e `evidence: "image:acme/api"`, além da aresta da regra 1 para `acme/iac`.
+- **UT-05** — Dada a imagem `team-x/api`, quando existe um único repositório de nome `api` (`acme/api`), então a regra 4 liga a ele. Com dois (`acme/api` e `globex/api`), ou com nenhum, não há aresta.
+- **UT-06** — Dado `image_repositories: {"acme/legacy-api": "acme/api-v1"}`, quando o `build` infere, então liga a `repository:acme/api-v1` mesmo que exista `acme/legacy-api`. Um item inválido (valor sem `/`, maiúsculas, esquema, `@`) dá exit 2 com `item N inválido` e o motivo, sem nenhum texto do item, em `config --json`, `build` e `lint`.
+- **UT-07** — Dado um serviço com aresta de imagem e aresta de `repoURL`, quando a página é gerada, então:
+  - "Repositórios" mostra "Código: acme/api" e "Configuração (GitOps): acme/iac";
+  - "Pipelines" inclui as pipelines de `acme/api`;
+  - a região "Do commit até o pod" lista, na ordem, repositório do código, pipelines, imagem, repositório de configuração e um item por deployment, com ambiente, cluster e estado.
+
+  Sem aresta de imagem, a região não aparece.
 
 ### 7.3 Testes de Integração
-<!-- Com as dependências reais (containers/emuladores), não mocks. -->
-- **IT-01** — {{fluxo principal com infraestrutura real: persistência, mensageria, chamadas externas}}.
+- **IT-01** — Com fixtures novas de `github` (repositórios `acme/api` e `acme/iac`, pipelines de `acme/api`) e de `argocd` (Applications `dev-api` e `qa-api` com `repoURL` do `acme/iac`, `status.summary.images` com `ghcr.io/acme/api:<tag>` e `--service-pattern`), quando `scan` e `build` rodam num atlas temporário, então:
+  - há um só `service:api` com dois deployments;
+  - a página do serviço mostra as pipelines de `acme/api` e a região "Do commit até o pod";
+  - nenhum snapshot nem página contém tag ou host de registry.
 
 ### 7.4 Testes de Contrato
-<!-- Obrigatório (CT-xx) se esta spec consome contrato de outra ou se outra spec consome o contrato desta. -->
-- {{CT-01 — verificação do contrato fornecido/consumido | N/A — não há contrato entre specs}}
+- **CT-01** — Dado um snapshot do `argocd` com `images` nos deployments, quando o validador do contrato `@1` roda nesta versão e na lógica da versão anterior (validação sem conhecer o atributo), então o snapshot é aceito nas duas. Com o atributo removido, o grafo é igual ao de hoje.
 
 ### 7.5 Testes E2E
-<!-- Obrigatório (E2E-xx) quando user_facing: true: jornada nova ou atualização do E2E que já cobre a jornada. Poucos e significativos. -->
-- {{E2E-01 — jornada do usuário: passos e resultado visível [jornada: <id em critical_journeys>] | N/A — por que nenhuma jornada de usuário é afetada (obrigatório com user_facing: false)}}
+- N/A — a mudança é de dados e páginas geradas, sem jornada interativa; IT-01 roda `scan` e `build` como processo, de ponta a ponta.
 
 ### 7.6 Outros
-- {{performance, segurança, acessibilidade exigidos pelos RNFs — ferramenta e critério | N/A}}
+- N/A
 
-**Dublês e dados de teste:** {{ex: stub do contrato SPEC-NNNN@1, builders de Cartão, dados isolados por teste | N/A}}
+**Dublês e dados de teste:**
+- Fixtures em `tests/fixtures/argocd/` e `tests/fixtures/github/`, só com nomes genéricos (`acme`).
+- `HOME`, `ATLAS_CONFIG_HOME` e `XDG_CONFIG_HOME` temporários.
+- Sem rede.
 
-**Ambiente de execução:** {{onde IT e E2E rodam: docker compose local, containers no CI, staging}}
+**Ambiente de execução:** local e CI (`python3 -m unittest discover -s skills/boson-atlas/tests`, Python 3.9 e 3.15).
 
 ## 8. Plano de Rollout
-- **Estratégia:** {{deploy direto | feature flag `nome` | canário | blue-green}}
-- **Dados/schema:** {{migração expand → migrate → contract, reversível | N/A}}
-- **Compatibilidade:** {{versões de API, clientes antigos, contratos publicados | N/A}}
-- **Observabilidade:** {{logs, métricas, alertas e dashboards novos ou ajustados}}
-- **Rollback:** {{como reverter, em quanto tempo e quem decide}}
-- **Etapas de migração/coexistência:** {{type migration: strangler/branch by abstraction, critérios de virada e remoção do caminho antigo | N/A}}
+- **Estratégia:** deploy direto, por versão do plugin.
+- **Dados/schema:** `images` e a regra 4 são aditivos.
+  - O primeiro `scan` depois do upgrade acrescenta arestas `sourced_from` inferidas e a região nova.
+  - Com `--service-pattern`, os ids de serviço por ambiente se juntam (o `diff` mostra a troca uma vez, como na SPEC-0076).
+- **Compatibilidade:**
+  - a versão anterior lê os snapshots novos e ignora `images`;
+  - `image_repositories` no arquivo compartilhado é acusado pelo `lint` da versão anterior (chave desconhecida), e o CHANGELOG avisa para atualizar as máquinas antes de declarar a chave (mesmo cuidado da SPEC-0080).
+- **Observabilidade:** a evidência `image:<I>` em cada aresta inferida e a seção "Do commit até o pod" na página.
+- **Rollback:** reverter o merge e tirar `image_repositories` do `atlas-config.yml`. Os snapshots com `images` continuam válidos.
+- **Etapas de migração/coexistência:** N/A.
 
 ## 9. Questões em Aberto
-<!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento (seção Registro de Impedimentos). -->
-{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}
+- [x] Kind `image` e relação nova, ou atributo e regra de inferência? — Atributo `images` e regra 4. O `build` descarta o snapshot inteiro diante de um kind ou relação desconhecido, e máquinas na versão anterior perderiam todos os dados do coletor (ADR-0022). A recomendação do arquiteto foi aceita no piloto automático autorizado por thomas em 2026-11-17 ("beleza, segue no piloto automático até o merge"); revisável no H1.
+- [x] O host do registry entra? — Não. Ele pode conter id de conta (ECR), e o casamento com o repositório só precisa do caminho (recomendação do arquiteto, piloto automático; revisável no H1).
+- [x] Como casar imagem e repositório sem convenção fixa? — Nesta ordem:
+  1. mapa explícito;
+  2. `<dono>/<nome>` igual;
+  3. último segmento igual ao nome de um único repositório;
+  4. senão, nada, para não ligar errado (recomendação do arquiteto, piloto automático; revisável no H1).
+- [x] Onde fica o mapa explícito? — `image_repositories` no `atlas-config.yml` compartilhado, porque vale para a organização e chega às máquinas pelo `init --join` (recomendação do arquiteto, piloto automático; revisável no H1).
+- [x] Nome do serviço por ambiente: padrão no coletor ou no `build`? — No coletor (`--service-pattern`), junto do rótulo e do `nameOverride`, para o id do serviço já sair certo no snapshot (recomendação do arquiteto, piloto automático; revisável no H1).
 
 ## 10. Aprovação (H1)
 Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o humano responder "Aprovado". O arquiteto nunca aprova a própria spec.
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [x] Red: CH-01 (passa antes), UT-01 a UT-07, IT-01 e CT-01 com a tag `SPEC-0082:<ID>`, falhando pelo motivo certo; fixtures novas em `tests/fixtures/argocd/` e `tests/fixtures/github/`, só com `acme`
+- [x] Green: `images` e `--service-pattern` em `assets/collectors/argocd.py`; regra 4, `image_repositories` (validação, `SHARED_KEYS`, mensagens sem o item), regiões da página do serviço e `ATLAS_VERSION` em `scripts/atlas.py`; exemplo comentado em `assets/atlas-config.yml`; `references/collectors/argocd.md`, `graph.md`, `config.md` e `collector-contract.md`; CHANGELOG da boson-atlas (aviso de atualizar as máquinas antes de declarar `image_repositories` e da troca de ids com `--service-pattern`); `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PENDING | | |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G0 Spec | PASS | validate: 0 erro(s) — b289b44 | 2026-11-20 |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=45, skipped=1)) — e125bb6 | 2026-11-20 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 1871020 | 2026-11-20 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — d4e20a0 | 2026-11-20 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer (subagente independente), rodada 2: APPROVED, só nits — a6d3ca2 | 2026-11-20 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 68d1a84 | 2026-11-20 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-20 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-20 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — d7946f0 | 2026-11-20 |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-20 — M1: credencial antes de @ vaza quando o texto depois parece host:porta (admin:secret@registry:5000 → admin); minors: região mostra só uma imagem por repositório, casos sem teste — d7a234b
+- G4 PASS 2026-11-20 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -170,39 +269,60 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- O coletor `argocd` grava no deployment o atributo `images`: só o caminho da imagem, sem host do registry, tag nem digest. Imagem com credencial ou fora da regra é descartada inteira.
+- `--service-pattern` junta Applications por ambiente (`dev-api`, `qa-api`) num só serviço.
+- A regra 4 do `build` liga o serviço ao repositório do código pela imagem. A ordem é: mapa `image_repositories`, depois `<dono>/<nome>`, depois nome único. Sem casamento seguro, não liga nada.
+- A página do serviço separa os repositórios em "Código" e "Configuração (GitOps)", soma as pipelines e os donos do repositório do código e ganha a região "Do commit até o pod".
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Atributo e regra de inferência, sem kind nem relação nova (ADR-0022): uma máquina na versão anterior lê o snapshot e ignora `images`.
+- `assets/collectors/argocd.py`: `normalize_image`, `images_of`, `compile_service_pattern`.
+- `scripts/atlas.py`: `validate_image_repositories` (posição e motivo, nunca o item) em config, build, lint e doctor; `infer_relations` com a regra 4; as regiões da página. O leitor YAML aceita chave entre aspas. O mapa viaja só no grafo em memória e não vai para o `graph.json`.
+- Emenda v2 (pontos sem definição apontados no G1) e Emenda v3 (achados da rodada 1 do G4: o digest aceitava `host:porta` e deixava passar credencial; a região mostrava uma só imagem).
+- ATLAS_VERSION 2026.11.12, plugin 2026.11.25.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Fixtures acme sem imagens dão o grafo e as páginas de hoje | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-01 | Imagens normalizadas, ordenadas, sem host, tag nem digest; sem imagem válida, sem atributo | PASS | `test_image_repositories.py`, `test_collector_argocd.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-02 | Imagem insegura descartada sem vazar pedaço; digest só sha256/384/512 | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-03 | `--service-pattern` na ordem do nome e exit 2 sem o padrão | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-04 | Regra 4 por dono/nome com evidência `image:` | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-05 | Regra 4 por nome único; dois ou nenhum, sem aresta | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-06 | Mapa `image_repositories` vence; repositório ausente sem aresta; item inválido só com posição e motivo (config, build, lint, doctor); chave entre aspas | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-07 | Página: Código/Configuração (GitOps), região "Do commit até o pod" com todas as imagens, página igual sem repositório de código | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| IT-01 | `scan` + `build` com github e argocd juntam o serviço e ligam ao repositório do código | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| CT-01 | Snapshot com `images` aceito pelo contrato @1 e pela versão anterior | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0022
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — privacidade (UT-02, UT-06), compatibilidade (CH-01, CT-01)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — evidência `image:<I>` nas arestas, região na página; rollback no CHANGELOG
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `references/` (argocd, graph, config, collector-contract), exemplo no `atlas-config.yml`, CHANGELOG 2026.11.12
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — `ATLAS_VERSION` 2026.11.12, plugin 2026.11.25, PR #59.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Ficam como nits sem spec:
+- nenhum teste afirma que o `graph.json` não tem a chave `image_repositories` (vale por construção);
+- `docker.io/library/x` e `x` normalizam diferente, como o contrato diz;
+- `--service-pattern` usa busca, não casamento inteiro.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0082`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-20 | Digest só `sha256/384/512`, senão a imagem é descartada; a região lista todas as imagens que levam ao repositório do código; chave entre aspas com espaço antes de `:`; aviso no CHANGELOG sobre a região; testes novos dos casos de borda | G4 rodada 1 (major): `admin:secret@registry:5000` virava `admin`; minors: região com uma só imagem, casos sem teste | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
+| 2 | 2026-11-20 | Esclarece: sem imagem válida não há atributo `images`; mapa para repositório ausente não gera aresta nem cai na convenção; chaves entre aspas aceitas em `image_repositories`; região "Do commit até o pod" só com repositório de Código; CH-01 em processo compara arestas e regiões; testes de atributos do deployment incluem `images` | G1 (test-writer): pontos do contrato sem definição | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
