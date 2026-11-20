@@ -9,7 +9,7 @@ created: 2026-11-19
 parent:
 depends_on: []
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/references/graph.md, skills/boson-atlas/references/config.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0011, ADR-0022]
@@ -132,6 +132,13 @@ Página do serviço (services/<id>.md, regiões do atlas)
 - As chaves de `image_repositories` podem vir entre aspas, como no exemplo, e o leitor YAML do atlas passa a aceitar chave entre aspas.
 - O marcador e o título da região "Do commit até o pod" só entram na página quando há repositório de Código. Sem ele, a página é igual à de hoje, byte a byte.
 - CH-01 em processo, com os coletores reais, compara arestas, nós e as regiões do serviço, porque as fixtures `acme` já trazem imagens. Testes existentes que fixam os atributos do deployment (`DEPLOYMENT_ATTRS`, `expected-acme.json`) passam a incluir `images`.
+
+**Esclarecimentos (Emenda v3):**
+- Digest aceito só como `sha256:`, `sha384:` ou `sha512:` seguido de hexadecimal. Qualquer outro texto depois de `@` descarta a imagem inteira, como `admin:secret@registry:5000`.
+- A região "Do commit até o pod" lista todas as imagens dos deployments do serviço que levam ao repositório do código, e não só a da evidência da aresta.
+- Chave entre aspas com espaço antes dos dois-pontos (`"acme/x" : acme/y`) também é lida.
+- O CHANGELOG pede para atualizar todas as máquinas do atlas antes do primeiro `build` com a região nova, porque um `build` da versão anterior não mexe nela.
+- Testes passam a fixar estes casos: os de cima; a saída da região quando o repositório de código some; o `doctor` com `image_repositories` inválido; host em maiúsculas; host sem caminho; segmento `..`; `docker.io/x`.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -297,4 +304,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0082`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-20 | Digest só `sha256/384/512`, senão a imagem é descartada; a região lista todas as imagens que levam ao repositório do código; chave entre aspas com espaço antes de `:`; aviso no CHANGELOG sobre a região; testes novos dos casos de borda | G4 rodada 1 (major): `admin:secret@registry:5000` virava `admin`; minors: região com uma só imagem, casos sem teste | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
 | 2 | 2026-11-20 | Esclarece: sem imagem válida não há atributo `images`; mapa para repositório ausente não gera aresta nem cai na convenção; chaves entre aspas aceitas em `image_repositories`; região "Do commit até o pod" só com repositório de Código; CH-01 em processo compara arestas e regiões; testes de atributos do deployment incluem `images` | G1 (test-writer): pontos do contrato sem definição | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
