@@ -239,12 +239,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Red: CH-01 (passa antes), UT-01 a UT-06, IT-01 e CT-01 com a tag `SPEC-0086:<ID>`, falhando pelo motivo certo; fixtures `image-link` e `acme` reaproveitadas
-- [ ] Green: `delivery` no `_service_entry` e o bloco "Entrega" no `_service_lines` (`scripts/atlas.py`), `references/context.md`, `ATLAS_VERSION`; gluon-spec: SKILL.md (passo 7), `references/gates.md` (G6), `references/brownfield.md`, `delivery_check` no `sdd-config.template.yml`, `SDD_TOOL_VERSION`; CHANGELOGs das duas skills; `version` do `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: CH-01 (passa antes), UT-01 a UT-06, IT-01 e CT-01 com a tag `SPEC-0086:<ID>`, falhando pelo motivo certo; fixtures `image-link` e `acme` reaproveitadas
+- [x] Green: `delivery` no `_service_entry` e o bloco "Entrega" no `_service_lines` (`scripts/atlas.py`), `references/context.md`, `ATLAS_VERSION`; gluon-spec: SKILL.md (passo 7), `references/gates.md` (G6), `references/brownfield.md`, `delivery_check` no `sdd-config.template.yml`, `SDD_TOOL_VERSION`; CHANGELOGs das duas skills; `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -273,37 +273,55 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- O `context` da boson-atlas (CLI e tool MCP `atlas_context`) entrega, em cada serviço com caminho de entrega, a chave `delivery`: repositórios de código e de configuração, pipelines com o repositório, imagens e deployments com ambientes, clusters, sync, health e imagens. Em Markdown, o mesmo dado vem no bloco "Entrega".
+- A gluon-spec, no G6, monta depois do merge um roteiro de verificação com três passos, a partir do `delivery`:
+  1. as pipelines do repositório do código;
+  2. o repositório de configuração onde a imagem nova deve aparecer;
+  3. o deployment, o cluster e o estado esperado em cada ambiente.
+
+  O roteiro é só de leitura, marca o estado do atlas como "último visto pelo atlas" e exige confirmação para produção. Sem atlas, segue com `smoke_test`/`test_e2e`/`deploy_*` sem bloquear.
+- `delivery_check` no `sdd-config.yml` liga ou desliga a consulta e escolhe os ambientes.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `scripts/atlas.py`: `_delivery` e `_delivery_lines`. `_code_images`, `_service_pipelines` e `_deployment_images` saíram da SPEC-0082 para servir a página e o `context` com a mesma regra. O `context` resolve as imagens com o mapa `image_repositories` do arquivo compartilhado.
+- gluon-spec: o passo 7 da SKILL.md diz quando o roteiro roda e aponta para o `gates.md` (G6), que traz os passos e as regras. O `brownfield.md` estende as regras do `org_context` ao G6, e o template ganhou a chave `delivery_check`.
+- Emenda v2: esclarecimentos do G1. Emenda v3: achados da rodada 1 do G4. O principal foi o `delivery.images` divergir da página quando havia mapa de imagens; também entraram a crase nos valores e a SKILL.md mais enxuta.
+- Versões: ATLAS_VERSION 2026.11.13, SDD_TOOL_VERSION 2026.11.9, plugin 2026.11.26.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Sem caminho de entrega, pacote igual ao de hoje; chaves de antes iguais | PASS | `test_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-01 | `delivery` completo, separado e ordenado | PASS | `test_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-02 | Sem repositório de código; status ausente; repositório da pipeline | PASS | `test_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-03 | Bloco "Entrega" na ordem, em crase, numa linha só, sem texto de ferramenta | PASS | `test_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-04 | Corte por `--max-chars` com o bloco dentro do serviço | PASS | `test_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-05 | `atlas_context` devolve o mesmo `delivery` da CLI | PASS | `mcp/tests/test_atlas_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-06 | `delivery_check`, roteiro do G6, só leitura, produção com confirmação, sem atlas não bloqueia | PASS | `skills/gluon-spec/tests/test_delivery_check.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| IT-01 | `scan` + `build` + `context` com e sem mapa de imagens, igual à página | PASS | `test_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
+| CT-01 | Chaves e tipos de antes mantidos; `delivery` com as cinco chaves | PASS | `test_context_delivery.py` — CI do PR #60 (run 44835594269, Python 3.9 e 3.15) e suíte local no G2 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — sem desvio; ADR-0022
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — segurança (UT-03, IT-01), resiliência (CH-01, UT-06); desempenho: sem índice novo, reaproveita os do `context`
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — roteiro na evidência do G6; rollback = reverter o merge
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `references/context.md`, `gates.md`, `brownfield.md`, template, CHANGELOGs das duas skills
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — ATLAS_VERSION 2026.11.13, SDD_TOOL_VERSION 2026.11.9, plugin 2026.11.26, PR #60.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+A verificação ativa depois do deploy (acompanhar rollout e logs no ambiente) fica na SPEC-0075, já no radar. Nit sem spec: o rótulo do ambiente na linha do bloco "Entrega" fica fora da crase, como a linha "Deployments" de hoje.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0086`. -->
