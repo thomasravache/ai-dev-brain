@@ -358,6 +358,69 @@ class UnsafeImagesTest(CollectorCliCase):
                 self.assertNotIn(piece, result.stderr)
 
 
+class ImageEdgeCasesTest(unittest.TestCase):
+    def test_host_case_bare_host_dot_dot_segment_and_docker_io(self):
+        """SPEC-0082:UT-01 (Emenda v3) — host em maiúsculas (GHCR.IO/Acme/Api:1 -> acme/api), host sem caminho
+        (ghcr.io e ghcr.io:443 são descartadas), segmento ".." (descartada) e docker.io/x -> x."""
+        cases = (
+            ("host em maiúsculas", "GHCR.IO/Acme/Api:1", ["acme/api"]),
+            ("host sem caminho", "ghcr.io", None),
+            ("host:porta sem caminho", "ghcr.io:443", None),
+            ("segmento ..", "ghcr.io/acme/../api", None),
+            ("docker.io/x", "docker.io/x", ["x"]),
+        )
+        for name, image, want in cases:
+            with self.subTest(caso=name):
+                entities, _ = function("map_application")(bare_app("dev-api", images=[image]))
+                self.assertEqual(deployment_of(entities)["attrs"].get("images"), want)
+
+
+# credencial antes do "@" com "host:porta" depois (parece um digest alg:hex) e digest que não é sha256/384/512
+CREDENTIAL_IMAGES = ("admin:secret@registry:5000", "AKIAABCDEFGHIJKLMNOP@reg:5000",
+                     "glpat-abcdefghij1234567890@reg:443", "oci://deploy:tok123@registry:443",
+                     "ghp_" + "a1B2c3D4e5" * 3 + "f6G7h8" + "@registry:5000")
+OTHER_DIGEST_IMAGES = ("a/b@md5:abcdef",)
+CREDENTIAL_PIECES = ("secret", "admin", "akia", "glpat", "tok123", "ghp_")
+SHA_DIGESTS = ("ghcr.io/acme/api@sha256:abc", "ghcr.io/acme/api@sha384:" + "0a" * 48,
+               "ghcr.io/acme/api@sha512:" + "0b" * 64)
+
+
+class DigestTest(CollectorCliCase):
+    def test_credential_before_at_with_host_port_after_is_dropped(self):
+        """SPEC-0082:UT-02 (Emenda v3) — só sha256:, sha384: e sha512: seguidos de hexadecimal são digest: uma
+        credencial antes do "@" com "host:porta" depois (admin:secret@registry:5000, chave AKIA, token glpat-, ghp_,
+        oci://deploy:tok123@registry:443) e um digest md5: descartam a imagem inteira (sem o atributo images)."""
+        self.assertEqual(len(CREDENTIAL_IMAGES[-1]), len("ghp_") + 36 + len("@registry:5000"))
+        for image in CREDENTIAL_IMAGES + OTHER_DIGEST_IMAGES:
+            with self.subTest(imagem=image):
+                entities, relations = function("map_application")(bare_app("dev-api", images=[image]))
+                self.assertNotIn("images", deployment_of(entities)["attrs"])
+                text = (json.dumps(entities) + json.dumps(relations)).lower()
+                for piece in CREDENTIAL_PIECES:
+                    self.assertNotIn(piece, text)
+
+    def test_sha_digests_are_removed(self):
+        """SPEC-0082:UT-02 (Emenda v3) — ghcr.io/acme/api@sha256:, @sha384: e @sha512: com hexadecimal dão
+        acme/api."""
+        for image in SHA_DIGESTS:
+            with self.subTest(imagem=image):
+                entities, _ = function("map_application")(bare_app("dev-api", images=[image]))
+                self.assertEqual(deployment_of(entities)["attrs"].get("images"), ["acme/api"])
+
+    def test_no_piece_of_a_credential_in_any_collector_output(self):
+        """SPEC-0082:UT-02 (Emenda v3) — pela CLI (--input): com as imagens de credencial e md5 ao lado de uma
+        imagem válida, só a válida sobra, e secret, admin, akia, glpat, tok123 e ghp_ (sem diferenciar maiúsculas)
+        não aparecem no stdout nem no stderr."""
+        images = CREDENTIAL_IMAGES + OTHER_DIGEST_IMAGES + ("ghcr.io/acme/web:2.0.3",)
+        path = self.write_apps([bare_app("dev-api", images=images)])
+        data, result = self.collect("--from", "argocd", "--input", path)
+        self.assertEqual(deployment_of(data["entities"])["attrs"].get("images"), ["acme/web"])
+        for piece in CREDENTIAL_PIECES:
+            with self.subTest(piece=piece):
+                self.assertNotIn(piece, result.stdout.lower())
+                self.assertNotIn(piece, result.stderr.lower())
+
+
 # --------------------------------------------------------------------------- UT-03 (coletor)
 
 
@@ -552,6 +615,40 @@ class ImageRepositoriesTest(AtlasCase):
         self.assertNotIn("repository:acme/ghost", {n["key"] for n in graph["nodes"]})
         self.assertEqual(edges_of(graph, dst="repository:acme/ghost"), [])
 
+    def test_quoted_key_with_a_space_before_the_colon_is_read(self):
+        """SPEC-0082:UT-06 (Emenda v3) — a chave entre aspas com espaço antes dos dois-pontos
+        ("acme/legacy-api" : acme/api-v1) também é lida, e o mapa vence a convenção."""
+        extra = 'image_repositories:\n  "acme/legacy-api" : acme/api-v1\n'
+        self.configure(atlas_config(IMAGE_MAP_COLLECTORS, extra=extra))
+        self.cli("config", "--json")
+        self.cli("scan")
+        graph = self.graph()
+        edges = [(e["from"], e["to"], e.get("evidence")) for e in image_edges(graph)]
+        self.assertEqual(edges, [("service:legacy", "repository:acme/api-v1", "image:acme/legacy-api")])
+        self.assertEqual(edges_of(graph, "service:legacy", "sourced_from", "repository:acme/legacy-api"), [])
+
+    def test_doctor_reports_an_invalid_item_without_the_item(self):
+        """SPEC-0082:UT-06 (Emenda v3) — doctor e doctor --json com um item inválido em image_repositories acusam o
+        erro (exit diferente de 0) com só a posição e o motivo, sem nenhum texto do item."""
+        key, value = INVALID_ITEMS[0]
+        self.configure(atlas_config(IMAGE_MAP_COLLECTORS,
+                                    extra=mapping_yaml([("acme/legacy-api", "acme/api-v1"), (key, value)])))
+        for command in (("doctor",), ("doctor", "--json")):
+            with self.subTest(command=" ".join(command)):
+                result = self.cli(*command, code=None)
+                self.assertNotEqual(result.returncode, 0, output(result))
+                text = output(result)
+                match = IMAGE_ITEM_RE.search(text)
+                self.assertIsNotNone(match, text)
+                self.assertEqual(match.group(1), "2")
+                for piece in (key, value):
+                    self.assertNotIn(piece, text, "a mensagem cita o item")
+                if command[-1] == "--json":
+                    data = json.loads(result.stdout)
+                    self.assertIs(data["ok"], False)
+                    self.assertTrue(any(c["status"] == "ERRO" and IMAGE_ITEM_RE.search(c["detail"])
+                                        for c in data["checks"]), data)
+
 
 # --------------------------------------------------------------------------- UT-07 (página do serviço)
 
@@ -654,6 +751,54 @@ class ServicePageTest(unittest.TestCase):
         self.assertNotIn(CODE_LABEL, repository)
         self.assertNotIn(CONFIG_LABEL, repository)
         self.assertIn("acme/iac", repository)
+
+
+class ServicePageEmendaTest(unittest.TestCase):
+    def test_commit_to_pod_region_lists_every_image_that_leads_to_the_code_repository(self):
+        """SPEC-0082:UT-07 (Emenda v3) — a região "Do commit até o pod" lista todas as imagens dos deployments do
+        serviço que levam ao repositório do código, e não só a da evidência da aresta: images [acme/api,
+        acme/api-worker] com image_repositories {"acme/api-worker": "acme/api"} e o repositório acme/api -> a linha
+        da imagem traz acme/api e acme/api-worker."""
+        snapshots = page_snapshots()
+        for item in snapshots["gitops"]["entities"]:
+            if item["kind"] == "deployment":
+                item["attrs"]["images"] = ["acme/api", "acme/api-worker"]
+        merged = fn("merge_snapshots", SPEC)(snapshots, ["scm", "gitops"], state("scm", "gitops"))
+        graph = fn("infer_relations", SPEC)(merged, {"acme/api-worker": "acme/api"})
+        self.assertTrue(edges_of(graph, "service:api", "sourced_from", "repository:acme/api"), graph["edges"])
+        pages = fn("render_pages", SPEC)(graph, {}, "Acme", scans=state("scm", "gitops"))
+        flow = flow_region(pages["services/api.md"])
+        self.assertIsNotNone(flow, f'a página não tem a região "{REGION_TITLE}"')
+        before_config = flow[:flow.find("acme/iac")]
+        last_pipeline = "acme/api/publish"  # as imagens ficam entre as pipelines e o repositório de configuração
+        self.assertIn(last_pipeline, before_config, flow)
+        image_text = before_config[before_config.rfind(last_pipeline) + len(last_pipeline):]
+        for image in ("acme/api-worker", "acme/api"):
+            with self.subTest(imagem=image):
+                self.assertRegex(image_text, rf"(?<![\w/.-]){re.escape(image)}(?![\w/.-])", flow)
+
+    def test_page_rebuilt_after_the_code_repository_disappears_equals_a_fresh_page(self):
+        """SPEC-0082:UT-07 (Emenda v3) — a página que tinha a região "Do commit até o pod", refeita depois que o
+        repositório do código some, é igual, byte a byte, à página nova sem a região; e refazer duas vezes a mesma
+        página não muda nada."""
+        render = fn("render_pages", SPEC)
+        scans = state("scm", "gitops")
+        path = "services/api.md"
+        with_region = render(page_graph(), {}, "Acme", scans=scans)[path]
+        self.assertIsNotNone(flow_region(with_region), f'a página não tem a região "{REGION_TITLE}"')
+        self.assertEqual(render(page_graph(), {path: with_region}, "Acme", scans=scans)[path], with_region,
+                         "refazer a página com a região muda o texto")
+        snapshots = page_snapshots()
+        scm = snapshots["scm"]
+        scm["entities"] = [e for e in scm["entities"] if not (e["kind"] == "repository" and e["id"] == "acme/api")]
+        scm["relations"] = [r for r in scm["relations"] if r["to"] != "repository:acme/api"]
+        gone = build_graph(snapshots, ["scm", "gitops"])
+        self.assertEqual(image_edges(gone), [])
+        fresh = render(gone, {}, "Acme", scans=scans)[path]
+        self.assertNotIn(REGION_TITLE, fresh)
+        rebuilt = render(gone, {path: with_region}, "Acme", scans=scans)[path]
+        self.assertEqual(rebuilt, fresh)
+        self.assertEqual(render(gone, {path: rebuilt}, "Acme", scans=scans)[path], rebuilt)
 
 
 # --------------------------------------------------------------------------- IT-01
