@@ -4,7 +4,7 @@ title: "boson-atlas: serviço ligado ao repositório do código pela imagem e ca
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-19
 parent:
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/scr
 adrs: [ADR-0011, ADR-0022]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-20
 ---
 
 # SPEC-0082 — boson-atlas: serviço ligado ao repositório do código pela imagem e caminho de entrega no build
@@ -221,6 +221,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Red: CH-01 (passa antes), UT-01 a UT-07, IT-01 e CT-01 com a tag `SPEC-0082:<ID>`, falhando pelo motivo certo; fixtures novas em `tests/fixtures/argocd/` e `tests/fixtures/github/`, só com `acme`
+- [ ] Green: `images` e `--service-pattern` em `assets/collectors/argocd.py`; regra 4, `image_repositories` (validação, `SHARED_KEYS`, mensagens sem o item), regiões da página do serviço e `ATLAS_VERSION` em `scripts/atlas.py`; exemplo comentado em `assets/atlas-config.yml`; `references/collectors/argocd.md`, `graph.md`, `config.md` e `collector-contract.md`; CHANGELOG da boson-atlas (aviso de atualizar as máquinas antes de declarar `image_repositories` e da troca de ids com `--service-pattern`); `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
