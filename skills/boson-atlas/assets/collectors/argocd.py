@@ -73,8 +73,9 @@ NAME_OVERRIDE_LINE_RE = re.compile(r"^nameOverride\s*:(?:\s+(.*))?$")
 YAML_LINE_RE = re.compile(r"^\s*(?:-\s+)?([A-Za-z0-9_.-]+)\s*:(?:\s+(.*))?$")
 # the normalized path of an image: lower case segments separated by "/" (SPEC-0082)
 IMAGE_PATH_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$")
-# the digest after "@" of an image reference (sha256:<hex>)
-IMAGE_DIGEST_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_+.-]*:[A-Fa-f0-9]+$")
+# the digest after "@" of an image reference: only sha256:, sha384: or sha512: and hexadecimal; anything else after
+# "@" (a credential before "@host:port", another algorithm) drops the whole image (SPEC-0082, Emenda v3)
+IMAGE_DIGEST_RE = re.compile(r"^sha(?:256|384|512):[A-Fa-f0-9]+$")
 IMAGE_REPOSITORY_KEY = "image.repository"
 # GitHub repoURL: https/http/ssh/git:// (credentials allowed) or scp-like git@github.com:owner/repo
 GITHUB_RE = re.compile(

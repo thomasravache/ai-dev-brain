@@ -137,9 +137,9 @@ A sorted list, without repetition, of the images the deployment runs, only as th
 | `registry.interno:5000/acme/worker`, `oci://registry.interno:5000/acme/worker`, `localhost:5000/team-x/tool` | `acme/worker`, `acme/worker`, `team-x/tool` |
 | `<account>.dkr.ecr.<region>.amazonaws.com/api` | `api` |
 | `ghcr.io/Acme/API` | `acme/api` |
-| `user:token@ghcr.io/acme/api` (credential), `ghcr.io/acme/a b` (space) | dropped |
+| `user:token@ghcr.io/acme/api` (credential), `admin:secret@registry:5000` (credential before `@host:port`), `a/b@md5:abc` (other digest), `ghcr.io/acme/a b` (space) | dropped |
 
-The scheme (`oci://`, `docker://`), the digest (`@sha256:…`), the tag (`:1.4.2`, in the last segment) and the registry host (the first segment when it has `.` or `:` or is `localhost`) are removed and the rest is lower case; it must match `^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$`, else the image is dropped whole. An `@` that is not a digest (a credential) drops the image. Nothing of a dropped image leaves, not even on stderr. A deployment without a valid image has no `images` attribute (not an empty list), so its snapshot stays as before 2026.11.12.
+The scheme (`oci://`, `docker://`), the digest (`@sha256:…`), the tag (`:1.4.2`, in the last segment) and the registry host (the first segment when it has `.` or `:` or is `localhost`) are removed and the rest is lower case; it must match `^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$`, else the image is dropped whole. The digest is only `sha256:`, `sha384:` or `sha512:` followed by hexadecimal; any other text after `@` (a credential, even one that looks like `alg:hex` as in `admin:secret@registry:5000`, or another algorithm such as `md5:`) drops the whole image (Emenda v3). Nothing of a dropped image leaves, not even on stderr. A deployment without a valid image has no `images` attribute (not an empty list), so its snapshot stays as before 2026.11.12.
 
 The `build` uses `images` to link the service to the repository of the code (rule 4, `references/graph.md`); tags and digests are execution data and never enter the atlas.
 

@@ -189,13 +189,14 @@ def parse_yaml(text: str) -> dict:
 
 
 def _block_key(content: str):
-    """(key, rest) of a `key: value` line, the key bare or between quotes ("acme/api": x, SPEC-0082); else None."""
+    """(key, rest) of a `key: value` line, the key bare or between quotes ("acme/api": x or "acme/api" : x,
+    SPEC-0082); else None."""
     if content[:1] in "\"'":
         try:
             key, end = _quoted(content, 0)
         except ValueError:
             return None
-        rest = content[end:]
+        rest = content[end:].lstrip(" \t")  # "acme/x" : acme/y also reads (SPEC-0082, Emenda v3)
         if rest == ":" or rest.startswith(": "):
             return key, rest[1:].strip()
         return None
@@ -1703,6 +1704,8 @@ OWNER_INTRO_RE = re.compile(r"^Serviço `(service:[^`]+)`", re.MULTILINE)
 NONE_TEXT = "_(nenhum)_"
 # region "Do commit até o pod" of a service page: only when the service has a code repository (SPEC-0082)
 FLOW_REGION, FLOW_TITLE = "commit-to-pod", "Do commit até o pod"
+# the image_repositories map kept by infer_relations in the graph in memory, never written to graph.json
+IMAGE_MAP_KEY = "image_repositories"
 FLOW_BLOCK = f"\n## {FLOW_TITLE}\n\n<!-- atlas:begin {FLOW_REGION} -->\n<!-- atlas:end {FLOW_REGION} -->\n"
 FLOW_BLOCK_RE = re.compile(rf"\n## {FLOW_TITLE}\n\n<!-- atlas:begin {FLOW_REGION} -->.*?<!-- atlas:end {FLOW_REGION} -->\n",
                            re.DOTALL)
@@ -1796,6 +1799,16 @@ def _image_repository(image, image_map, repositories, by_name):
     return found[0] if len(found) == 1 else None
 
 
+def _repository_lookup(nodes) -> tuple:
+    """(keys of the repositories, {last segment of the repository id: keys}) of a graph's nodes, for
+    _image_repository (rule 4)."""
+    repositories = {k for k, n in nodes.items() if n["kind"] == "repository"}
+    by_name = {}  # last segment of the repository id -> keys (rule 4, step 3)
+    for key in sorted(repositories):
+        by_name.setdefault(key.rsplit("/", 1)[-1].split(":", 1)[-1], []).append(key)
+    return repositories, by_name
+
+
 def infer_relations(graph: dict, image_repositories=None) -> dict:
     """New graph with the declared edges and the inferred ones (`inferred: true`); the input does not change.
     (1) deployment `sourced_from` repository + deployment `deploys` service -> service `sourced_from` repository;
@@ -1807,7 +1820,9 @@ def infer_relations(graph: dict, image_repositories=None) -> dict:
         repository, with `evidence` = "image:<I>" (SPEC-0082, ADR-0022).
     Only equality: an unknown or similar host creates no edge and no node. An inferred edge equal to a declared
     one (same from, type, to) is not added; the same inferred edge from several items keeps the smallest evidence;
-    an edge of rule 4 equal to one of rule 1 is not added either (the edge of rule 1 stays as it is)."""
+    an edge of rule 4 equal to one of rule 1 is not added either (the edge of rule 1 stays as it is).
+    The returned graph keeps the map under IMAGE_MAP_KEY, only in memory (graph.json has only nodes and edges), so
+    the pages resolve every image of a service by the same rule (SPEC-0082, Emenda v3)."""
     nodes = {node["key"]: node for node in graph["nodes"]}
     edges = [dict(edge, sources=list(edge["sources"])) for edge in graph["edges"]]
     declared = {(e["from"], e["type"], e["to"]) for e in edges}
@@ -1854,10 +1869,7 @@ def infer_relations(graph: dict, image_repositories=None) -> dict:
                     add(deploy["to"], "depends_on", target,
                         _union(deployment["sources"], nodes[target]["sources"]), ref)
     image_map = image_repositories if isinstance(image_repositories, dict) else {}
-    repositories = {k for k, n in nodes.items() if n["kind"] == "repository"}
-    by_name = {}  # last segment of the repository id -> keys (rule 4, step 3)
-    for key in sorted(repositories):
-        by_name.setdefault(key.rsplit("/", 1)[-1].split(":", 1)[-1], []).append(key)
+    repositories, by_name = _repository_lookup(nodes)
     before = set(inferred)
     for key in sorted(k for k, n in nodes.items() if n["kind"] == "deployment"):
         images = nodes[key]["attrs"].get("images")
@@ -1871,7 +1883,7 @@ def infer_relations(graph: dict, image_repositories=None) -> dict:
                     add(deploy["to"], "sourced_from", target, _union(deploy["sources"], nodes[target]["sources"]),
                         f"image:{image}")
     return {**graph, "nodes": [dict(node) for node in graph["nodes"]],
-            "edges": edges + [inferred[key] for key in sorted(inferred)]}
+            "edges": edges + [inferred[key] for key in sorted(inferred)], IMAGE_MAP_KEY: dict(image_map)}
 
 
 def _graph_node(node) -> dict:
@@ -1977,6 +1989,9 @@ class _Index:
             self.into.setdefault((edge["to"], edge["type"]), []).append(edge)
         services = [key for key, node in self.nodes.items() if node["kind"] == "service"]
         self.slugs = service_page_names(services, existing or {})
+        image_map = graph.get(IMAGE_MAP_KEY)
+        self.image_map = image_map if isinstance(image_map, dict) else {}
+        self.repositories, self.by_name = _repository_lookup(self.nodes)
 
     def targets(self, key, rtype, kind=None) -> list:
         return [e["to"] for e in self.out.get((key, rtype), []) if kind is None or e["to"].startswith(kind + ":")]
@@ -2039,10 +2054,17 @@ def _repository_lines(repositories, code, index) -> list:
 
 def _flow_lines(code_edges, config, by_env, index) -> list:
     """Lines of the "Do commit até o pod" region, only from the graph and without the name of any tool: the code
-    repository, its pipelines, the image(s) (evidence of rule 4), the configuration repository and one item per
-    deployment with environment, cluster and state (SPEC-0082)."""
+    repository, its pipelines, every image of the service's deployments that leads to it by rule 4 (not only the
+    evidence of the edge, Emenda v3), the configuration repository and one item per deployment with environment,
+    cluster and state (SPEC-0082)."""
     code = _union([e["to"] for e in code_edges])
-    images = sorted({e["evidence"][len(IMAGE_EVIDENCE):] for e in code_edges})
+    images = {e["evidence"][len(IMAGE_EVIDENCE):] for e in code_edges}
+    for deployment in {d for group in by_env.values() for d in group}:
+        attrs = index.nodes[deployment]["attrs"] if deployment in index.nodes else {}
+        found = attrs.get("images")
+        images.update(i for i in (found if isinstance(found, list) else []) if isinstance(i, str)
+                      and _image_repository(i, index.image_map, index.repositories, index.by_name) in code)
+    images = sorted(images)
     pipelines = _union(*(index.sources(r, "builds", "pipeline") for r in code))
     lines = ["1. Código: " + ", ".join(index.label(r) for r in code),
              "2. Pipelines: " + (", ".join(f"{index.name(p)} (`{p.split(':', 1)[1]}`)" for p in pipelines)
