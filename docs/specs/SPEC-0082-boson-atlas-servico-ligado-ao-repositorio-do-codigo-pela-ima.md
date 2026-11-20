@@ -4,7 +4,7 @@ title: "boson-atlas: serviço ligado ao repositório do código pela imagem e ca
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-19
 parent:
 depends_on: []
@@ -254,7 +254,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 68d1a84 | 2026-11-20 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-20 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-20 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — d7946f0 | 2026-11-20 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-20 — M1: credencial antes de @ vaza quando o texto depois parece host:porta (admin:secret@registry:5000 → admin); minors: região mostra só uma imagem por repositório, casos sem teste — d7a234b
