@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **6 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 3, approved 1, implemented 69
+- Specs: proposed 4, approved 1, implemented 69
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -37,6 +37,7 @@ Perfil: **minimo**
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 3d) |  |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 2 | SPEC-0086 | boson-atlas e gluon-spec: caminho de entrega no context e roteiro de verificação depois do merge | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
 | 3 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
 | 4 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
 
@@ -65,6 +66,7 @@ flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
   S0083["SPEC-0083<br/>boson-atlas: coletor de infraestrutura …"]:::proposed
   S0085["SPEC-0085<br/>boson-atlas: guardar o que o agente des…"]:::proposed
+  S0086["SPEC-0086<br/>boson-atlas e gluon-spec: caminho de en…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
@@ -179,6 +181,7 @@ flowchart LR
 | [SPEC-0083](SPEC-0083-boson-atlas-coletor-de-infraestrutura-como-codigo-stacks-pro.md) | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0084](SPEC-0084-boson-atlas-contas-de-nuvem-operacao-fornecedores-e-ciclo-de.md) | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | epic | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0085](SPEC-0085-boson-atlas-guardar-o-que-o-agente-descobre-notas-propostas.md) | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full | feature | proposed | 2026-11-19 | — | — | — |
+| [SPEC-0086](SPEC-0086-boson-atlas-e-gluon-spec-caminho-de-entrega-no-context-e-rot.md) | boson-atlas e gluon-spec: caminho de entrega no context e roteiro de verificação depois do merge | full | feature | proposed | 2026-11-20 | — | — | — |
 
 ## ADRs
 
