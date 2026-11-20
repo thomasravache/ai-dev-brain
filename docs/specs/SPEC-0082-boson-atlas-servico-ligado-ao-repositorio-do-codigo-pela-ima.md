@@ -235,12 +235,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Red: CH-01 (passa antes), UT-01 a UT-07, IT-01 e CT-01 com a tag `SPEC-0082:<ID>`, falhando pelo motivo certo; fixtures novas em `tests/fixtures/argocd/` e `tests/fixtures/github/`, só com `acme`
-- [ ] Green: `images` e `--service-pattern` em `assets/collectors/argocd.py`; regra 4, `image_repositories` (validação, `SHARED_KEYS`, mensagens sem o item), regiões da página do serviço e `ATLAS_VERSION` em `scripts/atlas.py`; exemplo comentado em `assets/atlas-config.yml`; `references/collectors/argocd.md`, `graph.md`, `config.md` e `collector-contract.md`; CHANGELOG da boson-atlas (aviso de atualizar as máquinas antes de declarar `image_repositories` e da troca de ids com `--service-pattern`); `version` do `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: CH-01 (passa antes), UT-01 a UT-07, IT-01 e CT-01 com a tag `SPEC-0082:<ID>`, falhando pelo motivo certo; fixtures novas em `tests/fixtures/argocd/` e `tests/fixtures/github/`, só com `acme`
+- [x] Green: `images` e `--service-pattern` em `assets/collectors/argocd.py`; regra 4, `image_repositories` (validação, `SHARED_KEYS`, mensagens sem o item), regiões da página do serviço e `ATLAS_VERSION` em `scripts/atlas.py`; exemplo comentado em `assets/atlas-config.yml`; `references/collectors/argocd.md`, `graph.md`, `config.md` e `collector-contract.md`; CHANGELOG da boson-atlas (aviso de atualizar as máquinas antes de declarar `image_repositories` e da troca de ids com `--service-pattern`); `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -269,37 +269,56 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- O coletor `argocd` grava no deployment o atributo `images`: só o caminho da imagem, sem host do registry, tag nem digest. Imagem com credencial ou fora da regra é descartada inteira.
+- `--service-pattern` junta Applications por ambiente (`dev-api`, `qa-api`) num só serviço.
+- A regra 4 do `build` liga o serviço ao repositório do código pela imagem. A ordem é: mapa `image_repositories`, depois `<dono>/<nome>`, depois nome único. Sem casamento seguro, não liga nada.
+- A página do serviço separa os repositórios em "Código" e "Configuração (GitOps)", soma as pipelines e os donos do repositório do código e ganha a região "Do commit até o pod".
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Atributo e regra de inferência, sem kind nem relação nova (ADR-0022): uma máquina na versão anterior lê o snapshot e ignora `images`.
+- `assets/collectors/argocd.py`: `normalize_image`, `images_of`, `compile_service_pattern`.
+- `scripts/atlas.py`: `validate_image_repositories` (posição e motivo, nunca o item) em config, build, lint e doctor; `infer_relations` com a regra 4; as regiões da página. O leitor YAML aceita chave entre aspas. O mapa viaja só no grafo em memória e não vai para o `graph.json`.
+- Emenda v2 (pontos sem definição apontados no G1) e Emenda v3 (achados da rodada 1 do G4: o digest aceitava `host:porta` e deixava passar credencial; a região mostrava uma só imagem).
+- ATLAS_VERSION 2026.11.12, plugin 2026.11.25.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Fixtures acme sem imagens dão o grafo e as páginas de hoje | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-01 | Imagens normalizadas, ordenadas, sem host, tag nem digest; sem imagem válida, sem atributo | PASS | `test_image_repositories.py`, `test_collector_argocd.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-02 | Imagem insegura descartada sem vazar pedaço; digest só sha256/384/512 | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-03 | `--service-pattern` na ordem do nome e exit 2 sem o padrão | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-04 | Regra 4 por dono/nome com evidência `image:` | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-05 | Regra 4 por nome único; dois ou nenhum, sem aresta | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-06 | Mapa `image_repositories` vence; repositório ausente sem aresta; item inválido só com posição e motivo (config, build, lint, doctor); chave entre aspas | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| UT-07 | Página: Código/Configuração (GitOps), região "Do commit até o pod" com todas as imagens, página igual sem repositório de código | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| IT-01 | `scan` + `build` com github e argocd juntam o serviço e ligam ao repositório do código | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
+| CT-01 | Snapshot com `images` aceito pelo contrato @1 e pela versão anterior | PASS | `test_image_repositories.py` — CI do PR #59 (run 44790269932, Python 3.9 e 3.15) e suíte local no G2 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4) — rodada 2
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado — ADR-0022
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado) — privacidade (UT-02, UT-06), compatibilidade (CH-01, CT-01)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6) — N/A: skills distribuídas por cópia e pelo plugin
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout — evidência `image:<I>` nas arestas, região na página; rollback no CHANGELOG
+- [x] Documentação raiz e CHANGELOG atualizados (G7) — `references/` (argocd, graph, config, collector-contract), exemplo no `atlas-config.yml`, CHANGELOG 2026.11.12
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7) — N/A: o projeto não declara `living_docs`
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+N/A — `ATLAS_VERSION` 2026.11.12, plugin 2026.11.25, PR #59.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Ficam como nits sem spec:
+- nenhum teste afirma que o `graph.json` não tem a chave `image_repositories` (vale por construção);
+- `docker.io/library/x` e `x` normalizam diferente, como o contrato diz;
+- `--service-pattern` usa busca, não casamento inteiro.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0082`. -->
