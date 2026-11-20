@@ -223,7 +223,11 @@ When every spec in the wave has G4 = PASS, the Integrator merges the branches in
 After "Aprovado", record H2 (`gate SPEC-X H2 --by <user>`). If the user grants a standing authorization ("merge when CI is green"), record it **once** as `h2_policy: auto-on-green` with `h2_policy_approved_by/at` in `sdd-config.yml` — then `gate SPEC-X H2 --run` records it from G5 — instead of repeating the authorization in every spec. Production releases are never covered by that policy.
 
 ### 7. DEPLOY (G6)
-Release deploys through the pipeline to staging, runs smoke + E2E against it, and records G6 (staging). For production, ask the user to confirm that specific release (version, strategy, rollback) and deploy only after an explicit yes; run smoke tests, watch the metrics listed in the Plano de Rollout, roll back if they degrade. Then go back to step 5 with `next`, or to step 8 when the specs are ready to close.
+Release deploys through the pipeline to staging, runs smoke + E2E against it, and records G6 (staging). For production, ask the user to confirm that specific release (version, strategy, rollback) and deploy only after an explicit yes; run smoke tests, watch the metrics listed in the Plano de Rollout, roll back if they degrade.
+
+After the merge, with `delivery_check` enabled and the atlas available (same `org_context` rules as DISCOVER), run `atlas.py context --json [--atlas <org_context>] "<serviços e termos da spec>"` and build the read-only verification route from the `delivery` of the spec's services; the steps and rules are in `references/gates.md` (G6).
+
+Then go back to step 5 with `next`, or to step 8 when the specs are ready to close.
 
 ### 8. CLOSE (G7)
 - Fill each spec's **Relatório de Entrega** from the gate evidence: what was delivered, how it was done, proof of fix (`type: fix`), **Verificação** with one row per test ID (PASS + evidence), Deploy, Pendências as new specs. Check every item of the Definição de Pronto — an item that isn't true stays unchecked and the spec stays open.

@@ -28,7 +28,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.12"
+ATLAS_VERSION = "2026.11.13"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -2052,19 +2052,36 @@ def _repository_lines(repositories, code, index) -> list:
     return lines
 
 
+def _deployment_images(deployment, index) -> list:
+    """The `images` attr of a deployment: only its texts, as they are; [] without it."""
+    attrs = index.nodes[deployment]["attrs"] if deployment in index.nodes else {}
+    found = attrs.get("images")
+    return [i for i in (found if isinstance(found, list) else []) if isinstance(i, str)]
+
+
+def _code_images(code_edges, deployments, index) -> list:
+    """Sorted images of the code (SPEC-0082, Emenda v3): the evidence of the edges of rule 4 and every image of
+    `deployments` that leads to a code repository by rule 4."""
+    code = {e["to"] for e in code_edges}
+    images = {e["evidence"][len(IMAGE_EVIDENCE):] for e in code_edges}
+    for deployment in deployments:
+        images.update(i for i in _deployment_images(deployment, index)
+                      if _image_repository(i, index.image_map, index.repositories, index.by_name) in code)
+    return sorted(images)
+
+
+def _service_pipelines(key, repositories, index) -> list:
+    """Pipelines that build the service or any of its `sourced_from` repositories."""
+    return _union(*(index.sources(target, "builds", "pipeline") for target in [key] + list(repositories)))
+
+
 def _flow_lines(code_edges, config, by_env, index) -> list:
     """Lines of the "Do commit até o pod" region, only from the graph and without the name of any tool: the code
     repository, its pipelines, every image of the service's deployments that leads to it by rule 4 (not only the
     evidence of the edge, Emenda v3), the configuration repository and one item per deployment with environment,
     cluster and state (SPEC-0082)."""
     code = _union([e["to"] for e in code_edges])
-    images = {e["evidence"][len(IMAGE_EVIDENCE):] for e in code_edges}
-    for deployment in {d for group in by_env.values() for d in group}:
-        attrs = index.nodes[deployment]["attrs"] if deployment in index.nodes else {}
-        found = attrs.get("images")
-        images.update(i for i in (found if isinstance(found, list) else []) if isinstance(i, str)
-                      and _image_repository(i, index.image_map, index.repositories, index.by_name) in code)
-    images = sorted(images)
+    images = _code_images(code_edges, {d for group in by_env.values() for d in group}, index)
     pipelines = _union(*(index.sources(r, "builds", "pipeline") for r in code))
     lines = ["1. Código: " + ", ".join(index.label(r) for r in code),
              "2. Pipelines: " + (", ".join(f"{index.name(p)} (`{p.split(':', 1)[1]}`)" for p in pipelines)
@@ -2123,7 +2140,7 @@ def _service_regions(key, index, scans) -> dict:
     depends = [e for rtype in DEPENDENCY_TYPES for e in index.out.get((key, rtype), [])]
     used = [e for rtype in DEPENDENCY_TYPES for e in index.into.get((key, rtype), [])]
     owners = _union(*(index.sources(target, "owns", "team") for target in [key] + repositories))
-    pipelines = _union(*(index.sources(target, "builds", "pipeline") for target in [key] + repositories))
+    pipelines = _service_pipelines(key, repositories, index)
     sources = []
     for cid in node["sources"]:
         seen = (scans.get(cid) or {}).get("seen_at") if isinstance(scans.get(cid), dict) else None
@@ -2871,10 +2888,52 @@ def _service_entry(key, index, page, score, reason) -> dict:
         deployments.append({"id": deployment.split(":", 1)[1], "environments": envs})
     repositories = _union(index.targets(key, "sourced_from", "repository"))
     owners = _union(*(index.sources(t, "owns", "team") for t in [key] + repositories))
-    return {"key": key, "name": node["name"], "score": score, "reason": reason, "page": page,
-            "repositories": [r.split(":", 1)[1] for r in repositories], "deployments": deployments,
-            "owners": [{"id": t.split(":", 1)[1], "name": index.name(t)} for t in owners], "attrs": node["attrs"],
-            "seen_at": node["seen_at"]}
+    entry = {"key": key, "name": node["name"], "score": score, "reason": reason, "page": page,
+             "repositories": [r.split(":", 1)[1] for r in repositories], "deployments": deployments,
+             "owners": [{"id": t.split(":", 1)[1], "name": index.name(t)} for t in owners], "attrs": node["attrs"],
+             "seen_at": node["seen_at"]}
+    delivery = _delivery(key, repositories, index)
+    if delivery:
+        entry["delivery"] = delivery
+    return entry
+
+
+def _delivery(key, repositories, index):
+    """The delivery path of a service (SPEC-0086), from the graph by the rules of the "Do commit até o pod" region
+    (SPEC-0082): code repositories (rule 4), configuration repositories (the other `sourced_from`, only with code),
+    the pipelines of the service and of its repositories, the images of the code and the deployments with
+    environments, clusters, state and images. None without a deployment, a pipeline or a code repository."""
+    code_edges = _code_edges(key, index)
+    code = _union([e["to"] for e in code_edges])
+    deployments = sorted(index.sources(key, "deploys", "deployment"), key=lambda d: d.split(":", 1)[1])
+    pipelines = _service_pipelines(key, repositories, index)
+    if not (code or deployments or pipelines):
+        return None
+    targets = [key] + list(repositories)
+    pipeline_items = []
+    for pipeline in pipelines:
+        built = index.targets(pipeline, "builds", "repository")
+        repository = next((r for r in built if r in targets), built[0] if built else "")
+        pipeline_items.append({"id": pipeline.split(":", 1)[1], "name": index.name(pipeline),
+                               "repository": repository.split(":", 1)[1] if repository else ""})
+    pipeline_items.sort(key=lambda p: p["id"])
+    deployment_items = []
+    for deployment in deployments:
+        attrs = index.nodes[deployment]["attrs"] if deployment in index.nodes else {}
+        item = {"id": deployment.split(":", 1)[1],
+                "environments": sorted(index.name(e) for e in index.targets(deployment, "runs_in", "environment")),
+                "clusters": sorted(index.name(c) for c in index.targets(deployment, "runs_in", "cluster"))}
+        for name in ("sync_status", "health_status"):
+            if attrs.get(name):
+                item[name] = str(attrs[name])
+        item["images"] = sorted(_deployment_images(deployment, index))
+        deployment_items.append(item)
+    return {"code_repositories": [r.split(":", 1)[1] for r in sorted(code)],
+            "config_repositories": (sorted(r.split(":", 1)[1] for r in repositories if r not in code)
+                                    if code else []),
+            "pipelines": pipeline_items,
+            "images": _code_images(code_edges, deployments, index),
+            "deployments": deployment_items}
 
 
 def _dependencies(starts, index, hops) -> list:
@@ -3004,7 +3063,11 @@ def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, tod
     if never:
         warnings.append(f"Nunca escaneado: {', '.join(never)}")
     package = _empty_package(query, warnings)
-    index = _Index(graph, _existing_service_pages(atlas))
+    try:  # the map of build (SPEC-0082): delivery.images resolves like the page (SPEC-0086, Emenda v3)
+        image_map = validate_image_repositories(shared.get("image_repositories"))
+    except AtlasError:
+        image_map = {}
+    index = _Index({**graph, IMAGE_MAP_KEY: image_map}, _existing_service_pages(atlas))
     organization = str(shared.get("organization") or graph.get("organization") or "")
     terms = _query_terms(query)
     found = []
@@ -3049,11 +3112,33 @@ def _service_lines(service) -> list:
     if service["deployments"]:
         parts = [f"{', '.join(d['environments']) or 'sem ambiente'}: {d['id']}" for d in service["deployments"]]
         lines.append(f"- Deployments: {'; '.join(parts)}")
+    if service.get("delivery"):
+        lines += _delivery_lines(service["delivery"])
     if service["owners"]:
         lines.append("- Donos: " + ", ".join(f"{o['name']} ({o['id']})" for o in service["owners"]))
     lines += [f"- {name}: {_fmt_value(value)}" for name, value in service["attrs"].items()]
     lines.append(f"- Visto em: {service['seen_at']}")
     return lines + [""]
+
+
+def _delivery_lines(delivery) -> list:
+    """The "Entrega" block of a service (SPEC-0086): each line only with a value, one per deployment."""
+    def code(values):  # every atlas value in its own code span (Emenda v3); backticks are already "'" (_flat)
+        return ", ".join(f"`{value}`" for value in values)
+
+    pipelines = [f"`{p['name']}`" + (f" (`{p['repository']}`)" if p["repository"] else "")
+                 for p in delivery["pipelines"]]
+    lines = [f"  - {label}: {text}" for label, text in (
+        ("Código", code(delivery["code_repositories"])), ("Pipelines", ", ".join(pipelines)),
+        ("Imagens", code(delivery["images"])), ("Configuração (GitOps)", code(delivery["config_repositories"])))
+        if text]
+    for item in delivery["deployments"]:
+        parts = [f"{label} {value}" for label, value in (
+            ("cluster", code(item["clusters"])), ("sync", code([item["sync_status"]]) if "sync_status" in item else ""),
+            ("health", code([item["health_status"]]) if "health_status" in item else "")) if value]
+        lines.append(f"  - {', '.join(item['environments']) or 'sem ambiente'}: `{item['id']}`"
+                     + (f" — {'; '.join(parts)}" if parts else ""))
+    return ["- Entrega:"] + lines
 
 
 def _dependency_line(edge) -> str:

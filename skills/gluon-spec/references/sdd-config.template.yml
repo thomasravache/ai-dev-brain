@@ -152,3 +152,10 @@ dod_extra: []
 # Com ele, o DISCOVER roda "atlas.py config --json --atlas" e "atlas.py context --atlas" com este valor e os termos da demanda.
 # "" ou sem a chave: o DISCOVER usa o atlas que a boson-atlas escolher nesta máquina, ou só o repositório se não houver.
 org_context: ""
+# Roteiro de verificação do G6 depois do merge (SPEC-0086): com o atlas disponível (mesmas regras do org_context), o G6
+# lê o "delivery" dos serviços da spec (atlas.py context --json) e lista pipelines, repositório de configuração e
+# deployments a acompanhar, só de leitura. enabled: false desliga a consulta; environments: nomes de ambiente do atlas
+# que entram no roteiro ([] = todos os do serviço). Sem a chave: ligado, com todos os ambientes.
+delivery_check:
+  enabled: true
+  environments: []

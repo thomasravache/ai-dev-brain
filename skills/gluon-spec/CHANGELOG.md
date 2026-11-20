@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.9] - 2026-11-20
+
+### Added
+- G6, roteiro de verificação depois do merge: com `delivery_check` ligado e o atlas disponível (as mesmas regras do `org_context` no DISCOVER), o agente roda `atlas.py context --json [--atlas <org_context>] "<serviços e termos da spec>"` e, para cada serviço com `delivery`, monta o roteiro: as pipelines do repositório do código no commit do merge, o repositório de configuração em que a imagem nova deve aparecer e, por ambiente, o deployment, o cluster e o estado esperado de sync e health, marcado como "último visto pelo atlas". Os passos são só de leitura, montados com as ferramentas do projeto (nenhum comando vem do atlas), produção só com a confirmação explícita da pessoa, e o aviso de envelhecimento é repassado. Sem `delivery` ou sem atlas, o G6 diz isso e segue com `smoke_test`, `test_e2e` e `deploy_*`, sem bloquear. O roteiro e o resultado de cada passo vão para o Relatório de Entrega ("Deploy") e para a evidência do G6 (SPEC-0086).
+- Chave opcional `delivery_check` no `sdd-config.yml` (`enabled: true`, `environments: []` = todos os ambientes do serviço, com os nomes do atlas); sem a chave, vale ligado com todos os ambientes. O `whats-new` lista a chave nova (SPEC-0086).
+
 ## [2026.11.8] - 2026-11-19
 
 ### Changed
