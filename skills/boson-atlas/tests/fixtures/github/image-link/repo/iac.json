@@ -1,0 +1,19 @@
+{
+  "id": 3002,
+  "name": "iac",
+  "full_name": "acme/iac",
+  "private": true,
+  "owner": {
+    "login": "acme",
+    "type": "Organization"
+  },
+  "html_url": "https://github.com/acme/iac",
+  "language": null,
+  "topics": [],
+  "archived": false,
+  "visibility": "private",
+  "default_branch": "main",
+  "allow_merge_commit": false,
+  "allow_squash_merge": true,
+  "allow_rebase_merge": false
+}
