@@ -9,7 +9,7 @@ created: 2026-11-19
 parent:
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/references/collectors/argocd.md, skills/boson-atlas/references/graph.md, skills/boson-atlas/references/config.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0011, ADR-0022]
@@ -125,6 +125,13 @@ Página do serviço (services/<id>.md, regiões do atlas)
     repositório do código → pipelines dele → imagem(ns) → repositório de configuração → um item por
     deployment com ambiente, cluster, sync_status e health_status; sem nenhum texto de ferramenta fixo
 ```
+
+**Esclarecimentos (Emenda v2):**
+- Deployment sem nenhuma imagem válida não ganha o atributo `images` (nem lista vazia), para o snapshot ficar igual ao de hoje.
+- Imagem que está em `image_repositories` mas aponta para um repositório ausente do grafo não gera aresta e não cai nos passos 2 e 3: o mapa é a declaração do time e vence a convenção.
+- As chaves de `image_repositories` podem vir entre aspas, como no exemplo, e o leitor YAML do atlas passa a aceitar chave entre aspas.
+- O marcador e o título da região "Do commit até o pod" só entram na página quando há repositório de Código. Sem ele, a página é igual à de hoje, byte a byte.
+- CH-01 em processo, com os coletores reais, compara arestas, nós e as regiões do serviço, porque as fixtures `acme` já trazem imagens. Testes existentes que fixam os atributos do deployment (`DEPLOYMENT_ATTRS`, `expected-acme.json`) passam a incluir `images`.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -287,3 +294,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0082`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-20 | Esclarece: sem imagem válida não há atributo `images`; mapa para repositório ausente não gera aresta nem cai na convenção; chaves entre aspas aceitas em `image_repositories`; região "Do commit até o pod" só com repositório de Código; CH-01 em processo compara arestas e regiões; testes de atributos do deployment incluem `images` | G1 (test-writer): pontos do contrato sem definição | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
