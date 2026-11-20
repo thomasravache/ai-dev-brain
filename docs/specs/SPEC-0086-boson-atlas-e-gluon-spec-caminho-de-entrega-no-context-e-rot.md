@@ -255,7 +255,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 11ebfb4 | 2026-11-20 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 4bbc2f5 | 2026-11-20 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer (subagente independente), rodada 2: APPROVED, só um nit — 6a37a5d | 2026-11-20 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 4430687 | 2026-11-20 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
