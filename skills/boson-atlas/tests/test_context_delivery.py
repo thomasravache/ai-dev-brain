@@ -55,6 +55,7 @@ TOOL_WORDS = ("argo", "github", "kubernetes", "helm")
 TAGS = ("7.7.1-rc9", "8.8.2")
 REGISTRY_HOSTS = ("ghcr.io",)
 PATTERN = r"^(?:dev|qa)-(?P<service>.+)$"
+TRICKY_CLUSTER = "c; sync Synced; health Healthy"
 
 # delivery de service:api nas fixtures image-link (seção 6 da SPEC-0086)
 API_DELIVERY = {
@@ -311,14 +312,51 @@ class DeliveryJsonTest(unittest.TestCase):
         self.assertEqual(qa["clusters"], [])
         self.assertEqual((qa["sync_status"], qa["health_status"]), ("Synced", "Healthy"))
 
+    def test_a_pipeline_that_only_builds_the_service_has_an_empty_repository(self):
+        """SPEC-0086:UT-02 (Emenda v3) — uma pipeline que só faz builds do próprio serviço tem repository "" e, no
+        Markdown, sai sem parênteses."""
+        snapshots = config_only_snapshots()
+        scm = snapshots["scm"]
+        scm["entities"].append(ent("pipeline", "acme/iac/release", {"file": ".github/workflows/release.yml"}, "scm",
+                                   name="Release"))
+        scm["relations"].append(rel("pipeline:acme/iac/release", "builds", "service:api", "scm"))
+        atlas = write_atlas(self, snapshots)
+        package = f("build_context")(atlas, "api", today=TODAY)
+        delivery = service_of(package).get("delivery")
+        self.assertIsNotNone(delivery, "service:api sem a chave delivery (SPEC-0086)")
+        self.assertEqual(delivery["pipelines"], [
+            {"id": "acme/iac/deploy", "name": "Deploy", "repository": "acme/iac"},
+            {"id": "acme/iac/release", "name": "Release", "repository": ""},
+        ])
+        lines = entrega_lines(service_block(f("render_context")(package), "service:api") or [])
+        self.assertIsNotNone(lines)
+        pipelines = [line for line in lines if line.startswith("- Pipelines:")]
+        self.assertEqual(len(pipelines), 1, lines)
+        plain = pipelines[0].replace("`", "")  # o código inline é do UT-03; aqui só os parênteses
+        self.assertTrue(plain.endswith(", Release"), pipelines[0])
+        self.assertNotIn("Release (", plain)
+
+    def test_a_pipeline_of_several_repositories_reports_the_service_repository(self):
+        """SPEC-0086:UT-02 (Emenda v3) — uma pipeline que faz build de um repositório alheio ao serviço (antes na
+        ordem alfabética) e de um repositório do serviço informa o repositório do serviço."""
+        snapshots = config_only_snapshots()
+        scm = snapshots["scm"]
+        scm["entities"].append(repo("acme/a-tools"))
+        scm["relations"].append(rel("pipeline:acme/iac/deploy", "builds", "repository:acme/a-tools", "scm"))
+        atlas = write_atlas(self, snapshots)
+        delivery = service_of(f("build_context")(atlas, "api", today=TODAY)).get("delivery")
+        self.assertIsNotNone(delivery, "service:api sem a chave delivery (SPEC-0086)")
+        self.assertEqual(delivery["pipelines"], [{"id": "acme/iac/deploy", "name": "Deploy", "repository": "acme/iac"}])
+
 
 # --------------------------------------------------------------------------- UT-03
 
 
 class DeliveryMarkdownTest(unittest.TestCase):
     def test_entrega_block_comes_after_deployments_in_the_contract_order_on_one_line(self):
-        """SPEC-0086:UT-03 — bloco "Entrega" depois de "Deployments", com as linhas na ordem do contrato; o nome de
-        pipeline com crase e quebra de linha sai numa linha só, com '; nenhum texto de ferramenta fixo."""
+        """SPEC-0086:UT-03 (Emenda v3) — bloco "Entrega" depois de "Deployments", com as linhas na ordem do contrato
+        e cada valor do atlas em código inline; o nome de pipeline com crase e quebra de linha sai numa linha só, com
+        '; nenhum texto de ferramenta fixo."""
         atlas = write_atlas(self, image_link_snapshots(publish_name="Pub`lish\nnow"))
         markdown = f("render_context")(f("build_context")(atlas, "api", today=TODAY))
         block = service_block(markdown, "service:api")
@@ -327,13 +365,13 @@ class DeliveryMarkdownTest(unittest.TestCase):
         deployments = next((i for i, line in enumerate(block) if line.startswith("- Deployments:")), None)
         self.assertIsNotNone(deployments, markdown)
         self.assertGreater(block.index(ENTREGA), deployments, markdown)
-        self.assertEqual(entrega_lines(block), [
-            "- Código: acme/api",
-            "- Pipelines: Build (acme/api), Pub'lish now (acme/api)",
-            "- Imagens: acme/api",
-            "- Configuração (GitOps): acme/iac",
-            "- dev: dev-api — cluster cluster-dev; sync Synced; health Healthy",
-            "- qa: qa-api — cluster cluster-qa; sync OutOfSync; health Degraded",
+        self.assertEqual(entrega_lines(block), [  # Emenda v3: cada valor do atlas em código inline
+            "- Código: `acme/api`",
+            "- Pipelines: `Build` (`acme/api`), `Pub'lish now` (`acme/api`)",
+            "- Imagens: `acme/api`",
+            "- Configuração (GitOps): `acme/iac`",
+            "- dev: `dev-api` — cluster `cluster-dev`; sync `Synced`; health `Healthy`",
+            "- qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`",
         ])
         self.assertNotIn("now", [line.strip()[:3] for line in markdown.splitlines()])
         self.assertNotIn("`lish", markdown)
@@ -342,8 +380,8 @@ class DeliveryMarkdownTest(unittest.TestCase):
             self.assertNotIn(word, lowered, f"texto de ferramenta fixo no bloco: {word}")
 
     def test_only_the_lines_with_a_value(self):
-        """SPEC-0086:UT-03 — sem repositório de código nem imagem, o bloco não tem "Código", "Imagens" nem
-        "Configuração (GitOps)"; o deployment sem sync_status não traz "sync"."""
+        """SPEC-0086:UT-03 (Emenda v3) — sem repositório de código nem imagem, o bloco não tem "Código", "Imagens"
+        nem "Configuração (GitOps)"; o deployment sem sync_status não traz "sync"; os valores em código inline."""
         atlas = write_atlas(self, config_only_snapshots())
         markdown = f("render_context")(f("build_context")(atlas, "api", today=TODAY))
         block = service_block(markdown, "service:api")
@@ -352,16 +390,34 @@ class DeliveryMarkdownTest(unittest.TestCase):
         self.assertIsNotNone(lines, f'o serviço não tem o bloco "Entrega":\n{markdown}')
         for label in ("- Código:", "- Imagens:", "- Configuração (GitOps):"):
             self.assertFalse([line for line in lines if line.startswith(label)], f"{label} sem valor:\n{markdown}")
-        self.assertIn("- Pipelines: Deploy (acme/iac)", lines)
-        dev = [line for line in lines if line.startswith("- dev: dev-api")]
+        self.assertIn("- Pipelines: `Deploy` (`acme/iac`)", lines)
+        dev = [line for line in lines if line.startswith("- dev: `dev-api`")]
         self.assertEqual(len(dev), 1, lines)
         self.assertNotIn("sync", dev[0])
-        self.assertIn("cluster cluster-dev", dev[0])
-        self.assertIn("health Healthy", dev[0])
-        qa = [line for line in lines if line.startswith("- qa: qa-api")]
+        self.assertIn("cluster `cluster-dev`", dev[0])
+        self.assertIn("health `Healthy`", dev[0])
+        qa = [line for line in lines if line.startswith("- qa: `qa-api`")]
         self.assertEqual(len(qa), 1, lines)
         self.assertNotIn("cluster", qa[0])
-        self.assertIn("sync Synced", qa[0])
+        self.assertIn("sync `Synced`", qa[0])
+
+    def test_a_cluster_name_that_imitates_the_line_stays_in_one_code_span(self):
+        """SPEC-0086:UT-03 (Emenda v3) — um cluster chamado "c; sync Synced; health Healthy" num deployment sem
+        sync_status fica num código inline só: fora dos códigos inline a linha não tem "sync"."""
+        snapshots = config_only_snapshots()
+        for item in snapshots["gitops"]["entities"]:
+            if item["kind"] == "cluster" and item["id"] == "cluster-dev":
+                item["name"] = TRICKY_CLUSTER
+        atlas = write_atlas(self, snapshots)
+        markdown = f("render_context")(f("build_context")(atlas, "api", today=TODAY))
+        lines = entrega_lines(service_block(markdown, "service:api") or [])
+        self.assertIsNotNone(lines, f'o serviço não tem o bloco "Entrega":\n{markdown}')
+        dev = [line for line in lines if line.startswith("- dev: `dev-api`")]
+        self.assertEqual(len(dev), 1, lines)
+        self.assertIn(f"cluster `{TRICKY_CLUSTER}`", dev[0])
+        outside = re.sub(r"`[^`]*`", "", dev[0])
+        self.assertNotIn("sync", outside, dev[0])
+        self.assertEqual(outside.count("health"), 1, dev[0])
 
 
 # --------------------------------------------------------------------------- UT-04
@@ -416,6 +472,21 @@ def atlas_config(collectors):
     return "\n".join(lines) + "\n"
 
 
+FLOW_BEGIN, FLOW_END = "<!-- atlas:begin commit-to-pod -->", "<!-- atlas:end commit-to-pod -->"
+
+
+def page_flow_images(page: Path) -> list:
+    """As imagens da linha "3. Imagem:" da região "Do commit até o pod" da página do serviço (os códigos inline)."""
+    text = page.read_text(encoding="utf-8")
+    if FLOW_BEGIN not in text or FLOW_END not in text:
+        raise AssertionError(f'{page.name} sem a região "Do commit até o pod":\n{text}')
+    region = text[text.index(FLOW_BEGIN):text.index(FLOW_END)]
+    found = [line for line in region.splitlines() if line.startswith("3. Imagem:")]
+    if len(found) != 1:
+        raise AssertionError(f'região "Do commit até o pod" sem uma linha "3. Imagem:":\n{region}')
+    return re.findall(r"`([^`]*)`", found[0])
+
+
 class DeliveryScanTest(unittest.TestCase):
     def setUp(self):
         self.sandbox = Sandbox()
@@ -453,6 +524,44 @@ class DeliveryScanTest(unittest.TestCase):
             for piece in TAGS + REGISTRY_HOSTS + ("sha256",):
                 with self.subTest(piece=piece):
                     self.assertNotIn(piece, text)
+
+    def scan_with_extra_image(self, extra_owner, image_map):
+        """scan + build com as fixtures image-link, cada deployment com mais uma imagem ghcr.io/<extra_owner>:<tag> e
+        o mapa image_repositories no atlas-config.yml compartilhado; devolve (delivery.images, imagens da página)."""
+        data = json.loads((TESTS / "fixtures" / "argocd" / "image-link.json").read_text(encoding="utf-8"))
+        for app in data:
+            images = app["status"]["summary"]["images"]
+            images.append(images[0].replace("acme/api:", f"{extra_owner}:"))
+        (self.atlas / "apps.json").write_text(json.dumps(data), encoding="utf-8")
+        mapping = "".join(f"  {json.dumps(k)}: {v}\n" for k, v in image_map.items())
+        (self.atlas / "atlas-config.yml").write_text(atlas_config([
+            ("github", "code", ["python3", "{skill}/assets/collectors/github.py", "--org", "acme", "--input",
+                                "{skill}/tests/fixtures/github/image-link"]),
+            ("argocd", "delivery", ["python3", "{skill}/assets/collectors/argocd.py", "--from", "argocd",
+                                    "--input", "{atlas}/apps.json", "--service-pattern", PATTERN]),
+        ]) + "image_repositories:\n" + mapping, encoding="utf-8")
+        self.cli("scan")
+        self.cli("build")
+        service = service_of(json.loads(self.cli("context", "--json", "api").stdout))
+        self.assertIn("delivery", service, "service:api sem a chave delivery (SPEC-0086)")
+        return service["delivery"]["images"], page_flow_images(self.atlas / "services" / "api.md")
+
+    def test_context_resolves_images_with_the_image_repositories_map_like_the_page(self):
+        """SPEC-0086:IT-01 (Emenda v3) — com image_repositories {"acme/api-worker": acme/api} e deployments com
+        ghcr.io/acme/api e ghcr.io/acme/api-worker, scan + build + context --json dão delivery.images
+        ["acme/api", "acme/api-worker"], iguais às imagens da região "Do commit até o pod" da página."""
+        images, page = self.scan_with_extra_image("acme/api-worker", {"acme/api-worker": "acme/api"})
+        self.assertEqual(page, ["acme/api", "acme/api-worker"], "a página não usou o mapa: o teste não vale")
+        self.assertEqual(images, ["acme/api", "acme/api-worker"])
+        self.assertEqual(images, page)
+
+    def test_a_map_to_a_missing_repository_has_no_fallback_like_the_page(self):
+        """SPEC-0086:IT-01 (Emenda v3) — com image_repositories {"team-x/api": acme/missing} (repositório fora do
+        grafo) e imagens acme/api e team-x/api, delivery.images é ["acme/api"], sem fallback, igual à página."""
+        images, page = self.scan_with_extra_image("team-x/api", {"team-x/api": "acme/missing"})
+        self.assertEqual(page, ["acme/api"], "a página caiu no fallback: o teste não vale")
+        self.assertEqual(images, ["acme/api"])
+        self.assertEqual(images, page)
 
 
 # --------------------------------------------------------------------------- CT-01

@@ -6,11 +6,13 @@ chave opcional do sdd-config. Os testes guardam os fatos estáveis do contrato (
 - references/sdd-config.template.yml: chave de topo `delivery_check` com `enabled` (true) e `environments` ([]), com
   o comentário do modelo acima (o `whats-new` só lê chaves de topo, e um bloco comentado com "#" não seria listado:
   "comentado" é lido como "com comentário");
-- SKILL.md (seção "### 7. DEPLOY (G6)") e references/gates.md (seção "## G6 — Deploy"): `delivery_check`,
+- references/gates.md (seção "## G6 — Deploy"): `delivery_check`,
   `atlas.py context` com `--json`, o `delivery` do serviço, os três passos do roteiro (pipelines no commit do merge;
   repositório de configuração em que a imagem nova aparece; por ambiente, deployment, cluster e o estado esperado de
   sync e health), "último visto pelo atlas", só leitura, produção só com confirmação explícita e o caminho sem atlas
   (`smoke_test`, `test_e2e`, `deploy_*`, sem bloquear o G6);
+- SKILL.md (seção "### 7. DEPLOY (G6)", Emenda v3): só quando o roteiro roda (`delivery_check`, `atlas.py context`,
+  depois do merge) e o ponteiro para o `gates.md` (G6);
 - references/brownfield.md: o item "Organization context" diz que as regras do `org_context` valem também no G6;
 - `whats-new` lista `delivery_check` como chave nova num projeto sem ela.
 
@@ -74,8 +76,17 @@ def section(path: Path, heading: str) -> str:
 
 
 def g6_texts() -> dict:
-    return {"SKILL.md (passo 7)": section(SKILL / "SKILL.md", "### 7. DEPLOY (G6)"),
-            "references/gates.md (G6)": section(GATES, "## G6 — Deploy")}
+    """Onde ficam as regras do roteiro: só o gates.md (G6) (Emenda v3; a SKILL.md traz só quando e o ponteiro)."""
+    return {"references/gates.md (G6)": section(GATES, "## G6 — Deploy")}
+
+
+def skill_route_paragraph() -> str:
+    """O parágrafo do passo 7 da SKILL.md que fala do roteiro (o que cita `delivery_check`)."""
+    text = section(SKILL / "SKILL.md", "### 7. DEPLOY (G6)")
+    found = [para for para in re.split(r"\n\s*\n", text) if "delivery_check" in para]
+    if len(found) != 1:
+        raise AssertionError(f"SKILL.md (passo 7): esperado um parágrafo com delivery_check, achei {len(found)}")
+    return found[0]
 
 
 class TemplateTest(unittest.TestCase):
@@ -108,7 +119,7 @@ class TemplateTest(unittest.TestCase):
 
 class G6InstructionTest(unittest.TestCase):
     def test_skill_and_gates_describe_the_verification_route(self):
-        """SPEC-0086:UT-06 — SKILL.md (passo 7) e gates.md (G6): delivery_check, atlas.py context --json, o
+        """SPEC-0086:UT-06 (Emenda v3) — gates.md (G6): delivery_check, atlas.py context --json, o
         delivery dos serviços e os três passos do roteiro (pipelines do código no commit do merge; repositório de
         configuração em que a imagem nova aparece; por ambiente, deployment, cluster e estado esperado de sync e
         health), com o estado marcado "último visto pelo atlas"."""
@@ -126,7 +137,7 @@ class G6InstructionTest(unittest.TestCase):
                 self.assertRegex(text, re.compile(r"environments|ambientes?\b|environment", re.IGNORECASE))
 
     def test_route_is_read_only_production_needs_confirmation_and_works_without_atlas(self):
-        """SPEC-0086:UT-06 — SKILL.md (passo 7) e gates.md (G6): passos só de leitura, produção só com a confirmação
+        """SPEC-0086:UT-06 (Emenda v3) — gates.md (G6): passos só de leitura, produção só com a confirmação
         explícita da pessoa e, sem atlas ou sem delivery, o caminho do smoke_test/test_e2e/deploy_* sem bloquear o G6."""
         for origin, text in g6_texts().items():
             with self.subTest(arquivo=origin):
@@ -137,6 +148,17 @@ class G6InstructionTest(unittest.TestCase):
                 for fragment in ("smoke_test", "test_e2e", "deploy_"):
                     self.assertIn(fragment, text, f"{origin}: caminho sem atlas sem {fragment!r}")
                 self.assertRegex(text, NO_BLOCK, f"{origin}: não diz que a falta de dado do atlas não bloqueia o G6")
+
+
+class SkillPointerTest(unittest.TestCase):
+    def test_skill_step_7_says_when_the_route_runs_and_points_to_gates(self):
+        """SPEC-0086:UT-06 (Emenda v3) — a SKILL.md (passo 7) diz quando o roteiro roda (depois do merge, com
+        delivery_check e atlas.py context) e aponta para o gates.md (G6), onde ficam as regras."""
+        text = skill_route_paragraph()
+        for fragment in ("delivery_check", "atlas.py context", "gates.md"):
+            self.assertIn(fragment, text, f"SKILL.md (passo 7): sem {fragment!r}")
+        self.assertRegex(text, re.compile(r"merge", re.IGNORECASE), "SKILL.md (passo 7): sem quando o roteiro roda")
+        self.assertRegex(text, re.compile(r"gates\.md`?\s*\(?G6"), "SKILL.md (passo 7): sem o ponteiro para o G6")
 
 
 class BrownfieldTest(unittest.TestCase):
