@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.13] - 2026-11-20
+
+### Added
+- `context --json`: chave `delivery` em cada serviço com caminho de entrega (ao menos um deployment, uma pipeline ou um repositório de código), só a partir do `graph.json` e pelas regras da região "Do commit até o pod": `code_repositories` (regra 4), `config_repositories` (os demais `sourced_from`, só quando há código), `pipelines` (`id`, `name`, `repository`; as que fazem `builds` do serviço ou dos repositórios dele), `images` (as do código) e `deployments` (`id`, `environments`, `clusters`, `sync_status` e `health_status` só quando o atlas tem, `images`), com as listas em ordem alfabética. Sem caminho de entrega, o pacote é igual ao de antes, byte a byte; a chave é aditiva e nenhuma chave existente muda. A tool MCP `atlas_context` traz o mesmo `delivery` (SPEC-0086).
+- `context` em Markdown: bloco `- Entrega:` no item do serviço, depois de `- Deployments:`, com `Código`, `Pipelines`, `Imagens`, `Configuração (GitOps)` e uma linha por deployment (`<ambiente>: <deployment> — cluster …; sync …; health …`), cada linha e cada parte só quando há valor e cada valor numa linha só, com a crase trocada por `'` (SPEC-0048). O bloco faz parte do item do serviço no corte de `--max-chars` (SPEC-0086).
+
 ## [2026.11.12] - 2026-11-20
 
 ### Added
