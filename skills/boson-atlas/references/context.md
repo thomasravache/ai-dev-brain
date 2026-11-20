@@ -30,8 +30,8 @@ Exit 0 sempre que o pacote é montado (também quando nada é encontrado e quand
 - **Caminho de entrega** (SPEC-0086): cada serviço que tem ao menos um deployment, uma pipeline ou um repositório de código ganha `delivery`, só a partir do `graph.json` e pelas mesmas regras da região "Do commit até o pod" da página do serviço (SPEC-0082, ADR-0022):
   - `code_repositories`: os repositórios `sourced_from` inferidos pela imagem (regra 4, evidência `image:`);
   - `config_repositories`: os demais `sourced_from`, só quando há repositório de código (senão `[]`);
-  - `pipelines`: as que fazem `builds` do serviço ou de qualquer repositório `sourced_from` dele, com `id`, `name` e `repository` (o repositório que ela constrói; `""` quando ela só constrói o serviço);
-  - `images`: as imagens do código, as mesmas da região "Do commit até o pod" (sem tag nem host de registry, que o grafo não guarda);
+  - `pipelines`: as que fazem `builds` do serviço ou de qualquer repositório `sourced_from` dele, com `id`, `name` e `repository` (o primeiro repositório do serviço que ela constrói, senão o primeiro em ordem alfabética; `""` quando ela só constrói o serviço);
+  - `images`: as imagens do código, as mesmas da região "Do commit até o pod", resolvidas pela regra 4 com o mapa `image_repositories` do `atlas-config.yml` compartilhado, como no `build` (um mapa que aponta para um repositório fora do grafo não cai em outra regra). Um mapa editado depois do último `build` só muda as arestas no próximo `build`. Sem tag nem host de registry, que o grafo não guarda;
   - `deployments`: `id`, `environments`, `clusters`, `sync_status` e `health_status` (cada um só quando o atlas tem) e `images` (o atributo do deployment, ou `[]`).
   As listas saem em ordem alfabética (pipelines e deployments por `id`). O estado é o **último visto pelo atlas** no scan, nunca o atual. Serviço sem caminho de entrega não tem a chave, e nenhuma chave de antes muda.
 - **Aviso de envelhecimento** a partir de `snapshots/_scan.json` e do `stale_days` do `atlas-config.yml` (padrão 14), só dos coletores declarados em `collectors`:
@@ -61,11 +61,11 @@ Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas 
 - Repositório: acme/backoffice, acme/iac
 - Deployments: prod: backoffice-prod
 - Entrega:
-  - Código: acme/backoffice
-  - Pipelines: Build (acme/backoffice)
-  - Imagens: acme/backoffice
-  - Configuração (GitOps): acme/iac
-  - prod: backoffice-prod — cluster cluster-prod; sync Synced; health Healthy
+  - Código: `acme/backoffice`
+  - Pipelines: `Build` (`acme/backoffice`)
+  - Imagens: `acme/backoffice`
+  - Configuração (GitOps): `acme/iac`
+  - prod: `backoffice-prod` — cluster `cluster-prod`; sync `Synced`; health `Healthy`
 - Donos: pay (acme/pay)
 - Visto em: 2026-11-02
 
@@ -86,7 +86,7 @@ Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas 
 - dependência `service:payments` → `datastore:payments-db` (depends_on)
 ```
 
-- `- Entrega:` só no serviço com `delivery`, logo depois de `- Deployments:`: as linhas `Código`, `Pipelines` (`nome (repositório)`), `Imagens` e `Configuração (GitOps)`, cada uma só quando tem valor, e uma linha por deployment, `<ambientes>: <deployment>` seguida de `cluster`, `sync` e `health`, cada parte só quando o atlas tem o valor. Nenhum nome de ferramenta é fixo: tudo vem dos dados. O bloco faz parte do item do serviço no corte de `--max-chars`.
+- `- Entrega:` só no serviço com `delivery`, logo depois de `- Deployments:`: as linhas `Código`, `Pipelines` (`` `nome` (`repositório`) ``, ou só `` `nome` `` quando a pipeline só constrói o serviço), `Imagens` e `Configuração (GitOps)`, cada uma só quando tem valor, e uma linha por deployment, `` <ambientes>: `<deployment>` `` seguida de `cluster`, `sync` e `health`, cada parte só quando o atlas tem o valor. Cada valor do atlas sai no seu próprio código inline (com a crase trocada por `'`), para um nome não imitar outra parte da linha. Nenhum nome de ferramenta é fixo: tudo vem dos dados. O bloco faz parte do item do serviço no corte de `--max-chars`.
 - `## Aviso de envelhecimento` é sempre a primeira seção quando existe e **nunca** é omitida, nem com `--max-chars` mínimo.
 - `## Omitidos`: os itens que não couberam em `--max-chars`, uma linha `- ` por item, até 50; passando disso, uma última linha `… e mais N item(ns) — use termos mais específicos, --hops menor ou --max-chars maior`. O corte mantém o maior prefixo possível na ordem serviços → regras → dependências → dicas (as regras valem mais que as dependências; as dicas são as primeiras a sair), contando a própria seção Omitidos no tamanho.
 

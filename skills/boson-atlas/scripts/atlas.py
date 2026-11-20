@@ -3063,7 +3063,11 @@ def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, tod
     if never:
         warnings.append(f"Nunca escaneado: {', '.join(never)}")
     package = _empty_package(query, warnings)
-    index = _Index(graph, _existing_service_pages(atlas))
+    try:  # the map of build (SPEC-0082): delivery.images resolves like the page (SPEC-0086, Emenda v3)
+        image_map = validate_image_repositories(shared.get("image_repositories"))
+    except AtlasError:
+        image_map = {}
+    index = _Index({**graph, IMAGE_MAP_KEY: image_map}, _existing_service_pages(atlas))
     organization = str(shared.get("organization") or graph.get("organization") or "")
     terms = _query_terms(query)
     found = []
@@ -3119,15 +3123,20 @@ def _service_lines(service) -> list:
 
 def _delivery_lines(delivery) -> list:
     """The "Entrega" block of a service (SPEC-0086): each line only with a value, one per deployment."""
-    pipelines = [p["name"] + (f" ({p['repository']})" if p["repository"] else "") for p in delivery["pipelines"]]
-    lines = [f"  - {label}: {', '.join(values)}" for label, values in (
-        ("Código", delivery["code_repositories"]), ("Pipelines", pipelines), ("Imagens", delivery["images"]),
-        ("Configuração (GitOps)", delivery["config_repositories"])) if values]
+    def code(values):  # every atlas value in its own code span (Emenda v3); backticks are already "'" (_flat)
+        return ", ".join(f"`{value}`" for value in values)
+
+    pipelines = [f"`{p['name']}`" + (f" (`{p['repository']}`)" if p["repository"] else "")
+                 for p in delivery["pipelines"]]
+    lines = [f"  - {label}: {text}" for label, text in (
+        ("Código", code(delivery["code_repositories"])), ("Pipelines", ", ".join(pipelines)),
+        ("Imagens", code(delivery["images"])), ("Configuração (GitOps)", code(delivery["config_repositories"])))
+        if text]
     for item in delivery["deployments"]:
         parts = [f"{label} {value}" for label, value in (
-            ("cluster", ", ".join(item["clusters"])), ("sync", item.get("sync_status")),
-            ("health", item.get("health_status"))) if value]
-        lines.append(f"  - {', '.join(item['environments']) or 'sem ambiente'}: {item['id']}"
+            ("cluster", code(item["clusters"])), ("sync", code([item["sync_status"]]) if "sync_status" in item else ""),
+            ("health", code([item["health_status"]]) if "health_status" in item else "")) if value]
+        lines.append(f"  - {', '.join(item['environments']) or 'sem ambiente'}: `{item['id']}`"
                      + (f" — {'; '.join(parts)}" if parts else ""))
     return ["- Entrega:"] + lines
 
