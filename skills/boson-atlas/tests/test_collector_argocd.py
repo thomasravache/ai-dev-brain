@@ -239,12 +239,13 @@ class ArgocdCase(unittest.TestCase):
 class MapApplicationTest(unittest.TestCase):
     def test_application_becomes_deployment_service_environment_and_cluster(self):
         """SPEC-0035:UT-01 — uma Application gera deployment, service, environment e cluster, com deploys e
-        runs_in (ambiente e cluster)."""
+        runs_in (ambiente e cluster); SPEC-0082:UT-01 (Emenda v2) — o deployment traz images, porque a
+        Application tem status.summary.images."""
         entities, relations = function("map_application")(application("ingress-nginx"))
         self.assertEqual(sorted(entities, key=canonical), sorted([
             {"kind": "deployment", "id": "ingress-nginx", "name": "ingress-nginx",
              "attrs": {"project": "platform", "namespace": "ingress", "sync_status": "Synced",
-                       "health_status": "Healthy", "config_refs": []},
+                       "health_status": "Healthy", "config_refs": [], "images": ["ingress-nginx/controller"]},
              "source": "argocd"},
             entity("service", "ingress-nginx"),
             entity("environment", "prod"),
