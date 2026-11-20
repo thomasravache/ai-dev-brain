@@ -9,6 +9,19 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.12] - 2026-11-20
+
+### Added
+- Coletor `argocd`: atributo `images` no `deployment`, a lista ordenada e sem repetição das imagens que ele roda, de `status.summary.images` e do `image.repository` do Helm (`helm.parameters`, `helm.valuesObject` e a linha `repository:` sob a raiz `image:` de `helm.values`). Cada imagem sai só com o caminho: sem esquema (`oci://`, `docker://`), tag, digest nem host do registry (o primeiro segmento com `.` ou `:` ou igual a `localhost`), em minúsculas (`ghcr.io/acme/api:1.4.2` → `acme/api`, `docker.io/library/redis:7` → `library/redis`, `<conta>.dkr.ecr.<região>.amazonaws.com/api` → `api`). Imagem com credencial na URL, espaço ou caractere fora da regra de nome é descartada inteira, e nada dela sai, nem no stderr. Deployment sem imagem válida não ganha o atributo, e o snapshot fica como antes. O contrato continua `boson-atlas/collector@1` (lista de escalares), e a versão anterior só ignora o atributo (SPEC-0082, ADR-0022).
+- Coletor `argocd`: opção `--service-pattern REGEX`, com o grupo nomeado `service`, procurada no nome da Application depois do rótulo de serviço e do `nameOverride` e antes do nome da Application (`^(?:dev|qa)-(?P<service>.+)$`: `dev-api` e `qa-api` → `service:api`). Um grupo que não participa do casamento ou não é um nome simples cai no nome da Application; regex que não compila ou sem o grupo `service` sai com 2 e `--service-pattern inválido: <motivo>` (SPEC-0082).
+- `build`, regra 4: cada imagem de um deployment que implanta um serviço liga o serviço ao repositório do **código** (`service sourced_from repository`, inferida, `evidence: "image:<imagem>"`), nesta ordem: o mapa `image_repositories`, `<dono>/<nome>` igual e o último segmento igual ao nome de um único repositório; sem casamento seguro, nada. Uma aresta igual à da regra 1 não é duplicada (SPEC-0082, ADR-0022).
+- Chave opcional `image_repositories:` no `atlas-config.yml` compartilhado (`"acme/legacy-api": acme/api-v1`), para quando o caminho da imagem não diz o repositório. O mapa vence a convenção: uma imagem do mapa que aponta para um repositório ausente do grafo não liga a nada. Um item inválido faz `config`, `scan`, `build`, `context`, `curate`, `vendor` e `lint` do atlas escolhido saírem com 2, com a posição e o motivo, nunca o item, e o `doctor` mostra o mesmo problema como ERRO (`image_repositories: item 2 inválido — o repositório tem maiúsculas; …`). O leitor YAML do atlas passa a aceitar chave entre aspas; o modelo `assets/atlas-config.yml` traz o exemplo comentado (SPEC-0082).
+- Página do serviço: com um repositório de código (regra 4), a região `repository` separa `Código` e `Configuração (GitOps)`, e a página ganha `## Do commit até o pod` (região `commit-to-pod`, depois das pipelines): repositório do código → pipelines dele → imagens → repositório de configuração → um item por deployment com ambiente, cluster e estado, só a partir do grafo. As pipelines e os donos continuam somando todos os repositórios do serviço, então as do código passam a aparecer. Sem repositório de código, a página é igual à de antes, byte a byte (SPEC-0082).
+
+### Changed
+- **Atualize todas as máquinas antes de declarar `image_repositories:`:** a versão anterior (2026.11.11) ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: image_repositories`. Rollback: tire `image_repositories:` do `atlas-config.yml`; os snapshots com `images` continuam válidos (SPEC-0082).
+- **Aviso de upgrade:** o primeiro `scan` depois desta versão acrescenta as arestas `sourced_from` inferidas pela imagem e a região "Do commit até o pod". Ao ligar `--service-pattern`, os ids de serviço por ambiente se juntam uma vez (`service:dev-api` e `service:qa-api` → `service:api`), e o `diff` mostra a remoção e a inclusão dos serviços e das relações `deploys`, como na SPEC-0076 (SPEC-0082).
+
 ## [2026.11.11] - 2026-11-18
 
 ### Added

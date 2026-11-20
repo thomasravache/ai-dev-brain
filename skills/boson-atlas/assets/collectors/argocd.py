@@ -4,14 +4,17 @@ the source repository of each deployment and its configuration references, read 
 Stdlib only, Python 3.9+; prints the boson-atlas/collector@1 output (ADR-0011).
 
 Usage: python3 argocd.py --from argocd|kubectl [--env-label KEY] [--service-label KEY]
-                         [--ref-suffixes HOST,URL,...] [--input FILE]
+                         [--service-pattern REGEX] [--ref-suffixes HOST,URL,...] [--input FILE]
 
 Only the Application list is read (`argocd app list -o json` or `kubectl get applications.argoproj.io -A -o json`):
 never Secrets, rendered manifests or cluster state. From the Helm parameters, Helm values and plugin env only the
 key names ending in a configured suffix leave the collector, each with the bare host or resource name of its value:
 user, password, port, path and query are stripped here, before the scan's redaction (two layers, spec §4); an AWS
 SQS queue URL or SQS/SNS ARN gives only the queue or topic name, never the account or the region (SPEC-0076).
-The service of an Application is its service label, else the root nameOverride of its Helm values, else its name.
+The service of an Application is its service label, else the root nameOverride of its Helm values, else the group
+"service" of --service-pattern over its name, else its name (SPEC-0082). The images of a deployment (status.summary
+.images and the Helm image.repository) leave only as their path: never the registry host (it may hold an account id),
+the tag, the digest or a credential; an image that does not fit the name rule is dropped whole (SPEC-0082).
 The chosen CLI is the only external process, run by run_cli: argv as a list, never a shell, with a timeout.
 --input FILE reads a recorded list instead of calling a CLI (references/collectors/argocd.md).
 """
@@ -68,6 +71,11 @@ AWS_ARN_RE = re.compile(r"^arn:[a-z0-9-]+:(?:sqs|sns):[a-z0-9-]+:\d{12}:(.+)$")
 NAME_OVERRIDE_LINE_RE = re.compile(r"^nameOverride\s*:(?:\s+(.*))?$")
 # "KEY: value" in a Helm values text, optionally as a list item ("- KEY: value")
 YAML_LINE_RE = re.compile(r"^\s*(?:-\s+)?([A-Za-z0-9_.-]+)\s*:(?:\s+(.*))?$")
+# the normalized path of an image: lower case segments separated by "/" (SPEC-0082)
+IMAGE_PATH_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$")
+# the digest after "@" of an image reference (sha256:<hex>)
+IMAGE_DIGEST_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_+.-]*:[A-Fa-f0-9]+$")
+IMAGE_REPOSITORY_KEY = "image.repository"
 # GitHub repoURL: https/http/ssh/git:// (credentials allowed) or scp-like git@github.com:owner/repo
 GITHUB_RE = re.compile(
     r"^(?:(?:https?|ssh|git)://(?:[^/]*@)?(?:www\.)?github\.com(?::\d+)?/|[^@/\s]+@github\.com:)"
@@ -319,10 +327,22 @@ def name_override(source):
     return name or _name_override_in_text(helm.get("values"))
 
 
-def service_and_environment(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL):
+def _service_from_pattern(name, service_pattern):
+    """The group "service" of service_pattern (a compiled regex) searched in the Application name, when it takes
+    part in the match and is a simple name (_simple_name); else None (SPEC-0082)."""
+    if service_pattern is None or not isinstance(name, str):
+        return None
+    match = service_pattern.search(name)
+    return _simple_name(match.group("service")) if match else None
+
+
+def service_and_environment(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL,
+                            service_pattern=None):
     """Application -> (service, environment). Service: the service label; else the root Helm nameOverride of the
-    first source (spec.source, then spec.sources) with a valid one (name_override, SPEC-0076); else the Application
-    name. Environment: the environment label; else the destination namespace (None when there is none)."""
+    first source (spec.source, then spec.sources) with a valid one (name_override, SPEC-0076); else the group
+    "service" of service_pattern over the Application name, when it is a simple name (SPEC-0082); else the
+    Application name. Environment: the environment label; else the destination namespace (None when there is
+    none)."""
     app = _dict(app)
     metadata = _dict(app.get("metadata"))
     labels = _dict(metadata.get("labels"))
@@ -333,6 +353,7 @@ def service_and_environment(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFA
         service = name_override(source)
         if service:
             break
+    service = service or _service_from_pattern(_text(metadata.get("name")), service_pattern)
     service = service or _text(metadata.get("name"))
     environment = _text(labels.get(env_label)) or _text(destination.get("namespace"))
     return service, environment
@@ -352,11 +373,85 @@ def _sources(spec: dict) -> list:
     return sources + [s for s in _list(spec.get("sources")) if isinstance(s, dict)]
 
 
+def normalize_image(value):
+    """An image reference -> its normalized path, or None when it is dropped whole (SPEC-0082). The scheme
+    (oci://, docker://), the digest ("@sha256:..."), the tag (":1.4.2", in the last segment) and the registry host
+    (the first segment when it has "." or ":" or is localhost) are removed and the rest is lower case; it must match
+    IMAGE_PATH_RE. A space, a credential ("user:pass@host/..."), any other "@" or nothing left = None. Nothing of a
+    dropped image is ever returned or printed."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or any(c.isspace() for c in text):
+        return None
+    match = SCHEME_RE.match(text)
+    text = text[match.end():] if match else text
+    if "@" in text:
+        name, _, digest = text.partition("@")  # "@" before a "/" = a credential, not a digest: dropped
+        if not IMAGE_DIGEST_RE.match(digest):
+            return None
+        text = name
+    head, sep, last = text.rpartition("/")
+    last = last.split(":", 1)[0]
+    segments = (head.split("/") if sep else []) + [last]
+    first = segments[0].lower()
+    if "." in first or ":" in first or first == "localhost":
+        segments = segments[1:]
+    path = "/".join(segments).lower()
+    return path if path and IMAGE_PATH_RE.match(path) else None
+
+
+def _image_repository_in_text(text):
+    """The "repository" key directly under a root "image:" key of a Helm values text, else None."""
+    root, child = None, None
+    for line in text.splitlines() if isinstance(text, str) else []:
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = YAML_LINE_RE.match(line)
+        indent = len(line) - len(stripped)
+        if indent == 0:
+            root, child = (match.group(1) if match and not stripped.startswith("-") else None), None
+            continue
+        if root != "image" or not match or stripped.startswith("-"):
+            continue
+        child = indent if child is None else child
+        if indent == child and match.group(1) == "repository":
+            return _unquote((match.group(2) or "").strip())
+    return None
+
+
+def image_references(app) -> list:
+    """The raw image references of an Application, in this order: status.summary.images, then the Helm
+    image.repository of each source (helm.parameters, helm.valuesObject, helm.values)."""
+    app = _dict(app)
+    found = [i for i in _list(_dict(_dict(app.get("status")).get("summary")).get("images")) if isinstance(i, str)]
+    for source in _sources(_dict(app.get("spec"))):
+        helm = _dict(source.get("helm"))
+        for item in _list(helm.get("parameters")):
+            item = _dict(item)
+            if item.get("name") == IMAGE_REPOSITORY_KEY and isinstance(item.get("value"), str):
+                found.append(item["value"])
+        repository = _dict(_dict(helm.get("valuesObject")).get("image")).get("repository")
+        if isinstance(repository, str):
+            found.append(repository)
+        repository = _image_repository_in_text(helm.get("values"))
+        if repository:
+            found.append(repository)
+    return found
+
+
+def images_of(app) -> list:
+    """Sorted list, without repetition, of the normalized images of an Application (normalize_image); [] when no
+    image is valid."""
+    return sorted({image for image in map(normalize_image, image_references(app)) if image})
+
+
 def map_application(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL,
-                    suffixes=DEFAULT_REF_SUFFIXES):
+                    suffixes=DEFAULT_REF_SUFFIXES, service_pattern=None):
     """One Application -> (entities deployment, service, environment, cluster; relations deploys, runs_in and
     sourced_from). Only the contract attrs of the deployment leave: annotations, status.resources and history
-    are never read."""
+    are never read. `images` is there only when the Application has a valid image (SPEC-0082, Emenda v2)."""
     app = _dict(app)
     name = _text(_dict(app.get("metadata")).get("name"))
     if not name:
@@ -366,15 +461,19 @@ def map_application(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERV
     sources = _sources(spec)
     refs = sorted({ref for source in sources for ref in extract_config_refs(source, suffixes)})
     deployment_ref = f"deployment:{name}"
-    entities = [entity("deployment", name, name, {
+    attrs = {
         "project": _text(spec.get("project")),
         "namespace": _text(destination.get("namespace")),
         "sync_status": _text(_dict(status.get("sync")).get("status")),
         "health_status": _text(_dict(status.get("health")).get("status")),
         "config_refs": refs,
-    })]
+    }
+    images = images_of(app)
+    if images:
+        attrs["images"] = images
+    entities = [entity("deployment", name, name, attrs)]
     relations = []
-    service, environment = service_and_environment(app, env_label, service_label)
+    service, environment = service_and_environment(app, env_label, service_label, service_pattern)
     for kind, eid, rtype in (("service", service, "deploys"), ("environment", environment, "runs_in"),
                              ("cluster", _cluster_id(destination), "runs_in")):
         if eid:
@@ -390,7 +489,7 @@ def map_application(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERV
 
 
 def map_applications(apps, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL,
-                     suffixes=DEFAULT_REF_SUFFIXES, warnings=None):
+                     suffixes=DEFAULT_REF_SUFFIXES, warnings=None, service_pattern=None):
     """List of Applications -> (entities without a repeated kind:id, relations without repetition). Shared
     entities (service, environment, cluster) appear once. A repeated Application name (Applications in several
     namespaces) keeps the whole first Application: the later one adds no entity or relation, and a warning naming
@@ -404,7 +503,7 @@ def map_applications(apps, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SE
                 where = f" (namespace {namespace})" if namespace else ""
                 warnings.append(f"aviso: Application repetida ignorada: {name}{where} — fica a primeira")
             continue
-        app_entities, app_relations = map_application(app, env_label, service_label, suffixes)
+        app_entities, app_relations = map_application(app, env_label, service_label, suffixes, service_pattern)
         if name:
             names.add(name)
         for item in app_entities:
@@ -494,12 +593,28 @@ def parse_suffixes(text: str) -> tuple:
     return tuple(s.strip() for s in (text or "").split(",") if s.strip())
 
 
+def compile_service_pattern(text):
+    """--service-pattern -> compiled regex, None when not given; ValueError with the reason (never the pattern)
+    when it does not compile or has no group named "service" (SPEC-0082)."""
+    if text is None:
+        return None
+    try:
+        pattern = re.compile(text)
+    except re.error as e:
+        raise ValueError(f"regex que não compila ({e.msg})") from None
+    if "service" not in pattern.groupindex:
+        raise ValueError('falta o grupo nomeado "service" (?P<service>...)')
+    return pattern
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="argocd.py", description="Coletor argocd da boson-atlas")
     parser.add_argument("--from", dest="source", required=True, choices=("argocd", "kubectl"),
                         help="CLI que lê as Applications")
     parser.add_argument("--env-label", default=DEFAULT_ENV_LABEL, help="label do ambiente")
     parser.add_argument("--service-label", default=DEFAULT_SERVICE_LABEL, help="label do serviço")
+    parser.add_argument("--service-pattern", default=None,
+                        help='regex sobre o nome da Application com o grupo "service" (ex.: ^(?:dev|qa)-(?P<service>.+)$)')
     parser.add_argument("--ref-suffixes", default=",".join(DEFAULT_REF_SUFFIXES),
                         help="sufixos das chaves de configuração extraídas (a,b)")
     parser.add_argument("--input", default=None, help="arquivo JSON com as Applications em vez da CLI")
@@ -513,9 +628,14 @@ def main(argv=None):
     if not suffixes:
         parser.error("--ref-suffixes precisa de ao menos um sufixo")
     try:
+        service_pattern = compile_service_pattern(args.service_pattern)
+    except ValueError as e:
+        parser.error(f"--service-pattern inválido: {e}")
+    try:
         apps = read_input(args.input) if args.input else run_cli(args.source)
         warnings = []
-        entities, relations = map_applications(apps, args.env_label, args.service_label, suffixes, warnings)
+        entities, relations = map_applications(apps, args.env_label, args.service_label, suffixes, warnings,
+                                               service_pattern)
     except CollectorError as e:
         print(f"erro: {e}", file=sys.stderr)
         return 1

@@ -37,7 +37,8 @@ The collector never reads or prints a token; the CLI handles it. It uses only th
 | Option | Default | Meaning |
 |---|---|---|
 | `--from argocd\|kubectl` | required | which CLI lists the Applications |
-| `--service-label KEY` | `app.kubernetes.io/part-of` | Application label that names the service; without it, the Helm `nameOverride`, then the Application name (see [Service name](#service-name)) |
+| `--service-label KEY` | `app.kubernetes.io/part-of` | Application label that names the service; without it, the Helm `nameOverride`, then `--service-pattern`, then the Application name (see [Service name](#service-name)) |
+| `--service-pattern REGEX` | — | Python regex with a named group `service`, searched in the Application name (`^(?:dev\|qa)-(?P<service>.+)$`); see [Service name](#service-name) |
 | `--env-label KEY` | `env` | Application label that names the environment; without it, the destination namespace |
 | `--ref-suffixes a,b` | `HOST,URL,URI,ENDPOINT,DSN,ADDR,_QUEUE,_TOPIC,_BUCKET` | key suffixes extracted into `config_refs` (case-insensitive, matched only at the end of the key); replaces the whole list |
 | `--input FILE` | — | read a recorded response instead of calling a CLI (tests, or running without access) |
@@ -64,14 +65,14 @@ One call per run, argv as a list without a shell, stdin closed (no prompt), 120 
 | `argocd` | `argocd app list -o json` |
 | `kubectl` | `kubectl get applications.argoproj.io -A -o json` |
 
-Nothing else is called: no `app get`, `app manifests` or `app resources`, no Secrets, no rendered manifests, no cluster state beyond the Application objects. From each Application only `metadata.name`, `metadata.labels`, `spec.project`, `spec.destination`, `spec.source` / `spec.sources` and `status.sync.status` / `status.health.status` are read; annotations (such as `last-applied-configuration`), `status.resources`, `status.history` and `status.sync.comparedTo` are ignored.
+Nothing else is called: no `app get`, `app manifests` or `app resources`, no Secrets, no rendered manifests, no cluster state beyond the Application objects. From each Application only `metadata.name`, `metadata.labels`, `spec.project`, `spec.destination`, `spec.source` / `spec.sources`, `status.sync.status` / `status.health.status` and `status.summary.images` are read; annotations (such as `last-applied-configuration`), `status.resources`, `status.history` and `status.sync.comparedTo` are ignored.
 
 ## Output
 
 | Entity | Attributes |
 |---|---|
-| `deployment:<Application name>` | `project`, `namespace` (destination), `sync_status`, `health_status`, `config_refs` |
-| `service:<service>` (label `--service-label`, else the Helm `nameOverride`, else the Application name) | none |
+| `deployment:<Application name>` | `project`, `namespace` (destination), `sync_status`, `health_status`, `config_refs`, and `images` when there is a valid image (see [`images`](#images)) |
+| `service:<service>` (label `--service-label`, else the Helm `nameOverride`, else `--service-pattern`, else the Application name) | none |
 | `environment:<environment>` (label `--env-label`, else the destination namespace) | none |
 | `cluster:<destination.server>`, or `cluster:<destination.name>` when there is no server | none |
 
@@ -83,7 +84,10 @@ The service of each Application is, in this order (SPEC-0076):
 
 1. the `--service-label` label of the Application;
 2. the Helm `nameOverride`, read only at the root of the values of the first source that declares a valid one (`spec.source`, then each of `spec.sources`). Inside one source the Argo CD and Helm precedence applies: the `nameOverride` parameter of `helm.parameters` (that exact name, not `chart.nameOverride`), then the root key of `helm.valuesObject`, then a line without indentation of `helm.values` (`nameOverride: account`, quoted or not);
-3. the Application name.
+3. the group `service` of `--service-pattern`, searched in the Application name (SPEC-0082);
+4. the Application name.
+
+With `--service-pattern '^(?:dev|qa)-(?P<service>.+)$'`, Applications named per environment (`dev-api`, `qa-api`) without the label or a `nameOverride` both deploy `service:api`, while `prod-api` (no match) stays `service:prod-api`. The group counts only when it takes part in the match and is a simple name (the same rule as the `nameOverride`); otherwise the Application name is used (`dev--x` → `service:dev--x`). A regex that does not compile or has no group named `service` ends the collector with exit 2 and `--service-pattern inválido: <motivo>` on stderr, before anything is read. Turning the option on changes the service ids once in the next `scan` (`service:dev-api` → `service:api`), and the `diff` shows it, as with the `nameOverride` (SPEC-0076).
 
 The `nameOverride` counts only when it is a simple name (the same rule as a host or resource name). An empty value, a YAML null or boolean literal (`null`, `~`, `true`, `false` and the YAML 1.1 `yes`, `no`, `on`, `off`, `y`, `n`, in any case, quoted or not), a template (`{{ .Values.app }}`, `${NAME}`), a value with a space or a non-text value is ignored, and the search goes on to the next place, then to the next source; the Application name is used only when no source has a valid one. So Applications per environment (`dev-account`, `qa-account`) whose chart declares `nameOverride: account` all deploy `service:account`, and a value such as `http://account` in another Application matches that service in `build`.
 
@@ -122,6 +126,23 @@ The SQS host (`sqs.<region>.amazonaws.com`) is the same for every queue of a reg
 
 User, password, port, path and query are stripped by the collector, before the `scan`'s redaction (two layers). A value with nothing safe left (empty, a template such as `${DB_HOST}` or `{{ .Values.x }}`, a list `a:9092,b:9092`, `user:pass` without a host) gives no reference. The cross-referencing step decides what the reference means (`depends_on`, inferred); the collector does not guess whether it is a read or a write.
 
+### `images`
+
+A sorted list, without repetition, of the images the deployment runs, only as their path (SPEC-0082). Taken, all together, from `status.summary.images` and from the Helm `image.repository` of each source (the `helm.parameters` item with that exact name, `image.repository` in `helm.valuesObject`, and the `repository:` line directly under a root `image:` of `helm.values`). Each image is normalized:
+
+| Image | In `images` |
+|---|---|
+| `ghcr.io/acme/api:1.4.2`, `ghcr.io/acme/api@sha256:abc…` | `acme/api` |
+| `docker.io/library/redis:7` | `library/redis` |
+| `registry.interno:5000/acme/worker`, `oci://registry.interno:5000/acme/worker`, `localhost:5000/team-x/tool` | `acme/worker`, `acme/worker`, `team-x/tool` |
+| `<account>.dkr.ecr.<region>.amazonaws.com/api` | `api` |
+| `ghcr.io/Acme/API` | `acme/api` |
+| `user:token@ghcr.io/acme/api` (credential), `ghcr.io/acme/a b` (space) | dropped |
+
+The scheme (`oci://`, `docker://`), the digest (`@sha256:…`), the tag (`:1.4.2`, in the last segment) and the registry host (the first segment when it has `.` or `:` or is `localhost`) are removed and the rest is lower case; it must match `^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$`, else the image is dropped whole. An `@` that is not a digest (a credential) drops the image. Nothing of a dropped image leaves, not even on stderr. A deployment without a valid image has no `images` attribute (not an empty list), so its snapshot stays as before 2026.11.12.
+
+The `build` uses `images` to link the service to the repository of the code (rule 4, `references/graph.md`); tags and digests are execution data and never enter the atlas.
+
 ## `--input` formats
 
 `FILE` is one JSON file in either CLI format, whatever `--from` says:
@@ -152,6 +173,7 @@ With `--input` the collector never calls a CLI.
 - Secrets are never read: not through the CLI, and Secrets listed in `status.resources` are ignored.
 - Annotations are never read, so `last-applied-configuration` (which repeats the whole spec) never leaves.
 - The cluster id is the destination server URL as Argo CD stores it (credentials, should one be there, are removed).
+- Images leave only as their path: never the registry host (it may hold an account id, as in ECR), the tag, the digest, a credential or any other Helm value than `image.repository` (SPEC-0082).
 
 ## Limits
 
