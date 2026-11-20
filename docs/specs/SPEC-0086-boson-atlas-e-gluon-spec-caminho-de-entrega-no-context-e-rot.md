@@ -9,7 +9,7 @@ created: 2026-11-20
 parent:
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/context.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/brownfield.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md, mcp/tests/**, .claude-plugin/plugin.json]
 adrs: [ADR-0022]
@@ -144,6 +144,12 @@ gluon-spec, G6, depois do merge do PR
     serviço sem "delivery" ou atlas indisponível → diz que o atlas não conhece o caminho e segue com
     smoke_test/test_e2e/deploy_* do sdd-config.yml; nunca bloqueia o G6 por falta de dado do atlas
 ```
+
+**Esclarecimentos (Emenda v2):**
+- `images` de cada deployment em `delivery` é o atributo `images` do próprio deployment, ordenado, ou `[]` sem o atributo. Não há filtro pelo repositório de código.
+- Na linha `<ambiente>: <deployment>` do Markdown, cada parte (`cluster`, `sync`, `health`) só aparece quando o atlas tem o valor.
+- O bloco "Entrega" vem depois da linha "Deployments" do mesmo serviço.
+- `delivery_check` é uma chave de verdade no template (`enabled: true`, `environments: []`), com comentário, para o `whats-new` listá-la.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -293,3 +299,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0086`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-20 | Esclarece: `images` do deployment é o atributo dele (ou `[]`); partes da linha do ambiente só com valor; bloco depois de "Deployments"; `delivery_check` como chave real do template | G1 (test-writer): leituras literais a confirmar | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
