@@ -4,7 +4,7 @@ title: "boson-atlas e gluon-spec: caminho de entrega no context e roteiro de ver
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-20
 parent:
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/con
 adrs: [ADR-0022]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-20
 ---
 
 # SPEC-0086 — boson-atlas e gluon-spec: caminho de entrega no context e roteiro de verificação depois do merge
@@ -227,6 +227,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Red: CH-01 (passa antes), UT-01 a UT-06, IT-01 e CT-01 com a tag `SPEC-0086:<ID>`, falhando pelo motivo certo; fixtures `image-link` e `acme` reaproveitadas
+- [ ] Green: `delivery` no `_service_entry` e o bloco "Entrega" no `_service_lines` (`scripts/atlas.py`), `references/context.md`, `ATLAS_VERSION`; gluon-spec: SKILL.md (passo 7), `references/gates.md` (G6), `references/brownfield.md`, `delivery_check` no `sdd-config.template.yml`, `SDD_TOOL_VERSION`; CHANGELOGs das duas skills; `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
