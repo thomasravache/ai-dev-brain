@@ -14,6 +14,9 @@
           "CACHE_HOST=redis-prod.interno",
           "DB_URL=db-prod.interno",
           "EVENTS_TOPIC=payments.events"
+        ],
+        "images": [
+          "acme/api"
         ]
       },
       "source": "argocd"
@@ -30,6 +33,9 @@
         "config_refs": [
           "DB_URL=db-staging.interno",
           "ORDERS_QUEUE=orders-staging"
+        ],
+        "images": [
+          "acme/api"
         ]
       },
       "source": "argocd"
@@ -47,6 +53,9 @@
           "API_URL=api.acme.example",
           "SENTRY_DSN=o0.ingest.example.io",
           "UPLOADS_BUCKET=acme-uploads"
+        ],
+        "images": [
+          "acme/web"
         ]
       },
       "source": "argocd"
@@ -60,7 +69,10 @@
         "namespace": "ingress",
         "sync_status": "Synced",
         "health_status": "Healthy",
-        "config_refs": []
+        "config_refs": [],
+        "images": [
+          "ingress-nginx/controller"
+        ]
       },
       "source": "argocd"
     },

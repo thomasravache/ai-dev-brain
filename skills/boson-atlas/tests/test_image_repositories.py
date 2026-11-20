@@ -304,6 +304,29 @@ class ImagesAttributeTest(unittest.TestCase):
                 self.assertIn("images", attrs, "o deployment não traz o atributo images (SPEC-0082)")
                 self.assertEqual(attrs["images"], want)
 
+    def test_deployment_without_a_valid_image_has_no_images_attribute(self):
+        """SPEC-0082:UT-01 (Emenda v2) — deployment sem nenhuma imagem válida não ganha o atributo images (a chave
+        some, nem lista vazia), para o snapshot ficar igual ao de hoje: sem status.summary.images nem
+        image.repository, com a lista vazia ou só com imagens descartadas. Ao lado, uma Application com imagem
+        válida traz images (o atributo existe)."""
+        entities, _ = function("map_application")(bare_app("dev-web", images=["ghcr.io/acme/web:2.0.3"]))
+        self.assertEqual(deployment_of(entities)["attrs"].get("images"), ["acme/web"],
+                         "o deployment não traz o atributo images (SPEC-0082)")
+        empty_summary = bare_app("dev-api")
+        empty_summary["status"]["summary"] = {"images": []}
+        cases = (
+            ("sem imagem", bare_app("dev-api")),
+            ("lista vazia", empty_summary),
+            ("só imagens descartadas", bare_app("dev-api", images=["user:tok@ghcr.io/acme/api", "ghcr.io/acme/a b"])),
+            ("image.repository inválido", bare_app("dev-api", source={
+                "repoURL": "https://github.com/acme/iac.git",
+                "helm": {"parameters": [{"name": "image.repository", "value": "user:tok@ghcr.io/acme/api"}]}})),
+        )
+        for name, app in cases:
+            with self.subTest(caso=name):
+                entities, _ = function("map_application")(app)
+                self.assertNotIn("images", deployment_of(entities)["attrs"])
+
 
 UNSAFE_IMAGES = ("user:tok@ghcr.io/acme/api", "123456789012.dkr.ecr.us-east-1.amazonaws.com/api",
                  "ghcr.io/Acme/API", "ghcr.io/acme/a b")
@@ -504,6 +527,30 @@ class ImageRepositoriesTest(AtlasCase):
                         for piece in (key, value, key.lower(), value.lower()):
                             self.assertNotIn(piece, text, "a mensagem cita o item")
                         self.assertNotIn("***", text, "a mensagem não cita o item, nem mascarado")
+
+    def test_map_to_a_repository_missing_from_the_graph_gives_no_edge_and_no_fallback(self):
+        """SPEC-0082:UT-06 (Emenda v2) — imagem que está em image_repositories mas aponta para um repositório ausente
+        do grafo não gera aresta e não cai nos passos 2 e 3, mesmo existindo o <dono>/<nome> igual (acme/legacy-api)
+        ou um único repositório com o mesmo nome (team-x/legacy-api -> legacy-api): o mapa é a declaração do time e
+        vence a convenção. Uma imagem fora do mapa (acme/api-v1) continua ligando pelo passo 2."""
+        gitops = json.loads((FIXTURES / "argocd" / "image-map.json").read_text(encoding="utf-8"))
+        gitops["entities"][0]["attrs"]["images"] = ["acme/api-v1", "acme/legacy-api", "team-x/legacy-api"]
+        facts = self.atlas / "facts"
+        facts.mkdir(parents=True, exist_ok=True)
+        (facts / "image-map-missing.json").write_text(json.dumps(gitops), encoding="utf-8")
+        collectors = [IMAGE_MAP_COLLECTORS[0],
+                      ("argocd", "delivery", ["python3", REPLAY, "argocd", "delivery",
+                                              "{atlas}/facts/image-map-missing.json"])]
+        mapping = [("acme/legacy-api", "acme/ghost"), ("team-x/legacy-api", "acme/ghost")]
+        self.configure(atlas_config(collectors, extra=mapping_yaml(mapping, quoted_keys=True)))
+        self.cli("config", "--json")
+        self.cli("scan")
+        graph = self.graph()
+        edges = [(e["from"], e["to"], e.get("evidence")) for e in image_edges(graph)]
+        self.assertEqual(edges, [("service:legacy", "repository:acme/api-v1", "image:acme/api-v1")])
+        self.assertEqual(edges_of(graph, "service:legacy", "sourced_from", "repository:acme/legacy-api"), [])
+        self.assertNotIn("repository:acme/ghost", {n["key"] for n in graph["nodes"]})
+        self.assertEqual(edges_of(graph, dst="repository:acme/ghost"), [])
 
 
 # --------------------------------------------------------------------------- UT-07 (página do serviço)
