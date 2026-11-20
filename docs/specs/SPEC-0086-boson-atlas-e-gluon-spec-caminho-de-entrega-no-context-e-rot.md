@@ -9,7 +9,7 @@ created: 2026-11-20
 parent:
 depends_on: []
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/context.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/brownfield.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md, mcp/tests/**, .claude-plugin/plugin.json]
 adrs: [ADR-0022]
@@ -150,6 +150,12 @@ gluon-spec, G6, depois do merge do PR
 - Na linha `<ambiente>: <deployment>` do Markdown, cada parte (`cluster`, `sync`, `health`) só aparece quando o atlas tem o valor.
 - O bloco "Entrega" vem depois da linha "Deployments" do mesmo serviço.
 - `delivery_check` é uma chave de verdade no template (`enabled: true`, `environments: []`), com comentário, para o `whats-new` listá-la.
+
+**Esclarecimentos (Emenda v3):**
+- O `context` resolve as imagens com o mapa `image_repositories` do `atlas-config.yml` compartilhado, como o `build`. `delivery.images` fica igual às imagens da região "Do commit até o pod", inclusive quando o mapa aponta para um repositório ausente, caso em que não há fallback. Um mapa editado depois do último `build` só muda as arestas no próximo `build`.
+- Uma pipeline que só faz `builds` do próprio serviço tem `repository: ""`, e no Markdown sai sem parênteses. Uma pipeline que faz build de vários repositórios usa o primeiro que é do serviço, e na falta dele o primeiro em ordem alfabética.
+- No bloco "Entrega", cada valor vindo do atlas sai em código inline (crase), como na região da página, para um nome não imitar outra parte da linha.
+- A SKILL.md (passo 7) traz só quando o roteiro roda e um ponteiro para o `gates.md` (G6), onde ficam as regras.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -302,4 +308,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0086`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-20 | `context` usa o mapa `image_repositories` (imagens iguais às da página); pipeline só do serviço com `repository: ""`; valores do bloco "Entrega" em crase; SKILL.md enxuta | G4 rodada 1 (major): `delivery.images` divergia da região com o mapa; minors e nits | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
 | 2 | 2026-11-20 | Esclarece: `images` do deployment é o atributo dele (ou `[]`); partes da linha do ambiente só com valor; bloco depois de "Deployments"; `delivery_check` como chave real do template | G1 (test-writer): leituras literais a confirmar | nenhuma | thomas, 2026-11-20 (piloto automático com o recomendado) |
