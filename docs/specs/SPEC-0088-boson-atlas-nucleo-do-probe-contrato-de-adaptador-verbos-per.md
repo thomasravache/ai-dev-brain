@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
 consumes_contract: [SPEC-0087@3]
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
@@ -148,6 +148,32 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
   {"at", "atlas", "service", "environment", "capability", "verb", "adapter", "status", "exit",
    "confirmed_production": bool}   — nunca items, message nem o contexto
 ```
+
+**Esclarecimentos (Emenda v2):**
+- **CH-01 em duas partes:**
+  - uma guarda que passa antes da mudança: sem a chave `probes` ou com `enabled: false`, `scan`, `build`, `context`, `doctor`, `lint` e `config --json` ficam iguais ao golden, tirando só as linhas novas do `doctor` sobre probes e a chave `probes` do `config --json`;
+  - um teste de recusa (exit 4, "probes desligadas", nenhum processo roda, nem `--describe`).
+- **Funções do validador (CT-01):** `validate_probe_describe`, `validate_probe_input` e `validate_probe_output`. Cada uma recebe o dado e devolve `list[str]`; vazia quer dizer válido.
+- **Exemplos em `references/probes.md`:** em blocos cercados com a info `json probe@1 <describe|input|output> <valid|invalid>`. Há pelo menos um válido e um inválido de cada tipo.
+- **`--summary`:**
+  - cada item de log tem `ts` e `line`;
+  - a ordem é error, warn, info e outros, e dentro de cada um por contagem decrescente.
+- **Credenciais:** o adaptador recebe só as credenciais declaradas na entrada dele. Nenhum nome declarado para outro adaptador ou para os coletores chega a ele.
+- **Comando do adaptador:**
+  - o núcleo acrescenta `--describe` no fim do comando;
+  - `command` aceita caminho absoluto.
+- **Registro:**
+  - uma probe recusada (verbo, produção, sem acesso) entra no `probes.log` com `exit: 4`;
+  - com as probes desligadas nada roda e nada é registrado.
+- **Deployment inexistente:** é exit 2 do próprio `probe`, com o nome na mensagem.
+- **Mensagens:** os testes conferem estes pedaços de texto, que fazem parte do contrato:
+  - "probes desligadas";
+  - "verbo X não permitido";
+  - "nenhum adaptador para X";
+  - "sem acesso local ao cluster X";
+  - "ambiente X é de produção ou sem marcação", junto de `--confirm-production`;
+  - "lines" ou "since" no erro de argumento;
+  - "tempo" ou "timeout" no estouro de tempo.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -298,3 +324,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0088`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-23 | Esclarecimentos (Emenda v2): CH-01 em guarda e recusa; nomes do validador e marcação dos exemplos; `ts`/`line` e ordem do `--summary`; credenciais por adaptador; `--describe` no fim; registro das recusas; mensagens | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
