@@ -4,7 +4,7 @@ title: "boson-atlas: máscara de segredos robusta (padrões separados e tempo li
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-23
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/tests/**, skil
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0092 — boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado)
@@ -64,6 +64,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: CH-01 (passa antes), UT-01 e UT-02 com a tag `SPEC-0092:<ID>`, falhando pelo motivo certo
+- [ ] Green: cada padrão embutido casa sozinho no texto original, na união da Emenda v6 da SPEC-0088; `url` e `jwt` com repetições limitadas; `references/redaction.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
