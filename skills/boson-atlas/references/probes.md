@@ -28,7 +28,7 @@ probes:
 - `enabled` — `true` ou `false` (padrão `false`). Sem a chave `probes`, as probes também estão desligadas.
 - `limits.lines` — quantos itens no máximo (padrão 200, de 1 a 2000); `limits.since` — a janela de tempo (padrão `30m`; `s`, `m`, `h` ou `d`, até `24h`).
 - `adapters.<id>` — o id é uma palavra minúscula (letras, dígitos, `-` e `_`). A ordem importa: para uma capacidade vale o **primeiro** adaptador que a declara.
-  - `command` — lista `[executável, argumentos...]`, sem shell; aceita caminho absoluto. Sem `command`, vale o adaptador da skill em `assets/probes/<id>.py`, quando existe.
+  - `command` — lista `[executável, argumentos...]`, sem shell. O executável (`command[0]`) é um nome sem pasta, procurado no `PATH` (`python3`), ou um caminho absoluto; um caminho relativo com pasta (`./x.py`, `rel/x.py`) é recusado (`probes: adapters.<id>.command inválido — …`, exit 2, e ERRO no `doctor`). Sem `command`, vale o adaptador da skill em `assets/probes/<id>.py`, quando existe.
   - `verbs` — os verbos que esta máquina libera. Sem a chave, nenhum.
   - `timeout` — padrão 60 s, de 1 a 300.
   - `credentials` — nomes de variável de ambiente (`^[A-Z_][A-Z0-9_]*$`) que o adaptador recebe.
@@ -56,6 +56,11 @@ Os passos, nesta ordem:
 1. Sem `probes.enabled: true` → exit 4 `probes desligadas nesta máquina (probes.enabled)`. Nada roda, nem o `--describe`, e nada é registrado.
 2. `--lines` fora de 1..2000 ou `--since` fora do formato ou acima de 24h → exit 2.
 3. **Alvo:** o deployment de `service:<id>` que faz `runs_in` em `environment:<ambiente>` no `graph.json` (o primeiro pelo id, se houver mais de um). Nenhum → exit 2 com o serviço e o ambiente procurados.
+   Os campos do alvo que vêm do atlas são conferidos antes de qualquer processo rodar (nem o `--describe`); fora da regra → exit 2 `alvo inválido no atlas: …`, sem citar o valor:
+   - `namespace` (quando há) segue o DNS-1123: minúsculas, dígitos e `-`, até 63, sem começar nem terminar com `-`;
+   - cada `workload` é `Kind/nome`, com o nome em DNS-1123 subdomínio (até 253) e o Kind sem começar com `-`;
+   - `service`, `deployment` e `environment` seguem a regra de nome simples do atlas (`ENVIRONMENT_NAME_RE` de `references/config.md`: letras, dígitos, `.`, `_` e `-`, começando e terminando com letra ou dígito).
+   Assim nenhum adaptador recebe um texto que pareça uma opção de linha de comando.
 4. **Adaptador:** o primeiro em `adapters` cujo `--describe` declara a capacidade. Nenhum → exit 4 `nenhum adaptador para <capacidade>`.
 5. **Verbo:** fora de (verbos do `--describe` ∩ `verbs` da configuração) → exit 4 `verbo <v> não permitido`. O adaptador não roda.
 6. **Produção:** `tier` do ambiente (em `environments:` do `atlas-config.yml`) diferente de `test`, inclusive sem `tier`, e sem `--confirm-production` → exit 4 `ambiente <a> é de produção ou sem marcação: confirme com a pessoa e use --confirm-production`.
@@ -66,8 +71,8 @@ Os passos, nesta ordem:
 | Exit | Quando |
 |---|---|
 | 0 | ok |
-| 1 | adaptador ausente, com erro (`status: error`, exit diferente de 0), tempo esgotado, saída acima de 1 MB, JSON inválido ou fora do contrato — com o motivo e sem nenhum item |
-| 2 | argumento ou configuração inválida, alvo inexistente |
+| 1 | adaptador ausente, com erro (`status: error`, exit diferente de 0), tempo esgotado, saída acima de 1 MB, JSON inválido (inclusive aninhamento profundo e `NaN`/`Infinity`) ou fora do contrato — com o motivo e sem nenhum item |
+| 2 | argumento ou configuração inválida, alvo inexistente ou com campo fora da regra |
 | 3 | sem configuração local |
 | 4 | recusado: desligadas, sem adaptador, verbo, produção sem confirmação, sem acesso local |
 
@@ -125,11 +130,12 @@ Chaves fechadas: `contract` (`probe@1`), `adapter` e `capabilities` (mapa `<capa
 {"contract": "probe@1", "adapter": "kubernetes", "capability": "runtime", "verb": "status", "status": "error", "items": [], "truncated": false, "message": "sem permissão para listar pods"}
 ```
 
-- Chaves fechadas: `contract`, `adapter`, `capability` e `verb` (os do pedido), `status` (`ok` ou `error`), `items`, `truncated` e `message` (opcional, texto curto). Uma chave a mais recusa a saída inteira (exit 1, com o nome da chave no motivo).
+- Chaves fechadas: `contract`, `adapter` (o id do adaptador que rodou), `capability` e `verb` (os do pedido), `status` (`ok` ou `error`), `items`, `truncated` e `message` (opcional, texto curto). Uma chave a mais recusa a saída inteira (exit 1, com o nome da chave no motivo).
 - `items` é uma lista de objetos; cada valor é escalar (texto, número, booleano, `null`) ou lista de escalares. Objeto aninhado é recusado.
 - Itens de log trazem o horário em `ts` e o texto em `line` (é o que o `--summary` usa).
 - O núcleo corta em `lines` itens; o excedente vira `truncated: true`.
 - Todo texto (itens, chaves e `message`, também a de erro) passa pela redaction antes de sair.
+- JSON padrão só: `NaN`, `Infinity`, `-Infinity`, número fora do intervalo do ponto flutuante e aninhamento profundo demais contam como JSON inválido (exit 1, sem traceback); nenhum número fora do JSON padrão sai em `--json`.
 
 ```json probe@1 output invalid
 {"contract": "probe@1", "adapter": "kubernetes", "capability": "runtime", "verb": "status", "status": "ok", "items": [{"name": "api", "spec": {"replicas": 1}}], "truncated": false}
@@ -145,6 +151,8 @@ O núcleo valida os três com `validate_probe_describe`, `validate_probe_input` 
 
 Valem os padrões do `references/redaction.md` e o `redaction.extra_patterns` do atlas, mais os de dados pessoais e segredos de linha de log: e-mail, CPF, CNPJ, `Bearer <token>` e `<nome>=<valor>` quando o nome diz senha, segredo, token ou chave (`token=…`, `password: …`, `api_key=…`). O trecho vira `[REDACTED]`. O stderr de um adaptador com falha é mascarado inteiro antes de ser cortado (últimas 20 linhas).
 
+Além disso, o valor do contexto escolhido (`target.context`) e os valores das credenciais declaradas do adaptador são mascarados, literalmente, em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato.
+
 ## Resumo de logs (`--summary`)
 
 Para verbos que devolvem linhas de log (itens com `line`), `--summary` troca os itens por um por (nível, assinatura):
@@ -153,7 +161,7 @@ Para verbos que devolvem linhas de log (itens com `line`), `--summary` troca os 
 - **nível** = `error`, `warn`, `info` ou `other`, pela palavra na linha (`ERROR`, `FATAL`, `WARN`, `INFO`…);
 - cada item: `{"signature", "level", "count", "first_ts", "last_ts", "sample"}`, em ordem de nível (error, warn, info, other) e, dentro dele, de contagem decrescente.
 
-Sem nenhum item com `line`, `--summary` sai com 2.
+Sem itens (janela vazia), `--summary` sai com 0 e zero assinaturas. Com itens e nenhum deles com `line`, sai com 2.
 
 ## Registro local (`probes.log`)
 

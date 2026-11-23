@@ -18,6 +18,7 @@ import datetime
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -4561,6 +4562,10 @@ PROBE_LOG = "probes.log"
 PROBES_DIR = ASSETS_DIR / "probes"  # adapters that come with the skill (an adapter without command)
 PROBE_WORD_RE = re.compile(r"^[a-z][a-z0-9_-]{0,62}\Z")  # adapter ids, capabilities and verbs
 SIMPLE_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
+# the target fields that come from the atlas (Emenda v4 of SPEC-0088): no adapter gets text that looks like an option
+DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\Z")  # DNS-1123 label, up to 63
+DNS_SUBDOMAIN_RE = re.compile(r"^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*\Z")
+DNS_SUBDOMAIN_MAX = 253
 DURATION_RE = re.compile(r"^(\d{1,6})([smhd])\Z")
 DURATION_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 PROBES_OFF = "probes desligadas nesta máquina (probes.enabled) — references/probes.md"
@@ -4630,6 +4635,12 @@ def _name_list(value):
     return None
 
 
+def _command_head_ok(head: str) -> bool:
+    """command[0] is a bare name (looked up in PATH) or an absolute path; a relative path with a folder is not."""
+    separators = {"/", os.sep, os.altsep} - {None}
+    return os.path.isabs(head) or not any(sep in head for sep in separators)
+
+
 def _probe_adapter(aid: str, entry) -> dict:
     where = f"adapters.{aid}"
     if entry in (None, ""):
@@ -4647,6 +4658,9 @@ def _probe_adapter(aid: str, entry) -> dict:
           or any(not isinstance(arg, str) or not arg or any(is_control(c) for c in arg) for arg in command)):
         raise _probe_error(f"{where}.command", "precisa ser uma lista não vazia [executável, argumentos...] "
                            "(sem shell)")
+    if command and not _command_head_ok(command[0]):
+        raise _probe_error(f"{where}.command", "o executável é um nome sem pasta (procurado no PATH) ou um caminho "
+                           "absoluto, nunca um caminho relativo")
     verbs = _name_list(entry.get("verbs"))
     if verbs is None or any(not PROBE_WORD_RE.match(verb) for verb in verbs):
         raise _probe_error(f"{where}.verbs", "cada verbo é uma palavra minúscula, sem espaço (letras, dígitos, - "
@@ -5000,6 +5014,48 @@ def _adapter_failure(aid, step, error: CollectorError, extras) -> AtlasError:
     return AtlasError(text, 1)
 
 
+def _reject_constant(name):
+    raise ValueError(f"{name} não é JSON padrão")
+
+
+def _finite_float(text):
+    value = float(text)
+    if not math.isfinite(value):
+        raise ValueError("número fora do JSON padrão")
+    return value
+
+
+def literal_masks(values) -> list:
+    """Patterns that mask each non-empty value literally (the context and the declared credentials, Emenda v4)."""
+    unique = sorted({v for v in values if isinstance(v, str) and v}, key=len, reverse=True)
+    return [re.compile(re.escape(value)) for value in unique]
+
+
+def adapter_masks(adapter: dict) -> list:
+    """literal_masks of the values (in this environment) of the credentials declared in the adapter."""
+    return literal_masks(os.environ.get(name, "") for name in adapter["credentials"])
+
+
+def target_problem(target: dict, service: str):
+    """Why a target field from the atlas is out of the rules of Emenda v4 (fixed text, never the value), or None:
+    namespace a DNS-1123 label, each workload Kind/name (name a DNS-1123 subdomain, Kind not starting with -),
+    service, deployment and environment by the simple name rule (ENVIRONMENT_NAME_RE)."""
+    for what, value in (("service", service), ("environment", target["environment"]),
+                        ("deployment", target["deployment"])):
+        if not isinstance(value, str) or not ENVIRONMENT_NAME_RE.match(value):
+            return f"{what} fora da regra de nome (letras, dígitos, . _ -, sem espaço, sem começar com -)"
+    namespace = target["namespace"]
+    if namespace and not DNS_LABEL_RE.match(namespace):
+        return "namespace fora do DNS-1123 (minúsculas, dígitos e -, até 63, sem começar ou terminar com -)"
+    for workload in target["workloads"]:
+        kind, sep, name = workload.partition("/")
+        if (not sep or not kind or kind.startswith("-") or len(name) > DNS_SUBDOMAIN_MAX
+                or not DNS_SUBDOMAIN_RE.match(name)):
+            return ("workload fora de Kind/nome (o nome em DNS-1123 subdomínio, até 253; nenhum dos dois começa "
+                    "com -)")
+    return None
+
+
 def _run_adapter(aid, argv, adapter, extras, input_text=None) -> dict:
     """Runs one adapter (run_collector: list, no shell, timeout, 1 MB) and parses its JSON; failure = exit 1."""
     step = "--describe" if input_text is None else "a consulta"
@@ -5009,8 +5065,8 @@ def _run_adapter(aid, argv, adapter, extras, input_text=None) -> dict:
     except CollectorError as e:
         raise _adapter_failure(aid, step, e, extras) from None
     try:
-        return json.loads(stdout)
-    except ValueError:
+        return json.loads(stdout, parse_constant=_reject_constant, parse_float=_finite_float)
+    except (ValueError, RecursionError):  # also NaN/Infinity, numbers out of range and deep nesting (Emenda v4)
         raise AtlasError(f"adaptador {aid}: {step} — a saída não é JSON válido (contrato {PROBE_CONTRACT})",
                          1) from None
 
@@ -5028,10 +5084,11 @@ def choose_adapter(probes, capability, extras) -> tuple:
         if argv is None:
             raise AtlasError(f"probes: adapters.{aid}.command inválido — sem command e a skill não traz o adaptador "
                              f"{aid}", 2)
-        described = _run_adapter(aid, argv + ["--describe"], adapter, extras)
+        masks = extras + adapter_masks(adapter)
+        described = _run_adapter(aid, argv + ["--describe"], adapter, masks)
         problems = validate_probe_describe(described)
         if problems:
-            raise _contract_failure(aid, "--describe", problems, extras)
+            raise _contract_failure(aid, "--describe", problems, masks)
         if capability in described["capabilities"]:
             return aid, adapter, argv, described["capabilities"][capability]
     raise AtlasError(f"nenhum adaptador para {capability} (probes.adapters)", 4)
@@ -5066,14 +5123,27 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
         if not PROBE_WORD_RE.match(value):
             raise AtlasError(f"{what} inválido — use uma palavra minúscula, sem espaço (letras, dígitos, - e _)", 2)
     lines, since_seconds = _probe_limits(args, probes)
+    for what, value in (("--service", args.service), ("--env", args.env)):
+        if not ENVIRONMENT_NAME_RE.match(value):
+            raise AtlasError(f"{what} inválido — use um nome do atlas (letras, dígitos, . _ -, sem espaço, sem "
+                             "começar com -)", 2)
     access = validate_access(entry.get("access"))
     atlas, shared = scan_config(args.atlas)
     extras = probe_extras(shared)
     extras_box[:] = extras
     tiers = validate_environments(shared.get("environments"))
     target = probe_target(atlas, args.service, args.env)
+    problem = target_problem(target, args.service)
+    if problem:  # checked before any process runs, --describe included (Emenda v4)
+        raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
+    reachable = [c for c in target["clusters"] if c in access or target["cluster_ids"].get(c) in access]
+    context = (access.get(reachable[0]) or access[target["cluster_ids"][reachable[0]]]) if reachable else None
+    extras = literal_masks([context]) + extras  # the context never shows in what comes from the adapter
+    extras_box[:] = extras
     aid, adapter, argv, declared = choose_adapter(probes, args.capability, extras)
     record["adapter"] = aid
+    extras = extras + adapter_masks(adapter)
+    extras_box[:] = extras
     allowed = [verb for verb in declared if verb in adapter["verbs"]]
     if args.verb not in allowed:
         raise AtlasError(f"verbo {args.verb} não permitido para {args.capability} no adaptador {aid} (permitidos: "
@@ -5085,14 +5155,12 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
     if not target["clusters"]:
         raise AtlasError(f"sem acesso local ao cluster: o deployment {target['deployment']} não tem cluster no "
                          "atlas", 4)
-    reachable = [c for c in target["clusters"] if c in access or target["cluster_ids"].get(c) in access]
     if not reachable:
         raise AtlasError(f"sem acesso local ao cluster {', '.join(target['clusters'])} (access.clusters)", 4)
-    cluster = reachable[0]
-    context = access.get(cluster) or access[target["cluster_ids"][cluster]]
     request = {"contract": PROBE_CONTRACT, "capability": args.capability, "verb": args.verb,
                "target": {"service": args.service, "environment": target["environment"],
-                          "deployment": target["deployment"], "clusters": target["clusters"], "context": context, "namespace": target["namespace"],
+                          "deployment": target["deployment"], "clusters": target["clusters"], "context": context,
+                          "namespace": target["namespace"],
                           "workloads": target["workloads"]},
                "limits": {"lines": lines, "since_seconds": since_seconds}}
     problems = validate_probe_input(request)
@@ -5102,6 +5170,8 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
     problems = validate_probe_output(data)
     if not problems:
         problems = [f"{key} diferente do pedido" for key in ("capability", "verb") if data[key] != request[key]]
+        if data["adapter"] != aid:
+            problems.append("adapter diferente do id do adaptador que rodou")
     if problems:
         raise _contract_failure(aid, "a saída", problems, extras)
     message = probe_mask(str(data.get("message") or ""), extras)[:PROBE_MESSAGE_MAX]
@@ -5109,7 +5179,7 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
         if args.json:
             result = {key: data[key] for key in ("contract", "adapter", "capability", "verb", "status")}
             print(json.dumps(probe_mask(dict(result, items=[], truncated=False, message=message), extras),
-                             ensure_ascii=False, indent=2))
+                             ensure_ascii=False, indent=2, allow_nan=False))
         print(f"erro: adaptador {aid} respondeu com erro: {message or '(sem mensagem)'}", file=sys.stderr)
         return 1
     items = probe_mask(data["items"], extras)
@@ -5119,7 +5189,7 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
         if items and not any(isinstance(item.get("line"), str) for item in items):
             raise AtlasError("--summary vale só para verbos que devolvem linhas de log (itens com line)", 2)
         items = summarize_log(items)
-    result = {"contract": PROBE_CONTRACT, "adapter": probe_mask(data["adapter"], extras),
+    result = {"contract": PROBE_CONTRACT, "adapter": aid,
               "capability": args.capability, "verb": args.verb, "status": "ok", "items": items,
               "truncated": truncated}
     if message:
@@ -5127,7 +5197,7 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
     request_view = {"capability": args.capability, "verb": args.verb, "service": args.service,
                     "environment": args.env, "deployment": target["deployment"]}
     if args.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
     else:
         print_probe(result, request_view, args.summary)
     return 0
