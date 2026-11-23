@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0088, SPEC-0089]
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/verify.md, skills/boson-atlas/references/probes.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0023, ADR-0024]
@@ -132,6 +132,27 @@ atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem>
   - quando a probe de `logs` volta com `truncated: true` e nenhum item, a verificação `logs` fica `not_verified`, com o motivo "nenhum pod respondeu", e nunca `ok`;
   - quando a probe de `status` volta com `found: false` para o workload, a verificação `runtime` fica `failed`.
 - **Contexto da probe:** o `verify` chama o mesmo caminho do `probe` (mesmas proteções, registro e máscara da SPEC-0088); não roda adaptador por conta própria.
+
+**Esclarecimentos (Emenda v3):**
+- **CH-01 em duas partes**, como na SPEC-0088: uma guarda que passa antes (nada muda e o `probe` segue igual) e a recusa com exit 4 quando as probes estão desligadas.
+- **Assinaturas de erro:** só as de nível `error` do `--summary`; `warn` e `info` não contam como erro novo.
+- **Foto sem amostra:** a foto guarda só assinaturas e contagens, nenhuma linha de log, nem mascarada.
+- **Chave dos avisos:** `reason|objeto`, com o nome do pod trocado pelo workload dono (sem o sufixo do pod). O mesmo motivo em outro pod do workload não é novo.
+- **Restarts:** contados por pod, agora menos a foto. Um pod que não estava na foto conta desde 0.
+- **Probe recusada, com erro ou com falha do adaptador:** a verificação dependente fica `not_verified` (exit 5). O exit 4 do comando todo vale só para probes desligadas e para produção sem confirmação. Em produção sem confirmação, nenhuma consulta roda (o `--describe` pode rodar).
+- **`found: false`:** `runtime` fica `failed` e `delivery` não é `ok`.
+- **Foto com `logs` em `not_verified`:** o `logs` daquele deployment também não pode dar `ok` na comparação.
+- **Argumentos:** dão exit 2 antes de qualquer probe:
+  - `--out` dentro do atlas, inclusive por `..`;
+  - `--expect-image` sem tag nem digest;
+  - `--baseline` ausente, inválido ou com outro contrato.
+- **Janelas:** `--window` do `compare` (padrão 10m) e `--since` do `snapshot` (padrão 30m) viram o `since_seconds` da probe de logs.
+- **Saída `--json`:**
+  - chaves fechadas: `contract`, `verdict`, `checks` e `suggestion` (vazia fora de `degradou`);
+  - cada verificação tem `deployment`, `check`, `status`, `evidence` e `reason`, este último obrigatório em `not_verified`;
+  - a foto também tem chaves fechadas.
+- **Validador:** `validate_verify_snapshot` e `validate_verify_result`, cada um devolvendo `list[str]`. Os exemplos do `references/verify.md` são blocos json com `"contract": "verify@1"`.
+- **Sugestão sem comando:** nenhuma linha começa com `$`, e nenhuma cita `kubectl`, `argocd`, `helm` nem `git revert/push/reset/checkout`.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -290,3 +311,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): logs cortados e sem item são `not_verified`; workload não encontrado é `failed`; o `verify` usa o caminho do `probe` | Achados do G4 da SPEC-0089 e planejamento | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 3 | 2026-11-23 | Esclarecimentos (Emenda v3): CH-01 em duas partes; só assinaturas `error`; foto sem amostra; chave dos avisos; restarts por pod; recusas viram `not_verified`; argumentos e janelas; chaves fechadas; validadores; sugestão sem comando | Perguntas do test-writer no G1 | SPEC-0091 | thomas, 2026-11-23 (piloto automático com o recomendado) |
