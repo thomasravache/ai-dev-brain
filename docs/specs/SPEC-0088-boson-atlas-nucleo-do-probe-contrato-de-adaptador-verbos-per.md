@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
 consumes_contract: [SPEC-0087@3]
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
@@ -175,6 +175,33 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
   - "lines" ou "since" no erro de argumento;
   - "tempo" ou "timeout" no estouro de tempo.
 
+**Esclarecimentos (Emenda v3):**
+- **`doctor`:**
+  - sem a chave `probes`, não mostra linha de probe;
+  - com a chave, mostra "ligadas, N adaptador(es)" ou "desligadas";
+  - um executável de adaptador que falta é ERRO com as probes ligadas e AVISO com elas desligadas.
+- **Redação:** só na saída das probes, entram padrões a mais além das regras do atlas e de `redaction.extra_patterns`: e-mail, CPF, CNPJ, `Bearer <token>` e `<nome>=<valor>` quando o nome indica senha, segredo, token ou chave. Os snapshots do `scan` não mudam.
+- **Ambiente do adaptador:**
+  - recebe só uma base fixa (PATH, HOME, usuário, idioma, fuso, pastas temporárias e as variáveis de sistema do Windows) mais as credenciais declaradas na entrada dele, pelo nome;
+  - qualquer outra variável, como KUBECONFIG ou um perfil de nuvem, precisa estar declarada (vale para a SPEC-0089).
+- **Alvo:**
+  - com vários deployments do serviço no ambiente, vale o primeiro pelo id;
+  - com vários clusters, vale o primeiro, pelo nome, que tem acesso local;
+  - sem nenhum cluster acessível, ou com o deployment sem cluster, a probe é recusada (exit 4).
+- **Escolha do adaptador:**
+  - o `--describe` roda em cada adaptador, na ordem, até um declarar a capacidade;
+  - um adaptador ausente ou com `--describe` falho para a probe com exit 1;
+  - sem `command`, vale `assets/probes/<id>.py` da skill quando existe (é o caso da SPEC-0089); sem ele, exit 2;
+  - sem `verbs` na configuração, nenhum verbo é permitido.
+- **Resultado:**
+  - `status: error` do adaptador dá exit 1; com `--json`, sai o objeto do contrato com `items: []` e a mensagem mascarada, cortada em 500 caracteres;
+  - uma resposta com capacidade ou verbo diferente do pedido está fora do contrato;
+  - `--summary` sem nenhum item com `line` dá exit 2.
+- **Registro:**
+  - os status são ok, error, invalid e refused;
+  - os exit 2 depois da checagem de ligado também entram no registro;
+  - a configuração inválida não entra.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -325,3 +352,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): CH-01 em guarda e recusa; nomes do validador e marcação dos exemplos; `ts`/`line` e ordem do `--summary`; credenciais por adaptador; `--describe` no fim; registro das recusas; mensagens | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 3 | 2026-11-23 | Esclarecimentos (Emenda v3): linhas do `doctor`; redação a mais só nas probes; ambiente do adaptador por lista permitida; escolha do alvo e do adaptador; `assets/probes/<id>.py` por padrão; status do registro | Relatório do implementer no G2 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
