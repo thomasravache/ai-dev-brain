@@ -1314,31 +1314,47 @@ def compile_extra_pattern(index: int, pattern):
     return regex
 
 
-def _mask(match) -> str:
-    prefix = match.group("url")
-    return f"{prefix}{REDACTED}@" if prefix else REDACTED
+def _secret_span(match) -> tuple:
+    """The part of a SECRET_RE match that is masked: the "url" pattern keeps scheme://user: and the last @ (it masks
+    only the password, even when empty); every other pattern masks the whole match."""
+    if match.group("url") is not None:
+        return match.end("url"), match.end() - 1
+    return match.start(), match.end()
+
+
+def _masked_spans(text: str, extras: list) -> tuple:
+    """(merged spans, count): every secret pattern and every extra pattern (in the probe, also PROBE_PATTERNS and
+    the literals) finds its matches in the ORIGINAL text; the spans are joined (overlapping or touching ones become
+    one) so no mask hides a match from another, in any order (Emenda v6 of SPEC-0088). Zero-width matches of an
+    extra pattern (\\b, lookarounds) never mask. count = the occurrences: overlapping matches count once (a span
+    already masked is not counted again), touching ones count apart."""
+    spans = [_secret_span(match) for match in SECRET_RE.finditer(text)]
+    for pattern in extras:
+        spans += [match.span() for match in pattern.finditer(text) if match.end() > match.start()]
+    merged, count, reach = [], 0, -1
+    for start, end in sorted(spans):
+        if start >= reach:
+            count += 1
+        reach = max(reach, end) if start < reach else end
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return merged, count
 
 
 def _redact_text(text: str, extras: list) -> tuple:
-    text, count = SECRET_RE.subn(_mask, text)
-    for pattern in extras:
-        text, n = _sub_non_empty(pattern, text)
-        count += n
-    return text, count
-
-
-def _sub_non_empty(pattern, text: str) -> tuple:
-    """pattern.subn(REDACTED, text) that ignores zero-width matches (\\b, lookarounds): they never mask."""
-    count = 0
-
-    def mask(match):
-        nonlocal count
-        if not match.group(0):
-            return ""
-        count += 1
-        return REDACTED
-
-    return pattern.sub(mask, text), count
+    """(text with each merged span of _masked_spans replaced once by [REDACTED], count): one pass, never a mask
+    over a marker already written (no [RE[REDACTED]TED])."""
+    spans, count = _masked_spans(text, extras)
+    if not spans:
+        return text, count
+    parts, position = [], 0
+    for start, end in spans:
+        parts += [text[position:start], REDACTED]
+        position = end
+    parts.append(text[position:])
+    return "".join(parts), count
 
 
 def _redact_keys(item: dict, extras: list) -> tuple:
@@ -5055,8 +5071,8 @@ def literal_variants(value: str) -> set:
 
 def literal_masks(values) -> list:
     """Patterns that mask each non-empty value literally (the context and the declared credentials, Emenda v4), in
-    every form of literal_variants and without case difference (Emenda v5); longest first. They go after the
-    secret patterns, so a short context never breaks a key=value secret before it is masked."""
+    every form of literal_variants and without case difference (Emenda v5). They match the original text together
+    with the secret patterns and the spans are joined (Emenda v6), so neither breaks the other."""
     forms = set()
     for value in values:
         if isinstance(value, str) and value:
@@ -5130,7 +5146,7 @@ def _contract_failure(aid, what, problems, extras) -> AtlasError:
 def choose_adapter(probes, capability, extras, literals) -> tuple:
     """(id, adapter, argv, verbs of the capability) of the first adapter whose --describe declares the capability;
     none = AtlasError (code 4). The core appends --describe to the end of the command. `extras` are the secret
-    patterns; `literals` the values masked literally after them (the context; Emenda v5)."""
+    patterns; `literals` the values masked literally with them, in one pass (the context; Emenda v6)."""
     for aid, adapter in probes["adapters"].items():
         argv = adapter_command(aid, adapter)
         if argv is None:
@@ -5190,7 +5206,7 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
         raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
     reachable = [c for c in target["clusters"] if c in access or target["cluster_ids"].get(c) in access]
     context = (access.get(reachable[0]) or access[target["cluster_ids"][reachable[0]]]) if reachable else None
-    # the context never shows in what comes from the adapter; the literals run after the secret patterns (Emenda v5)
+    # the context never shows in what comes from the adapter; patterns and literals mask in one pass (Emenda v6)
     patterns = extras
     extras = patterns + literal_masks([context])
     extras_box[:] = extras
@@ -5232,7 +5248,8 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
     if data["status"] == "error":
         if args.json:
             result = {key: data[key] for key in ("contract", "adapter", "capability", "verb", "status")}
-            print(json.dumps(probe_mask(dict(result, items=[], truncated=False, message=message), extras),
+            # the message is already masked: masking it again would put a marker inside a marker (Emenda v6)
+            print(json.dumps(dict(probe_mask(result, extras), items=[], truncated=False, message=message),
                              ensure_ascii=False, indent=2, allow_nan=False))
         print(f"erro: adaptador {aid} respondeu com erro: {message or '(sem mensagem)'}", file=sys.stderr)
         return 1

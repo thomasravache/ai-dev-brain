@@ -155,12 +155,13 @@ Valem os padrões do `references/redaction.md` e o `redaction.extra_patterns` do
 
 Além disso, o valor do contexto escolhido (`target.context`) e os valores das credenciais declaradas do adaptador são mascarados, literalmente, em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato.
 
-Ordem da máscara (Emenda v5):
+Máscara numa passada só (Emenda v6):
 
-1. primeiro os padrões de segredo (os do `references/redaction.md`, os de linha de log acima e o `redaction.extra_patterns`), no texto original;
-2. depois os literais (o contexto e os valores das credenciais).
+1. todos os padrões de segredo (os do `references/redaction.md`, os de linha de log acima e o `redaction.extra_patterns`) e todos os literais (o contexto e os valores das credenciais, com as variantes abaixo) procuram casamentos no texto original;
+2. os trechos casados são juntados (os que se sobrepõem ou se encostam viram um só);
+3. cada trecho resultante é trocado uma vez por `[REDACTED]`.
 
-Assim um contexto curto, como `api`, não impede que `api_key=<valor>` seja mascarado. A máscara literal não diferencia maiúsculas e pega, de cada valor, a forma crua, a escapada como dentro de uma string JSON (com e sem `/` escrito `\/`) e a codificada em URL (`%3A`, `%2F`…).
+Assim nenhuma máscara impede a outra, em qualquer ordem: um contexto curto, como `api`, não impede que `api_key=<valor>` seja mascarado; uma senha com cara de e-mail, ou com `token=<x>` no meio, sai inteira mascarada; e a máscara nunca roda sobre um marcador já escrito (nada de `[RE[REDACTED]TED]`). Cada padrão mascara o mesmo pedaço de sempre (o de URL, por exemplo, guarda `esquema://usuário:` e o `@`). A máscara literal não diferencia maiúsculas e pega, de cada valor, a forma crua, a escapada como dentro de uma string JSON (com e sem `/` escrito `\/`) e a codificada em URL (`%3A`, `%2F`…).
 
 ## Resumo de logs (`--summary`)
 
