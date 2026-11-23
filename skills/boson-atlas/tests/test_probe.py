@@ -1024,6 +1024,89 @@ class ContextVariantsTest(MaskV5Case):
                         self.assertNotIn(variant.lower(), text.lower(), f"a forma {form} da credencial vazou")
 
 
+
+# --------------------------------------------------------------------------- Emenda v6
+
+# montados em tempo de execução (genéricos): uma senha com cara de e-mail seguida de um sufixo, e uma senha com um
+# gatilho de padrão (token=) no meio
+EMAIL_LIKE_CREDENTIAL = "Xy7" + "@" + "k9.Zq" + "!" + "rT5pLmQw"
+TRIGGER_TAIL = "DEF" + "SECRETTAIL"
+TRIGGER_CREDENTIAL = "zz " + "token" + "=ABC " + TRIGGER_TAIL
+OVERLAP_PREFIX = "ctx-0088-ov"
+OVERLAP_CONTEXT = OVERLAP_PREFIX + ".api"  # o padrão api_key=... começa no meio do contexto
+NESTED_RE = re.compile(r"\[[A-Za-z]*\[REDACTED\]|\[REDACTED\][A-Za-z]*\]")
+
+
+def _fragments(value, size=4):
+    return {value[i:i + size] for i in range(len(value) - size + 1)}
+
+
+class MaskOnePassTest(MaskV5Case):
+    """Emenda v6 — a máscara numa passada só: todos os padrões de segredo e todos os literais (contexto e valores das
+    credenciais, com as variantes) casam no texto original, os trechos são juntados e cada trecho resultante vira um
+    [REDACTED] só."""
+
+    def assertNoNested(self, text):
+        self.assertIsNone(NESTED_RE.search(text), f"marcador aninhado: uma máscara rodou sobre outra: {text!r}")
+
+    def test_a_credential_shaped_like_an_email_is_masked_whole(self):
+        """SPEC-0088:UT-04 (Emenda v6) — valor de credencial declarada com cara de e-mail seguido de um sufixo
+        (<a>@<b>.<tld>!<resto>), ecoado no stderr, na message, num item e numa linha do --summary: nenhum trecho de 4
+        caracteres do valor (em especial o sufixo depois do e-mail) aparece nas saídas (texto e --json) nem no
+        probes.log."""
+        suffix = EMAIL_LIKE_CREDENTIAL[EMAIL_LIKE_CREDENTIAL.index("!"):]
+        for mode, verb, extra, code in ECHO_MODES:
+            with self.subTest(mode=mode):
+                texts, codes = self.run_echo_v5(mode, verb, extra, CONTEXT_DEV, "raw",
+                                                credential=EMAIL_LIKE_CREDENTIAL)
+                self.assertEqual(codes, [code, code], texts)
+                for text in texts:
+                    self.assertNotIn(suffix, text, "o sufixo da senha com cara de e-mail vazou: o padrão de e-mail "
+                                                   "mascarou só o começo e o literal não casou mais")
+                    for fragment in _fragments(EMAIL_LIKE_CREDENTIAL):
+                        self.assertNotIn(fragment, text, f"um trecho do valor da credencial vazou: {fragment!r}")
+                    self.assertNoNested(text)
+
+    def test_a_credential_with_a_pattern_trigger_inside_is_masked_whole(self):
+        """SPEC-0088:UT-04 (Emenda v6) — valor de credencial declarada com um gatilho de padrão no meio
+        (... token=<x> <resto>), ecoado no stderr, na message, num item e numa linha do --summary: o resto depois do
+        trecho casado pelo padrão não aparece nas saídas (texto e --json) nem no probes.log."""
+        for mode, verb, extra, code in ECHO_MODES:
+            with self.subTest(mode=mode):
+                texts, codes = self.run_echo_v5(mode, verb, extra, CONTEXT_DEV, "raw", credential=TRIGGER_CREDENTIAL)
+                self.assertEqual(codes, [code, code], texts)
+                for text in texts:
+                    self.assertNotIn(TRIGGER_TAIL, text, "o resto da credencial depois de token=<x> vazou")
+                    self.assertNoNested(text)
+
+    def test_a_context_overlapping_a_secret_pattern_becomes_a_single_marker(self):
+        """SPEC-0088:UT-04 (Emenda v6, sobreposição) — contexto <prefixo>.api e um adaptador que escreve
+        <contexto>_key=<segredo>: o padrão api_key=... começa no meio do contexto; o trecho juntado (contexto inteiro
+        e segredo) vira um [REDACTED] só, sem sobrar o prefixo do contexto nem o segredo, e sem marcador aninhado."""
+        for mode, verb, extra, code in ECHO_MODES:
+            with self.subTest(mode=mode):
+                texts, codes = self.run_echo_v5(mode, verb, extra, OVERLAP_CONTEXT, "keyed", secret=SECRET_V5)
+                self.assertEqual(codes, [code, code], texts)
+                for text in texts:
+                    self.assertNotIn(SECRET_V5, text, "o segredo vazou")
+                    self.assertNotIn(OVERLAP_PREFIX, text, "o prefixo do contexto sobrou: o padrão mascarou antes "
+                                                           "e o literal do contexto não casou mais")
+                    self.assertNoNested(text)
+
+    def test_a_context_inside_the_marker_text_does_not_nest_markers(self):
+        """SPEC-0088:UT-04 (Emenda v6, sobreposição) — contexto de 3 letras que também é um pedaço do texto do
+        marcador (dac, de [REDACTED]) e uma credencial declarada, ecoados no stderr, na message, num item e numa
+        linha do --summary: cada trecho casado vira um [REDACTED] só, sem marcador aninhado como [RE[REDACTED]TED]
+        (a máscara não roda sobre o que já foi mascarado)."""
+        context = "da" + "c"
+        for mode, verb, extra, code in ECHO_MODES:
+            with self.subTest(mode=mode):
+                texts, codes = self.run_echo_v5(mode, verb, extra, context, "raw", credential=CREDENTIAL_VALUE)
+                self.assertEqual(codes, [code, code], texts)
+                for text in texts:
+                    self.assertNotIn(CREDENTIAL_VALUE, text, "o valor da credencial vazou")
+                    self.assertNoNested(text)
+
 class LoneSurrogateTest(ProbeCase):
     def test_a_lone_surrogate_in_the_output_exits_1_as_invalid_json(self):
         r"""SPEC-0088:UT-04 (Emenda v5) — saída do adaptador com "line": "\ud800 bad" num item, ou com um surrogate
