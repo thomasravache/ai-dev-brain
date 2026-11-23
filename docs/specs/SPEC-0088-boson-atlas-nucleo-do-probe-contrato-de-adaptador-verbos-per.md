@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
 consumes_contract: [SPEC-0087@3]
-contract_version: 5
+contract_version: 6
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
@@ -231,6 +231,14 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
 - **Texto que não vira UTF-8:** uma string com surrogate solto na saída do adaptador conta como JSON inválido (exit 1, sem traceback).
 - **Clusters do alvo:** cada nome em `target.clusters` segue a regra de nome simples. Uma URL de servidor também vale, desde que sem espaço, sem caractere de controle e sem `-` no começo. Fora disso, é exit 2 antes de rodar qualquer coisa, como os outros campos do alvo (Emenda v4).
 
+**Esclarecimentos (Emenda v6):**
+- **Máscara numa passada só:**
+  1. todos os padrões de segredo e todos os literais (contexto e valores das credenciais, com as variantes da Emenda v5) procuram casamentos no texto original;
+  2. os trechos casados são juntados (união dos intervalos);
+  3. cada trecho resultante é trocado uma vez por `[REDACTED]`.
+
+  Assim nenhuma máscara impede a outra, em qualquer ordem: uma senha com cara de e-mail sai inteira mascarada, e `api_key=<valor>` também, com contexto `api`. Esta regra substitui a ordem da Emenda v5.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -387,3 +395,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | 3 | 2026-11-23 | Esclarecimentos (Emenda v3): linhas do `doctor`; redação a mais só nas probes; ambiente do adaptador por lista permitida; escolha do alvo e do adaptador; `assets/probes/<id>.py` por padrão; status do registro | Relatório do implementer no G2 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 4 | 2026-11-23 | Esclarecimentos (Emenda v4): contexto mascarado na saída do adaptador; JSON aninhado e NaN inválidos; `--summary` vazio é exit 0; `command` relativo recusado; campos do alvo conferidos; doc do ambiente | Achados da rodada 1 do G4 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 5 | 2026-11-23 | Esclarecimentos (Emenda v5): padrões de segredo antes dos literais; variantes do contexto (JSON, URL, maiúsculas); surrogate solto é JSON inválido; clusters do alvo conferidos | Achados minor da rodada 2 do G4 (um deles reabria vazamento de segredo) | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 6 | 2026-11-23 | Esclarecimentos (Emenda v6): máscara por união dos trechos casados no texto original, numa passada só, no lugar da ordem da Emenda v5 | Achado minor da rodada 3 do G4 (valor de credencial em parte casado por um padrão vazava o resto) | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
