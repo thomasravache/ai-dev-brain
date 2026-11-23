@@ -220,12 +220,12 @@ When every spec in the wave has G4 = PASS, the Integrator merges the branches in
 
 > "Onda N integrada: build, testes (unitários, integração, contrato, E2E), arquitetura e CI passando (G5). Deseja revisar antes de prosseguir? Digite 'Aprovado' para seguir ou solicite ajustes."
 
-After "Aprovado", record H2 (`gate SPEC-X H2 --by <user>`). If the user grants a standing authorization ("merge when CI is green"), record it **once** as `h2_policy: auto-on-green` with `h2_policy_approved_by/at` in `sdd-config.yml` — then `gate SPEC-X H2 --run` records it from G5 — instead of repeating the authorization in every spec. Production releases are never covered by that policy.
+After "Aprovado", record H2 (`gate SPEC-X H2 --by <user>`). If the user grants a standing authorization ("merge when CI is green"), record it **once** as `h2_policy: auto-on-green` with `h2_policy_approved_by/at` in `sdd-config.yml` — then `gate SPEC-X H2 --run` records it from G5 — instead of repeating the authorization in every spec. Production releases are never covered by that policy. With `delivery_check.verify: true`, take the G6 snapshot before the merge, even under `auto-on-green` (`references/gates.md`, H2).
 
 ### 7. DEPLOY (G6)
-Release deploys through the pipeline to staging, runs smoke + E2E against it, and records G6 (staging). For production, ask the user to confirm that specific release (version, strategy, rollback) and deploy only after an explicit yes; run smoke tests, watch the metrics listed in the Plano de Rollout, roll back if they degrade.
+Release deploys through the pipeline to staging, runs smoke + E2E against it, and records G6 (staging). For production, ask the user to confirm that specific release (version, strategy, rollback) and deploy only after an explicit yes; run smoke tests, watch the metrics listed in the Plano de Rollout and, if they degrade, suggest the rollback while the person decides.
 
-After the merge, with `delivery_check` enabled and the atlas available (same `org_context` rules as DISCOVER), run `atlas.py context --json [--atlas <org_context>] "<serviços e termos da spec>"` and build the read-only verification route from the `delivery` of the spec's services; the steps and rules are in `references/gates.md` (G6).
+After the merge, with `delivery_check` enabled and the atlas available (same `org_context` rules as DISCOVER), run `atlas.py context --json [--atlas <org_context>] "<serviços e termos da spec>"` and build the read-only verification route from the `delivery` of the spec's services; the steps and rules are in `references/gates.md` (G6). With `delivery_check.verify` set, the active verification with `atlas.py verify` (snapshot before the merge, compare after the deploy) also follows `references/gates.md` (G6).
 
 Then go back to step 5 with `next`, or to step 8 when the specs are ready to close.
 

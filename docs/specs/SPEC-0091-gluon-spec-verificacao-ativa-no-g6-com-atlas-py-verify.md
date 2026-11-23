@@ -4,12 +4,12 @@ title: "gluon-spec: verificação ativa no G6 com atlas.py verify"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0090]
 consumes_contract: []
-contract_version: 1
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0024]
@@ -113,6 +113,32 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
   o arquivo da foto é apagado no fim da tarefa; nunca entra em commit
 ```
 
+**Esclarecimentos (Emenda v2):**
+- **`whats-new`:** continua lendo só as chaves de primeiro nível. Um projeto sem `delivery_check` vê as quatro chaves novas citadas no comentário da chave; o `spec_graph.py` não muda para listar subchaves.
+- **Teste da SPEC-0086:** a checagem das chaves de `delivery_check` no template passa a aceitar chaves a mais (subconjunto), porque esta spec acrescenta quatro.
+- **Subseção:** no G6 do `gates.md`, a subseção se chama "Active verification (SPEC-0091)". Os vereditos aparecem com o exit ao lado, e a confirmação de produção vale por execução.
+- **SKILL.md:** a frase nova entra no parágrafo de `delivery_check` que já existe no passo 7.
+
+**Esclarecimentos (Emenda v3):**
+- **Foto antes do merge:**
+  - a seção H2 do `gates.md` diz que, com `delivery_check.verify: true`, a foto do G6 (passo 1 da verificação ativa) é tirada ali, antes do merge, inclusive com `h2_policy: auto-on-green`;
+  - o passo 6 da SKILL.md ganha uma oração apontando para isso;
+  - sem foto, o `compare` roda sem `--baseline`, e o veredito tende a `inconclusivo`.
+- **Versão da ferramenta:**
+  - o `touches` volta a ter `skills/gluon-spec/scripts/spec_graph.py`, mas só para subir o `SDD_TOOL_VERSION` para 2026.11.10;
+  - o CHANGELOG da gluon-spec ganha a seção datada `[2026.11.10]`, para o `whats-new` mostrar a mudança a quem já tem `delivery_check`.
+
+  Isto corrige a Emenda v2, que tirou o arquivo do `touches`. O plano ganha o IT-01 (o `whats-new` de ponta a ponta), porque o tier full exige teste de integração.
+- **Rollout lento:** se `delivery` falhou só porque `rollout_complete` é falso, o agente roda o `compare` mais uma vez, depois de outra janela, antes de aplicar o veredito.
+- **`--expect-image`:**
+  - é a imagem do commit do merge achada no passo 2 do roteiro (repositório de configuração ou saída da pipeline);
+  - vai sem o host do registro, com `:tag` e/ou `@digest`, de preferência o digest.
+- **Exits 2 e 3:**
+  - exit 3 vira "verificação ativa não executada: sem configuração";
+  - exit 2 leva a corrigir os argumentos uma vez; se repetir, "não executada" com o motivo;
+  - nenhum dos dois bloqueia o G6.
+- **Passo 7 da SKILL.md:** a frase de produção diz "sugira o rollback; a pessoa decide", no lugar de reverter por conta própria.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -152,7 +178,7 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
 - **UT-04** — O passo 7 da SKILL.md menciona `delivery_check.verify` e `atlas.py verify` numa frase e aponta para `references/gates.md` (G6). As regras detalhadas não são repetidas na SKILL.md.
 
 ### 7.3 Testes de Integração
-- N/A — a spec só muda instruções e configuração. Os comandos que ela orquestra são testados de ponta a ponta no IT-01 da SPEC-0090.
+- **IT-01** — Dado um projeto temporário com `tools/sdd` em 2026.11.9 e um `sdd-config.yml` com o `delivery_check` da SPEC-0086, quando o `spec_graph.py whats-new` da skill roda como processo, então mostra a seção `[2026.11.10]` com a verificação ativa e as quatro chaves novas de `delivery_check` (Emenda v3). Os comandos do `atlas.py verify` são testados de ponta a ponta na SPEC-0090.
 
 ### 7.4 Testes de Contrato
 - **CT-01** — Toda opção de `atlas.py verify snapshot` e `verify compare` citada no G6 do `gates.md` existe no `--help` do `atlas.py` da boson-atlas. Os exits citados (0, 1, 4 e 5) e os vereditos são os de `skills/boson-atlas/references/verify.md`.
@@ -184,20 +210,32 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [x] Red: CH-01 (passa antes), UT-01 a UT-04 e CT-01 com a tag `SPEC-0091:<ID>`, falhando pelo motivo certo
+- [x] Green: `delivery_check.verify`, `window_minutes`, `max_new_errors` e `max_new_restarts` no `sdd-config.template.yml`; verificação ativa no G6 do `references/gates.md` (foto depois do H2 e antes do merge, comparação depois dos passos 1–2 do roteiro e da janela, veredito para o gate, produção confirmada, foto apagada no fim); passo 7 da SKILL.md; `SDD_TOOL_VERSION` (e `tools/sdd` se mudar o script), CHANGELOG da gluon-spec e `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 6bd2520 | 2026-11-22 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=18, skipped=1)) — 7a0f1b2 | 2026-11-23 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — daecfc1 | 2026-11-23 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 1e0ca94 | 2026-11-23 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — majors da rodada 1 resolvidos (Emenda v3); 3 minors no radar (exits da foto, confirmação de produção explícita na foto, frase do CHANGELOG) — 0065153 | 2026-11-23 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 4188f31 | 2026-11-23 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 7cf6d21 | 2026-11-23 |
+
+### Histórico de reprovações
+- G1 FAIL 2026-11-23 — verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0091:IT-01 — 9e82a23
+- G1 PASS 2026-11-23 — depois de 1 reprovação(ões)
+- G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: nenhuma instrução manda tirar a foto antes do merge (H2/passo 6); SDD_TOOL_VERSION e seção datada do CHANGELOG ausentes (touches sem o spec_graph.py); minors: rollout lento, origem do --expect-image, exits 2 e 3, passo 7 fala em reverter — 9e9bb6f
+- G4 PASS 2026-11-23 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -208,39 +246,66 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- A gluon-spec passa a fazer, no G6, uma verificação ativa da entrega quando `delivery_check.verify: true`:
+  1. tira a foto com `atlas.py verify snapshot` no H2, antes do merge;
+  2. depois dos passos 1–2 do roteiro da SPEC-0086 e da janela (`window_minutes`), compara com `atlas.py verify compare`;
+  3. transforma o veredito no resultado do gate: `passou` → PASS; `degradou` → FAIL, com o rollback só sugerido e a decisão com a pessoa; `inconclusivo` → a pessoa decide, e a decisão fica registrada.
+- Produção só com o "sim" da pessoa para aquela execução.
+- Quando a verificação não pode rodar, fica registrada como "não executada", com o motivo, sem bloquear o G6.
+- A foto é apagada no fim.
+- Novas chaves no template: `verify`, `window_minutes`, `max_new_errors` e `max_new_restarts`.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `references/gates.md`: H2 e a subseção "Active verification (SPEC-0091)" do G6.
+- `SKILL.md`: uma frase no passo 6 e outra no passo 7, apontando para o `gates.md`.
+- `references/sdd-config.template.yml`: as quatro chaves.
+- `scripts/spec_graph.py`: só o `SDD_TOOL_VERSION`, agora 2026.11.10.
+- CHANGELOG da gluon-spec com a seção `[2026.11.10]`.
+- Emendas:
+  - v2: perguntas do G1;
+  - v3: rodada 1 do G4 (foto no H2, versão da ferramenta, rollout lento, imagem esperada, exits 2 e 3, rollback só sugerido; o plano ganhou o IT-01).
+- G4 aprovado na rodada 2.
+- Plugin 2026.11.31.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | O roteiro da SPEC-0086 continua igual (passos, "último visto pelo atlas", fallback) | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-01 | Template com `verify`, `window_minutes`, `max_new_errors` e `max_new_restarts`; `SDD_TOOL_VERSION` 2026.11.10 e seção datada do CHANGELOG | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-02 | G6: foto no H2 antes do merge (também com `auto-on-green`), comparação depois dos passos 1–2 e da janela, veredito para o gate; sem foto tende a `inconclusivo` | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-03 | Produção confirmada por execução, "não executada" sem bloquear, foto apagada; rollout lento, origem do `--expect-image`, exits 2 e 3 | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-04 | SKILL.md: passo 6 aponta a foto no H2; passo 7 cita `delivery_check.verify` e `atlas.py verify` e só sugere o rollback | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| IT-01 | `whats-new` de um projeto em 2026.11.9 mostra a seção 2026.11.10 com a verificação ativa e as quatro chaves | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| CT-01 | Toda opção e todo exit citados existem no `--help` do `atlas.py verify` e no `verify.md` | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). A entrega chega pelo plugin `fermion` 2026.11.31. O `tools/sdd` deste repositório fica em 2026.11.9 até um `vendor --force` à parte.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Achados minor do G4 que ficaram no radar:
+- os exits da própria foto (2, 3 e 4) não estão mapeados à parte;
+- a confirmação de produção da foto está só na regra geral;
+- a frase do CHANGELOG sobre o comentário mostrado pelo `whats-new`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0091`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-23 | Esclarecimentos (Emenda v2): `whats-new` só no primeiro nível; teste da SPEC-0086 aceita chaves a mais; nome da subseção; vereditos com exit; confirmação por execução; frase no parágrafo existente | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 3 | 2026-11-23 | Esclarecimentos (Emenda v3): foto no H2; `SDD_TOOL_VERSION` 2026.11.10 e seção datada (`spec_graph.py` volta ao `touches`); rollout lento; origem do `--expect-image`; exits 2 e 3; rollback só sugerido no passo 7 | Achados da rodada 1 do G4 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
