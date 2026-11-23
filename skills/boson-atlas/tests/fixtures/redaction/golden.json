@@ -1,0 +1,192 @@
+{
+  "aws access key": {
+    "count": 1,
+    "extras": "none",
+    "masked": "chave [REDACTED] da conta"
+  },
+  "aws session key": {
+    "count": 1,
+    "extras": "none",
+    "masked": "sessão [REDACTED]."
+  },
+  "colado a texto, corpo exato": {
+    "count": 1,
+    "extras": "none",
+    "masked": "abc[REDACTED] fim"
+  },
+  "dois segredos separados": {
+    "count": 2,
+    "extras": "none",
+    "masked": "[REDACTED] e [REDACTED]"
+  },
+  "e-mail sem extras": {
+    "count": 0,
+    "extras": "none",
+    "masked": "contato maria.silva@acme.example"
+  },
+  "extra do time": {
+    "count": 1,
+    "extras": "team",
+    "masked": "id [REDACTED] interno"
+  },
+  "extra do time e token": {
+    "count": 2,
+    "extras": "team",
+    "masked": "[REDACTED] e [REDACTED]"
+  },
+  "extra do time sem casar": {
+    "count": 0,
+    "extras": "team",
+    "masked": "acme-internal-xyz"
+  },
+  "falso positivo ASIAPACIFIC": {
+    "count": 0,
+    "extras": "none",
+    "masked": "ASIAPACIFICNORTHEAST1"
+  },
+  "falso positivo laughs_": {
+    "count": 0,
+    "extras": "none",
+    "masked": "laughs_abcdefghijklmnopqrstuvwxyz"
+  },
+  "gho no texto": {
+    "count": 1,
+    "extras": "none",
+    "masked": "token [REDACTED] expira amanhã"
+  },
+  "ghp sozinho": {
+    "count": 1,
+    "extras": "none",
+    "masked": "[REDACTED]"
+  },
+  "github_pat": {
+    "count": 1,
+    "extras": "none",
+    "masked": "PAT=[REDACTED]"
+  },
+  "jwt": {
+    "count": 1,
+    "extras": "none",
+    "masked": "Authorization [REDACTED] ok"
+  },
+  "key=value sem extras": {
+    "count": 0,
+    "extras": "none",
+    "masked": "password=plain-0092 user=bot"
+  },
+  "pem sem fim": {
+    "count": 1,
+    "extras": "none",
+    "masked": "chave [REDACTED]"
+  },
+  "pgp private key": {
+    "count": 1,
+    "extras": "none",
+    "masked": "antes [REDACTED] depois"
+  },
+  "pontuação =ghp_": {
+    "count": 1,
+    "extras": "none",
+    "masked": "=[REDACTED]"
+  },
+  "pontuação _ghp_": {
+    "count": 1,
+    "extras": "none",
+    "masked": "_[REDACTED]"
+  },
+  "pontuação token:ghp_": {
+    "count": 1,
+    "extras": "none",
+    "masked": "token:[REDACTED]"
+  },
+  "probe bearer": {
+    "count": 1,
+    "extras": "probe",
+    "masked": "Authorization: [REDACTED]"
+  },
+  "probe cpf e cnpj": {
+    "count": 2,
+    "extras": "probe",
+    "masked": "cpf [REDACTED] cnpj [REDACTED]"
+  },
+  "probe e-mail": {
+    "count": 1,
+    "extras": "probe",
+    "masked": "usuário [REDACTED]"
+  },
+  "probe key=value": {
+    "count": 3,
+    "extras": "probe",
+    "masked": "[REDACTED]; [REDACTED] [REDACTED]"
+  },
+  "probe texto comum": {
+    "count": 0,
+    "extras": "probe",
+    "masked": "GET /health 200 em 3ms"
+  },
+  "probe token= e e-mail": {
+    "count": 2,
+    "extras": "probe",
+    "masked": "login ok [REDACTED] para [REDACTED]"
+  },
+  "probe url e e-mail": {
+    "count": 2,
+    "extras": "probe",
+    "masked": "https://bot:[REDACTED] e [REDACTED]"
+  },
+  "rsa private key": {
+    "count": 1,
+    "extras": "none",
+    "masked": "antes\n[REDACTED]\ndepois"
+  },
+  "slack": {
+    "count": 1,
+    "extras": "none",
+    "masked": "bot [REDACTED] no canal"
+  },
+  "texto comum": {
+    "count": 0,
+    "extras": "none",
+    "masked": "deploy do api em prod às 10h, sem incidente"
+  },
+  "texto vazio": {
+    "count": 0,
+    "extras": "none",
+    "masked": ""
+  },
+  "url @ na senha": {
+    "count": 1,
+    "extras": "none",
+    "masked": "conecta https://user:[REDACTED]@host.example/x agora"
+  },
+  "url barra na senha": {
+    "count": 1,
+    "extras": "none",
+    "masked": "conecta https://user:[REDACTED]@host.example/x agora"
+  },
+  "url com credencial": {
+    "count": 1,
+    "extras": "none",
+    "masked": "clone https://bot:[REDACTED]@git.acme.example/acme/api.git agora"
+  },
+  "url duas": {
+    "count": 2,
+    "extras": "none",
+    "masked": "a=https://u1:[REDACTED]@h1.example b=postgres://u2:[REDACTED]@db:5432/x"
+  },
+  "url sem credencial": {
+    "count": 0,
+    "extras": "none",
+    "masked": "veja https://git.acme.example/acme/api.git e ssh://host.example/x"
+  },
+  "url usuário vazio": {
+    "count": 1,
+    "extras": "none",
+    "masked": "conecta redis://:[REDACTED]@cache:6379 agora"
+  },
+  "vários segredos separados": {
+    "count": 4,
+    "extras": "none",
+    "masked": "[REDACTED] | [REDACTED] | [REDACTED] | [REDACTED]"
+  }
+}
