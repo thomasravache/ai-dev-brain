@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
 consumes_contract: []
-contract_version: 3
+contract_version: 4
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/**, skills/boson-atlas/references/probes/**, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/fixtures/kubernetes/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0023]
@@ -144,6 +144,21 @@ erros → status: "error", items: [], message: "kubectl não encontrado" | "sem 
   - um verbo ou recurso fora da lista dá a mensagem "chamada não permitida", sem chamar o `kubectl`;
   - o timeout é reconhecido por "deadline exceeded", "timeout" ou "i/o timeout" no stderr.
 - **Nomes:** o adaptador recusa nomes de workload, namespace ou pod que não seguem o DNS-1123 ou que começam com `-` ("chamada não permitida"), mesmo que o núcleo já confira (Emenda v4 da SPEC-0088).
+
+**Esclarecimentos (Emenda v4):**
+- **`events` de um Deployment:** lê também `replicasets` (um `get` a mais) e inclui os eventos Warning das ReplicaSets dele, como FailedCreate.
+- **Workload não encontrado:** vira o item `{kind, workload, found: false, rollout_complete: false}`, sem contagem de réplicas.
+- **Pods:**
+  - casados pelo `spec.selector`, com `matchLabels` e `matchExpressions`; um seletor vazio não casa nada;
+  - as imagens vêm de `spec.containers`.
+- **Cluster sem o tipo `rollouts`:** conta como lista vazia, não como erro.
+- **Mensagens de erro a mais:** "falha do kubectl", "resposta inválida do kubectl" e "entrada inválida". Nenhuma traz o stderr do kubectl nem o contexto.
+- **Corte:**
+  - `logs` tem `truncated` verdadeiro também quando um contêiner chegou ao `--tail`;
+  - os itens ficam abaixo de cerca de 900 KB, tirando os mais antigos, para não passar do limite de leitura do núcleo;
+  - os eventos vêm do mais antigo para o mais novo e ficam os `lines` mais recentes.
+- **Processo:** o `kubectl` roda com timeout de 30 s, acima do `--request-timeout=20s`.
+- **`references/probes.md`:** fora do `touches`; o link para `references/probes/kubernetes.md` fica no `SKILL.md`.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -287,3 +302,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): `touches` com versão, SKILL.md, CHANGELOG e plugin; `KUBECONFIG` só declarado; comando padrão | Planejamento depois da Emenda v3 da SPEC-0088 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 3 | 2026-11-23 | Esclarecimentos (Emenda v3): ordem do argv; só as opções do contrato; logs por pod (até 10) juntados por `ts`; limites das chamadas e do `--tail`; `--request-timeout=20s`; erros com exit 0; nomes recusados | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 4 | 2026-11-23 | Esclarecimentos (Emenda v4): eventos das ReplicaSets; workload não encontrado; casamento de pods; sem `rollouts`; mensagens a mais; cortes; timeout do processo; link no `SKILL.md` | Relatório do implementer no G2 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
