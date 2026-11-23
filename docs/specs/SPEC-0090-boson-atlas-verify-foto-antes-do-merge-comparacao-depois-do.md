@@ -299,7 +299,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=52, skipped=1)) — 97b43c2 | 2026-11-23 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — e83e347 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — babfc30 | 2026-11-23 |
-| G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major: --out aceito dentro do atlas com outra caixa no macOS; status cortado ainda dá passou; minors: logs e eventos cortados, --expect-image sem normalização, baseline de outro serviço sem teste; nit: arquivo temporário seguindo link | 2026-11-23 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — majors da rodada 1 resolvidos (Emenda v5); 1 minor (imagem do Docker Hub com e sem library/ dá degradou falso) e 2 nits no radar — 32e47d0 | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -307,6 +307,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: --out aceito dentro do atlas com outra caixa no macOS; status cortado ainda dá passou; minors: logs e eventos cortados, --expect-image sem normalização, baseline de outro serviço sem teste; nit: arquivo temporário seguindo link — afa1d4d
+- G4 PASS 2026-11-23 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
