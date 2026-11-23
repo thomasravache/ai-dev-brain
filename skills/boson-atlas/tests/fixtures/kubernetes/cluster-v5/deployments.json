@@ -1,0 +1,81 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "queue",
+        "namespace": "acme-apps",
+        "generation": 2,
+        "labels": {
+          "app": "queue"
+        }
+      },
+      "spec": {
+        "replicas": 4,
+        "selector": {
+          "matchLabels": {
+            "app": "queue"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "queue"
+            }
+          },
+          "spec": {
+            "containers": []
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "replicas": 4,
+        "updatedReplicas": 4,
+        "readyReplicas": 2,
+        "availableReplicas": 2
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "clock",
+        "namespace": "acme-apps",
+        "generation": 2,
+        "labels": {
+          "app": "clock"
+        }
+      },
+      "spec": {
+        "replicas": 2,
+        "selector": {
+          "matchLabels": {
+            "app": "clock"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "clock"
+            }
+          },
+          "spec": {
+            "containers": []
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 2,
+        "replicas": 2,
+        "updatedReplicas": 2,
+        "readyReplicas": 2,
+        "availableReplicas": 2
+      }
+    }
+  ],
+  "metadata": {}
+}

@@ -62,6 +62,7 @@ ADAPTER = SKILL / "assets" / "probes" / "kubernetes.py"
 FIXTURES = TESTS / "fixtures" / "kubernetes"
 FAKE_KUBECTL = FIXTURES / "fake_kubectl.py"
 CLUSTER = FIXTURES / "cluster"
+CLUSTER_V5 = FIXTURES / "cluster-v5"  # Emenda v5: Rollouts, pods que não responderam, frações de segundo
 CONTEXT = "ctx-acme-local-0089"
 NAMESPACE = "acme-apps"
 DIGEST = "sha256:" + "abc0" * 16
@@ -85,6 +86,8 @@ LOG_KEYS = {"workload", "pod", "container", "ts", "line"}
 DESCRIBE = {"contract": "probe@1", "adapter": "kubernetes", "capabilities": {"runtime": ["status", "events", "logs"]}}
 FAIL_MESSAGES = {"forbidden": "sem permissão (Forbidden)", "nocontext": "contexto inexistente", "timeout": "timeout"}
 REFUSED = "chamada não permitida"
+INVALID_INPUT = "entrada inválida"
+INVALID_ANSWER = "resposta inválida do kubectl"
 EMAIL = "pessoa.falsa@example.com"
 
 
@@ -100,14 +103,16 @@ def probe_input(verb, workloads=("Deployment/api",), lines=200, since=1800, capa
             "limits": {"lines": lines, "since_seconds": since}}
 
 
-def install_kubectl(folder: Path, record: Path, fail=""):
-    """Copia o kubectl falso como `kubectl` (cabeçalho com o Python dos testes) e grava o cenário ao lado dele."""
+def install_kubectl(folder: Path, record: Path, fail="", fixtures=(CLUSTER,), pod_fail=None):
+    """Copia o kubectl falso como `kubectl` (cabeçalho com o Python dos testes) e grava o cenário ao lado dele
+    (`fixtures`: as pastas de respostas, a primeira que tiver o arquivo vale; `pod_fail`: {pod: falha} só no logs)."""
     folder.mkdir(parents=True, exist_ok=True)
     body = FAKE_KUBECTL.read_text(encoding="utf-8").split("\n", 1)[1]
     target = folder / "kubectl"
     target.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
     target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    scenario = {"record": str(record), "fixtures": str(CLUSTER), "fail": fail}
+    scenario = {"record": str(record), "fixtures": [str(path) for path in fixtures], "fail": fail,
+                "pod_fail": dict(pod_fail or {})}
     (folder / "fake-kubectl.json").write_text(json.dumps(scenario), encoding="utf-8")
     return target
 
@@ -195,8 +200,8 @@ class KubectlCase(unittest.TestCase):
         self.bin.mkdir()
         self.record = self.root / "kubectl-calls.jsonl"
 
-    def install(self, fail=""):
-        install_kubectl(self.bin, self.record, fail)
+    def install(self, fail="", fixtures=(CLUSTER,), pod_fail=None):
+        install_kubectl(self.bin, self.record, fail, fixtures, pod_fail)
 
     def environment(self):
         env = {"PATH": str(self.bin), "HOME": str(self.home), "XDG_CONFIG_HOME": str(self.home / ".config"),
@@ -302,6 +307,25 @@ class StatusTest(KubectlCase):
         self.assertEqual(workloads["Deployment/api"].get("found"), True, out)
         self.assertFalse([i for i in out["items"] if i.get("kind") == "pod" and i["workload"] == "Deployment/ghost"])
 
+    def test_rollout_with_observed_generation_as_text_of_digits(self):
+        """SPEC-0089:UT-01 (Emenda v5) — o Argo Rollouts grava status.observedGeneration como texto: Rollout web
+        com metadata.generation 10, observedGeneration "10" e 2 de 2 réplicas prontas tem rollout_complete true;
+        Rollout canary com generation 10 e observedGeneration "9" (texto que, comparado como texto, passaria de "10")
+        e as réplicas prontas tem rollout_complete false."""
+        self.install(fixtures=(CLUSTER_V5,))
+        out = self.run_probe(probe_input("status", workloads=("Rollout/web", "Rollout/canary")))
+        self.assertEqual(out["status"], "ok", out)
+        workloads = {i["workload"]: i for i in out["items"] if i.get("kind") == "workload"}
+        self.assertEqual({k: workloads["Rollout/web"].get(k) for k in WORKLOAD_KEYS},
+                         {"kind": "workload", "workload": "Rollout/web", "found": True, "desired": 2, "updated": 2,
+                          "ready": 2, "available": 2, "rollout_complete": True}, out)
+        self.assertEqual((workloads["Rollout/canary"].get("found"), workloads["Rollout/canary"].get("ready"),
+                          workloads["Rollout/canary"].get("rollout_complete")), (True, 2, False), out)
+        pods = {i["pod"]: i for i in out["items"] if i.get("kind") == "pod"}
+        self.assertEqual({name for name, item in pods.items() if item["workload"] == "Rollout/web"},
+                         {"web-6b7d-aaaa", "web-6b7d-bbbb"}, out)
+        self.assertIn("rollouts", {words_of(a)[0] for a in self.calls() if a[0] == "get"})
+
 
 # --------------------------------------------------------------------------- UT-02
 
@@ -331,6 +355,21 @@ class EventsTest(KubectlCase):
         self.assertEqual(found[("Deployment/api", "ProgressDeadlineExceeded")].get("message"),
                          "Deployment api has timed out progressing.")
         self.assertIn("events", {words_of(a)[0] for a in self.calls() if a[0] == "get"})
+
+    def test_rollout_events_include_the_warnings_of_its_replicasets(self):
+        """SPEC-0089:UT-02 (Emenda v5) — como no Deployment, `events` de Rollout/web traz os Warning da ReplicaSet
+        web-6b7d (ownerReferences kind Rollout, name web) e do próprio Rollout, na janela; não traz o Normal da
+        ReplicaSet, o Warning de 2 h atrás, o da ReplicaSet de um Deployment também chamado web nem o da ReplicaSet de
+        outro Rollout."""
+        self.install(fixtures=(CLUSTER_V5,))
+        out = self.run_probe(probe_input("events", workloads=("Rollout/web",)))
+        self.assertEqual(out["status"], "ok", out)
+        for item in out["items"]:
+            self.assertLessEqual(set(item), EVENT_KEYS, item)
+        self.assertEqual({(i.get("object"), i.get("reason")) for i in out["items"]},
+                         {("ReplicaSet/web-6b7d", "FailedCreate"), ("Rollout/web", "RolloutAborted")}, out)
+        self.assertEqual(len(out["items"]), 2, out)
+        self.assertIn("replicasets", {words_of(a)[0] for a in self.calls() if a[0] == "get"})
 
 
 # --------------------------------------------------------------------------- UT-03
@@ -390,6 +429,51 @@ class LogsTest(KubectlCase):
         self.assertEqual(len(out["items"]), 300)
         self.assertIs(out["truncated"], False)
 
+    def test_pods_waiting_to_start_are_skipped_and_mark_truncated(self):
+        """SPEC-0089:UT-03 (Emenda v5) — Deployment/queue com 4 pods: aaaa e cccc rodando, bbbb em Pending com o
+        contêiner esperando (ContainerCreating) e dddd em Pending sem agendamento; o `logs` deles falha como no
+        kubectl de verdade (exit 1, "Error from server (BadRequest): container ... is waiting to start: ..."). `logs`
+        dá status ok com as linhas de aaaa e cccc e truncated: true."""
+        self.install(fixtures=(CLUSTER_V5,))
+        out = self.run_probe(probe_input("logs", workloads=("Deployment/queue",), lines=2000))
+        self.assertEqual(out["status"], "ok", out)
+        self.assertIs(out["truncated"], True, out)
+        self.assertEqual(sorted(i["line"].rsplit(" ", 1)[-1] for i in out["items"]), ["a1", "a2", "c1", "c2"], out)
+        self.assertEqual({i["pod"] for i in out["items"]}, {"queue-4f2a-aaaa", "queue-4f2a-cccc"}, out)
+        for item in out["items"]:
+            self.assertEqual(set(item), LOG_KEYS, item)
+            self.assertEqual(item["workload"], "Deployment/queue")
+
+    def test_a_pod_whose_logs_fail_with_another_error_is_skipped(self):
+        """SPEC-0089:UT-03 (Emenda v5) — o `logs` de queue-4f2a-cccc falha com um erro que não é Forbidden, contexto
+        ausente nem timeout (NotFound: o pod sumiu entre o get e o logs): o pod é pulado, `logs` dá status ok com as
+        linhas de queue-4f2a-aaaa e truncated: true."""
+        self.install(fixtures=(CLUSTER_V5,), pod_fail={"queue-4f2a-cccc": "notfound"})
+        out = self.run_probe(probe_input("logs", workloads=("Deployment/queue",), lines=2000))
+        self.assertEqual(out["status"], "ok", out)
+        self.assertIs(out["truncated"], True, out)
+        self.assertEqual(sorted(i["line"].rsplit(" ", 1)[-1] for i in out["items"]), ["a1", "a2"], out)
+
+    def test_lines_are_ordered_by_the_fraction_of_the_second(self):
+        """SPEC-0089:UT-03 (Emenda v5) — Deployment/clock com dois pods e três (pod, contêiner): linhas no mesmo
+        segundo com os horários como o kubectl imprime (sem os zeros do fim: "...SSZ", ".05Z", ".1Z", ".12Z",
+        ".123456789Z", ".5Z") e uma no segundo seguinte. `logs` devolve na ordem do tempo real (tick 1 a 7), com o ts
+        como o kubectl mandou; com lines 3 saem as 3 mais recentes (ticks 5, 6 e 7)."""
+        self.install(fixtures=(CLUSTER_V5,))
+        out = self.run_probe(probe_input("logs", workloads=("Deployment/clock",), lines=2000))
+        self.assertEqual(out["status"], "ok", out)
+        ticks = [int(re.search(r"tick (\d)", i["line"]).group(1)) for i in out["items"]]
+        self.assertEqual(ticks, [1, 2, 3, 4, 5, 6, 7], out)
+        stamps = {int(re.search(r"tick (\d)", i["line"]).group(1)): i["ts"] for i in out["items"]}
+        self.assertRegex(stamps[1], r":\d{2}Z$")
+        for tick, fraction in ((2, ".05Z"), (3, ".1Z"), (4, ".12Z"), (5, ".123456789Z"), (6, ".5Z")):
+            self.assertTrue(stamps[tick].endswith(fraction), stamps)
+        self.assertIs(out["truncated"], False, out)
+        self.record.unlink(missing_ok=True)
+        out = self.run_probe(probe_input("logs", workloads=("Deployment/clock",), lines=3))
+        self.assertEqual([int(re.search(r"tick (\d)", i["line"]).group(1)) for i in out["items"]], [5, 6, 7], out)
+        self.assertIs(out["truncated"], True, out)
+
 
 # --------------------------------------------------------------------------- UT-04
 
@@ -406,6 +490,65 @@ class ErrorTest(KubectlCase):
                     out = self.run_probe(probe_input(verb))
                     self.assertError(out, message)
                     self.assertTrue(self.calls(), "o kubectl não foi chamado")
+
+    def test_forbidden_nocontext_or_timeout_on_one_pod_is_still_an_error(self):
+        """SPEC-0089:UT-04 (Emenda v5) — só o `logs` de queue-4f2a-aaaa falha com Forbidden, contexto inexistente ou
+        timeout (os outros pods de Deployment/queue estão rodando ou esperando): `logs` dá status error com a
+        mensagem do contrato; o pod não é pulado como um que não respondeu."""
+        for fail, message in FAIL_MESSAGES.items():
+            with self.subTest(fail=fail):
+                self.record.unlink(missing_ok=True)
+                self.install(fixtures=(CLUSTER_V5,), pod_fail={"queue-4f2a-aaaa": fail})
+                out = self.run_probe(probe_input("logs", workloads=("Deployment/queue",), lines=2000))
+                self.assertError(out, message)
+
+    def test_malformed_kubectl_answers_are_an_invalid_answer(self):
+        """SPEC-0089:UT-04 (Emenda v5) — campos que deviam ser objeto e não são: um Deployment com metadata "x" (em
+        cada verbo), um contêiner de pod de api com lastState "x" (status) e o Deployment api com spec [] (status).
+        Sai status error "resposta inválida do kubectl", exit 0, sem traceback."""
+        deployments = json.loads((CLUSTER / "deployments.json").read_text(encoding="utf-8"))
+        pods = json.loads((CLUSTER / "pods.json").read_text(encoding="utf-8"))
+
+        def odd_metadata():
+            data = json.loads(json.dumps(deployments))
+            data["items"].append({"apiVersion": "apps/v1", "kind": "Deployment", "metadata": "x", "spec": {},
+                                  "status": {}})
+            return "deployments.json", data
+
+        def odd_last_state():
+            data = json.loads(json.dumps(pods))
+            pod = next(p for p in data["items"] if p["metadata"]["name"] == "api-7f9c-aaaa")
+            pod["status"]["containerStatuses"][0]["lastState"] = "x"
+            return "pods.json", data
+
+        def odd_spec():
+            data = json.loads(json.dumps(deployments))
+            next(d for d in data["items"] if d["metadata"]["name"] == "api")["spec"] = []
+            return "deployments.json", data
+
+        cases = [("metadata", odd_metadata, verb) for verb in ("status", "events", "logs")]
+        cases += [("lastState", odd_last_state, "status"), ("spec", odd_spec, "status")]
+        for number, (field, build, verb) in enumerate(cases):
+            with self.subTest(field=field, verb=verb):
+                overlay = self.root / f"overlay-{number}"
+                overlay.mkdir()
+                name, data = build()
+                (overlay / name).write_text(json.dumps(data), encoding="utf-8")
+                self.record.unlink(missing_ok=True)
+                self.install(fixtures=(overlay, CLUSTER))
+                out = self.run_probe(probe_input(verb))  # exit 0 e nenhum traceback
+                self.assertError(out, INVALID_ANSWER)
+
+    def test_a_context_with_a_null_character_is_invalid_input(self):
+        """SPEC-0089:UT-04 (Emenda v5) — target.context com um caractere nulo, em cada verbo: status error "entrada
+        inválida", exit 0, sem traceback e nenhuma chamada ao kubectl."""
+        self.install()
+        for verb in ("status", "events", "logs"):
+            with self.subTest(verb=verb):
+                self.record.unlink(missing_ok=True)
+                out = self.run_probe(probe_input(verb, context="ctx-acme\x00local"))
+                self.assertError(out, INVALID_INPUT)
+                self.assertEqual(self.calls(), [], "o kubectl rodou com um contexto inválido")
 
     def test_without_kubectl_on_the_path(self):
         """SPEC-0089:UT-04 — sem kubectl no PATH: status error, items [] e "kubectl não encontrado", em cada verbo."""

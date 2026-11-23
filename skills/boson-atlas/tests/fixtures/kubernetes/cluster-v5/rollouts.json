@@ -1,0 +1,111 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Rollout",
+      "metadata": {
+        "name": "web",
+        "namespace": "acme-apps",
+        "generation": 10,
+        "labels": {
+          "app": "web"
+        }
+      },
+      "spec": {
+        "replicas": 2,
+        "selector": {
+          "matchLabels": {
+            "app": "web"
+          }
+        },
+        "strategy": {
+          "canary": {
+            "steps": [
+              {
+                "setWeight": 50
+              },
+              {
+                "pause": {}
+              }
+            ]
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "web"
+            }
+          },
+          "spec": {
+            "containers": []
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": "10",
+        "replicas": 2,
+        "updatedReplicas": 2,
+        "readyReplicas": 2,
+        "availableReplicas": 2,
+        "currentPodHash": "6b7d",
+        "stableRS": "6b7d",
+        "phase": "Healthy"
+      }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Rollout",
+      "metadata": {
+        "name": "canary",
+        "namespace": "acme-apps",
+        "generation": 10,
+        "labels": {
+          "app": "canary"
+        }
+      },
+      "spec": {
+        "replicas": 2,
+        "selector": {
+          "matchLabels": {
+            "app": "canary"
+          }
+        },
+        "strategy": {
+          "canary": {
+            "steps": [
+              {
+                "setWeight": 50
+              },
+              {
+                "pause": {}
+              }
+            ]
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "canary"
+            }
+          },
+          "spec": {
+            "containers": []
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": "9",
+        "replicas": 2,
+        "updatedReplicas": 2,
+        "readyReplicas": 2,
+        "availableReplicas": 2,
+        "currentPodHash": "6b7d",
+        "stableRS": "6b7d",
+        "phase": "Healthy"
+      }
+    }
+  ],
+  "metadata": {}
+}

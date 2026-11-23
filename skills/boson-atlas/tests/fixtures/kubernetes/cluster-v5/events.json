@@ -1,0 +1,139 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Event",
+      "metadata": {
+        "name": "web-6b7d.0001",
+        "namespace": "acme-apps"
+      },
+      "type": "Warning",
+      "reason": "FailedCreate",
+      "count": 1,
+      "message": "Error creating: pods \"web-6b7d-cccc\" is forbidden: exceeded quota: acme-quota",
+      "involvedObject": {
+        "kind": "ReplicaSet",
+        "name": "web-6b7d",
+        "namespace": "acme-apps"
+      },
+      "firstTimestamp": "{{now-120}}",
+      "lastTimestamp": "{{now-120}}",
+      "source": {
+        "component": "rollouts-controller"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Event",
+      "metadata": {
+        "name": "web-6b7d.0002",
+        "namespace": "acme-apps"
+      },
+      "type": "Normal",
+      "reason": "SuccessfulCreate",
+      "count": 1,
+      "message": "Created pod: web-6b7d-bbbb",
+      "involvedObject": {
+        "kind": "ReplicaSet",
+        "name": "web-6b7d",
+        "namespace": "acme-apps"
+      },
+      "firstTimestamp": "{{now-110}}",
+      "lastTimestamp": "{{now-110}}",
+      "source": {
+        "component": "rollouts-controller"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Event",
+      "metadata": {
+        "name": "web.0001",
+        "namespace": "acme-apps"
+      },
+      "type": "Warning",
+      "reason": "RolloutAborted",
+      "count": 1,
+      "message": "Rollout aborted update to revision 4",
+      "involvedObject": {
+        "kind": "Rollout",
+        "name": "web",
+        "namespace": "acme-apps"
+      },
+      "firstTimestamp": "{{now-100}}",
+      "lastTimestamp": "{{now-100}}",
+      "source": {
+        "component": "rollouts-controller"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Event",
+      "metadata": {
+        "name": "web-6b7d.0003",
+        "namespace": "acme-apps"
+      },
+      "type": "Warning",
+      "reason": "FailedCreate",
+      "count": 1,
+      "message": "Error creating: old warning outside the window",
+      "involvedObject": {
+        "kind": "ReplicaSet",
+        "name": "web-6b7d",
+        "namespace": "acme-apps"
+      },
+      "firstTimestamp": "{{now-7200}}",
+      "lastTimestamp": "{{now-7200}}",
+      "source": {
+        "component": "rollouts-controller"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Event",
+      "metadata": {
+        "name": "web-legacy-5a5a.0001",
+        "namespace": "acme-apps"
+      },
+      "type": "Warning",
+      "reason": "FailedCreate",
+      "count": 1,
+      "message": "Error creating: replica set of a Deployment that is also called web",
+      "involvedObject": {
+        "kind": "ReplicaSet",
+        "name": "web-legacy-5a5a",
+        "namespace": "acme-apps"
+      },
+      "firstTimestamp": "{{now-90}}",
+      "lastTimestamp": "{{now-90}}",
+      "source": {
+        "component": "rollouts-controller"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Event",
+      "metadata": {
+        "name": "canary-3c3c.0001",
+        "namespace": "acme-apps"
+      },
+      "type": "Warning",
+      "reason": "FailedCreate",
+      "count": 1,
+      "message": "Error creating: replica set of another Rollout",
+      "involvedObject": {
+        "kind": "ReplicaSet",
+        "name": "canary-3c3c",
+        "namespace": "acme-apps"
+      },
+      "firstTimestamp": "{{now-80}}",
+      "lastTimestamp": "{{now-80}}",
+      "source": {
+        "component": "rollouts-controller"
+      }
+    }
+  ],
+  "metadata": {}
+}
