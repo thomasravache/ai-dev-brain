@@ -2,7 +2,8 @@
 esperando decisão e páginas órfãs (SPEC-0039: UT-01 a UT-06, IT-01 a IT-03 e CT-01).
 
 A fixture tests/fixtures/lint/atlas foi gerada pelos comandos reais (init, scan, build, curate confirm/reject) e
-está limpa: todas as convenções decididas, nenhuma referência quebrada, nenhum segredo. Cada caso de regra é
+está limpa: todas as convenções decididas, nenhuma referência quebrada, nenhum segredo e o único ambiente (prod)
+marcado em environments: (SPEC-0087, Emenda v3: sem a marcação, o lint daria o aviso untiered-environment). Cada caso de regra é
 montado numa cópia feita na hora do teste. tests/fixtures/lint/inferred/ guarda uma convenção inferred gerada
 pelo curate (SPEC-0037@2) antes da decisão.
 
@@ -15,7 +16,8 @@ Contrato esperado das funções de scripts/atlas.py (o Implementer segue estes t
         Achados das regras (None = todas), só lendo o atlas; `today` = AAAA-MM-DD (None = hoje em UTC). Cada
         achado: {"rule", "severity": "error" | "warn", "path" (relativo ao atlas; em secret-leak
         "<arquivo>:<linha>"), "detail", "suggestion"}. Erro: secret-leak, config, failed-collector. Aviso: stale,
-        broken-ref, pending-convention, orphan-page. Um arquivo ilegível vira achado config e o lint segue.
+        broken-ref, pending-convention, orphan-page, untiered-environment (SPEC-0087). Um arquivo ilegível vira
+        achado config e o lint segue.
 
 CLI (seção 6): lint [--json] [--only regra,...]
     "<ERRO|AVISO> <regra> <caminho> — <detalhe> (sugestão: …)" por achado e o resumo "N erros, M avisos";
@@ -42,7 +44,8 @@ FIXTURE = TESTS / "fixtures" / "lint" / "atlas"
 INFERRED = TESTS / "fixtures" / "lint" / "inferred" / "merge-method-squash.md"
 MAINTENANCE = SKILL / "references" / "maintenance.md"
 TODAY = "2026-11-02"  # o _scan.json da fixture é deste dia
-RULES = ("secret-leak", "config", "failed-collector", "stale", "broken-ref", "pending-convention", "orphan-page")
+RULES = ("secret-leak", "config", "failed-collector", "stale", "broken-ref", "pending-convention", "orphan-page",
+         "untiered-environment")  # SPEC-0087 (Emenda v3): a regra nova, por último
 ERRORS = ("secret-leak", "config", "failed-collector")
 LINE_RE = re.compile(r"^(ERRO|AVISO) (\S+) (\S+) — (.+) \(sugestão: .+\)$")
 SUMMARY_RE = re.compile(r"^(\d+) erros, (\d+) avisos$", re.MULTILINE)

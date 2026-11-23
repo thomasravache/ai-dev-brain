@@ -24,8 +24,9 @@ Contrato (seção 6 da SPEC-0087) que estes testes fixam:
 
 Leituras literais desta suíte (ver o relatório do test-writer):
     - CH-01 "iguais aos de hoje" = igual ao golden fixtures/access/spec-0087-ch01-golden.json, gravado com o código
-      anterior à SPEC-0087 (scan, build, context, doctor e lint pela CLI, com a pasta temporária trocada por <ROOT> e a
-      data de hoje por <TODAY>). Como as fixtures já têm namespace e cluster, as chaves "namespace" e "access" de
+      anterior à SPEC-0087 (scan, build, context, doctor e lint pela CLI, com a pasta temporária trocada por <ROOT>, a
+      data de hoje por <TODAY> e, na Emenda v3, a "version" do pacote do context, quando é a ATLAS_VERSION, por
+      <VERSION>). Como as fixtures já têm namespace e cluster, as chaves "namespace" e "access" de
       delivery.deployments (e as partes "; namespace" e "; sem acesso local" do Markdown) são tiradas antes de
       comparar; "tier" e "workloads" não podem aparecer. No doctor e no lint, só os avisos novos são tirados.
     - Emenda v2: as linhas do doctor seguem "<STATUS> <rótulo> — <detalhe>" e os testes procuram só os pedaços do
@@ -33,6 +34,10 @@ Leituras literais desta suíte (ver o relatório do test-writer):
       e lint; access só existe quando o deployment tem cluster; a chave de access.clusters pode ser a URL do
       servidor; no Markdown, depois de cluster, sync e health: tier, namespace, workloads (juntos por ", " num
       trecho em crase só) e "sem acesso local".
+    - Emenda v3: o tier do deployment é production quando algum ambiente é de produção, test só quando todos são de
+      teste e fica ausente quando algum ambiente não tem marcação; a versão anterior (fixtures/previous) lê o
+      snapshot como o scan o grava (contract = SNAPSHOT_CONTRACT); as entradas dos testes ficam fora da pasta do
+      atlas.
 
 Isolamento: HOME, XDG_CONFIG_HOME e ATLAS_CONFIG_HOME temporários (helpers.Sandbox); sem rede; sem kubectl; nomes
 genéricos (acme, globex, team-x); o contexto local é só um nome falso.
@@ -47,7 +52,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from helpers import SKILL, TESTS, Sandbox, doctor_lines, fn, output
+from helpers import SKILL, TESTS, Sandbox, atlas, doctor_lines, fn, output
 from test_collector_argocd import function as collector_function
 from test_context_delivery import image_link_snapshots
 from test_image_repositories import bare_app
@@ -165,8 +170,13 @@ class AccessCase(unittest.TestCase):
         return self.sandbox.write_local(text)
 
     def write_apps(self, apps, name="apps.json"):
-        (self.atlas / name).write_text(json.dumps(apps), encoding="utf-8")
-        return f"{{atlas}}/{name}"
+        """As Applications de entrada fora da pasta do atlas (são entrada do teste, não arquivo do atlas), numa pasta
+        irmã dela; devolve o caminho para o command do coletor, relativo a {atlas} (o command não aceita caminho
+        absoluto)."""
+        inputs = self.atlas.parent / "inputs"
+        inputs.mkdir(exist_ok=True)
+        (inputs / name).write_text(json.dumps(apps), encoding="utf-8")
+        return f"{{atlas}}/../inputs/{name}"
 
     def cli(self, *args, code=0):
         result = self.sandbox.run(*args)
@@ -223,6 +233,8 @@ def ch01_outputs(case: "AccessCase", name: str) -> dict:
              for p in sorted(case.atlas.rglob("*.md"))}
     graph = json.loads(norm((case.atlas / "graph.json").read_text(encoding="utf-8")))
     context_json = json.loads(norm(case.cli("context", "--json", *query.split()).stdout))
+    if context_json.get("version") == atlas().ATLAS_VERSION:  # Emenda v3: a versão do pacote, normalizada
+        context_json["version"] = "<VERSION>"
     context_markdown = norm(case.cli("context", *query.split()).stdout)
     doctor = case.cli("doctor", code=None)
     lint = case.cli("lint", "--json", code=None)
@@ -485,10 +497,16 @@ class ContextFieldsTest(AccessCase):
 
     URL_CLUSTER = "https://kubernetes.default.svc"
 
-    def write_snapshots(self, dev_cluster="cluster-dev", qa_cluster=True):
-        """dev-api roda em `dev_cluster`; sem `qa_cluster`, qa-api fica sem cluster no grafo (Emenda v2)."""
+    def write_snapshots(self, dev_cluster="cluster-dev", qa_cluster=True, dev_also_in=None):
+        """dev-api roda em `dev_cluster`; sem `qa_cluster`, qa-api fica sem cluster no grafo (Emenda v2); com
+        `dev_also_in`, dev-api roda também nesse ambiente (Emenda v3: tier de um deployment com vários ambientes)."""
         snapshots = image_link_snapshots()
         gitops = snapshots["gitops"]
+        if dev_also_in:
+            gitops["entities"].append({"kind": "environment", "id": dev_also_in, "name": dev_also_in, "attrs": {},
+                                       "source": "gitops"})
+            gitops["relations"].append({"from": "deployment:dev-api", "to": f"environment:{dev_also_in}",
+                                        "type": "runs_in", "source": "gitops"})
         workloads = {"dev-api": ["StatefulSet/api-cache", "Deployment/api"], "qa-api": ["Deployment/api"]}
         for entity in gitops["entities"]:
             if entity["kind"] == "deployment":
@@ -539,6 +557,33 @@ class ContextFieldsTest(AccessCase):
                          "- qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`; "
                          "namespace `api-qa`; workloads `Deployment/api`; sem acesso local")
         self.assertNotIn(SECRET_CONTEXT, markdown + json.dumps(deployments))
+
+    def test_the_tier_of_a_deployment_in_several_environments(self):
+        """SPEC-0087:UT-04 (Emenda v3) — dev-api roda em dev e stage: o tier do deployment é production quando algum
+        ambiente é de produção, test só quando todos são de teste e fica ausente quando algum ambiente não tem
+        marcação; a linha do Markdown de dev-api traz o mesmo tier (ou nenhum)."""
+        cases = [
+            ("um de produção", [("dev", "{tier: test}"), ("stage", "{tier: production}")], "production"),
+            ("os dois de produção", [("dev", "{tier: production}"), ("stage", "{tier: production}")], "production"),
+            ("os dois de teste", [("dev", "{tier: test}"), ("stage", "{tier: test}")], "test"),
+            ("um sem marcação", [("dev", "{tier: test}")], None),
+        ]
+        for label, environments, want in cases:
+            with self.subTest(caso=label):
+                self.setUp()  # um atlas novo por caso
+                deployments, markdown = self.run_context(environments, [], dev_also_in="stage")
+                dev = deployments["dev-api"]
+                self.assertEqual(sorted(dev["environments"]), ["dev", "stage"], "dev-api não roda nos dois ambientes")
+                self.assertEqual(dev.get("tier"), want, dev)
+                if want is None:
+                    self.assertNotIn("tier", dev)
+                lines = [line for line in markdown.splitlines() if "`dev-api` —" in line]
+                self.assertTrue(lines, markdown)
+                for line in lines:
+                    if want:
+                        self.assertIn(f"; tier `{want}`", line)
+                    else:
+                        self.assertNotIn("tier", line)
 
     def test_without_access_every_deployment_has_access_false(self):
         """SPEC-0087:UT-04 — sem access nesta máquina e sem environments: access false e sem tier nos dois
@@ -686,8 +731,8 @@ class ContractTest(AccessCase):
     def collector_snapshot(self, resources):
         apps = with_resources(json.loads(IMAGE_LINK_APPS.read_text(encoding="utf-8")),
                               {"dev-api": resources, "qa-api": resources})
-        path = self.atlas / "apps-ct01.json"
-        path.write_text(json.dumps(apps), encoding="utf-8")
+        self.write_apps(apps, "apps-ct01.json")
+        path = self.atlas.parent / "inputs" / "apps-ct01.json"
         environ = dict(os.environ, HOME=str(self.sandbox.home), XDG_CONFIG_HOME=str(self.sandbox.home / ".config"))
         out = subprocess.run([sys.executable, str(SKILL / "assets" / "collectors" / "argocd.py"), "--from", "argocd",
                               "--input", str(path), "--service-pattern", PATTERN], check=False, capture_output=True,
@@ -698,16 +743,18 @@ class ContractTest(AccessCase):
     def test_a_snapshot_with_workloads_is_accepted_by_contract_one_and_by_the_previous_version(self):
         """SPEC-0087:CT-01 — o snapshot do argocd com workloads (lista de escalares) passa no validador @1 atual sem
         violação nem campo descartado, e no validador da versão anterior (fixtures/previous), que ignora o atributo
-        desconhecido sem violação."""
+        desconhecido sem violação. A versão anterior lê o snapshot como o scan o grava: com o nome de contrato
+        SNAPSHOT_CONTRACT (SPEC-0071), não com o nome que o coletor emite."""
         data = self.collector_snapshot([resource("Deployment", "api")])
         deployments = [e for e in data["entities"] if e["kind"] == "deployment"]
         self.assertTrue(deployments)
         for item in deployments:
             self.assertEqual(item["attrs"].get("workloads"), ["Deployment/api"], "o coletor não emite workloads")
-        for label, validate in (("atual", f("validate_collector_output")),
-                                ("anterior", previous_atlas().validate_collector_output)):
+        as_written = dict(copy.deepcopy(data), contract=f("SNAPSHOT_CONTRACT"))  # o que o scan grava
+        for label, validate, snapshot in (("atual", f("validate_collector_output"), data),
+                                          ("anterior", previous_atlas().validate_collector_output, as_written)):
             with self.subTest(validador=label):
-                clean, violations, dropped = validate(copy.deepcopy(data))
+                clean, violations, dropped = validate(copy.deepcopy(snapshot))
                 self.assertEqual(violations, [])
                 self.assertEqual(dropped, [])
                 kept = [e for e in clean["entities"] if e["kind"] == "deployment"]

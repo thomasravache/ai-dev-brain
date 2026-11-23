@@ -13,4 +13,6 @@ collectors:
     category: code
     command: ["python3", "{skill}/tests/fixtures/curate/signals.py", "signals", "{atlas}/facts/signals.json"]
     timeout: 60
+environments:
+  prod: {tier: production}
 redaction: {extra_patterns: []}

@@ -64,13 +64,22 @@ API_DELIVERY = {
     "pipelines": [{"id": "acme/api/build", "name": "Build", "repository": "acme/api"},
                   {"id": "acme/api/publish", "name": "Publish", "repository": "acme/api"}],
     "images": ["acme/api"],
-    "deployments": [
+    "deployments": [  # SPEC-0087 (Emenda v3): access false — com cluster e sem access.clusters nesta máquina
         {"id": "dev-api", "environments": ["dev"], "clusters": ["cluster-dev"], "sync_status": "Synced",
-         "health_status": "Healthy", "images": ["acme/api"]},
+         "health_status": "Healthy", "images": ["acme/api"], "access": False},
         {"id": "qa-api", "environments": ["qa"], "clusters": ["cluster-qa"], "sync_status": "OutOfSync",
-         "health_status": "Degraded", "images": ["acme/api"]},
+         "health_status": "Degraded", "images": ["acme/api"], "access": False},
     ],
 }
+
+
+def scanned_api_delivery():
+    """API_DELIVERY depois do scan real das fixtures image-link: o coletor argocd grava o namespace de cada
+    Application, que o context passa a trazer (SPEC-0087, Emenda v3)."""
+    delivery = json.loads(json.dumps(API_DELIVERY))
+    for deployment in delivery["deployments"]:
+        deployment["namespace"] = "api-" + deployment["environments"][0]
+    return delivery
 
 
 def f(name):
@@ -370,9 +379,9 @@ class DeliveryMarkdownTest(unittest.TestCase):
             "- Pipelines: `Build` (`acme/api`), `Pub'lish now` (`acme/api`)",
             "- Imagens: `acme/api`",
             "- Configuração (GitOps): `acme/iac`",
-            "- dev: `dev-api` — cluster `cluster-dev`; sync `Synced`; health `Healthy`",
-            "- qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`",
-        ])
+            "- dev: `dev-api` — cluster `cluster-dev`; sync `Synced`; health `Healthy`; sem acesso local",
+            "- qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`; sem acesso local",
+        ])  # SPEC-0087 (Emenda v3): "; sem acesso local" — com cluster e sem access.clusters nesta máquina
         self.assertNotIn("now", [line.strip()[:3] for line in markdown.splitlines()])
         self.assertNotIn("`lish", markdown)
         lowered = "\n".join(entrega_lines(block)).lower()
@@ -518,7 +527,7 @@ class DeliveryScanTest(unittest.TestCase):
         data = json.loads(result.stdout)
         service = service_of(data)
         self.assertIn("delivery", service, "service:api sem a chave delivery (SPEC-0086)")
-        self.assertEqual(service["delivery"], API_DELIVERY)
+        self.assertEqual(service["delivery"], scanned_api_delivery())
         outputs.append(output(self.cli("context", "api")))
         for text in outputs:
             for piece in TAGS + REGISTRY_HOSTS + ("sha256",):

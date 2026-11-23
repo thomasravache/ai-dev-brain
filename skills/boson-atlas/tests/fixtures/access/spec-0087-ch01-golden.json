@@ -162,7 +162,7 @@
           "seen_at": "<TODAY>"
         }
       ],
-      "version": "2026.11.13",
+      "version": "<VERSION>",
       "warnings": []
     },
     "context_markdown": "## Serviços\n\n### `api` (`service:api`)\n\n- Página: services/api.md\n- Encontrado por: nome: api (pontuação 10)\n- Repositório: acme/api\n- Deployments: prod: api-prod; staging: api-staging\n- Entrega:\n  - Pipelines: `CI` (`acme/api`), `Release` (`acme/api`)\n  - prod: `api-prod` — cluster `https://kubernetes.default.svc`; sync `Synced`; health `Healthy`\n  - staging: `api-staging` — cluster `https://10.20.0.1:6443`; sync `OutOfSync`; health `Progressing`\n- Donos: docs-team (acme/docs-team), payments (acme/payments)\n- Visto em: <TODAY>\n\n### `web` (`service:web`)\n\n- Página: services/web.md\n- Encontrado por: nome: web (pontuação 10)\n- Repositório: acme/web\n- Deployments: frontend: web\n- Entrega:\n  - Pipelines: `ci` (`acme/web`)\n  - frontend: `web` — cluster `eks-prod-1`; sync `Synced`; health `Healthy`\n- Donos: frontend (acme/frontend), payments (acme/payments)\n- Visto em: <TODAY>\n\n## Convenções (dica)\n\n- `pr-template-present` — Repositórios com template de PR (organization; conventions/pr-template-present.md) — não confirmada\n\n",
@@ -929,7 +929,7 @@
           "seen_at": "<TODAY>"
         }
       ],
-      "version": "2026.11.13",
+      "version": "<VERSION>",
       "warnings": []
     },
     "context_markdown": "## Serviços\n\n### `api` (`service:api`)\n\n- Página: services/api.md\n- Encontrado por: nome: api (pontuação 10)\n- Repositório: acme/api, acme/iac\n- Deployments: dev: dev-api; qa: qa-api\n- Entrega:\n  - Código: `acme/api`\n  - Pipelines: `Build` (`acme/api`), `Publish` (`acme/api`)\n  - Imagens: `acme/api`\n  - Configuração (GitOps): `acme/iac`\n  - dev: `dev-api` — cluster `cluster-dev`; sync `Synced`; health `Healthy`\n  - qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`\n- Donos: team-x (acme/team-x), platform (acme/platform)\n- Visto em: <TODAY>\n\n",

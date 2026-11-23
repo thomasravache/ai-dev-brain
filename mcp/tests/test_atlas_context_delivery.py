@@ -19,11 +19,11 @@ API_DELIVERY = {
     "pipelines": [{"id": "acme/api/build", "name": "Build", "repository": "acme/api"},
                   {"id": "acme/api/publish", "name": "Publish", "repository": "acme/api"}],
     "images": ["acme/api"],
-    "deployments": [
+    "deployments": [  # SPEC-0087 (Emenda v3): namespace do coletor argocd; access false sem access.clusters local
         {"id": "dev-api", "environments": ["dev"], "clusters": ["cluster-dev"], "sync_status": "Synced",
-         "health_status": "Healthy", "images": ["acme/api"]},
+         "health_status": "Healthy", "images": ["acme/api"], "namespace": "api-dev", "access": False},
         {"id": "qa-api", "environments": ["qa"], "clusters": ["cluster-qa"], "sync_status": "OutOfSync",
-         "health_status": "Degraded", "images": ["acme/api"]},
+         "health_status": "Degraded", "images": ["acme/api"], "namespace": "api-qa", "access": False},
     ],
 }
 PROCESS_TIMEOUT = 60
