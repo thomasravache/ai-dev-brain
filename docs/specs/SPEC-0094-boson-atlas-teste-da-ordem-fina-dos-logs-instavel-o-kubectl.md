@@ -4,7 +4,7 @@ title: "boson-atlas: teste da ordem fina dos logs instável (o kubectl falso rec
 tier: lite
 type: fix
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-23
 parent:
 depends_on: []
@@ -13,8 +13,8 @@ touches: [skills/boson-atlas/tests/fixtures/kubernetes/fake_kubectl.py, skills/b
 adrs: []
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0094 — boson-atlas: teste da ordem fina dos logs instável (o kubectl falso recalcula o agora a cada chamada)
@@ -64,6 +64,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
+- [ ] Red: UT-01 e IT-01 com a tag `SPEC-0094:<ID>`, falhando pelo motivo certo (o horário desloca entre chamadas)
+- [ ] Green: `now` fixo no cenário gravado por `install_kubectl` e usado pelo `kubectl` falso
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
