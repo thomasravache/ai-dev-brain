@@ -9,9 +9,9 @@ created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0090]
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0024]
 external: []
 size: S
@@ -118,6 +118,26 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
 - **Teste da SPEC-0086:** a checagem das chaves de `delivery_check` no template passa a aceitar chaves a mais (subconjunto), porque esta spec acrescenta quatro.
 - **Subseção:** no G6 do `gates.md`, a subseção se chama "Active verification (SPEC-0091)". Os vereditos aparecem com o exit ao lado, e a confirmação de produção vale por execução.
 - **SKILL.md:** a frase nova entra no parágrafo de `delivery_check` que já existe no passo 7.
+
+**Esclarecimentos (Emenda v3):**
+- **Foto antes do merge:**
+  - a seção H2 do `gates.md` diz que, com `delivery_check.verify: true`, a foto do G6 (passo 1 da verificação ativa) é tirada ali, antes do merge, inclusive com `h2_policy: auto-on-green`;
+  - o passo 6 da SKILL.md ganha uma oração apontando para isso;
+  - sem foto, o `compare` roda sem `--baseline`, e o veredito tende a `inconclusivo`.
+- **Versão da ferramenta:**
+  - o `touches` volta a ter `skills/gluon-spec/scripts/spec_graph.py`, mas só para subir o `SDD_TOOL_VERSION` para 2026.11.10;
+  - o CHANGELOG da gluon-spec ganha a seção datada `[2026.11.10]`, para o `whats-new` mostrar a mudança a quem já tem `delivery_check`.
+
+  Isto corrige a Emenda v2, que tirou o arquivo do `touches`.
+- **Rollout lento:** se `delivery` falhou só porque `rollout_complete` é falso, o agente roda o `compare` mais uma vez, depois de outra janela, antes de aplicar o veredito.
+- **`--expect-image`:**
+  - é a imagem do commit do merge achada no passo 2 do roteiro (repositório de configuração ou saída da pipeline);
+  - vai sem o host do registro, com `:tag` e/ou `@digest`, de preferência o digest.
+- **Exits 2 e 3:**
+  - exit 3 vira "verificação ativa não executada: sem configuração";
+  - exit 2 leva a corrigir os argumentos uma vez; se repetir, "não executada" com o motivo;
+  - nenhum dos dois bloqueia o G6.
+- **Passo 7 da SKILL.md:** a frase de produção diz "sugira o rollback; a pessoa decide", no lugar de reverter por conta própria.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -262,3 +282,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): `whats-new` só no primeiro nível; teste da SPEC-0086 aceita chaves a mais; nome da subseção; vereditos com exit; confirmação por execução; frase no parágrafo existente | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 3 | 2026-11-23 | Esclarecimentos (Emenda v3): foto no H2; `SDD_TOOL_VERSION` 2026.11.10 e seção datada (`spec_graph.py` volta ao `touches`); rollout lento; origem do `--expect-image`; exits 2 e 3; rollback só sugerido no passo 7 | Achados da rodada 1 do G4 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
