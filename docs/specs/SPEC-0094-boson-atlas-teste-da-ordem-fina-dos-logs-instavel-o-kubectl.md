@@ -82,7 +82,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 1): APPROVED — regressões determinísticas e vermelhas sem a correção (3/3); a correção cobre todos os placeholders e o --since; nenhum outro dublê com o mesmo padrão — 9c1941d | 2026-11-23 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 71e787e | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 9. Registro de Impedimentos
