@@ -337,7 +337,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — c2bbfa3 | 2026-11-22 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=49, skipped=1)) — 677c563 | 2026-11-23 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 0cb7f26 | 2026-11-23 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 4f9feb8 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 86b370c | 2026-11-23 |
 | G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major M1: o contexto do kubeconfig vaza quando o adaptador o ecoa (stderr, message, itens); minors: JSON muito aninhado dá traceback, --summary com zero itens, command relativo, campos do alvo sem restrição; nits: NaN, doc do ambiente | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
