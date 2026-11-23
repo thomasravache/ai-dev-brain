@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0088, SPEC-0089]
 consumes_contract: []
-contract_version: 4
+contract_version: 5
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/verify.md, skills/boson-atlas/references/probes.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0023, ADR-0024]
@@ -179,6 +179,21 @@ atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem>
   - o `--json` sempre traz as quatro chaves, com `suggestion` vazia fora de `degradou`.
 - **Probes:** o caminho do `probe` virou `run_probe`, sem mudar o comportamento. O `verify` chega aos adaptadores só por ele.
 
+**Esclarecimentos (Emenda v5):**
+- **`--out` fora do atlas por identidade:**
+  - a pasta pai e cada pasta acima dela são comparadas com a pasta do atlas pelo arquivo (mesmo `st_dev` e `st_ino`), não pelo texto do caminho;
+  - assim nem a caixa diferente (macOS) nem um link para dentro do atlas passam.
+- **Arquivo temporário:** a foto é gravada num temporário criado de forma exclusiva na pasta de destino (`mkstemp`), depois renomeado. Nunca segue um link existente.
+- **Probes cortadas não dão `ok`:**
+  - o `verify` pede as probes com o limite máximo de linhas;
+  - se a probe de `status` volta com `truncated`, `delivery` e `runtime` ficam `not_verified` ("probe de status cortada");
+  - se a de `events` volta cortada, `runtime` fica `not_verified`, salvo quando já está `failed`;
+  - se a de `logs` volta cortada, com ou sem itens, `logs` fica `not_verified` ("probe de logs cortada"), porque um pod pode não ter respondido ou erros antigos da janela podem ter ficado de fora.
+- **Imagem esperada:**
+  - `--expect-image` passa pela mesma normalização do adaptador: tira o primeiro segmento quando ele tem `.` ou `:` ou é `localhost`, e põe o digest em minúsculas;
+  - o `references/verify.md` avisa que o digest só casa quando o manifesto fixa o digest.
+- **Baseline de outro serviço ou ambiente:** exit 2 sem rodar probe, agora com teste.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -341,3 +356,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): logs cortados e sem item são `not_verified`; workload não encontrado é `failed`; o `verify` usa o caminho do `probe` | Achados do G4 da SPEC-0089 e planejamento | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 3 | 2026-11-23 | Esclarecimentos (Emenda v3): CH-01 em duas partes; só assinaturas `error`; foto sem amostra; chave dos avisos; restarts por pod; recusas viram `not_verified`; argumentos e janelas; chaves fechadas; validadores; sugestão sem comando | Perguntas do test-writer no G1 | SPEC-0091 | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 4 | 2026-11-23 | Esclarecimentos (Emenda v4): ordem das checagens; dependências das probes; quando `delivery` falha; chave dos avisos; leitura sem foto; contagem de erros; formato da saída; `run_probe` | Relatório do implementer no G2 | SPEC-0091 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 5 | 2026-11-23 | Esclarecimentos (Emenda v5): `--out` comparado por identidade; temporário exclusivo; probes cortadas viram `not_verified`; `--expect-image` normalizada; teste da baseline de outro serviço | Achados da rodada 1 do G4 | SPEC-0091 | thomas, 2026-11-23 (piloto automático com o recomendado) |
