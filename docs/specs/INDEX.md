@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **6 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 4, approved 1, in-progress 1, implemented 75
+- Specs: proposed 4, approved 1, implemented 76
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -29,18 +29,17 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0094  
+**Em andamento:** —  
 **Paradas por impedimento:** —  
 **Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0094 | boson-atlas: teste da ordem fina dos logs instável (o kubectl falso recalcula o agora a cada chamada) | lite/S | in-progress | 🔄 em andamento |  |
-| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 6d) | saiu da onda 1: arquivos em comum com SPEC-0094 |
+| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 6d) |  |
+| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 2 | SPEC-0092 | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
 | 3 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
 | 4 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
-| 5 | SPEC-0092 | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0094; saiu da onda 2: arquivos em comum com SPEC-0073; saiu da onda 3: arquivos em comum com SPEC-0083; saiu da onda 4: arquivos em comum com SPEC-0085 |
 
 ## Épicos
 
@@ -69,7 +68,6 @@ flowchart LR
   S0083["SPEC-0083<br/>boson-atlas: coletor de infraestrutura …"]:::proposed
   S0085["SPEC-0085<br/>boson-atlas: guardar o que o agente des…"]:::proposed
   S0092["SPEC-0092<br/>boson-atlas: máscara de segredos robust…"]:::proposed
-  S0094["SPEC-0094<br/>boson-atlas: teste da ordem fina dos lo…"]:::inprogress
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
@@ -192,7 +190,7 @@ flowchart LR
 | [SPEC-0091](SPEC-0091-gluon-spec-verificacao-ativa-no-g6-com-atlas-py-verify.md) | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | implemented | 2026-11-22 | SPEC-0075 | SPEC-0090 | — |
 | [SPEC-0092](SPEC-0092-boson-atlas-mascara-de-segredos-robusta-padroes-separados-e.md) | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite | fix | proposed | 2026-11-23 | — | — | — |
 | [SPEC-0093](SPEC-0093-photon-brain-uso-pelo-conector-e-em-sessao-na-nuvem-listas-a.md) | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | epic | feature | proposed | 2026-11-23 | — | — | — |
-| [SPEC-0094](SPEC-0094-boson-atlas-teste-da-ordem-fina-dos-logs-instavel-o-kubectl.md) | boson-atlas: teste da ordem fina dos logs instável (o kubectl falso recalcula o agora a cada chamada) | lite | fix | in-progress | 2026-11-23 | — | — | — |
+| [SPEC-0094](SPEC-0094-boson-atlas-teste-da-ordem-fina-dos-logs-instavel-o-kubectl.md) | boson-atlas: teste da ordem fina dos logs instável (o kubectl falso recalcula o agora a cada chamada) | lite | fix | implemented | 2026-11-23 | — | — | — |
 
 ## ADRs
 
