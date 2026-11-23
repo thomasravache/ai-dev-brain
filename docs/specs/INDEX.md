@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **5 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 3, approved 5, in-progress 1, implemented 70
+- Specs: proposed 3, approved 5, implemented 71
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -29,21 +29,20 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0087  
+**Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** —
+**Próximo lote:** SPEC-0088
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0087 | boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster | full/M | in-progress | 🔄 em andamento |  |
-| 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 6d) | saiu da onda 1: arquivos em comum com SPEC-0087 |
-| 3 | SPEC-0088 | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0087; saiu da onda 2: arquivos em comum com SPEC-0073 |
-| 4 | SPEC-0089 | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full/M | approved | ⛔ aguarda implementação de SPEC-0088 |  |
-| 5 | SPEC-0090 | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full/M | approved | ⛔ aguarda implementação de SPEC-0088; aguarda implementação de SPEC-0089 |  |
-| 6 | SPEC-0091 | gluon-spec: verificação ativa no G6 com atlas.py verify | full/S | approved | ⛔ aguarda implementação de SPEC-0090 |  |
-| 7 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo; saiu da onda 6: touches vazio, não roda em paralelo |
-| 8 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo; saiu da onda 6: touches vazio, não roda em paralelo; saiu da onda 7: touches vazio, não roda em paralelo |
+| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 6d) |  |
+| 2 | SPEC-0088 | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 3 | SPEC-0089 | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full/M | approved | ⛔ aguarda implementação de SPEC-0088 |  |
+| 4 | SPEC-0090 | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full/M | approved | ⛔ aguarda implementação de SPEC-0088; aguarda implementação de SPEC-0089 |  |
+| 5 | SPEC-0091 | gluon-spec: verificação ativa no G6 com atlas.py verify | full/S | approved | ⛔ aguarda implementação de SPEC-0090 |  |
+| 6 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo |
+| 7 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo; saiu da onda 6: touches vazio, não roda em paralelo |
 
 ## Épicos
 
@@ -57,7 +56,7 @@ Perfil: **minimo**
 | SPEC-0065 | gluon-spec: segurança como parte da spec e dos gates | proposed | 0/0 implementadas |
 | SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | implemented | 2/2 implementadas |
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
-| SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | approved | 0/3 implementadas |
+| SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | approved | 1/3 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | implemented | 3/3 implementadas |
 | SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
 
@@ -85,7 +84,7 @@ flowchart LR
     S0073["SPEC-0073<br/>Remoção dos nomes técnicos antigos na v…"]:::approved
   end
   subgraph E0075["SPEC-0075 · boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço"]
-    S0087["SPEC-0087<br/>boson-atlas: mapa de acesso — ambientes…"]:::inprogress
+    S0087["SPEC-0087<br/>boson-atlas: mapa de acesso — ambientes…"]:::implemented
     S0090["SPEC-0090<br/>boson-atlas: verify — foto antes do mer…"]:::approved
     S0091["SPEC-0091<br/>gluon-spec: verificação ativa no G6 com…"]:::approved
   end
@@ -199,7 +198,7 @@ flowchart LR
 | [SPEC-0084](SPEC-0084-boson-atlas-contas-de-nuvem-operacao-fornecedores-e-ciclo-de.md) | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | epic | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0085](SPEC-0085-boson-atlas-guardar-o-que-o-agente-descobre-notas-propostas.md) | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0086](SPEC-0086-boson-atlas-e-gluon-spec-caminho-de-entrega-no-context-e-rot.md) | boson-atlas e gluon-spec: caminho de entrega no context e roteiro de verificação depois do merge | full | feature | implemented | 2026-11-20 | — | — | — |
-| [SPEC-0087](SPEC-0087-boson-atlas-mapa-de-acesso-ambientes-marcados-workloads-e-ac.md) | boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster | full | feature | in-progress | 2026-11-22 | SPEC-0075 | — | — |
+| [SPEC-0087](SPEC-0087-boson-atlas-mapa-de-acesso-ambientes-marcados-workloads-e-ac.md) | boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster | full | feature | implemented | 2026-11-22 | SPEC-0075 | — | — |
 | [SPEC-0088](SPEC-0088-boson-atlas-nucleo-do-probe-contrato-de-adaptador-verbos-per.md) | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full | feature | approved | 2026-11-22 | SPEC-0030 | — | SPEC-0087@3 |
 | [SPEC-0089](SPEC-0089-boson-atlas-adaptador-de-probe-de-runtime-kubernetes-estado.md) | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full | feature | approved | 2026-11-22 | SPEC-0030 | SPEC-0088 | — |
 | [SPEC-0090](SPEC-0090-boson-atlas-verify-foto-antes-do-merge-comparacao-depois-do.md) | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0088, SPEC-0089 | — |

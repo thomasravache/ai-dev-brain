@@ -4,7 +4,7 @@ title: "boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso l
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: []
@@ -258,7 +258,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — e5bbfe9 | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 070a48a | 2026-11-23 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-23 — verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 1): APROVADO — sem blocker/major; 1 minor (nome com \n final passa no HOST_RE, já existente) e 2 nits registrados no Relatório de Entrega — fbf77b6
