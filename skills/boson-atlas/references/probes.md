@@ -9,6 +9,8 @@
 - saída validada, limitada e mascarada;
 - um registro local de cada probe, sem o resultado, e nada gravado no atlas.
 
+Para verificar uma entrega depois do deploy (foto antes do merge, comparação depois e um veredito), use o `verify`, que roda estas mesmas probes: `references/verify.md` (SPEC-0090).
+
 ## Configuração (`probes:` na camada local)
 
 Fica no `config.yml` desta máquina, junto das credenciais por nome (na forma de vários atlas, dentro da entrada do atlas). Nunca vai para o `atlas-config.yml`: é esta máquina que tem o acesso.

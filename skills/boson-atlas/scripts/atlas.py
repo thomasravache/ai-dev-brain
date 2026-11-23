@@ -9,7 +9,8 @@ init creates the atlas structure from assets/ (or, with --join, only the local l
 configuration with the origin of each value; doctor reports what is configured, what works and what is missing,
 looking only at files, shutil.which and os.environ (never at a variable's value).
 run_collector is the only function allowed to run an external process (SPEC-0033); it also runs the probe
-adapters of `probe` (SPEC-0088, ADR-0023: off by default, allowed verbs, confirmed production, local log).
+adapters of `probe` (SPEC-0088, ADR-0023: off by default, allowed verbs, confirmed production, local log), also
+the only route of `verify` (SPEC-0090, ADR-0024: snapshot outside the atlas, compare with a verdict).
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.16"
+ATLAS_VERSION = "2026.11.17"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -4988,10 +4989,10 @@ def _probe_limits(args, probes) -> tuple:
     return lines, seconds
 
 
-def probe_target(atlas: Path, service: str, environment: str) -> dict:
-    """The deployment of service:<service> that runs_in environment:<environment>, from graph.json (the first by id
-    when there are several): {"deployment", "environment", "clusters", "namespace", "workloads"}. None found =
-    AtlasError (code 2) naming what was looked for."""
+def probe_targets(atlas: Path, service: str, environment: str) -> list:
+    """Every deployment of service:<service> that runs_in environment:<environment>, from graph.json, sorted by id:
+    [{"deployment", "environment", "clusters", "cluster_ids", "namespace", "workloads", "config_repositories"}].
+    None found = AtlasError (code 2) naming what was looked for."""
     graph = read_json_file(atlas / GRAPH_FILE)
     if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list) or not isinstance(
             graph.get("edges"), list):
@@ -5011,15 +5012,19 @@ def probe_target(atlas: Path, service: str, environment: str) -> dict:
     if not found:
         raise AtlasError(f"nenhum deployment de service:{service} em environment:{environment} no atlas (veja "
                          "`context` ou rode scan e build)", 2)
-    deployment, eid = found[0]
-    attrs = index.nodes.get(deployment, {}).get("attrs", {})
-    clusters = index.targets(deployment, "runs_in", "cluster")
-    workloads = attrs.get("workloads") if isinstance(attrs.get("workloads"), list) else []
-    return {"deployment": deployment.split(":", 1)[1], "environment": eid,
-            "clusters": sorted({index.name(c) for c in clusters}),
-            "cluster_ids": {index.name(c): c.split(":", 1)[1] for c in clusters},
-            "namespace": attrs["namespace"] if isinstance(attrs.get("namespace"), str) else "",
-            "workloads": sorted({str(w) for w in workloads if isinstance(w, str) and w})}
+    targets = []
+    for deployment, eid in found:
+        attrs = index.nodes.get(deployment, {}).get("attrs", {})
+        clusters = index.targets(deployment, "runs_in", "cluster")
+        workloads = attrs.get("workloads") if isinstance(attrs.get("workloads"), list) else []
+        repositories = index.targets(deployment, "sourced_from", "repository")
+        targets.append({"deployment": deployment.split(":", 1)[1], "environment": eid,
+                        "clusters": sorted({index.name(c) for c in clusters}),
+                        "cluster_ids": {index.name(c): c.split(":", 1)[1] for c in clusters},
+                        "namespace": attrs["namespace"] if isinstance(attrs.get("namespace"), str) else "",
+                        "workloads": sorted({str(w) for w in workloads if isinstance(w, str) and w}),
+                        "config_repositories": sorted(r.split(":", 1)[1] for r in repositories)})
+    return targets
 
 
 def _adapter_failure(aid, step, error: CollectorError, extras) -> AtlasError:
@@ -5186,7 +5191,11 @@ def print_probe(result: dict, request: dict, summary: bool) -> None:
         print(f"mensagem: {result['message']}")
 
 
-def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> int:
+def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list, deployment=None) -> dict:
+    """One probe through the core (the protections of SPEC-0088), without printing: {"result", "message", "extras",
+    "request_view", "aid"}; result["status"] is "ok" or "error". `deployment` picks that deployment of the service in
+    the environment (verify, SPEC-0090); None = the first by id, as `probe` does. Refusals and failures raise
+    AtlasError with the exit code of `probe`."""
     for what, value in (("capacidade", args.capability), ("verbo", args.verb)):
         if not PROBE_WORD_RE.match(value):
             raise AtlasError(f"{what} inválido — use uma palavra minúscula, sem espaço (letras, dígitos, - e _)", 2)
@@ -5200,7 +5209,10 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
     extras = probe_extras(shared)
     extras_box[:] = extras
     tiers = validate_environments(shared.get("environments"))
-    target = probe_target(atlas, args.service, args.env)
+    targets = probe_targets(atlas, args.service, args.env)
+    target = next((t for t in targets if t["deployment"] == deployment), None) if deployment else targets[0]
+    if target is None:
+        raise AtlasError(f"deployment {deployment} não é de service:{args.service} em environment:{args.env}", 2)
     problem = target_problem(target, args.service)
     if problem:  # checked before any process runs, --describe included (Emenda v4)
         raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
@@ -5245,14 +5257,13 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
     if problems:
         raise _contract_failure(aid, "a saída", problems, extras)
     message = probe_mask(str(data.get("message") or ""), extras)[:PROBE_MESSAGE_MAX]
+    request_view = {"capability": args.capability, "verb": args.verb, "service": args.service,
+                    "environment": args.env, "deployment": target["deployment"]}
+    outcome = {"message": message, "extras": extras, "request_view": request_view, "aid": aid}
     if data["status"] == "error":
-        if args.json:
-            result = {key: data[key] for key in ("contract", "adapter", "capability", "verb", "status")}
-            # the message is already masked: masking it again would put a marker inside a marker (Emenda v6)
-            print(json.dumps(dict(probe_mask(result, extras), items=[], truncated=False, message=message),
-                             ensure_ascii=False, indent=2, allow_nan=False))
-        print(f"erro: adaptador {aid} respondeu com erro: {message or '(sem mensagem)'}", file=sys.stderr)
-        return 1
+        result = {key: data[key] for key in ("contract", "adapter", "capability", "verb", "status")}
+        # the message is already masked: masking it again would put a marker inside a marker (Emenda v6)
+        return dict(outcome, result=dict(probe_mask(result, extras), items=[], truncated=False, message=message))
     items = probe_mask(data["items"], extras)
     truncated = bool(data["truncated"]) or len(items) > lines
     items = items[:lines]
@@ -5265,13 +5276,28 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
               "truncated": truncated}
     if message:
         result["message"] = message
-    request_view = {"capability": args.capability, "verb": args.verb, "service": args.service,
-                    "environment": args.env, "deployment": target["deployment"]}
-    if args.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
-    else:
-        print_probe(result, request_view, args.summary)
-    return 0
+    return dict(outcome, result=result)
+
+
+def run_probe(args, name: str, probes: dict, entry: dict, deployment=None) -> dict:
+    """_probe_query with its line in probes.log (written whatever the outcome, ADR-0023): the one path of `probe`
+    and `verify` to an adapter. Raises the AtlasError of a refusal or failure after logging it."""
+    record = {"atlas": name, "service": args.service, "environment": args.env, "capability": args.capability,
+              "verb": args.verb, "adapter": "", "confirmed_production": bool(args.confirm_production)}
+    extras_box = list(PROBE_PATTERNS)  # _probe_query adds redaction.extra_patterns once the atlas is read
+    code = 1
+    try:
+        outcome = _probe_query(args, record, probes, entry, extras_box, deployment)
+        code = 0 if outcome["result"]["status"] == "ok" else 1
+        return outcome
+    except AtlasError as e:
+        code = e.code
+        raise
+    finally:
+        record["status"] = {0: "ok", 1: "error", 2: "invalid", 4: "refused"}.get(code, "error")
+        record["exit"] = code
+        record["at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        write_probe_log(record, extras_box)
 
 
 def cmd_probe(args):
@@ -5285,21 +5311,558 @@ def cmd_probe(args):
     probes = validate_probes(entry.get("probes"))
     if not probes or not probes["enabled"]:
         raise AtlasError(PROBES_OFF, 4)
-    record = {"atlas": name, "service": args.service, "environment": args.env, "capability": args.capability,
-              "verb": args.verb, "adapter": "", "confirmed_production": bool(args.confirm_production)}
-    extras_box = list(PROBE_PATTERNS)  # _probe adds redaction.extra_patterns once the atlas is read
-    code = 1
+    outcome = run_probe(args, name, probes, entry)
+    result, message = outcome["result"], outcome["message"]
+    if result["status"] == "error":
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+        print(f"erro: adaptador {outcome['aid']} respondeu com erro: {message or '(sem mensagem)'}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+    else:
+        print_probe(result, outcome["request_view"], args.summary)
+    return 0
+
+
+# ---------------------------------------------------------------- verify (references/verify.md, ADR-0024)
+
+VERIFY_CONTRACT = "verify@1"
+VERIFY_CHECKS = ("delivery", "runtime", "logs")
+VERIFY_STATUSES = ("ok", "failed", "not_verified")
+VERDICT_EXITS = {"passou": 0, "degradou": 1, "inconclusivo": 5}
+VERIFY_SNAPSHOT_KEYS = ("contract", "service", "environment", "taken_at", "deployments", "not_verified")
+VERIFY_DEPLOYMENT_KEYS = ("images", "ready", "desired", "restarts", "warnings", "error_signatures")
+VERIFY_NOT_VERIFIED_KEYS = ("deployment", "check", "reason")
+VERIFY_RESULT_KEYS = ("contract", "verdict", "checks", "suggestion")
+VERIFY_CHECK_KEYS = ("deployment", "check", "status", "evidence", "reason")
+VERIFY_SINCE, VERIFY_WINDOW = "30m", "10m"
+VERIFY_VERBS = ("status", "events", "logs")
+ISO_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)\Z")
+# the expected image: the normalized path (no registry host, SPEC-0082) with ":<tag>" and/or "@<digest>"
+EXPECT_IMAGE_RE = re.compile(r"^(?P<path>[a-z0-9][a-z0-9._/-]*[a-z0-9]|[a-z0-9])"
+                             r"(?::(?P<tag>[A-Za-z0-9_][A-Za-z0-9._-]{0,127}))?"
+                             r"(?:@(?P<digest>[A-Za-z0-9_+.-]+:[A-Fa-f0-9]{16,}))?\Z")
+LIMIT_RE = re.compile(r"^\d{1,6}\Z")
+NO_BASELINE = "sem foto de antes: erros novos e antigos não se separam"
+NO_POD = "nenhum pod respondeu (probe de logs cortada e sem linha)"
+# the suggestion of `degradou` never carries a command (Emenda v3): checked before it is printed
+SUGGESTION_COMMAND_RE = re.compile(r"\bkubectl\b|\bargocd\b|\bhelm\b|\bgit (?:revert|push|reset|checkout)\b|^\s*\$ ",
+                                   re.MULTILINE)
+
+
+def _verify_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _verify_text(value) -> bool:
+    return isinstance(value, str) and bool(value)
+
+
+def validate_verify_snapshot(data) -> list:
+    """Problems of a snapshot file (verify@1, SPEC-0090); [] = valid. Closed keys at every level."""
+    if not isinstance(data, dict):
+        return ["a foto precisa ser um objeto JSON"]
+    problems = _closed_keys(data, VERIFY_SNAPSHOT_KEYS, VERIFY_SNAPSHOT_KEYS)
+    if data.get("contract") != VERIFY_CONTRACT:
+        problems.append(f"contract precisa ser {VERIFY_CONTRACT}")
+    for key in ("service", "environment"):
+        if key in data and not _verify_text(data[key]):
+            problems.append(f"{key} precisa ser um texto não vazio")
+    if "taken_at" in data and not (isinstance(data["taken_at"], str) and ISO_UTC_RE.match(data["taken_at"])):
+        problems.append("taken_at precisa ser uma data ISO em UTC (2026-11-23T10:00:00Z)")
+    deployments = data.get("deployments")
+    if "deployments" in data and not isinstance(deployments, dict):
+        problems.append("deployments precisa ser um mapa <deployment>: {...}")
+    for name, entry in (deployments.items() if isinstance(deployments, dict) else ()):
+        where = f"deployments.{_show(name)}"
+        if not isinstance(entry, dict):
+            problems.append(f"{where} precisa ser um objeto")
+            continue
+        problems += _closed_keys(entry, VERIFY_DEPLOYMENT_KEYS, VERIFY_DEPLOYMENT_KEYS, where)
+        if "images" in entry and not (isinstance(entry["images"], list)
+                                      and all(_verify_text(i) for i in entry["images"])):
+            problems.append(f"{where}.images precisa ser uma lista de textos")
+        for key in ("ready", "desired"):
+            if key in entry and not _verify_int(entry[key]):
+                problems.append(f"{where}.{key} precisa ser um inteiro >= 0")
+        for key in ("restarts", "error_signatures"):
+            value = entry.get(key)
+            if key in entry and not (isinstance(value, dict)
+                                     and all(_verify_text(k) and _verify_int(v) for k, v in value.items())):
+                problems.append(f"{where}.{key} precisa ser um mapa <texto>: <inteiro >= 0>")
+        if "warnings" in entry and not (isinstance(entry["warnings"], list)
+                                        and all(_verify_text(w) and "|" in w for w in entry["warnings"])):
+            problems.append(f"{where}.warnings precisa ser uma lista de \"<motivo>|<objeto>\"")
+    not_verified = data.get("not_verified")
+    if "not_verified" in data and not isinstance(not_verified, list):
+        problems.append("not_verified precisa ser uma lista")
+    for position, item in enumerate(not_verified if isinstance(not_verified, list) else [], 1):
+        where = f"not_verified[{position}]"
+        if not isinstance(item, dict):
+            problems.append(f"{where} precisa ser um objeto")
+            continue
+        problems += _closed_keys(item, VERIFY_NOT_VERIFIED_KEYS, VERIFY_NOT_VERIFIED_KEYS, where)
+        if "deployment" in item and not _verify_text(item["deployment"]):
+            problems.append(f"{where}.deployment precisa ser um texto não vazio")
+        if "check" in item and item["check"] not in VERIFY_CHECKS:
+            problems.append(f"{where}.check precisa ser um de: {', '.join(VERIFY_CHECKS)}")
+        if "reason" in item and not _verify_text(item["reason"]):
+            problems.append(f"{where}.reason precisa ser um texto não vazio")
+    return problems
+
+
+def verdict_of(statuses) -> str:
+    """degradou when one check failed; else inconclusivo when one was not verified; else passou."""
+    statuses = set(statuses)
+    return "degradou" if "failed" in statuses else "inconclusivo" if "not_verified" in statuses else "passou"
+
+
+def validate_verify_result(data) -> list:
+    """Problems of the output of `verify compare --json` (verify@1, SPEC-0090); [] = valid: closed keys, the verdict
+    by the rule, reason in every not_verified, a suggestion only in degradou and never with a command."""
+    if not isinstance(data, dict):
+        return ["a saída precisa ser um objeto JSON"]
+    problems = _closed_keys(data, VERIFY_RESULT_KEYS, VERIFY_RESULT_KEYS)
+    if data.get("contract") != VERIFY_CONTRACT:
+        problems.append(f"contract precisa ser {VERIFY_CONTRACT}")
+    if "verdict" in data and data["verdict"] not in VERDICT_EXITS:
+        problems.append(f"verdict precisa ser um de: {', '.join(VERDICT_EXITS)}")
+    checks = data.get("checks")
+    if not isinstance(checks, list) or not checks:
+        return problems + ["checks precisa ser uma lista não vazia"]
+    for position, item in enumerate(checks, 1):
+        where = f"checks[{position}]"
+        if not isinstance(item, dict):
+            problems.append(f"{where} precisa ser um objeto")
+            continue
+        problems += _closed_keys(item, VERIFY_CHECK_KEYS, ("deployment", "check", "status", "evidence"), where)
+        if "deployment" in item and not _verify_text(item["deployment"]):
+            problems.append(f"{where}.deployment precisa ser um texto não vazio")
+        if "check" in item and item["check"] not in VERIFY_CHECKS:
+            problems.append(f"{where}.check precisa ser um de: {', '.join(VERIFY_CHECKS)}")
+        if "status" in item and item["status"] not in VERIFY_STATUSES:
+            problems.append(f"{where}.status precisa ser um de: {', '.join(VERIFY_STATUSES)}")
+        if "evidence" in item and not isinstance(item["evidence"], dict):
+            problems.append(f"{where}.evidence precisa ser um objeto")
+        if "reason" in item and not isinstance(item["reason"], str):
+            problems.append(f"{where}.reason precisa ser um texto")
+        if item.get("status") == "not_verified" and not _verify_text(item.get("reason")):
+            problems.append(f"{where}: not_verified precisa de reason")
+    statuses = [item.get("status") for item in checks if isinstance(item, dict)]
+    if data.get("verdict") in VERDICT_EXITS and data["verdict"] != verdict_of(statuses):
+        problems.append(f"verdict fora da regra (failed > not_verified > ok: {verdict_of(statuses)})")
+    suggestion = data.get("suggestion")
+    if "suggestion" in data and not isinstance(suggestion, str):
+        problems.append("suggestion precisa ser um texto")
+    elif data.get("verdict") == "degradou" and not (suggestion or "").strip():
+        problems.append("degradou precisa de suggestion")
+    elif data.get("verdict") != "degradou" and suggestion:
+        problems.append("suggestion só em degradou")
+    elif suggestion and SUGGESTION_COMMAND_RE.search(suggestion):
+        problems.append("suggestion não pode trazer comando")
+    return problems
+
+
+def parse_image_ref(value) -> tuple:
+    """(path, tag, digest) of an image reference as the adapters give it ("<path>[:<tag>][@<digest>]")."""
+    path, _, digest = str(value).partition("@")
+    tag = ""
+    if path.rfind(":") > path.rfind("/"):
+        path, tag = path.rsplit(":", 1)
+    return path, tag, digest
+
+
+def image_matches(image, expected: tuple) -> bool:
+    """True when a pod image is the expected one: the same path and the digest, when given; else the tag."""
+    path, tag, digest = parse_image_ref(image)
+    want_path, want_tag, want_digest = expected
+    if path != want_path:
+        return False
+    return digest == want_digest if want_digest else tag == want_tag
+
+
+def _verify_duration(value, option) -> int:
+    seconds = parse_duration(value)
+    if seconds is None or seconds > PROBE_SINCE_MAX:
+        raise AtlasError(f"{option} inválido — use uma duração como 10m ou 2h, até 24h", 2)
+    return seconds
+
+
+def _verify_limit(value, option) -> int:
+    if not isinstance(value, str) or not LIMIT_RE.match(value.strip()):
+        raise AtlasError(f"{option} precisa ser um número inteiro >= 0", 2)
+    return int(value)
+
+
+def _inside(path: Path, folder: Path) -> bool:
     try:
-        code = _probe(args, record, probes, entry, extras_box)
-        return code
-    except AtlasError as e:
-        code = e.code
-        raise
-    finally:
-        record["status"] = {0: "ok", 1: "error", 2: "invalid", 4: "refused"}.get(code, "error")
-        record["exit"] = code
-        record["at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        write_probe_log(record, extras_box)
+        path.relative_to(folder)
+        return True
+    except ValueError:
+        return False
+
+
+def _verify_out(value, atlas: Path) -> Path:
+    """The --out of the snapshot, resolved (.., symlinks): never inside the atlas folder (ADR-0024), exit 2."""
+    out = Path(os.path.expanduser(str(value))).resolve()
+    if _inside(out, Path(atlas).expanduser().resolve()):
+        raise AtlasError("--out dentro da pasta do atlas: a foto é um arquivo da tarefa, fora do atlas "
+                         "(references/verify.md)", 2)
+    if out.is_dir():
+        raise AtlasError("--out é uma pasta: indique o arquivo da foto", 2)
+    if not out.parent.is_dir():
+        raise AtlasError("--out numa pasta que não existe: crie a pasta da tarefa antes", 2)
+    return out
+
+
+def _verify_baseline(value, service: str, environment: str) -> dict:
+    """The --baseline file, read and validated (verify@1) for this service and environment; else exit 2."""
+    path = Path(os.path.expanduser(str(value)))
+    if not path.is_file():
+        raise AtlasError("--baseline não encontrado: indique a foto gravada pelo verify snapshot", 2)
+    try:
+        data = json.loads(read_text(path), parse_constant=_reject_constant)
+    except (ValueError, RecursionError):
+        raise AtlasError(f"--baseline não é JSON válido (contrato {VERIFY_CONTRACT})", 2) from None
+    problems = validate_verify_snapshot(data)
+    if problems:
+        raise AtlasError(f"--baseline fora do contrato {VERIFY_CONTRACT} — {'; '.join(problems[:10])}", 2)
+    if (data["service"], data["environment"]) != (service, environment):
+        raise AtlasError("--baseline é a foto de outro serviço ou ambiente", 2)
+    return data
+
+
+def _verify_setup(args) -> dict:
+    """What both phases need before any probe: the chosen atlas (exit 3 without configuration), the probes on (exit
+    4), --env/--service by the name rule, the deployments of the service in the environment (exit 2), and production
+    only with --confirm-production (exit 4: no query runs)."""
+    config, name, _ = chosen_atlas(choice=args.atlas)
+    entry = config["entries"][name]
+    probes = validate_probes(entry.get("probes"))
+    if not probes or not probes["enabled"]:
+        raise AtlasError(PROBES_OFF, 4)
+    for what, value in (("--service", args.service), ("--env", args.env)):
+        if not ENVIRONMENT_NAME_RE.match(value):
+            raise AtlasError(f"{what} inválido — use um nome do atlas (letras, dígitos, . _ -, sem espaço, sem "
+                             "começar com -)", 2)
+    atlas, shared = scan_config(args.atlas)
+    return {"name": name, "entry": entry, "probes": probes, "atlas": atlas, "shared": shared}
+
+
+def _verify_targets(setup, args) -> list:
+    tiers = validate_environments(setup["shared"].get("environments"))
+    targets = probe_targets(setup["atlas"], args.service, args.env)
+    for target in targets:
+        problem = target_problem(target, args.service)
+        if problem:
+            raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
+        if tiers.get(target["environment"]) != "test" and not args.confirm_production:
+            raise AtlasError(f"ambiente {args.env} é de produção ou sem marcação: confirme com a pessoa e use "
+                             "--confirm-production", 4)
+    return targets
+
+
+def _verify_observe(setup, args, target, window: str) -> dict:
+    """The 3 probes of one deployment (status, events, logs --summary), each by run_probe (the path, protections,
+    mask and log of `probe`): {verb: {"result"} | {"reason"}}. A refusal, failure or answer with error becomes the
+    reason (the check is not verified), never a pass."""
+    seen = {}
+    for verb in VERIFY_VERBS:
+        query = argparse.Namespace(capability="runtime", verb=verb, service=args.service, env=args.env,
+                                   since=window, lines=None, summary=verb == "logs",
+                                   confirm_production=args.confirm_production, atlas=args.atlas, json=True)
+        try:
+            outcome = run_probe(query, setup["name"], setup["probes"], setup["entry"], target["deployment"])
+        except AtlasError as e:
+            seen[verb] = {"reason": f"probe {verb}: {e}"}
+            continue
+        result = outcome["result"]
+        if result["status"] != "ok":
+            seen[verb] = {"reason": f"probe {verb} respondeu com erro: {outcome['message'] or '(sem mensagem)'}"}
+        else:
+            seen[verb] = {"result": result}
+    return seen
+
+
+def _owner_names(target, pods) -> tuple:
+    """({pod: workload name}, workload names) of a deployment: the owner of each object of a warning."""
+    owner = {}
+    names = {w.split("/", 1)[1] for w in target["workloads"] if "/" in w}
+    for pod in pods:
+        workload = pod.get("workload")
+        if isinstance(workload, str) and "/" in workload:
+            names.add(workload.split("/", 1)[1])
+            if isinstance(pod.get("pod"), str):
+                owner[pod["pod"]] = workload.split("/", 1)[1]
+    return owner, names
+
+
+def warning_key(event: dict, owner: dict, names) -> str:
+    """"<reason>|<Kind>/<name>" with a pod (or ReplicaSet) name replaced by the workload that owns it (Emenda v3):
+    the same reason on another pod of the workload is the same warning."""
+    reason = str(event.get("reason") or "")
+    kind, _, name = str(event.get("object") or "").partition("/")
+    if name in owner:
+        name = owner[name]
+    else:
+        name = max((n for n in names if name == n or name.startswith(n + "-")), key=len, default=name)
+    return f"{reason}|{kind}/{name}"
+
+
+def _status_parts(seen) -> tuple:
+    """(workloads, pods) of the status probe; ([], []) when it did not answer."""
+    items = seen["status"]["result"]["items"] if "result" in seen["status"] else []
+    workloads = [i for i in items if isinstance(i, dict) and i.get("kind") == "workload"]
+    pods = [i for i in items if isinstance(i, dict) and i.get("kind") == "pod"]
+    return workloads, pods
+
+
+def _observed(target, seen) -> dict:
+    """The state of one deployment as the snapshot keeps it (no log line, only signatures and counts)."""
+    workloads, pods = _status_parts(seen)
+    owner, names = _owner_names(target, pods)
+    images = sorted({str(i) for pod in pods for i in (pod.get("images") or []) if isinstance(i, str) and i})
+    restarts = {}
+    for pod in pods:
+        if isinstance(pod.get("pod"), str) and pod["pod"]:
+            restarts[pod["pod"]] = pod["restarts"] if _verify_int(pod.get("restarts")) else 0
+    events = seen["events"]["result"]["items"] if "result" in seen["events"] else []
+    warnings = sorted({warning_key(e, owner, names) for e in events if isinstance(e, dict) and e.get("reason")})
+    signatures = {}
+    for group in (seen["logs"]["result"]["items"] if "result" in seen["logs"] else []):
+        if isinstance(group, dict) and group.get("level") == "error" and isinstance(group.get("signature"), str):
+            signatures[group["signature"]] = signatures.get(group["signature"], 0) + int(group.get("count") or 0)
+    return {"images": images,
+            "ready": sum(w["ready"] for w in workloads if w.get("found") is not False and _verify_int(w.get("ready"))),
+            "desired": sum(w["desired"] for w in workloads
+                           if w.get("found") is not False and _verify_int(w.get("desired"))),
+            "restarts": restarts, "warnings": warnings, "error_signatures": signatures}
+
+
+def _logs_problem(seen):
+    """Why the logs of one observation cannot be used, or None."""
+    if "reason" in seen["logs"]:
+        return seen["logs"]["reason"]
+    result = seen["logs"]["result"]
+    if result["truncated"] and not result["items"]:
+        return NO_POD
+    return None
+
+
+def cmd_verify_snapshot(args) -> int:
+    """verify snapshot (SPEC-0090, ADR-0024): the photo of a service in an environment before the merge, in a task
+    file outside the atlas."""
+    setup = _verify_setup(args)
+    out = _verify_out(args.out, setup["atlas"])
+    window = args.since or VERIFY_SINCE
+    _verify_duration(window, "--since")
+    targets = _verify_targets(setup, args)
+    deployments, not_verified = {}, []
+    for target in targets:
+        seen = _verify_observe(setup, args, target, window)
+        deployments[target["deployment"]] = _observed(target, seen)
+        missing = []
+        if "reason" in seen["status"]:
+            missing += [("delivery", seen["status"]["reason"]), ("runtime", seen["status"]["reason"])]
+        elif "reason" in seen["events"]:
+            missing.append(("runtime", seen["events"]["reason"]))
+        if _logs_problem(seen):
+            missing.append(("logs", _logs_problem(seen)))
+        not_verified += [{"deployment": target["deployment"], "check": check, "reason": reason}
+                         for check, reason in missing]
+    photo = {"contract": VERIFY_CONTRACT, "service": args.service, "environment": args.env,
+             "taken_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             "deployments": deployments, "not_verified": not_verified}
+    problems = validate_verify_snapshot(photo)
+    if problems:  # never written out of the contract
+        raise AtlasError(f"foto fora do contrato {VERIFY_CONTRACT} — {'; '.join(problems[:10])}", 1)
+    write_atomic(out, json.dumps(photo, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    print(f"foto {VERIFY_CONTRACT} gravada em {out}: {args.service} em {args.env}, {len(deployments)} deployment(s), "
+          f"{len(not_verified)} verificação(ões) não feita(s)")
+    for item in not_verified:
+        print(f"- não verificado: {item['deployment']} · {item['check']} — {item['reason']}")
+    print("a foto é da tarefa: apague o arquivo no fim (references/verify.md)")
+    return 0
+
+
+def _check(deployment, check, status, evidence, reason) -> dict:
+    return {"deployment": deployment, "check": check, "status": status, "evidence": evidence, "reason": reason}
+
+
+def _delivery_check(target, seen, expect: str) -> dict:
+    deployment = target["deployment"]
+    if "reason" in seen["status"]:
+        return _check(deployment, "delivery", "not_verified", {"expected": expect}, seen["status"]["reason"])
+    expected = parse_image_ref(expect)
+    workloads, pods = _status_parts(seen)
+    missing = sorted(str(w.get("workload")) for w in workloads if w.get("found") is False)
+    complete = bool(workloads) and all(w.get("rollout_complete") is True for w in workloads)
+    ready = [p for p in pods if p.get("ready") is True]
+    other = [{"pod": str(p.get("pod")), "images": [str(i) for i in (p.get("images") or [])]} for p in ready
+             if not any(image_matches(i, expected) for i in (p.get("images") or []))]
+    evidence = {"expected": expect, "rollout_complete": complete, "ready_pods": len(ready),
+                "pods_with_other_image": other, "workloads_not_found": missing}
+    reasons = []
+    if missing:
+        reasons.append(f"workload não encontrado: {', '.join(missing)}")
+    if not workloads:
+        reasons.append("a probe de status não trouxe o workload")
+    elif not complete:
+        reasons.append("rollout não concluído")
+    if not ready:
+        reasons.append("nenhum pod pronto")
+    if other:
+        reasons.append(f"{len(other)} pod(s) pronto(s) com outra imagem")
+    if reasons:
+        return _check(deployment, "delivery", "failed", evidence, "; ".join(reasons))
+    return _check(deployment, "delivery", "ok", evidence, f"{len(ready)} pod(s) pronto(s) com {expect}")
+
+
+def _baseline_entry(baseline, deployment, check):
+    """The snapshot entry of a deployment usable for `check`, or None (no photo, deployment absent from it, or
+    that check not verified in it)."""
+    if not baseline or deployment not in baseline["deployments"]:
+        return None
+    if any(i["deployment"] == deployment and i["check"] == check for i in baseline["not_verified"]):
+        return None
+    return baseline["deployments"][deployment]
+
+
+def _runtime_check(target, seen, baseline, max_restarts: int) -> dict:
+    deployment = target["deployment"]
+    if "reason" in seen["status"]:
+        return _check(deployment, "runtime", "not_verified", {}, seen["status"]["reason"])
+    workloads, pods = _status_parts(seen)
+    before = _baseline_entry(baseline, deployment, "runtime") or {"restarts": {}, "warnings": []}
+    now = _observed(target, seen)
+    missing = sorted(str(w.get("workload")) for w in workloads if w.get("found") is False)
+    not_ready = sorted(str(p.get("pod")) for p in pods if p.get("ready") is not True)
+    new_restarts = {}
+    for pod, count in now["restarts"].items():
+        extra = count - before["restarts"].get(pod, 0)
+        if extra > 0:
+            new_restarts[pod] = extra
+    total = sum(new_restarts.values())
+    evidence = {"workloads_not_found": missing, "not_ready_pods": not_ready, "new_restarts": new_restarts,
+                "new_restarts_total": total, "max_new_restarts": max_restarts,
+                "baseline": "foto" if _baseline_entry(baseline, deployment, "runtime") else "sem foto (desde 0)"}
+    reasons = []
+    if missing:
+        reasons.append(f"workload não encontrado: {', '.join(missing)}")
+    if not workloads:
+        reasons.append("a probe de status não trouxe o workload")
+    if not_ready:
+        reasons.append(f"{len(not_ready)} pod(s) não pronto(s)")
+    if total > max_restarts:
+        reasons.append(f"{total} restart(s) novo(s), acima de {max_restarts}")
+    if "reason" in seen["events"]:
+        evidence["new_warnings"] = []
+        if reasons:
+            return _check(deployment, "runtime", "failed", evidence, "; ".join(reasons))
+        return _check(deployment, "runtime", "not_verified", evidence, seen["events"]["reason"])
+    new_warnings = [w for w in now["warnings"] if w not in set(before["warnings"])]
+    evidence["new_warnings"] = new_warnings
+    if new_warnings:
+        reasons.append(f"{len(new_warnings)} aviso(s) novo(s)")
+    if reasons:
+        return _check(deployment, "runtime", "failed", evidence, "; ".join(reasons))
+    return _check(deployment, "runtime", "ok", evidence, "pods prontos, sem restart nem aviso novo")
+
+
+def _logs_check(target, seen, baseline, max_errors: int, window_seconds: int) -> dict:
+    deployment = target["deployment"]
+    evidence = {"window_seconds": window_seconds, "max_new_errors": max_errors}
+    problem = _logs_problem(seen)
+    if problem:
+        return _check(deployment, "logs", "not_verified", evidence, problem)
+    if not baseline:
+        return _check(deployment, "logs", "not_verified", evidence, NO_BASELINE)
+    before = _baseline_entry(baseline, deployment, "logs")
+    if before is None:
+        return _check(deployment, "logs", "not_verified", evidence,
+                      "a foto não tem os logs deste deployment: erros novos e antigos não se separam")
+    now = _observed(target, seen)["error_signatures"]
+    new = {sig: count for sig, count in sorted(now.items()) if sig not in before["error_signatures"]}
+    evidence.update(new_error_signatures=new, known_error_signatures=len(now) - len(new),
+                    truncated=bool(seen["logs"]["result"]["truncated"]))
+    if len(new) > max_errors:
+        return _check(deployment, "logs", "failed", evidence,
+                      f"{len(new)} assinatura(s) de erro nova(s), acima de {max_errors}")
+    return _check(deployment, "logs", "ok", evidence, f"{len(new)} assinatura(s) de erro nova(s)")
+
+
+def verify_suggestion(targets) -> str:
+    """The fixed text of `degradou`: the person decides the rollback, through the configuration repository of the
+    delivery (SPEC-0086); never a command, never executed."""
+    repositories = sorted({r for t in targets for r in t["config_repositories"]})
+    where = (f"no repositório de configuração do delivery ({', '.join(repositories)})" if repositories
+             else "no repositório de configuração do delivery (não encontrado no atlas: veja o `context` do serviço)")
+    text = ("Degradou: mostre as evidências à pessoa e deixe que ela decida se volta a versão anterior. O rollback, "
+            f"se ela decidir, é feito {where}, pelo fluxo de mudança do time. O verify não executa nenhuma ação "
+            "no ambiente.")
+    return "" if SUGGESTION_COMMAND_RE.search(text) else text
+
+
+def print_verify(result: dict, args) -> None:
+    print(f"# verify — {args.service} em {args.env}: {result['verdict']}")
+    print()
+    print(f"Imagem esperada: `{args.expect_image}`.")
+    print()
+    print("| Deployment | Verificação | Status | Motivo |")
+    print("|---|---|---|---|")
+    for item in result["checks"]:
+        reason = item["reason"].replace("|", "\\|")
+        print(f"| {item['deployment']} | {item['check']} | {item['status']} | {reason} |")
+    print()
+    print("## Evidências")
+    for item in result["checks"]:
+        print(f"- {item['deployment']} · {item['check']}: `{json.dumps(item['evidence'], ensure_ascii=False)}`")
+    if result["suggestion"]:
+        print()
+        print("## Sugestão")
+        print(result["suggestion"])
+
+
+def cmd_verify_compare(args) -> int:
+    """verify compare (SPEC-0090, ADR-0024): delivery, runtime and logs of each deployment against the snapshot and
+    the expected image; verdict passou (0), degradou (1) or inconclusivo (5). Nothing is written to the atlas."""
+    setup = _verify_setup(args)
+    match = EXPECT_IMAGE_RE.match(args.expect_image or "")
+    if not match or not (match.group("tag") or match.group("digest")):
+        raise AtlasError("--expect-image inválido — use o caminho da imagem com :<tag> e/ou @<digest> (ex.: "
+                         "acme/api:1.4.2)", 2)
+    window = args.window or VERIFY_WINDOW
+    window_seconds = _verify_duration(window, "--window")
+    max_errors = _verify_limit(args.max_new_errors, "--max-new-errors")
+    max_restarts = _verify_limit(args.max_new_restarts, "--max-new-restarts")
+    baseline = _verify_baseline(args.baseline, args.service, args.env) if args.baseline is not None else None
+    targets = _verify_targets(setup, args)
+    checks = []
+    for target in targets:
+        seen = _verify_observe(setup, args, target, window)
+        checks += [_delivery_check(target, seen, args.expect_image),
+                   _runtime_check(target, seen, baseline, max_restarts),
+                   _logs_check(target, seen, baseline, max_errors, window_seconds)]
+    verdict = verdict_of(c["status"] for c in checks)
+    result = {"contract": VERIFY_CONTRACT, "verdict": verdict, "checks": checks,
+              "suggestion": verify_suggestion(targets) if verdict == "degradou" else ""}
+    problems = validate_verify_result(result)
+    if problems:
+        raise AtlasError(f"resultado fora do contrato {VERIFY_CONTRACT} — {'; '.join(problems[:10])}", 1)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+    else:
+        print_verify(result, args)
+    return VERDICT_EXITS[verdict]
+
+
+def cmd_verify(args) -> int:
+    """verify snapshot | compare (SPEC-0090): read-only, through the probes; exits 0/1/5 (verdict), 2 argument, 3 no
+    configuration, 4 probes off or production without --confirm-production."""
+    if args.phase == "snapshot":
+        return cmd_verify_snapshot(args)
+    return cmd_verify_compare(args)
 
 
 def probe_checks(local: dict) -> list:
@@ -5678,6 +6241,30 @@ def main(argv=None):
                    help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
     p.add_argument("--json", action="store_true")
     add_atlas_option(p)
+    p = sub.add_parser("verify", help="foto antes do merge e comparação depois do deploy, com veredito (só leitura, "
+                                      "pelas probes; references/verify.md)")
+    phases = p.add_subparsers(dest="phase", required=True)
+    q = phases.add_parser("snapshot", help="grava a foto do serviço no ambiente num arquivo da tarefa, fora do atlas")
+    q.add_argument("--service", required=True, help="id do serviço no atlas")
+    q.add_argument("--env", required=True, help="ambiente dos deployments")
+    q.add_argument("--out", required=True, help="arquivo da foto (fora da pasta do atlas)")
+    q.add_argument("--since", help=f"janela dos eventos e logs (padrão {VERIFY_SINCE}; até 24h)")
+    q.add_argument("--confirm-production", action="store_true",
+                   help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
+    add_atlas_option(q)
+    q = phases.add_parser("compare", help="compara o estado atual com a foto e a imagem esperada: passou, degradou "
+                                          "ou inconclusivo")
+    q.add_argument("--service", required=True, help="id do serviço no atlas")
+    q.add_argument("--env", required=True, help="ambiente dos deployments")
+    q.add_argument("--expect-image", required=True, help="imagem esperada: caminho com :<tag> e/ou @<digest>")
+    q.add_argument("--baseline", help="a foto do verify snapshot (sem ela, os logs ficam não verificados)")
+    q.add_argument("--window", help=f"janela dos eventos e logs (padrão {VERIFY_WINDOW}; até 24h)")
+    q.add_argument("--max-new-errors", default="0", help="assinaturas de erro novas toleradas (padrão 0)")
+    q.add_argument("--max-new-restarts", default="0", help="restarts novos tolerados (padrão 0)")
+    q.add_argument("--confirm-production", action="store_true",
+                   help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
+    q.add_argument("--json", action="store_true")
+    add_atlas_option(q)
     p = sub.add_parser("curate", help="propõe convenções (inferred) e registra a decisão humana (confirm | reject)")
     curate = p.add_subparsers(dest="action", required=True)
     q = curate.add_parser("propose", help="cria ou atualiza conventions/<id>.md a partir dos sinais")
@@ -5721,6 +6308,8 @@ def main(argv=None):
             return cmd_curate(args)
         if args.command == "probe":
             return cmd_probe(args)
+        if args.command == "verify":
+            return cmd_verify(args)
         if args.command == "vendor":
             return cmd_vendor(args)
     except AtlasError as e:

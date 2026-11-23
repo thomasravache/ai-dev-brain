@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.17] - 2026-11-23
+
+### Added
+- Comando `verify`, em duas fases, **só de leitura** e pelas probes (cada consulta passa pelo caminho do `probe`: ligadas, verbos permitidos, produção confirmada, acesso local, saída validada e mascarada e uma linha em `probes.log`). `verify snapshot --service <id> --env <ambiente> --out <arquivo> [--since 30m]` roda `runtime status`, `events` e `logs --summary` em cada deployment do serviço no ambiente e grava uma foto `verify@1` (imagens, réplicas prontas e desejadas, restarts por pod, avisos `<motivo>|<objeto>` com o pod trocado pelo workload dono, assinaturas de erro de nível `error` com contagem e as verificações não feitas com o motivo), sem nenhuma linha de log, num arquivo da tarefa **fora do atlas** (`--out` dentro da pasta do atlas, inclusive por `..`, sai com 2 sem gravar). `verify compare --service <id> --env <ambiente> --expect-image <imagem> [--baseline <arquivo>] [--window 10m] [--max-new-errors 0] [--max-new-restarts 0] [--json]` confere por deployment `delivery` (rollout concluído e todo pod pronto com a imagem esperada, pelo digest quando dado, senão pela tag), `runtime` (pod não pronto, restarts novos por pod contra a foto, avisos novos, workload não encontrado) e `logs` (assinaturas de erro da janela ausentes da foto; sem foto, ou com os logs cortados sem linha, `not_verified`) e dá o veredito `passou` (0), `degradou` (1, com uma sugestão de rollback que cita o repositório de configuração do delivery, sem comando e sem executar nada) ou `inconclusivo` (5). Probe recusada, com erro ou que falha deixa a verificação dependente `not_verified`, nunca `ok`. Exits 2 argumento inválido (`--expect-image` sem tag nem digest, `--baseline` ausente, inválida ou de outro serviço ou ambiente), 3 sem configuração, 4 probes desligadas ou produção sem `--confirm-production` (nenhuma consulta roda). Nada é gravado no atlas. Validadores `validate_verify_snapshot` e `validate_verify_result` (SPEC-0090, ADR-0024).
+- `references/verify.md`: as fases, as verificações, os limites, o veredito, os exits e exemplos `verify@1` da foto e da saída `--json`; `references/probes.md` e `SKILL.md` apontam para ele (SPEC-0090).
+
 ## [2026.11.16] - 2026-11-23
 
 ### Added
