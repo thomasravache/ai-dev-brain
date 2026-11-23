@@ -117,6 +117,26 @@ def install_kubectl(folder: Path, record: Path, fail="", fixtures=(CLUSTER,), po
     return target
 
 
+SHIM = '''import os
+import sys
+import time
+
+if sys.argv[1:2] == ["logs"] and {pod!r} in sys.argv[2:]:
+    time.sleep(1.0 - time.time() % 1.0 + 0.05)
+os.execv(sys.executable, [sys.executable, {real!r}, *sys.argv[1:]])
+'''
+
+
+def install_second_turning_shim(folder: Path, real: Path, pod: str):
+    """SPEC-0094:IT-01 — `kubectl` intermediário em `folder`: antes de repassar ao dublê `real` o `logs` de `pod`,
+    espera o relógio virar de segundo (o dublê começa num segundo diferente do da chamada anterior)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / "kubectl"
+    target.write_text(f"#!{sys.executable}\n" + SHIM.format(pod=pod, real=str(real)), encoding="utf-8")
+    target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return target
+
+
 def read_calls(record: Path) -> list:
     if not record.exists():
         return []
@@ -473,6 +493,21 @@ class LogsTest(KubectlCase):
         out = self.run_probe(probe_input("logs", workloads=("Deployment/clock",), lines=3))
         self.assertEqual([int(re.search(r"tick (\d)", i["line"]).group(1)) for i in out["items"]], [5, 6, 7], out)
         self.assertIs(out["truncated"], True, out)
+
+    def test_fraction_order_survives_the_clock_turning_between_pods(self):
+        """SPEC-0094:IT-01 — o mesmo cenário do UT-03 da SPEC-0089 (Deployment/clock), com o relógio forçado a virar
+        de segundo entre os pods: um `kubectl` intermediário no PATH espera o próximo segundo antes de repassar o
+        `logs` de clock-7c1e-bbbb ao dublê. A ordem continua a do tempo real (ticks 1 a 7; com lines 3, 5, 6 e 7)."""
+        real = self.root / "real-bin"
+        install_kubectl(real, self.record, fixtures=(CLUSTER_V5,))
+        install_second_turning_shim(self.bin, real / "kubectl", "pod/clock-7c1e-bbbb")
+        out = self.run_probe(probe_input("logs", workloads=("Deployment/clock",), lines=2000))
+        self.assertEqual(out["status"], "ok", out)
+        ticks = [int(re.search(r"tick (\d)", i["line"]).group(1)) for i in out["items"]]
+        self.assertEqual(ticks, [1, 2, 3, 4, 5, 6, 7], out)
+        self.record.unlink(missing_ok=True)
+        out = self.run_probe(probe_input("logs", workloads=("Deployment/clock",), lines=3))
+        self.assertEqual([int(re.search(r"tick (\d)", i["line"]).group(1)) for i in out["items"]], [5, 6, 7], out)
 
 
 # --------------------------------------------------------------------------- UT-04
