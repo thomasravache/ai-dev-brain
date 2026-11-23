@@ -168,6 +168,24 @@ Rules:
 - Relay the `warnings` (staleness) of the package to the user with the route.
 - A service without `delivery`, `delivery_check.enabled: false`, or no atlas (exit 3, not installed) → say the atlas doesn't know the delivery path and verify with `smoke_test`, `test_e2e` and `deploy_*` from `sdd-config.yml`, as without this route. Missing atlas data never blocks G6.
 
+### Active verification (SPEC-0091)
+
+When `delivery_check.verify` in `sdd-config.yml` is `true` (default `false`; no key = off) and the atlas is available under the same `org_context` rules, G6 also checks the deploy actively with `atlas.py verify` from the boson-atlas (`references/verify.md` there), per service of the spec and per environment of `delivery_check.environments` (`[]` = every environment of the service). Without it, the route above is all there is.
+
+1. **Snapshot**, after H2 and before the merge: `python3 <boson-atlas>/scripts/atlas.py verify snapshot --service <id> --env <ambiente> --out <foto> [--atlas <org_context>]`, where `<foto>` is a temporary file of the task, outside the repository and outside the atlas.
+2. **Compare**, after steps 1 and 2 of the route above (the pipeline of the merge commit and the new image in the configuration repository) and after waiting `window_minutes`: `python3 <boson-atlas>/scripts/atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem:tag> --baseline <foto> --window <window_minutes>m --max-new-errors <max_new_errors> --max-new-restarts <max_new_restarts> --json [--atlas <org_context>]`, with the window and limits from the `delivery_check` keys. If the rollout hasn't finished, run it again after the window.
+3. **Verdict → G6:**
+   - `passou` (exit 0) → G6 PASS for that environment.
+   - `degradou` (exit 1) → G6 FAIL; show the rollback suggestion of the output and let the person decide the rollback. The agent never rolls back on its own.
+   - `inconclusivo` (exit 5) → the person decides PASS or FAIL from the evidence, and the decision is recorded in the G6 evidence.
+   - exit 4 (probes off, or production refused without the confirmation) → the active verification didn't run; follow the rule below.
+4. Write the verdict, the checks and the evidence in the Relatório de Entrega ("Deploy") and in the G6 evidence.
+
+Rules:
+- Production: pass `--confirm-production` only after the person's explicit "yes" in chat for that run, every time; never reuse an earlier yes. In production the verification is passive only, like every probe.
+- Not possible (probes off, no access, no atlas, a service without `delivery`) → record "verificação ativa não executada: <motivo>" in the G6 evidence and in the Relatório de Entrega, and verify with `smoke_test` and `test_e2e` as without this check. It never blocks G6.
+- The snapshot is a temporary file: delete it at the end of the task, and never commit it.
+
 ## G7 — Done & Docs (Definition of Done)
 
 The Definition of Done is the checklist in each spec's Relatório de Entrega, plus the project's `dod_extra` items appended at PLAN. G7 passes when:

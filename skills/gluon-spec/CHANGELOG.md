@@ -9,6 +9,10 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+### Added
+- G6, verificação ativa com `atlas.py verify` da boson-atlas (SPEC-0090): com `delivery_check.verify: true`, o agente tira a foto (`verify snapshot --service --env --out`) depois do H2 e antes do merge, num arquivo temporário fora do repositório e do atlas, e, depois dos passos 1 e 2 do roteiro da SPEC-0086 e da janela, roda `verify compare` com `--expect-image`, `--baseline`, `--window` e os limites. `passou` (exit 0) é G6 PASS; `degradou` (exit 1) é G6 FAIL com a sugestão de rollback, que a pessoa decide; `inconclusivo` (exit 5) fica com a decisão da pessoa, registrada. Produção só com `--confirm-production` depois do "sim" da pessoa para aquela execução, e só passiva. Sem probes, sem acesso ou sem atlas (exit 4 inclusive), registra "verificação ativa não executada: <motivo>" e segue com `smoke_test` e `test_e2e`, sem bloquear. A foto é apagada no fim e nunca entra em commit; o veredito vai para o Relatório de Entrega (SPEC-0091).
+- Chaves opcionais em `delivery_check` no `sdd-config.yml`: `verify` (padrão `false`), `window_minutes` (10), `max_new_errors` (0) e `max_new_restarts` (0); o comentário de `delivery_check`, mostrado pelo `whats-new`, cita as quatro (SPEC-0091).
+
 ## [2026.11.9] - 2026-11-20
 
 ### Added
