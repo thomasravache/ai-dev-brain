@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
 consumes_contract: [SPEC-0087@3]
-contract_version: 3
+contract_version: 4
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
@@ -202,6 +202,23 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
   - os exit 2 depois da checagem de ligado também entram no registro;
   - a configuração inválida não entra.
 
+**Esclarecimentos (Emenda v4):**
+- **Contexto mascarado (M1 do G4):** depois de escolher o contexto, o núcleo mascara o valor dele em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato. Vale o mesmo para os nomes das credenciais declaradas com valor.
+- **JSON do adaptador:**
+  - aninhamento profundo (`RecursionError`) e as constantes `NaN`/`Infinity` contam como JSON inválido (exit 1, sem traceback);
+  - nenhum número fora do JSON padrão sai em `--json`.
+- **`--summary`:**
+  - sem itens, sai exit 0 com zero assinaturas, porque uma janela vazia é resposta válida;
+  - itens sem nenhum `line` continuam dando exit 2.
+- **`command` local:** o primeiro elemento é um nome sem separador de pasta (procurado no PATH) ou um caminho absoluto. Um caminho relativo é recusado na validação (exit 2) e no `doctor`.
+- **Campos do alvo:** antes de rodar, o núcleo confere os campos que vêm do atlas e recusa com exit 2, sem rodar nada:
+  - `namespace` segue o DNS-1123 (até 63 caracteres);
+  - cada `workload` é `Kind/nome`, com o nome em DNS-1123 subdomínio;
+  - `service`, `deployment` e `environment` seguem a regra de nome simples do atlas;
+  - nenhum desses campos começa com `-`.
+  Assim nenhum adaptador recebe um texto que pareça uma opção de linha de comando.
+- **Documentação:** a lista do ambiente do adaptador em `references/config.md` e `references/probes.md` fica igual à do código.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -356,3 +373,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): CH-01 em guarda e recusa; nomes do validador e marcação dos exemplos; `ts`/`line` e ordem do `--summary`; credenciais por adaptador; `--describe` no fim; registro das recusas; mensagens | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 3 | 2026-11-23 | Esclarecimentos (Emenda v3): linhas do `doctor`; redação a mais só nas probes; ambiente do adaptador por lista permitida; escolha do alvo e do adaptador; `assets/probes/<id>.py` por padrão; status do registro | Relatório do implementer no G2 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 4 | 2026-11-23 | Esclarecimentos (Emenda v4): contexto mascarado na saída do adaptador; JSON aninhado e NaN inválidos; `--summary` vazio é exit 0; `command` relativo recusado; campos do alvo conferidos; doc do ambiente | Achados da rodada 1 do G4 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
