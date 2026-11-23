@@ -14,7 +14,7 @@ approved_at:
 
 # SPEC-0093 — photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) (Épico)
 
-> **Radar (thomas, 2026-11-23):** primeiro feedback de uso real da photon-brain por conector, numa sessão na nuvem. Está registrado na inbox do vault, na nota `inbox/2026-11-23-020743-feedback-da-skill-second-brain-melhorias.md`; novos feedbacks entram na inbox do mesmo jeito. Fica a detalhar antes do G0, sempre agnóstico e configurável. Os pontos:
+> **Radar (thomas, 2026-11-23):** primeiro feedback de uso real da photon-brain por conector, numa sessão na nuvem. Está registrado na inbox do vault, na nota `inbox/2026-11-23-020743-feedback-da-skill-second-brain-melhorias.md`; novos feedbacks entram na inbox do mesmo jeito. Um segundo feedback, do modo só conector no Google Drive (thomas, 2026-11-23), acrescentou os pontos 6 e 7 e detalhes nos pontos 3 e 5. Fica a detalhar antes do G0, sempre agnóstico e configurável. Os pontos:
 > 1. **Lista que cresce:**
 >    - pelo conector só dá para criar arquivo novo;
 >    - uma lista que vai ganhando itens vira várias capturas soltas na inbox;
@@ -25,14 +25,24 @@ approved_at:
 > 3. **Achar o vault no Drive:**
 >    - foi preciso procurar o `brain-config.yml` para descobrir onde o vault fica;
 >    - há várias pastas `inbox` antigas que confundem a busca;
->    - falta um jeito claro de identificar o vault e a inbox certos pelo conector.
+>    - falta um jeito claro de identificar o vault e a inbox certos pelo conector;
+>    - no segundo feedback, o caminho que funcionou foi buscar `title = 'brain-config.yml'` e depois a pasta `inbox` com o mesmo `parentId`;
+>    - sugestões: documentar esse passo no `references/connectors.md`, ou guardar o ID da pasta inbox do Drive na config local.
 > 4. **Horário das capturas:**
 >    - numa sessão na nuvem, a captura sai em UTC quando ninguém ajusta o fuso;
 >    - o campo `created` vem sem o fuso;
 >    - a ideia é gravar a data com o fuso e usar o fuso configurado do usuário.
 > 5. **Sessão sem a pasta do vault:**
 >    - sem a pasta conectada, nenhum fluxo completo de escrita funciona;
+>    - o modo só conector resolve a captura, mas não dá para rodar `index`, `relate` nem processar a inbox;
 >    - a skill deveria orientar a pedir só a pasta do vault.
+> 6. **Config ilegível pelo conector do Drive:**
+>    - o `brain-config.yml` vem com o tipo `application/octet-stream`, e o `read_file_content` recusa esse tipo;
+>    - sem ler a config, o `capture --print` não confere o `layout.inbox` nem se o contexto existe;
+>    - sugestões: no `references/connectors.md`, orientar a ler o `.yml` com o `download_file_content`; ou manter uma cópia do layout e dos contextos num arquivo `.md` que o conector lê.
+> 7. **Nome antigo na conta:**
+>    - a sessão na nuvem do segundo feedback ainda carregou a skill com o nome `second-brain`, não a `photon-brain`;
+>    - conferir se a conta tem uma versão antiga da skill ou o plugin antigo instalado, e se a SPEC-0067 cobre esse caso.
 >
 > Antes de detalhar, conferir as specs entregues de captura e inbox (SPEC-0021) e de configuração (SPEC-0017), para não repetir o que já existe.
 
