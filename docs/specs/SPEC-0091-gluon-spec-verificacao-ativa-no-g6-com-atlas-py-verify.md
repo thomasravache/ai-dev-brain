@@ -4,7 +4,7 @@ title: "gluon-spec: verificação ativa no G6 com atlas.py verify"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0090]
@@ -184,6 +184,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Red: CH-01 (passa antes), UT-01 a UT-04 e CT-01 com a tag `SPEC-0091:<ID>`, falhando pelo motivo certo
+- [ ] Green: `delivery_check.verify`, `window_minutes`, `max_new_errors` e `max_new_restarts` no `sdd-config.template.yml`; verificação ativa no G6 do `references/gates.md` (foto depois do H2 e antes do merge, comparação depois dos passos 1–2 do roteiro e da janela, veredito para o gate, produção confirmada, foto apagada no fim); passo 7 da SKILL.md; `SDD_TOOL_VERSION` (e `tools/sdd` se mudar o script), CHANGELOG da gluon-spec e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
