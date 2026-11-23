@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **5 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 3, approved 4, in-progress 1, implemented 71
+- Specs: proposed 4, approved 4, in-progress 1, implemented 71
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -43,6 +43,7 @@ Perfil: **minimo**
 | 5 | SPEC-0091 | gluon-spec: verificação ativa no G6 com atlas.py verify | full/S | approved | ⛔ aguarda implementação de SPEC-0090 |  |
 | 6 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo |
 | 7 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo; saiu da onda 6: touches vazio, não roda em paralelo |
+| 8 | SPEC-0092 | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0088; saiu da onda 2: arquivos em comum com SPEC-0073; saiu da onda 3: arquivos em comum com SPEC-0089; saiu da onda 4: arquivos em comum com SPEC-0090; saiu da onda 5: arquivos em comum com SPEC-0091; saiu da onda 6: arquivos em comum com SPEC-0083; saiu da onda 7: arquivos em comum com SPEC-0085 |
 
 ## Épicos
 
@@ -69,6 +70,7 @@ flowchart LR
   S0028["SPEC-0028<br/>second-brain: padrões de cópia de confl…"]:::proposed
   S0083["SPEC-0083<br/>boson-atlas: coletor de infraestrutura …"]:::proposed
   S0085["SPEC-0085<br/>boson-atlas: guardar o que o agente des…"]:::proposed
+  S0092["SPEC-0092<br/>boson-atlas: máscara de segredos robust…"]:::proposed
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
@@ -203,6 +205,7 @@ flowchart LR
 | [SPEC-0089](SPEC-0089-boson-atlas-adaptador-de-probe-de-runtime-kubernetes-estado.md) | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full | feature | approved | 2026-11-22 | SPEC-0030 | SPEC-0088 | — |
 | [SPEC-0090](SPEC-0090-boson-atlas-verify-foto-antes-do-merge-comparacao-depois-do.md) | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0088, SPEC-0089 | — |
 | [SPEC-0091](SPEC-0091-gluon-spec-verificacao-ativa-no-g6-com-atlas-py-verify.md) | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0090 | — |
+| [SPEC-0092](SPEC-0092-boson-atlas-mascara-de-segredos-robusta-padroes-separados-e.md) | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite | fix | proposed | 2026-11-23 | — | — | — |
 
 ## ADRs
 
