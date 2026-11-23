@@ -45,6 +45,7 @@ import re
 import sys
 import time
 import unittest
+import urllib.parse
 
 from helpers import (
     SKILL,
@@ -927,6 +928,162 @@ class TargetFieldsTest(ProbeCase):
             graph_path.write_text(original, encoding="utf-8")
         result = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json")
         self.assertExit(result, 0)  # guarda: o alvo de verdade roda (o teste não vale sem isso)
+
+
+# --------------------------------------------------------------------------- Emenda v5
+
+SECRET_V5 = "SUPERSECRETVALUE" + "0088"  # montado em tempo de execução
+ARN_CONTEXT = "arn:aws:eks:region:000000000000:cluster/example"
+CREDENTIAL_V5 = FAKE_VALUE + "/credencial:0088"
+ECHO_MODES = (("stderr", "status", (), 1), ("message", "status", (), 1), ("items", "status", (), 0),
+              ("summary", "logs", ("--summary",), 0))
+
+
+def _strings(data):
+    """Todas as chaves e textos de um JSON já decodificado (a forma escapada some no dump do --json)."""
+    if isinstance(data, dict):
+        return [t for key, value in data.items() for t in [str(key)] + _strings(value)]
+    if isinstance(data, list):
+        return [t for value in data for t in _strings(value)]
+    return [data] if isinstance(data, str) else []
+
+
+def _variants(value):
+    r"""As formas do valor que a Emenda v5 manda mascarar: escapada em JSON (com \/), codificada em URL e em
+    maiúsculas (a comparação é sem diferença de maiúsculas)."""
+    return {"json": json.dumps(value, ensure_ascii=False)[1:-1].replace("/", "\\/"),
+            "url": urllib.parse.quote(value, safe=""), "upper": value.upper()}
+
+
+class MaskV5Case(ProbeCase):
+    def run_echo_v5(self, mode, verb, extra, context, form, secret=None, credential=None):
+        """Roda o echo_context.py com o contexto `context` no cluster-dev (texto e --json) e devolve os textos a
+        conferir: as saídas, os textos do JSON decodificado e o probes.log."""
+        fake = self.fake("echo_context.py", "--mode", mode, "--form", form,
+                         *(("--secret", secret) if secret else ()),
+                         *(("--env-name", "PROBE_FAKE_TOKEN") if credential else ()))
+        self.configure(probes_yaml([adapter_yaml("fake", fake, credentials=("PROBE_FAKE_TOKEN",) if credential
+                                                 else ())]), access=dict(CONTEXTS, **{"cluster-dev": context}))
+        texts, codes = [], []
+        for flag in ((), ("--json",)):
+            result = self.probe("runtime", verb, "--service", "api", "--env", "dev", *extra, *flag,
+                                env={"PROBE_FAKE_TOKEN": credential} if credential else None)
+            runs = self.calls("run")
+            self.assertTrue(runs, "o adaptador não rodou: o teste não vale")
+            self.assertEqual(runs[-1]["input"]["target"]["context"], context)
+            texts.append(output(result))
+            codes.append(result.returncode)
+            if flag and result.stdout.strip():
+                try:
+                    texts += _strings(json.loads(result.stdout))
+                except ValueError:
+                    pass
+        log = self.cfg / "probes.log"
+        texts.append(log.read_text(encoding="utf-8") if log.exists() else "")
+        return texts, codes
+
+
+class MaskOrderTest(MaskV5Case):
+    def test_a_short_context_does_not_stop_the_secret_pattern(self):
+        """SPEC-0088:UT-04 (Emenda v5, ordem da máscara) — contexto curto (api; e access) e um adaptador que escreve
+        <contexto>_key=<segredo> (api_key=..., access_key=...) no stderr, na message, num item e numa linha do
+        --summary: os padrões de segredo rodam antes do literal do contexto, então o valor do segredo não aparece em
+        nenhuma saída (texto e --json) nem no probes.log."""
+        for context in ("api", "access"):
+            for mode, verb, extra, code in ECHO_MODES:
+                with self.subTest(context=context, mode=mode):
+                    texts, codes = self.run_echo_v5(mode, verb, extra, context, "keyed", secret=SECRET_V5)
+                    self.assertEqual(codes, [code, code], texts)
+                    for text in texts:
+                        self.assertNotIn(SECRET_V5, text, f"{context}_key=<segredo> vazou: o literal do contexto "
+                                                          "rodou antes dos padrões de segredo")
+
+
+class ContextVariantsTest(MaskV5Case):
+    def test_json_url_and_upper_forms_of_the_context_are_masked(self):
+        r"""SPEC-0088:UT-04 (Emenda v5, variantes) — contexto ARN genérico (com / e :) que o adaptador escreve
+        escapado em JSON (com \/), codificado em URL e em maiúsculas, no stderr, na message, num item e numa linha do
+        --summary: nenhuma dessas formas aparece (sem diferença de maiúsculas) nas saídas nem no probes.log."""
+        for form, variant in _variants(ARN_CONTEXT).items():
+            for mode, verb, extra, code in ECHO_MODES:
+                with self.subTest(form=form, mode=mode):
+                    texts, codes = self.run_echo_v5(mode, verb, extra, ARN_CONTEXT, form)
+                    self.assertEqual(codes, [code, code], texts)
+                    for text in texts:
+                        self.assertNotIn(variant.lower(), text.lower(), f"a forma {form} do contexto vazou")
+
+    def test_json_url_and_upper_forms_of_a_declared_credential_are_masked(self):
+        r"""SPEC-0088:UT-04 (Emenda v5, variantes) — o mesmo para o valor de uma credencial declarada (com / e :):
+        nenhuma das formas (JSON com \/, URL, maiúsculas) aparece nas saídas nem no probes.log."""
+        for form, variant in _variants(CREDENTIAL_V5).items():
+            for mode, verb, extra, code in ECHO_MODES:
+                with self.subTest(form=form, mode=mode):
+                    texts, codes = self.run_echo_v5(mode, verb, extra, CONTEXT_DEV, form, credential=CREDENTIAL_V5)
+                    self.assertEqual(codes, [code, code], texts)
+                    for text in texts:
+                        self.assertNotIn(variant.lower(), text.lower(), f"a forma {form} da credencial vazou")
+
+
+class LoneSurrogateTest(ProbeCase):
+    def test_a_lone_surrogate_in_the_output_exits_1_as_invalid_json(self):
+        r"""SPEC-0088:UT-04 (Emenda v5) — saída do adaptador com "line": "\ud800 bad" num item, ou com um surrogate
+        solto num valor de item: exit 1 como JSON inválido, com o motivo, sem traceback e sem item impresso (texto e
+        --json)."""
+        for kind in ("surrogate-line", "surrogate-value"):
+            self.configure(probes_yaml([adapter_yaml("fake", self.fake("invalid.py", "--kind", kind))]))
+            for extra in ((), ("--json",)):
+                with self.subTest(kind=kind, extra=extra):
+                    result = self.probe("runtime", "status", "--service", "api", "--env", "dev", *extra)
+                    self.assertExit(result, 1)
+                    self.assertNotIn(MARKER, output(result))
+                    self.assertIn("json", output(result).lower())
+
+
+DEV_CLUSTER = "cluster:cluster-dev"
+
+
+def _cluster_named(name):
+    """graph com o nome do nó cluster:cluster-dev trocado por `name` (o id fica: o access.clusters ainda o acha)."""
+    def change(graph):
+        nodes = [node for node in graph["nodes"] if node["key"] == DEV_CLUSTER]
+        assert nodes, f"{DEV_CLUSTER} não está no graph.json: o teste não vale"
+        for node in nodes:
+            node["name"] = name
+        return graph
+    return change
+
+
+class TargetClustersTest(ProbeCase):
+    def run_cases(self, names, code):
+        graph_path = self.box.atlas / "graph.json"
+        original = graph_path.read_text(encoding="utf-8")
+        try:
+            for name in names:
+                with self.subTest(cluster=name):
+                    graph_path.write_text(json.dumps(_cluster_named(name)(json.loads(original))), encoding="utf-8")
+                    before = len(self.calls())
+                    result = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json")
+                    self.assertExit(result, code)
+                    if code == 2:
+                        self.assertEqual(len(self.calls()), before, "um processo do adaptador rodou com o cluster "
+                                                                    "inválido")
+                    else:
+                        self.assertEqual(self.calls("run")[-1]["input"]["target"]["clusters"], [name])
+        finally:
+            graph_path.write_text(original, encoding="utf-8")
+
+    def test_cluster_names_out_of_the_rule_exit_2_without_running_anything(self):
+        """SPEC-0088:UT-02 (Emenda v5, clusters do alvo) — target.clusters com um nome que começa com -, com espaço
+        ou com caractere de controle: `probe` sai com 2 e nenhum processo do adaptador roda (nem o --describe)."""
+        self.configure_ok()
+        self.run_cases(["-cluster-dev", "cluster dev", "cluster\x07dev", "-https://kubernetes.default.svc",
+                        "https://kubernetes.default.svc/a b"], 2)
+
+    def test_a_simple_name_and_a_server_url_still_run(self):
+        """SPEC-0088:UT-02 (Emenda v5, guarda) — um nome simples e a URL https://kubernetes.default.svc continuam
+        rodando (exit 0, o adaptador recebe o nome em target.clusters)."""
+        self.configure_ok()
+        self.run_cases(["cluster-dev-b", "https://kubernetes.default.svc"], 0)
 
 
 # --------------------------------------------------------------------------- IT-01

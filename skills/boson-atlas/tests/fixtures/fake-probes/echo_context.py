@@ -8,13 +8,22 @@
     contract  item cuja chave é o valor e cujo valor é um objeto (saída fora do contrato: a falha cita a chave)
     adapter   o campo "adapter" da saída é o contexto (só o contexto: é uma palavra válida do contrato)
 
+Com --form (Emenda v5), cada valor sai transformado antes de ir para o lugar do --mode:
+
+    raw       como veio (padrão)
+    json      escapado como dentro de uma string JSON, com "/" como "\\/"
+    url       codificado em URL (urllib.parse.quote, sem caracteres seguros)
+    upper     em maiúsculas
+    keyed     só o contexto, como "<contexto>_key=<--secret>" (um contexto curto como api vira api_key=...)
+
 O núcleo precisa mascarar esses valores em tudo o que imprime ou registra.
-Uso: python3 echo_context.py --record <arquivo> --mode <modo> [--adapter <id>] [--env-name <NOME>]
-                             [--verbs <capacidade>=<verbo>,<verbo>]...
+Uso: python3 echo_context.py --record <arquivo> --mode <modo> [--form <forma>] [--secret <valor>] [--adapter <id>]
+                             [--env-name <NOME>] [--verbs <capacidade>=<verbo>,<verbo>]...
 """
 import json
 import os
 import sys
+import urllib.parse
 
 argv = sys.argv[1:]
 
@@ -42,6 +51,15 @@ if mode == "describe":
 values = [data["target"]["context"]]
 if option("--env-name"):
     values.append(os.environ.get(option("--env-name"), ""))
+form = option("--form", "raw")
+if form == "json":
+    values = [json.dumps(value, ensure_ascii=False)[1:-1].replace("/", "\\/") for value in values]
+elif form == "url":
+    values = [urllib.parse.quote(value, safe="") for value in values]
+elif form == "upper":
+    values = [value.upper() for value in values]
+elif form == "keyed":
+    values = [f"{values[0]}_key={option('--secret')}"]
 out = {"contract": "probe@1", "adapter": adapter, "capability": data.get("capability"), "verb": data.get("verb"),
        "status": "ok", "items": [], "truncated": False, "message": "ok"}
 if mode_arg == "stderr":
