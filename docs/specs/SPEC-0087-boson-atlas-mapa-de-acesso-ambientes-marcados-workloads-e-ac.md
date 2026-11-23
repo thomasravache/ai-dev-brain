@@ -239,12 +239,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Red: CH-01 (passa antes), UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0087:<ID>`, falhando pelo motivo certo; fixtures `image-link` e `acme` reaproveitadas, com nomes genéricos
-- [ ] Green: atributo `workloads` no coletor `argocd.py`; `environments` (com `tier`) e `access.clusters` na configuração; campos novos em `delivery.deployments` no `context`; avisos do `doctor`; regra `untiered-environment` no `lint`; `references/`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: CH-01 (passa antes), UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0087:<ID>`, falhando pelo motivo certo; fixtures `image-link` e `acme` reaproveitadas, com nomes genéricos
+- [x] Green: atributo `workloads` no coletor `argocd.py`; `environments` (com `tier`) e `access.clusters` na configuração; campos novos em `delivery.deployments` no `context`; avisos do `doctor`; regra `untiered-environment` no `lint`; `references/`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -273,37 +273,60 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- O atlas sabe quais ambientes são de teste e quais são de produção: a chave compartilhada `environments` marca o `tier`, e o `build` grava esse `tier` no ambiente. Um ambiente sem marcação conta como produção.
+- O coletor `argocd` grava os `workloads` de cada deployment (Deployment, StatefulSet, DaemonSet e Rollout), tirados de `status.resources`.
+- Cada máquina declara, na configuração local, o contexto do kubeconfig de cada cluster (`access.clusters`). O valor nunca sai em nenhuma saída nem arquivo.
+- O `context` mostra em `delivery.deployments` o `tier`, o `namespace`, os `workloads` e se há acesso local. O `doctor` avisa dos ambientes sem marcação e dos clusters sem acesso, e o `lint` tem a regra `untiered-environment`.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `assets/collectors/argocd.py`: `workloads_of`, com os kinds permitidos e a regra de nome simples.
+- `scripts/atlas.py`:
+  - `validate_environments` e `validate_access` seguem o padrão do `image_repositories` (SPEC-0082) e do `remotes` (SPEC-0080);
+  - `with_tiers` grava o tier no `build`;
+  - `access_view` troca o contexto por "definido";
+  - `_deployment_tier` e `_access_fields` montam os campos do `context`;
+  - o `doctor` ganhou as linhas novas, e o `lint` a regra `untiered-environment`;
+  - o `dump_yaml` põe aspas nas chaves com ":", para uma URL de cluster sobreviver ao `init --join`.
+- Emenda v2: perguntas do test-writer no G1. Emenda v3: relatório do implementer. Ela define o `tier` de um deployment com vários ambientes, as leituras do `doctor` e do `lint`, os testes antigos a atualizar e o `touches`.
+- G4 aprovado na rodada 1. O primeiro registro do G4 saiu FAIL só porque o veredito foi escrito sem a palavra APPROVED.
+- Versões: ATLAS_VERSION 2026.11.14, plugin 2026.11.27.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Sem as chaves novas, grafo, páginas, context, doctor e lint iguais aos de antes | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-01 | `environments` marca o `tier` dos ambientes; item inválido recusado com posição e motivo | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-02 | `workloads` só dos kinds permitidos, ordenado, com nome simples | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-03 | `access.clusters` local validado; o contexto nunca é impresso; chave em URL; vários atlas | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-04 | `delivery.deployments` com tier (regra da Emenda v3), namespace, workloads e access; Markdown na ordem | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-05 | Avisos do `doctor` e regra `untiered-environment` no `lint` | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| IT-01 | `scan` + `build` + `context` com tudo ligado, sem o contexto local em nenhum arquivo ou saída | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| CT-01 | Snapshot com `workloads` aceito pelo `@1` atual e pela versão anterior | PASS | `test_access_map.py` — CI do PR #61 (run 45117677611, Python 3.9 e 3.15) e suíte local no G2/G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). A entrega chega pelo plugin `fermion` 2026.11.27, depois do merge do PR #61.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Achados do G4 que ficaram para o radar:
+- minor: o `HOST_RE` aceita um nome com quebra de linha no fim (problema que já existia; o Kubernetes não gera nomes assim);
+- nit: o `doctor` casa o `access` só pelo nome do cluster, e o `context` casa pelo nome ou pelo id;
+- nit: o nome `_lint_image_repositories` ficou estreito.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0087`. -->
