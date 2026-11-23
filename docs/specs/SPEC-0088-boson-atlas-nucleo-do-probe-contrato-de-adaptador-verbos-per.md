@@ -341,7 +341,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — df49b5d | 2026-11-23 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 4): APPROVED — rodadas 2 e 3 também APPROVED, com minors corrigidos nas Emendas v5 e v6; ficam 2 minors que já existiam na main (tokens colados na alternância do SECRET_RE; regex url/jwt quadráticas em entrada hostil), na SPEC nova de robustez da máscara — 692c1a4 | 2026-11-23 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 47cabc4 | 2026-11-23 |
-| H2 Integração aprovada | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
 
