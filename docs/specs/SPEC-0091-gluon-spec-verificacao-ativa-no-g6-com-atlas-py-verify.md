@@ -158,7 +158,7 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
 - **UT-04** — O passo 7 da SKILL.md menciona `delivery_check.verify` e `atlas.py verify` numa frase e aponta para `references/gates.md` (G6). As regras detalhadas não são repetidas na SKILL.md.
 
 ### 7.3 Testes de Integração
-- N/A — a spec só muda instruções e configuração. Os comandos que ela orquestra são testados de ponta a ponta no IT-01 da SPEC-0090.
+- N/A — a spec só muda instruções e configuração. Os comandos que ela orquestra são testados de ponta a ponta no teste de integração da SPEC-0090.
 
 ### 7.4 Testes de Contrato
 - **CT-01** — Toda opção de `atlas.py verify snapshot` e `verify compare` citada no G6 do `gates.md` existe no `--help` do `atlas.py` da boson-atlas. Os exits citados (0, 1, 4 e 5) e os vereditos são os de `skills/boson-atlas/references/verify.md`.
