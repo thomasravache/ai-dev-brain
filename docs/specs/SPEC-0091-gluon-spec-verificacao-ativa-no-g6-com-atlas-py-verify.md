@@ -128,7 +128,7 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
   - o `touches` volta a ter `skills/gluon-spec/scripts/spec_graph.py`, mas só para subir o `SDD_TOOL_VERSION` para 2026.11.10;
   - o CHANGELOG da gluon-spec ganha a seção datada `[2026.11.10]`, para o `whats-new` mostrar a mudança a quem já tem `delivery_check`.
 
-  Isto corrige a Emenda v2, que tirou o arquivo do `touches`.
+  Isto corrige a Emenda v2, que tirou o arquivo do `touches`. O plano ganha o IT-01 (o `whats-new` de ponta a ponta), porque o tier full exige teste de integração.
 - **Rollout lento:** se `delivery` falhou só porque `rollout_complete` é falso, o agente roda o `compare` mais uma vez, depois de outra janela, antes de aplicar o veredito.
 - **`--expect-image`:**
   - é a imagem do commit do merge achada no passo 2 do roteiro (repositório de configuração ou saída da pipeline);
@@ -178,7 +178,7 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
 - **UT-04** — O passo 7 da SKILL.md menciona `delivery_check.verify` e `atlas.py verify` numa frase e aponta para `references/gates.md` (G6). As regras detalhadas não são repetidas na SKILL.md.
 
 ### 7.3 Testes de Integração
-- N/A — a spec só muda instruções e configuração. Os comandos que ela orquestra são testados de ponta a ponta no teste de integração da SPEC-0090.
+- **IT-01** — Dado um projeto temporário com `tools/sdd` em 2026.11.9 e um `sdd-config.yml` com o `delivery_check` da SPEC-0086, quando o `spec_graph.py whats-new` da skill roda como processo, então mostra a seção `[2026.11.10]` com a verificação ativa e as quatro chaves novas de `delivery_check` (Emenda v3). Os comandos do `atlas.py verify` são testados de ponta a ponta na SPEC-0090.
 
 ### 7.4 Testes de Contrato
 - **CT-01** — Toda opção de `atlas.py verify snapshot` e `verify compare` citada no G6 do `gates.md` existe no `--help` do `atlas.py` da boson-atlas. Os exits citados (0, 1, 4 e 5) e os vereditos são os de `skills/boson-atlas/references/verify.md`.
