@@ -8,7 +8,8 @@ one chosen by select_atlas (--atlas, ATLAS_NAME, default, the only one) and only
 init creates the atlas structure from assets/ (or, with --join, only the local layer); config shows the effective
 configuration with the origin of each value; doctor reports what is configured, what works and what is missing,
 looking only at files, shutil.which and os.environ (never at a variable's value).
-run_collector is the only function allowed to run an external process (SPEC-0033).
+run_collector is the only function allowed to run an external process (SPEC-0033); it also runs the probe
+adapters of `probe` (SPEC-0088, ADR-0023: off by default, allowed verbs, confirmed production, local log).
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ import datetime
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -25,10 +27,12 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.14"
+ATLAS_VERSION = "2026.11.15"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -36,7 +40,7 @@ PAGES_DIR = ASSETS_DIR / "pages"
 
 SHARED_FILE = "atlas-config.yml"
 MODES = ("repo", "local")
-LOCAL_KEYS = ("atlas", "credentials", "access")
+LOCAL_KEYS = ("atlas", "credentials", "access", "probes")
 SHARED_KEYS = ("version", "organization", "mode", "language", "stale_days", "categories", "collectors",
                "redaction", "curation", "ci", "remotes", "image_repositories", "environments")
 REQUIRED_SHARED = ("version", "organization", "mode")
@@ -931,6 +935,8 @@ def load_config(config_home=None, choice=None) -> dict:
     origins["credentials"] = ORIGIN_LOCAL if "credentials" in local else ORIGIN_DEFAULT
     values["access"] = access_view(validate_access(local.get("access")))  # never the context (SPEC-0087)
     origins["access"] = ORIGIN_LOCAL if "access" in local else ORIGIN_DEFAULT
+    values["probes"] = probes_view(validate_probes(local.get("probes")))  # names only (SPEC-0088)
+    origins["probes"] = ORIGIN_LOCAL if "probes" in local else ORIGIN_DEFAULT
     if values["atlas"]:
         require_readable_atlas(values["atlas"])
     shared_path = Path(values["atlas"]) / SHARED_FILE if values["atlas"] else None
@@ -948,10 +954,12 @@ def load_config(config_home=None, choice=None) -> dict:
             "atlases": atlas_list(config)}
 
 
-def render_local_config(atlas: str, credentials=None, access=None) -> str:
+def render_local_config(atlas: str, credentials=None, access=None, probes=None) -> str:
     data = {"atlas": atlas, "credentials": credentials or {}}
     if access:  # SPEC-0087: kept as it is (only names of this machine's contexts)
         data["access"] = access
+    if probes not in (None, ""):  # SPEC-0088: kept as it is (adapters and credential names only)
+        data["probes"] = probes
     return LOCAL_HEADER + dump_yaml(data)
 
 
@@ -960,13 +968,16 @@ def render_atlases(entries: dict, default) -> str:
     working), the multi form (`default:` + `atlases:`) with two or more (ADR-0021)."""
     if len(entries) == 1:
         (entry,) = entries.values()
-        return render_local_config(entry_atlas(entry), entry.get("credentials") or {}, entry.get("access"))
+        return render_local_config(entry_atlas(entry), entry.get("credentials") or {}, entry.get("access"),
+                                   entry.get("probes"))
     data = {"default": default} if default else {}
     data["atlases"] = {}
     for name, entry in sorted(entries.items()):
         data["atlases"][name] = {"atlas": entry_atlas(entry), "credentials": entry.get("credentials") or {}}
         if entry.get("access"):
             data["atlases"][name]["access"] = entry["access"]
+        if entry.get("probes") not in (None, ""):
+            data["atlases"][name]["probes"] = entry["probes"]
     return LOCAL_HEADER + dump_yaml(data)
 
 
@@ -1022,9 +1033,12 @@ def updated_local(atlas_path: str, name, organization, make_default=False) -> di
     credentials = (entries.get(name) or {}).get("credentials")
     validate_credentials(credentials)
     access = (entries.get(name) or {}).get("access")
+    probes = (entries.get(name) or {}).get("probes")
     entries[name] = {"atlas": atlas_path, "credentials": credentials if isinstance(credentials, dict) else {}}
     if access:
         entries[name]["access"] = access
+    if probes not in (None, ""):
+        entries[name]["probes"] = probes
     default = config["default"]
     if config["form"] == "single":
         default = next(iter(config["entries"]))  # the only atlas was the default
@@ -1300,31 +1314,47 @@ def compile_extra_pattern(index: int, pattern):
     return regex
 
 
-def _mask(match) -> str:
-    prefix = match.group("url")
-    return f"{prefix}{REDACTED}@" if prefix else REDACTED
+def _secret_span(match) -> tuple:
+    """The part of a SECRET_RE match that is masked: the "url" pattern keeps scheme://user: and the last @ (it masks
+    only the password, even when empty); every other pattern masks the whole match."""
+    if match.group("url") is not None:
+        return match.end("url"), match.end() - 1
+    return match.start(), match.end()
+
+
+def _masked_spans(text: str, extras: list) -> tuple:
+    """(merged spans, count): every secret pattern and every extra pattern (in the probe, also PROBE_PATTERNS and
+    the literals) finds its matches in the ORIGINAL text; the spans are joined (overlapping or touching ones become
+    one) so no mask hides a match from another, in any order (Emenda v6 of SPEC-0088). Zero-width matches of an
+    extra pattern (\\b, lookarounds) never mask. count = the occurrences: overlapping matches count once (a span
+    already masked is not counted again), touching ones count apart."""
+    spans = [_secret_span(match) for match in SECRET_RE.finditer(text)]
+    for pattern in extras:
+        spans += [match.span() for match in pattern.finditer(text) if match.end() > match.start()]
+    merged, count, reach = [], 0, -1
+    for start, end in sorted(spans):
+        if start >= reach:
+            count += 1
+        reach = max(reach, end) if start < reach else end
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return merged, count
 
 
 def _redact_text(text: str, extras: list) -> tuple:
-    text, count = SECRET_RE.subn(_mask, text)
-    for pattern in extras:
-        text, n = _sub_non_empty(pattern, text)
-        count += n
-    return text, count
-
-
-def _sub_non_empty(pattern, text: str) -> tuple:
-    """pattern.subn(REDACTED, text) that ignores zero-width matches (\\b, lookarounds): they never mask."""
-    count = 0
-
-    def mask(match):
-        nonlocal count
-        if not match.group(0):
-            return ""
-        count += 1
-        return REDACTED
-
-    return pattern.sub(mask, text), count
+    """(text with each merged span of _masked_spans replaced once by [REDACTED], count): one pass, never a mask
+    over a marker already written (no [RE[REDACTED]TED])."""
+    spans, count = _masked_spans(text, extras)
+    if not spans:
+        return text, count
+    parts, position = [], 0
+    for start, end in spans:
+        parts += [text[position:start], REDACTED]
+        position = end
+    parts.append(text[position:])
+    return "".join(parts), count
 
 
 def _redact_keys(item: dict, extras: list) -> tuple:
@@ -1525,30 +1555,130 @@ def _kill(proc) -> None:
         pass
 
 
-def run_collector(argv, timeout=COLLECTOR_TIMEOUT, env=None) -> tuple:
+def run_collector(argv, timeout=COLLECTOR_TIMEOUT, env=None, input_text=None, max_bytes=None) -> tuple:
     """The only function of atlas.py that runs an external process (ADR-0010): argv as a list, never a shell, in a
     temporary folder and its own process group, with a timeout (the whole group is killed when it expires) and the
-    output captured; env = its environment (None = this process's). Returns (stdout, stderr); exit ≠ 0, timeout or missing executable = CollectorError."""
+    output captured; env = its environment (None = this process's). Returns (stdout, stderr); exit ≠ 0, timeout or missing executable = CollectorError.
+    input_text: text written to its stdin (None = no stdin). max_bytes: the most read from its stdout; more = the
+    group is killed and CollectorError (the probe adapters, SPEC-0088)."""
     with tempfile.TemporaryDirectory(prefix="atlas-collector-") as tmp:
+        bounded = max_bytes is not None
         try:
-            proc = subprocess.Popen(argv, cwd=tmp, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, encoding="utf-8", errors="replace", env=env,
-                                    start_new_session=os.name != "nt")
+            proc = subprocess.Popen(argv, cwd=tmp,
+                                    stdin=subprocess.DEVNULL if input_text is None else subprocess.PIPE,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    encoding=None if bounded else "utf-8", errors=None if bounded else "replace",
+                                    env=env, start_new_session=os.name != "nt")
         except FileNotFoundError as e:
             raise CollectorError(f"executável não encontrado: {argv[0]}") from e
         except OSError as e:
             raise CollectorError(f"não consegui executar {argv[0]}: {e.strerror or e}") from e
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired as e:
-            _kill(proc)
-            raise CollectorError(f"tempo esgotado ({timeout} s); processo encerrado") from e
-        except BaseException:
-            _kill(proc)
-            raise
+        if bounded:
+            stdout, stderr = _bounded_communicate(proc, input_text, timeout, max_bytes)
+        else:
+            try:
+                stdout, stderr = proc.communicate(input=input_text, timeout=timeout)
+            except subprocess.TimeoutExpired as e:
+                _kill(proc)
+                raise CollectorError(f"tempo esgotado ({timeout} s); processo encerrado") from e
+            except BaseException:
+                _kill(proc)
+                raise
     if proc.returncode != 0:
         raise CollectorError(f"saiu com {proc.returncode}", stderr or "")
     return stdout or "", stderr or ""
+
+
+def _kill_group(proc) -> None:
+    """Kills the process and what it started (its process group on POSIX) and reaps it, without touching its pipes
+    (the reader threads of _bounded_communicate own them)."""
+    try:
+        if os.name != "nt":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except OSError:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+
+def _bounded_communicate(proc, input_text, timeout, max_bytes) -> tuple:
+    """(stdout, stderr) of a binary-mode process, reading at most max_bytes of stdout (and keeping at most
+    max_bytes of stderr, the rest drained): over the limit or past the timeout, the group is killed and
+    CollectorError. Text is decoded as UTF-8 (invalid bytes replaced)."""
+    out, err, over = bytearray(), bytearray(), threading.Event()
+
+    def pump(stream, buffer, limit, stop_when_over):
+        try:
+            while True:
+                chunk = stream.read(65536)
+                if not chunk:
+                    break
+                room = limit + 1 - len(buffer)
+                if room > 0:
+                    buffer.extend(chunk[:room])
+                if len(buffer) > limit and stop_when_over:
+                    over.set()
+                    break
+        except (OSError, ValueError):
+            pass
+
+    def feed():
+        try:
+            if input_text is not None:
+                proc.stdin.write(input_text.encode("utf-8"))
+        except (OSError, ValueError):
+            pass
+        finally:
+            try:
+                proc.stdin.close()
+            except (OSError, ValueError):
+                pass
+
+    threads = [threading.Thread(target=pump, args=(proc.stdout, out, max_bytes, True), daemon=True),
+               threading.Thread(target=pump, args=(proc.stderr, err, max_bytes, False), daemon=True)]
+    if proc.stdin is not None:
+        threads.append(threading.Thread(target=feed, daemon=True))
+    for thread in threads:
+        thread.start()
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            if over.is_set():
+                _kill_group(proc)
+                raise CollectorError(f"saída maior que {max_bytes} bytes; processo encerrado")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                _kill_group(proc)
+                raise CollectorError(f"tempo esgotado ({timeout} s); processo encerrado")
+            try:
+                proc.wait(timeout=min(0.05, remaining))
+            except subprocess.TimeoutExpired:
+                continue
+            for thread in threads[:2]:  # a child that keeps the pipes open is bounded by the same deadline
+                thread.join(max(0.0, deadline - time.monotonic()))
+            if any(thread.is_alive() for thread in threads[:2]):
+                _kill_group(proc)
+                raise CollectorError(f"tempo esgotado ({timeout} s); processo encerrado")
+            if over.is_set():
+                raise CollectorError(f"saída maior que {max_bytes} bytes; processo encerrado")
+            break
+    except BaseException:
+        if proc.poll() is None:
+            _kill_group(proc)
+        raise
+    for stream in (proc.stdout, proc.stderr):
+        try:
+            stream.close()
+        except (OSError, ValueError):
+            pass
+    return out.decode("utf-8", "replace"), err[:max_bytes].decode("utf-8", "replace")
 
 
 def stderr_tail(text: str, extras: list) -> list:
@@ -4433,6 +4563,768 @@ def cmd_config(args):
     return 0
 
 
+# ---------------------------------------------------------------- probes (references/probes.md, ADR-0023)
+
+PROBE_CONTRACT = "probe@1"
+PROBE_KEYS = ("enabled", "limits", "adapters")
+PROBE_LIMIT_KEYS = ("lines", "since")
+PROBE_ADAPTER_KEYS = ("command", "verbs", "timeout", "credentials")
+PROBE_TIMEOUT, PROBE_TIMEOUT_MAX = 60, 300
+PROBE_LINES, PROBE_LINES_MAX = 200, 2000
+PROBE_SINCE, PROBE_SINCE_MAX = "30m", 24 * 3600
+PROBE_MAX_BYTES = 1024 * 1024  # the most read from an adapter's stdout
+PROBE_MESSAGE_MAX = 500
+PROBE_LOG = "probes.log"
+PROBES_DIR = ASSETS_DIR / "probes"  # adapters that come with the skill (an adapter without command)
+PROBE_WORD_RE = re.compile(r"^[a-z][a-z0-9_-]{0,62}\Z")  # adapter ids, capabilities and verbs
+SIMPLE_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
+# the target fields that come from the atlas (Emenda v4 of SPEC-0088): no adapter gets text that looks like an option
+CLUSTER_URL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://\S+\Z")  # a server URL in target.clusters
+DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\Z")  # DNS-1123 label, up to 63
+DNS_SUBDOMAIN_RE = re.compile(r"^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*\Z")
+DNS_SUBDOMAIN_MAX = 253
+DURATION_RE = re.compile(r"^(\d{1,6})([smhd])\Z")
+DURATION_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+PROBES_OFF = "probes desligadas nesta máquina (probes.enabled) — references/probes.md"
+# the environment of an adapter: these names (when set) plus the credentials declared in it, nothing else
+PROBE_BASE_ENV = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "TZ", "TMPDIR",
+                  "TMP", "TEMP", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE",
+                  "APPDATA", "LOCALAPPDATA")
+# personal data and secrets of log lines, on top of SECRET_PATTERNS and redaction.extra_patterns (SPEC-0088)
+PROBE_PATTERNS = (
+    re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"),  # e-mail
+    re.compile(r"(?<!\d)\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)"),  # CPF
+    re.compile(r"(?<!\d)\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}(?!\d)"),  # CNPJ
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]+=*"),
+    re.compile(r"(?i)\b[\w-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[=:]\s*[^\s,;&\"']+"),
+)
+LOG_LEVELS = (("error", re.compile(r"(?i)\b(?:error|err|fatal|critical|crit|panic|exception)\b")),
+              ("warn", re.compile(r"(?i)\b(?:warn|warning)\b")),
+              ("info", re.compile(r"(?i)\binfo\b")))
+LEVEL_ORDER = {"error": 0, "warn": 1, "info": 2, "other": 3}
+SIGNATURE_RULES = (  # (regex, marker), in this order
+    (re.compile(r"\"[^\"]*\"|'[^']*'"), "<texto>"),
+    (re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"), "<email>"),
+    (re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"), "<uuid>"),
+    (re.compile(r"\b(?:0x)?[0-9a-fA-F]{8,}\b"), "<hex>"),
+    (re.compile(r"\d+(?:[.,:]\d+)*"), "<n>"),
+)
+
+
+def _probe_error(field, reason) -> AtlasError:
+    """The configuration error of the contract: "probes: <field> inválido — <reason>" (never the value), exit 2."""
+    return AtlasError(f"probes: {field} inválido — {reason} (references/probes.md)", 2)
+
+
+def _key_name(key, fallback) -> str:
+    """A key safe to show in a message (a simple name), else `fallback`."""
+    return key if isinstance(key, str) and SIMPLE_KEY_RE.match(key) else fallback
+
+
+def _int_of(value):
+    """An integer from int or digit text (parse_yaml keeps scalars as text); None for anything else (bool too)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and re.match(r"^\d{1,9}\Z", value.strip()):
+        return int(value.strip())
+    return None
+
+
+def parse_duration(value):
+    """Seconds of a duration like 30s, 30m, 2h or 1d; None when it is not one (or is zero)."""
+    match = DURATION_RE.match(str(value).strip()) if isinstance(value, (str, int)) else None
+    if not match or isinstance(value, bool):
+        return None
+    seconds = int(match.group(1)) * DURATION_SECONDS[match.group(2)]
+    return seconds or None
+
+
+def _name_list(value):
+    """A list of texts from a list or one text; None when it is neither."""
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return list(value)
+    return None
+
+
+def _command_head_ok(head: str) -> bool:
+    """command[0] is a bare name (looked up in PATH) or an absolute path; a relative path with a folder is not."""
+    separators = {"/", os.sep, os.altsep} - {None}
+    return os.path.isabs(head) or not any(sep in head for sep in separators)
+
+
+def _probe_adapter(aid: str, entry) -> dict:
+    where = f"adapters.{aid}"
+    if entry in (None, ""):
+        entry = {}
+    if not isinstance(entry, dict):
+        raise _probe_error(where, "precisa ser um mapa {command, verbs, timeout, credentials}")
+    for key in entry:
+        if key not in PROBE_ADAPTER_KEYS:
+            raise _probe_error(f"{where}.{_key_name(key, 'chave')}", "chave desconhecida — use command, verbs, "
+                               "timeout e credentials")
+    command = entry.get("command")
+    if command in (None, ""):
+        command = None
+    elif (not isinstance(command, list) or not command
+          or any(not isinstance(arg, str) or not arg or any(is_control(c) for c in arg) for arg in command)):
+        raise _probe_error(f"{where}.command", "precisa ser uma lista não vazia [executável, argumentos...] "
+                           "(sem shell)")
+    if command and not _command_head_ok(command[0]):
+        raise _probe_error(f"{where}.command", "o executável é um nome sem pasta (procurado no PATH) ou um caminho "
+                           "absoluto, nunca um caminho relativo")
+    verbs = _name_list(entry.get("verbs"))
+    if verbs is None or any(not PROBE_WORD_RE.match(verb) for verb in verbs):
+        raise _probe_error(f"{where}.verbs", "cada verbo é uma palavra minúscula, sem espaço (letras, dígitos, - "
+                           "e _)")
+    timeout = entry.get("timeout")
+    if timeout in (None, ""):
+        timeout = PROBE_TIMEOUT
+    else:
+        timeout = _int_of(timeout)
+        if timeout is None or not 1 <= timeout <= PROBE_TIMEOUT_MAX:
+            raise _probe_error(f"{where}.timeout", f"precisa ser um número inteiro de segundos, de 1 a "
+                               f"{PROBE_TIMEOUT_MAX}")
+    credentials = _name_list(entry.get("credentials"))
+    if credentials is None or any(not ENV_NAME_RE.match(name) for name in credentials):
+        raise _probe_error(f"{where}.credentials", "aceita só nomes de variável de ambiente (^[A-Z_][A-Z0-9_]*$), "
+                           "nunca valores (ADR-0010)")
+    return {"command": list(command) if command else None, "verbs": list(dict.fromkeys(verbs)),
+            "timeout": timeout, "credentials": list(dict.fromkeys(credentials))}
+
+
+def validate_probes(probes):
+    """The local `probes` key of one atlas entry (SPEC-0088), normalized: {"enabled", "limits": {"lines", "since",
+    "since_seconds"}, "adapters": {<id>: {"command" | None, "verbs", "timeout", "credentials"}}}; None without the
+    key. Invalid = AtlasError (code 2) "probes: <campo> inválido — <motivo>", never the value."""
+    if probes is None:
+        return None
+    if probes == "":
+        probes = {}
+    if not isinstance(probes, dict):
+        raise _probe_error("probes", "precisa ser um mapa {enabled, limits, adapters}")
+    for key in probes:
+        if key not in PROBE_KEYS:
+            raise _probe_error(_key_name(key, "chave"), "chave desconhecida — use enabled, limits e adapters")
+    enabled = probes.get("enabled")
+    if enabled in (None, ""):
+        enabled = False
+    elif not isinstance(enabled, bool):
+        text = str(enabled).strip().lower()
+        if text not in BOOLEANS:
+            raise _probe_error("enabled", "use true ou false")
+        enabled = BOOLEANS[text]
+    limits = probes.get("limits")
+    if limits in (None, ""):
+        limits = {}
+    if not isinstance(limits, dict):
+        raise _probe_error("limits", "precisa ser um mapa {lines, since}")
+    for key in limits:
+        if key not in PROBE_LIMIT_KEYS:
+            raise _probe_error(f"limits.{_key_name(key, 'chave')}", "chave desconhecida — use lines e since")
+    lines = limits.get("lines")
+    lines = PROBE_LINES if lines in (None, "") else _int_of(lines)
+    if lines is None or not 1 <= lines <= PROBE_LINES_MAX:
+        raise _probe_error("limits.lines", f"precisa ser um número inteiro de 1 a {PROBE_LINES_MAX}")
+    since = limits.get("since")
+    since = PROBE_SINCE if since in (None, "") else since
+    seconds = parse_duration(since)
+    if seconds is None or seconds > PROBE_SINCE_MAX:
+        raise _probe_error("limits.since", "precisa ser uma duração como 30m ou 2h, até 24h")
+    adapters = probes.get("adapters")
+    if adapters in (None, ""):
+        adapters = {}
+    if not isinstance(adapters, dict):
+        raise _probe_error("adapters", "precisa ser um mapa <id>: {command, verbs, timeout, credentials}")
+    result = {}
+    for position, (aid, entry) in enumerate(adapters.items(), start=1):
+        if not isinstance(aid, str) or not PROBE_WORD_RE.match(aid):
+            raise _probe_error(f"adapters[{position}]", "o id do adaptador é uma palavra minúscula (letras, dígitos, "
+                               "- e _)")
+        result[aid] = _probe_adapter(aid, entry)
+    return {"enabled": enabled, "limits": {"lines": lines, "since": str(since).strip(), "since_seconds": seconds},
+            "adapters": result}
+
+
+def probes_view(probes) -> dict:
+    """What config shows of `probes` (the defaults without the key): names only, never a credential value."""
+    probes = probes or {"enabled": False, "limits": {"lines": PROBE_LINES, "since": PROBE_SINCE}, "adapters": {}}
+    adapters = {}
+    for aid, adapter in probes["adapters"].items():
+        adapters[aid] = {"command": adapter["command"] if adapter["command"] else "(embutido na skill)",
+                         "verbs": adapter["verbs"], "timeout": adapter["timeout"],
+                         "credentials": adapter["credentials"]}
+    return {"enabled": probes["enabled"],
+            "limits": {"lines": probes["limits"]["lines"], "since": probes["limits"]["since"]},
+            "adapters": adapters}
+
+
+def adapter_command(aid: str, adapter: dict):
+    """The argv of an adapter: its command, or the adapter of the skill (assets/probes/<id>.py) when it has none;
+    None when neither exists. Never built from text of the atlas (ADR-0023)."""
+    if adapter["command"]:
+        return list(adapter["command"])
+    bundled = PROBES_DIR / f"{aid}.py"
+    return [sys.executable, str(bundled)] if bundled.is_file() else None
+
+
+def probe_environment(adapter: dict) -> dict:
+    """The environment of an adapter: PROBE_BASE_ENV plus the credentials declared in it (by name, ADR-0010); a
+    name declared only for another adapter or for the collectors never reaches it."""
+    names = list(PROBE_BASE_ENV) + list(adapter["credentials"])
+    return {name: os.environ[name] for name in names if name in os.environ}
+
+
+def probe_extras(shared) -> list:
+    """Compiled patterns of the probe redaction: the valid redaction.extra_patterns plus PROBE_PATTERNS."""
+    compiled, _ = _extra_patterns(shared or {})
+    return [regex for _, regex in compiled] + list(PROBE_PATTERNS)
+
+
+def probe_mask(value, extras):
+    """value with every secret or personal datum replaced by [REDACTED] (redact + PROBE_PATTERNS)."""
+    return redact(value, extras)[0]
+
+
+# ---------------------------------------------------------------- probe@1 contract (validators)
+
+def _show(key) -> str:
+    return str(key)[:64] if isinstance(key, str) else f"<{type(key).__name__}>"
+
+
+def _closed_keys(data: dict, allowed, required, where="") -> list:
+    prefix = f"{where}." if where else ""
+    problems = [f"chave fora do contrato: {prefix}{_show(key)}" for key in data if key not in allowed]
+    problems += [f"falta a chave {prefix}{key}" for key in required if key not in data]
+    return problems
+
+
+def _contract_problem(data) -> list:
+    return [] if data.get("contract") == PROBE_CONTRACT else [f"contract precisa ser {PROBE_CONTRACT}"]
+
+
+def _word_problem(value, what) -> list:
+    if not isinstance(value, str) or not PROBE_WORD_RE.match(value):
+        return [f"{what} precisa ser uma palavra minúscula, sem espaço (letras, dígitos, - e _)"]
+    return []
+
+
+def validate_probe_describe(data) -> list:
+    """Problems of the answer of `<command> --describe` (probe@1); [] = valid. Never quotes a value."""
+    if not isinstance(data, dict):
+        return ["a descrição precisa ser um objeto JSON"]
+    problems = _closed_keys(data, ("contract", "adapter", "capabilities"), ("contract", "adapter", "capabilities"))
+    problems += _contract_problem(data)
+    if "adapter" in data:
+        problems += _word_problem(data["adapter"], "adapter")
+    capabilities = data.get("capabilities")
+    if "capabilities" in data:
+        if not isinstance(capabilities, dict) or not capabilities:
+            problems.append("capabilities precisa ser um mapa não vazio <capacidade>: [verbos]")
+        else:
+            for cap, verbs in capabilities.items():
+                problems += _word_problem(cap, "o nome de uma capacidade")
+                if not isinstance(verbs, list) or not verbs:
+                    problems.append(f"capabilities.{_show(cap)} precisa ser uma lista não vazia de verbos")
+                    continue
+                for verb in verbs:
+                    problems += _word_problem(verb, f"um verbo de capabilities.{_show(cap)}")
+    return problems
+
+
+def _text_list(value) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) and item for item in value)
+
+
+def validate_probe_input(data) -> list:
+    """Problems of the input written to an adapter's stdin (probe@1); [] = valid."""
+    if not isinstance(data, dict):
+        return ["a entrada precisa ser um objeto JSON"]
+    keys = ("contract", "capability", "verb", "target", "limits")
+    problems = _closed_keys(data, keys, keys) + _contract_problem(data)
+    for key in ("capability", "verb"):
+        if key in data:
+            problems += _word_problem(data[key], key)
+    target = data.get("target")
+    if "target" in data:
+        if not isinstance(target, dict):
+            problems.append("target precisa ser um objeto")
+        else:
+            fields = ("service", "environment", "deployment", "clusters", "context", "namespace", "workloads")
+            problems += _closed_keys(target, fields, fields, "target")
+            for key in ("service", "environment", "deployment", "context"):
+                if key in target and (not isinstance(target[key], str) or not target[key]):
+                    problems.append(f"target.{key} precisa ser um texto não vazio")
+            if "namespace" in target and not isinstance(target["namespace"], str):
+                problems.append("target.namespace precisa ser um texto")
+            for key in ("clusters", "workloads"):
+                if key in target and not _text_list(target[key]):
+                    problems.append(f"target.{key} precisa ser uma lista de textos")
+    limits = data.get("limits")
+    if "limits" in data:
+        if not isinstance(limits, dict):
+            problems.append("limits precisa ser um objeto {lines, since_seconds}")
+        else:
+            problems += _closed_keys(limits, ("lines", "since_seconds"), ("lines", "since_seconds"), "limits")
+            for key, top in (("lines", PROBE_LINES_MAX), ("since_seconds", PROBE_SINCE_MAX)):
+                value = limits.get(key)
+                if key in limits and (isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= top):
+                    problems.append(f"limits.{key} precisa ser um inteiro de 1 a {top}")
+    return problems
+
+
+def _probe_scalar(value) -> bool:
+    return isinstance(value, (str, int, float, bool, type(None)))
+
+
+def validate_probe_output(data) -> list:
+    """Problems of the JSON an adapter prints (probe@1); [] = valid: closed keys, status ok | error, items as a
+    list of objects whose values are scalars or lists of scalars. Never quotes a value (key names only)."""
+    if not isinstance(data, dict):
+        return ["a saída precisa ser um objeto JSON"]
+    allowed = ("contract", "adapter", "capability", "verb", "status", "items", "truncated", "message")
+    problems = _closed_keys(data, allowed, allowed[:-1]) + _contract_problem(data)
+    for key in ("adapter", "capability", "verb"):
+        if key in data:
+            problems += _word_problem(data[key], key)
+    if "status" in data and data["status"] not in ("ok", "error"):
+        problems.append("status precisa ser ok ou error")
+    if "truncated" in data and not isinstance(data["truncated"], bool):
+        problems.append("truncated precisa ser true ou false")
+    if "message" in data and not isinstance(data["message"], str):
+        problems.append("message precisa ser um texto")
+    items = data.get("items")
+    if "items" in data:
+        if not isinstance(items, list):
+            problems.append("items precisa ser uma lista de objetos")
+        else:
+            for index, item in enumerate(items):
+                if not isinstance(item, dict):
+                    problems.append(f"items[{index}] precisa ser um objeto")
+                    continue
+                for key, value in item.items():
+                    if not isinstance(key, str) or not key:
+                        problems.append(f"items[{index}] tem uma chave que não é texto")
+                    elif not (_probe_scalar(value) or (isinstance(value, list)
+                                                         and all(_probe_scalar(v) for v in value))):
+                        problems.append(f"items[{index}].{_show(key)} precisa ser escalar ou lista de escalares")
+    return problems
+
+
+# ---------------------------------------------------------------- probe: summary of log lines
+
+def log_level(line: str) -> str:
+    for level, regex in LOG_LEVELS:
+        if regex.search(line):
+            return level
+    return "other"
+
+
+def log_signature(line: str) -> str:
+    """The line with quoted text, e-mails, UUIDs, hexadecimals of 8 or more and numbers replaced by markers."""
+    for regex, marker in SIGNATURE_RULES:
+        line = regex.sub(marker, line)
+    return line
+
+
+def summarize_log(items: list) -> list:
+    """--summary: the items with "line" grouped by (level, signature) into {"signature", "level", "count",
+    "first_ts", "last_ts", "sample"}, sorted by level (error, warn, info, other), count (desc) and signature."""
+    groups = {}
+    for item in items:
+        line = item.get("line")
+        if not isinstance(line, str):
+            continue
+        ts = item.get("ts") if isinstance(item.get("ts"), str) else ""
+        key = (log_level(line), log_signature(line))
+        group = groups.setdefault(key, {"signature": key[1], "level": key[0], "count": 0, "first_ts": ts,
+                                        "last_ts": ts, "sample": line})
+        group["count"] += 1
+        if ts and (not group["first_ts"] or ts < group["first_ts"]):
+            group["first_ts"] = ts
+        if ts and (not group["last_ts"] or ts > group["last_ts"]):
+            group["last_ts"] = ts
+    return sorted(groups.values(), key=lambda g: (LEVEL_ORDER[g["level"]], -g["count"], g["signature"]))
+
+
+# ---------------------------------------------------------------- probe: the command
+
+def probe_log_path() -> Path:
+    """<folder of this machine's local configuration>/probes.log (never in the atlas, ADR-0023)."""
+    return local_config_write_path().parent / PROBE_LOG
+
+
+def write_probe_log(record: dict, extras) -> None:
+    """Appends one JSON line (the keys of the contract only: never items, message nor the context)."""
+    line = {key: record[key] for key in ("at", "atlas", "service", "environment", "capability", "verb", "adapter",
+                                         "status", "exit", "confirmed_production")}
+    line = probe_mask(line, extras)
+    path = probe_log_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n")
+    except OSError as e:
+        print(f"aviso: não consegui gravar o registro local {path}: {e.strerror or e}", file=sys.stderr)
+
+
+def _probe_limits(args, probes) -> tuple:
+    """(lines, since_seconds) from --lines/--since or probes.limits; out of range = AtlasError (code 2)."""
+    lines = probes["limits"]["lines"]
+    if args.lines is not None:
+        lines = _int_of(args.lines)
+        if lines is None or not 1 <= lines <= PROBE_LINES_MAX:
+            raise AtlasError(f"--lines precisa ser um número inteiro de 1 a {PROBE_LINES_MAX}", 2)
+    seconds = probes["limits"]["since_seconds"]
+    if args.since is not None:
+        seconds = parse_duration(args.since)
+        if seconds is None or seconds > PROBE_SINCE_MAX:
+            raise AtlasError("--since inválido — use uma duração como 30m ou 2h, até 24h", 2)
+    return lines, seconds
+
+
+def probe_target(atlas: Path, service: str, environment: str) -> dict:
+    """The deployment of service:<service> that runs_in environment:<environment>, from graph.json (the first by id
+    when there are several): {"deployment", "environment", "clusters", "namespace", "workloads"}. None found =
+    AtlasError (code 2) naming what was looked for."""
+    graph = read_json_file(atlas / GRAPH_FILE)
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list) or not isinstance(
+            graph.get("edges"), list):
+        raise AtlasError("atlas sem graph.json — rode scan e build", 2)
+    index = _Index(graph)
+    key = f"service:{service}"
+    if key not in index.nodes:
+        key = next((k for k, node in sorted(index.nodes.items())
+                    if node["kind"] == "service" and node.get("name") == service), key)
+    found = []
+    for deployment in sorted(index.sources(key, "deploys", "deployment")):
+        for env in index.targets(deployment, "runs_in", "environment"):
+            eid = env.split(":", 1)[1]
+            if environment in (eid, index.name(env)):
+                found.append((deployment, eid))
+                break
+    if not found:
+        raise AtlasError(f"nenhum deployment de service:{service} em environment:{environment} no atlas (veja "
+                         "`context` ou rode scan e build)", 2)
+    deployment, eid = found[0]
+    attrs = index.nodes.get(deployment, {}).get("attrs", {})
+    clusters = index.targets(deployment, "runs_in", "cluster")
+    workloads = attrs.get("workloads") if isinstance(attrs.get("workloads"), list) else []
+    return {"deployment": deployment.split(":", 1)[1], "environment": eid,
+            "clusters": sorted({index.name(c) for c in clusters}),
+            "cluster_ids": {index.name(c): c.split(":", 1)[1] for c in clusters},
+            "namespace": attrs["namespace"] if isinstance(attrs.get("namespace"), str) else "",
+            "workloads": sorted({str(w) for w in workloads if isinstance(w, str) and w})}
+
+
+def _adapter_failure(aid, step, error: CollectorError, extras) -> AtlasError:
+    tail = stderr_tail(error.stderr, extras)
+    detail = probe_mask(error.reason, extras)
+    text = f"adaptador {aid}: {step} falhou — {detail}"
+    if tail:
+        text += "\n" + "\n".join(f"  {line}" for line in tail)
+    return AtlasError(text, 1)
+
+
+def _reject_surrogates(data) -> None:
+    """ValueError when a string (key or value) of the adapter output has a lone surrogate (no UTF-8; Emenda v5)."""
+    stack = [data]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            try:
+                item.encode("utf-8")
+            except UnicodeEncodeError:
+                raise ValueError("surrogate solto") from None
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+
+
+def _reject_constant(name):
+    raise ValueError(f"{name} não é JSON padrão")
+
+
+def _finite_float(text):
+    value = float(text)
+    if not math.isfinite(value):
+        raise ValueError("número fora do JSON padrão")
+    return value
+
+
+def literal_variants(value: str) -> set:
+    """The forms of a value that the literal mask catches (Emenda v5): raw, escaped as inside a JSON string (ASCII
+    or not, with or without "/" as "\\/") and URL-encoded (no safe characters)."""
+    forms = {value, urllib.parse.quote(value, safe="")}
+    for ascii_only in (True, False):
+        escaped = json.dumps(value, ensure_ascii=ascii_only)[1:-1]
+        forms |= {escaped, escaped.replace("/", "\\/")}
+    return {form for form in forms if form}
+
+
+def literal_masks(values) -> list:
+    """Patterns that mask each non-empty value literally (the context and the declared credentials, Emenda v4), in
+    every form of literal_variants and without case difference (Emenda v5). They match the original text together
+    with the secret patterns and the spans are joined (Emenda v6), so neither breaks the other."""
+    forms = set()
+    for value in values:
+        if isinstance(value, str) and value:
+            forms |= literal_variants(value)
+    unique = sorted(forms, key=lambda form: (-len(form), form))
+    return [re.compile(re.escape(form), re.IGNORECASE) for form in unique]
+
+
+def adapter_values(adapter: dict) -> list:
+    """The values (in this environment) of the credentials declared in the adapter."""
+    return [os.environ.get(name, "") for name in adapter["credentials"]]
+
+
+def cluster_problem(cluster) -> bool:
+    """True when a target.clusters entry is neither a simple name (ENVIRONMENT_NAME_RE) nor a server URL without
+    space or control character and not starting with - (Emenda v5)."""
+    if not isinstance(cluster, str):
+        return True
+    if ENVIRONMENT_NAME_RE.match(cluster):
+        return False
+    return (cluster.startswith("-") or not CLUSTER_URL_RE.match(cluster)
+            or any(ch.isspace() or not ch.isprintable() for ch in cluster))
+
+
+def target_problem(target: dict, service: str):
+    """Why a target field from the atlas is out of the rules of Emenda v4 (fixed text, never the value), or None:
+    namespace a DNS-1123 label, each workload Kind/name (name a DNS-1123 subdomain, Kind not starting with -),
+    service, deployment and environment by the simple name rule (ENVIRONMENT_NAME_RE); each cluster by
+    cluster_problem (Emenda v5)."""
+    for what, value in (("service", service), ("environment", target["environment"]),
+                        ("deployment", target["deployment"])):
+        if not isinstance(value, str) or not ENVIRONMENT_NAME_RE.match(value):
+            return f"{what} fora da regra de nome (letras, dígitos, . _ -, sem espaço, sem começar com -)"
+    namespace = target["namespace"]
+    if namespace and not DNS_LABEL_RE.match(namespace):
+        return "namespace fora do DNS-1123 (minúsculas, dígitos e -, até 63, sem começar ou terminar com -)"
+    for workload in target["workloads"]:
+        kind, sep, name = workload.partition("/")
+        if (not sep or not kind or kind.startswith("-") or len(name) > DNS_SUBDOMAIN_MAX
+                or not DNS_SUBDOMAIN_RE.match(name)):
+            return ("workload fora de Kind/nome (o nome em DNS-1123 subdomínio, até 253; nenhum dos dois começa "
+                    "com -)")
+    if any(cluster_problem(cluster) for cluster in target["clusters"]):
+        return ("cluster fora da regra de nome (letras, dígitos, . _ -) ou de URL de servidor (sem espaço, sem "
+                "caractere de controle, sem começar com -)")
+    return None
+
+
+def _run_adapter(aid, argv, adapter, extras, input_text=None) -> dict:
+    """Runs one adapter (run_collector: list, no shell, timeout, 1 MB) and parses its JSON; failure = exit 1."""
+    step = "--describe" if input_text is None else "a consulta"
+    try:
+        stdout, _ = run_collector(argv, timeout=adapter["timeout"], env=probe_environment(adapter),
+                                  input_text=input_text, max_bytes=PROBE_MAX_BYTES)
+    except CollectorError as e:
+        raise _adapter_failure(aid, step, e, extras) from None
+    try:
+        data = json.loads(stdout, parse_constant=_reject_constant, parse_float=_finite_float)
+        _reject_surrogates(data)
+        return data
+    except (ValueError, RecursionError):  # also NaN/Infinity, numbers out of range and deep nesting (Emenda v4)
+        raise AtlasError(f"adaptador {aid}: {step} — a saída não é JSON válido (contrato {PROBE_CONTRACT})",
+                         1) from None
+
+
+def _contract_failure(aid, what, problems, extras) -> AtlasError:
+    shown = probe_mask(problems[:10], extras)
+    return AtlasError(f"adaptador {aid}: {what} fora do contrato {PROBE_CONTRACT} — {'; '.join(shown)}", 1)
+
+
+def choose_adapter(probes, capability, extras, literals) -> tuple:
+    """(id, adapter, argv, verbs of the capability) of the first adapter whose --describe declares the capability;
+    none = AtlasError (code 4). The core appends --describe to the end of the command. `extras` are the secret
+    patterns; `literals` the values masked literally with them, in one pass (the context; Emenda v6)."""
+    for aid, adapter in probes["adapters"].items():
+        argv = adapter_command(aid, adapter)
+        if argv is None:
+            raise AtlasError(f"probes: adapters.{aid}.command inválido — sem command e a skill não traz o adaptador "
+                             f"{aid}", 2)
+        masks = extras + literal_masks(literals + adapter_values(adapter))
+        described = _run_adapter(aid, argv + ["--describe"], adapter, masks)
+        problems = validate_probe_describe(described)
+        if problems:
+            raise _contract_failure(aid, "--describe", problems, masks)
+        if capability in described["capabilities"]:
+            return aid, adapter, argv, described["capabilities"][capability]
+    raise AtlasError(f"nenhum adaptador para {capability} (probes.adapters)", 4)
+
+
+def _item_line(item: dict) -> str:
+    parts = []
+    for key, value in item.items():
+        shown = ", ".join(_fmt_value(v) for v in value) if isinstance(value, list) else _fmt_value(value)
+        parts.append(f"{key}: {shown}")
+    return " · ".join(parts)
+
+
+def print_probe(result: dict, request: dict, summary: bool) -> None:
+    count = len(result["items"])
+    head = (f"probe {request['capability']} {request['verb']} — {request['service']} em {request['environment']} "
+            f"(deployment {request['deployment']}), adaptador {result['adapter']}: {result['status']}, "
+            f"{count} {'assinatura(s)' if summary else 'item(ns)'}")
+    print(head + (" — truncado" if result["truncated"] else ""))
+    for item in result["items"]:
+        if summary:
+            print(f"- [{item['level']}] ×{item['count']} {item['signature']} ({item['first_ts']} → {item['last_ts']})")
+            print(f"  exemplo: {item['sample']}")
+        else:
+            print(f"- {_item_line(item)}")
+    if result.get("message"):
+        print(f"mensagem: {result['message']}")
+
+
+def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> int:
+    for what, value in (("capacidade", args.capability), ("verbo", args.verb)):
+        if not PROBE_WORD_RE.match(value):
+            raise AtlasError(f"{what} inválido — use uma palavra minúscula, sem espaço (letras, dígitos, - e _)", 2)
+    lines, since_seconds = _probe_limits(args, probes)
+    for what, value in (("--service", args.service), ("--env", args.env)):
+        if not ENVIRONMENT_NAME_RE.match(value):
+            raise AtlasError(f"{what} inválido — use um nome do atlas (letras, dígitos, . _ -, sem espaço, sem "
+                             "começar com -)", 2)
+    access = validate_access(entry.get("access"))
+    atlas, shared = scan_config(args.atlas)
+    extras = probe_extras(shared)
+    extras_box[:] = extras
+    tiers = validate_environments(shared.get("environments"))
+    target = probe_target(atlas, args.service, args.env)
+    problem = target_problem(target, args.service)
+    if problem:  # checked before any process runs, --describe included (Emenda v4)
+        raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
+    reachable = [c for c in target["clusters"] if c in access or target["cluster_ids"].get(c) in access]
+    context = (access.get(reachable[0]) or access[target["cluster_ids"][reachable[0]]]) if reachable else None
+    # the context never shows in what comes from the adapter; patterns and literals mask in one pass (Emenda v6)
+    patterns = extras
+    extras = patterns + literal_masks([context])
+    extras_box[:] = extras
+    aid, adapter, argv, declared = choose_adapter(probes, args.capability, patterns, [context])
+    record["adapter"] = aid
+    extras = patterns + literal_masks([context] + adapter_values(adapter))
+    extras_box[:] = extras
+    allowed = [verb for verb in declared if verb in adapter["verbs"]]
+    if args.verb not in allowed:
+        raise AtlasError(f"verbo {args.verb} não permitido para {args.capability} no adaptador {aid} (permitidos: "
+                         f"{', '.join(allowed) or 'nenhum'}; a interseção dos verbos do adaptador com "
+                         f"probes.adapters.{aid}.verbs)", 4)
+    if tiers.get(target["environment"]) != "test" and not args.confirm_production:
+        raise AtlasError(f"ambiente {args.env} é de produção ou sem marcação: confirme com a pessoa e use "
+                         "--confirm-production", 4)
+    if not target["clusters"]:
+        raise AtlasError(f"sem acesso local ao cluster: o deployment {target['deployment']} não tem cluster no "
+                         "atlas", 4)
+    if not reachable:
+        raise AtlasError(f"sem acesso local ao cluster {', '.join(target['clusters'])} (access.clusters)", 4)
+    request = {"contract": PROBE_CONTRACT, "capability": args.capability, "verb": args.verb,
+               "target": {"service": args.service, "environment": target["environment"],
+                          "deployment": target["deployment"], "clusters": target["clusters"], "context": context,
+                          "namespace": target["namespace"],
+                          "workloads": target["workloads"]},
+               "limits": {"lines": lines, "since_seconds": since_seconds}}
+    problems = validate_probe_input(request)
+    if problems:  # the atlas has a value the contract does not accept: never sent to the adapter
+        raise AtlasError(f"alvo fora do contrato {PROBE_CONTRACT} — {'; '.join(probe_mask(problems, extras))}", 2)
+    data = _run_adapter(aid, argv, adapter, extras, json.dumps(request, ensure_ascii=False))
+    problems = validate_probe_output(data)
+    if not problems:
+        problems = [f"{key} diferente do pedido" for key in ("capability", "verb") if data[key] != request[key]]
+        if data["adapter"] != aid:
+            problems.append("adapter diferente do id do adaptador que rodou")
+    if problems:
+        raise _contract_failure(aid, "a saída", problems, extras)
+    message = probe_mask(str(data.get("message") or ""), extras)[:PROBE_MESSAGE_MAX]
+    if data["status"] == "error":
+        if args.json:
+            result = {key: data[key] for key in ("contract", "adapter", "capability", "verb", "status")}
+            # the message is already masked: masking it again would put a marker inside a marker (Emenda v6)
+            print(json.dumps(dict(probe_mask(result, extras), items=[], truncated=False, message=message),
+                             ensure_ascii=False, indent=2, allow_nan=False))
+        print(f"erro: adaptador {aid} respondeu com erro: {message or '(sem mensagem)'}", file=sys.stderr)
+        return 1
+    items = probe_mask(data["items"], extras)
+    truncated = bool(data["truncated"]) or len(items) > lines
+    items = items[:lines]
+    if args.summary:
+        if items and not any(isinstance(item.get("line"), str) for item in items):
+            raise AtlasError("--summary vale só para verbos que devolvem linhas de log (itens com line)", 2)
+        items = summarize_log(items)
+    result = {"contract": PROBE_CONTRACT, "adapter": aid,
+              "capability": args.capability, "verb": args.verb, "status": "ok", "items": items,
+              "truncated": truncated}
+    if message:
+        result["message"] = message
+    request_view = {"capability": args.capability, "verb": args.verb, "service": args.service,
+                    "environment": args.env, "deployment": target["deployment"]}
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+    else:
+        print_probe(result, request_view, args.summary)
+    return 0
+
+
+def cmd_probe(args):
+    """probe <capacidade> <verbo> --service <id> --env <ambiente> (SPEC-0088, ADR-0023): a read-only query through
+    a declared adapter. Off by default (exit 4); invalid `probes` or argument = 2; refused (verb, production
+    without --confirm-production, no local access, no adapter) = 4; adapter failure or invalid output = 1. Every
+    probe that passes the on/off check leaves one line in probes.log (never the result); nothing goes to the
+    atlas."""
+    config, name, _ = chosen_atlas(choice=args.atlas)
+    entry = config["entries"][name]
+    probes = validate_probes(entry.get("probes"))
+    if not probes or not probes["enabled"]:
+        raise AtlasError(PROBES_OFF, 4)
+    record = {"atlas": name, "service": args.service, "environment": args.env, "capability": args.capability,
+              "verb": args.verb, "adapter": "", "confirmed_production": bool(args.confirm_production)}
+    extras_box = list(PROBE_PATTERNS)  # _probe adds redaction.extra_patterns once the atlas is read
+    code = 1
+    try:
+        code = _probe(args, record, probes, entry, extras_box)
+        return code
+    except AtlasError as e:
+        code = e.code
+        raise
+    finally:
+        record["status"] = {0: "ok", 1: "error", 2: "invalid", 4: "refused"}.get(code, "error")
+        record["exit"] = code
+        record["at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        write_probe_log(record, extras_box)
+
+
+def probe_checks(local: dict) -> list:
+    """doctor rows of the probes (SPEC-0088): on or off, and each adapter found or not (shutil.which only; no
+    process runs). A missing adapter is ERRO with the probes on and AVISO with them off; no row without the key."""
+    if not isinstance(local, dict) or "probes" not in local:  # without the key the doctor stays as it was
+        return []
+    try:
+        probes = validate_probes(local.get("probes"))
+    except AtlasError as e:
+        return [("ERRO", "probes", str(e))]
+    rows = [("OK", "probes", f"ligadas, {len(probes['adapters'])} adaptador(es)" if probes["enabled"]
+             else "desligadas (probes.enabled: false)")]
+    missing = "ERRO" if probes["enabled"] else "AVISO"
+    for aid, adapter in probes["adapters"].items():
+        argv = adapter_command(aid, adapter)
+        if argv is None:
+            rows.append((missing, f"adaptador {aid}", "sem command e a skill não traz esse adaptador"))
+        elif shutil.which(argv[0]) or (Path(argv[0]).is_file() and os.access(argv[0], os.X_OK)):
+            rows.append(("OK", f"adaptador {aid}", f"executável {argv[0]} encontrado"))
+        else:
+            rows.append((missing, f"adaptador {aid}", f"executável {argv[0]} não encontrado"))
+    return rows
+
+
 # ---------------------------------------------------------------- doctor
 
 def check_shared(data: dict) -> list:
@@ -4655,26 +5547,27 @@ def doctor_rows(config_home=None, choice=None) -> list:
     atlas = local.get("atlas")
     if not isinstance(atlas, str) or not atlas:
         rows.append(("ERRO", "pasta do atlas", f"atlas não definido em {path} — rode init (ou init --join)"))
-        return rows + credential_checks(credentials)
+        return rows + credential_checks(credentials) + probe_checks(local)
     if not Path(atlas).is_absolute():
         detail = f"caminho relativo: {atlas} — use o caminho absoluto em {path} (ou rode init --join)"
         rows.append(("ERRO", "pasta do atlas", detail))
-        return rows + credential_checks(credentials)
+        return rows + credential_checks(credentials) + probe_checks(local)
     try:
         if not Path(atlas).is_dir():
             rows.append(("ERRO", "pasta do atlas", f"não existe: {atlas}"))
-            return rows + credential_checks(credentials)
+            return rows + credential_checks(credentials) + probe_checks(local)
         problem = unreadable_atlas(atlas)
         if problem:
             rows.append(("ERRO", "pasta do atlas", problem))
-            return rows + credential_checks(credentials)
+            return rows + credential_checks(credentials) + probe_checks(local)
         found, shared = atlas_checks(Path(atlas))
     except OSError as e:
         rows.append(("ERRO", "pasta do atlas", f"não consegui ler {atlas}: {e.strerror or e}"))
-        return rows + credential_checks(credentials)
+        return rows + credential_checks(credentials) + probe_checks(local)
     rows.append(("OK", "pasta do atlas", atlas))
     rows += found + old_copy_items(Path(atlas)) + collector_checks((shared or {}).get("collectors"))
-    return rows + credential_checks(credentials) + access_map_items(Path(atlas), shared, access)
+    return (rows + credential_checks(credentials) + access_map_items(Path(atlas), shared, access)
+            + probe_checks(local))
 
 
 def access_map_items(atlas: Path, shared, access) -> list:
@@ -4772,6 +5665,19 @@ def main(argv=None):
     p.add_argument("--max-chars", type=int, default=30000, help="tamanho máximo do pacote")
     p.add_argument("--json", action="store_true")
     add_atlas_option(p)
+    p = sub.add_parser("probe", help="consulta só de leitura na infraestrutura por um adaptador declarado (desligada "
+                                     "por padrão; references/probes.md)")
+    p.add_argument("capability", help="capacidade (runtime, ...)")
+    p.add_argument("verb", help="verbo de leitura (status, events, logs, ...)")
+    p.add_argument("--service", required=True, help="id do serviço no atlas")
+    p.add_argument("--env", required=True, help="ambiente do deployment")
+    p.add_argument("--since", help="janela de tempo (30m, 2h; até 24h; padrão: probes.limits.since)")
+    p.add_argument("--lines", help="máximo de itens (1..2000; padrão: probes.limits.lines)")
+    p.add_argument("--summary", action="store_true", help="agrupa linhas de log por nível e assinatura")
+    p.add_argument("--confirm-production", action="store_true",
+                   help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
+    p.add_argument("--json", action="store_true")
+    add_atlas_option(p)
     p = sub.add_parser("curate", help="propõe convenções (inferred) e registra a decisão humana (confirm | reject)")
     curate = p.add_subparsers(dest="action", required=True)
     q = curate.add_parser("propose", help="cria ou atualiza conventions/<id>.md a partir dos sinais")
@@ -4813,6 +5719,8 @@ def main(argv=None):
             return cmd_context(args)
         if args.command == "curate":
             return cmd_curate(args)
+        if args.command == "probe":
+            return cmd_probe(args)
         if args.command == "vendor":
             return cmd_vendor(args)
     except AtlasError as e:

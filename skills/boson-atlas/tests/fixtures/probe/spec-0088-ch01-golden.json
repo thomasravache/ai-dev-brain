@@ -1,0 +1,652 @@
+{
+  "config": {
+    "atlas_name": "acme",
+    "atlases": [
+      {
+        "atlas": "<ROOT>/work/acme-atlas",
+        "default": true,
+        "name": "acme"
+      }
+    ],
+    "origins": {
+      "access": "local",
+      "atlas": "local",
+      "categories": "atlas",
+      "ci": "padrão",
+      "collectors": "atlas",
+      "credentials": "local",
+      "curation": "padrão",
+      "environments": "atlas",
+      "image_repositories": "padrão",
+      "language": "atlas",
+      "mode": "atlas",
+      "organization": "atlas",
+      "redaction": "atlas",
+      "remotes": "padrão",
+      "stale_days": "atlas",
+      "version": "atlas"
+    },
+    "selected_by": "single",
+    "values": {
+      "access": {
+        "clusters": {
+          "cluster-dev": {
+            "context": "definido"
+          },
+          "cluster-qa": {
+            "context": "definido"
+          },
+          "cluster-stg": {
+            "context": "definido"
+          }
+        }
+      },
+      "atlas": "<ROOT>/work/acme-atlas",
+      "categories": [
+        "code",
+        "delivery"
+      ],
+      "ci": "",
+      "collectors": [
+        {
+          "category": "delivery",
+          "command": [
+            "python3",
+            "{skill}/assets/collectors/argocd.py",
+            "--from",
+            "argocd",
+            "--input",
+            "{atlas}/../inputs/apps.json",
+            "--service-pattern",
+            "^(?:dev|qa|stg|sbx)-(?P<service>.+)$"
+          ],
+          "id": "argocd",
+          "timeout": "60"
+        }
+      ],
+      "credentials": {},
+      "curation": {
+        "min_repos": "3",
+        "min_share": "0.6",
+        "min_total": "20"
+      },
+      "environments": {
+        "dev": {
+          "tier": "test"
+        },
+        "qa": {
+          "tier": "production"
+        },
+        "sbx": {
+          "tier": "test"
+        }
+      },
+      "image_repositories": {},
+      "language": "auto",
+      "mode": "local",
+      "organization": "Acme",
+      "redaction": {
+        "extra_patterns": []
+      },
+      "remotes": [],
+      "stale_days": "14",
+      "version": "1"
+    }
+  },
+  "config_exit": 0,
+  "context_json": {
+    "dependencies": [],
+    "hints": [],
+    "omitted": [],
+    "query": "api",
+    "rules": [],
+    "services": [
+      {
+        "attrs": {},
+        "delivery": {
+          "code_repositories": [],
+          "config_repositories": [],
+          "deployments": [
+            {
+              "access": true,
+              "clusters": [
+                "cluster-dev"
+              ],
+              "environments": [
+                "dev"
+              ],
+              "health_status": "Healthy",
+              "id": "dev-api",
+              "images": [
+                "acme/api"
+              ],
+              "namespace": "api-dev",
+              "sync_status": "Synced",
+              "tier": "test",
+              "workloads": [
+                "Deployment/api"
+              ]
+            },
+            {
+              "access": true,
+              "clusters": [
+                "cluster-qa"
+              ],
+              "environments": [
+                "qa"
+              ],
+              "health_status": "Degraded",
+              "id": "qa-api",
+              "images": [
+                "acme/api"
+              ],
+              "namespace": "api-qa",
+              "sync_status": "OutOfSync",
+              "tier": "production",
+              "workloads": [
+                "Deployment/api"
+              ]
+            },
+            {
+              "access": false,
+              "clusters": [
+                "cluster-sbx"
+              ],
+              "environments": [
+                "sbx"
+              ],
+              "health_status": "Healthy",
+              "id": "sbx-api",
+              "images": [
+                "acme/api"
+              ],
+              "namespace": "api-sbx",
+              "sync_status": "Synced",
+              "tier": "test"
+            },
+            {
+              "access": true,
+              "clusters": [
+                "cluster-stg"
+              ],
+              "environments": [
+                "stg"
+              ],
+              "health_status": "Healthy",
+              "id": "stg-api",
+              "images": [
+                "acme/api"
+              ],
+              "namespace": "api-stg",
+              "sync_status": "Synced"
+            }
+          ],
+          "images": [],
+          "pipelines": []
+        },
+        "deployments": [
+          {
+            "environments": [
+              "dev"
+            ],
+            "id": "dev-api"
+          },
+          {
+            "environments": [
+              "qa"
+            ],
+            "id": "qa-api"
+          },
+          {
+            "environments": [
+              "sbx"
+            ],
+            "id": "sbx-api"
+          },
+          {
+            "environments": [
+              "stg"
+            ],
+            "id": "stg-api"
+          }
+        ],
+        "key": "service:api",
+        "name": "api",
+        "owners": [],
+        "page": "services/api.md",
+        "reason": "nome: api",
+        "repositories": [
+          "acme/iac"
+        ],
+        "score": 10,
+        "seen_at": "<TODAY>"
+      }
+    ],
+    "version": "<VERSION>",
+    "warnings": []
+  },
+  "context_markdown": "## Serviços\n\n### `api` (`service:api`)\n\n- Página: services/api.md\n- Encontrado por: nome: api (pontuação 10)\n- Repositório: acme/iac\n- Deployments: dev: dev-api; qa: qa-api; sbx: sbx-api; stg: stg-api\n- Entrega:\n  - dev: `dev-api` — cluster `cluster-dev`; sync `Synced`; health `Healthy`; tier `test`; namespace `api-dev`; workloads `Deployment/api`\n  - qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`; tier `production`; namespace `api-qa`; workloads `Deployment/api`\n  - sbx: `sbx-api` — cluster `cluster-sbx`; sync `Synced`; health `Healthy`; tier `test`; namespace `api-sbx`; sem acesso local\n  - stg: `stg-api` — cluster `cluster-stg`; sync `Synced`; health `Healthy`; namespace `api-stg`\n- Visto em: <TODAY>\n\n",
+  "doctor": [
+    "OK configuração local — <ROOT>/config-home/config.yml",
+    "OK Atlas configurados — 1 (acme)",
+    "OK atlas escolhido — acme (escolhido por: único)",
+    "OK pasta do atlas — <ROOT>/work/acme-atlas",
+    "OK atlas-config.yml — versão 1, Acme, modo local",
+    "OK estrutura — ATLAS.md, glossary.md, services/, platform/, conventions/, process/, snapshots/",
+    "AVISO git — a pasta não é um repositório git — rode git init (modo local) ou clone o repositório do atlas (modo repo)",
+    "OK coletor argocd — executável python3 encontrado",
+    "AVISO ambientes sem marcação — stg (conta como produção)",
+    "OK acesso cluster-dev — contexto definido",
+    "OK acesso cluster-qa — contexto definido",
+    "AVISO acesso cluster-sbx — sem contexto local",
+    "OK acesso cluster-stg — contexto definido"
+  ],
+  "doctor_exit": 0,
+  "graph": {
+    "built_at": "<TODAY>",
+    "edges": [
+      {
+        "from": "deployment:dev-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "service:api",
+        "type": "deploys"
+      },
+      {
+        "from": "deployment:dev-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "cluster:cluster-dev",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:dev-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "environment:dev",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:dev-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "repository:acme/iac",
+        "type": "sourced_from"
+      },
+      {
+        "from": "deployment:qa-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "service:api",
+        "type": "deploys"
+      },
+      {
+        "from": "deployment:qa-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "cluster:cluster-qa",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:qa-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "environment:qa",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:qa-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "repository:acme/iac",
+        "type": "sourced_from"
+      },
+      {
+        "from": "deployment:sbx-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "service:api",
+        "type": "deploys"
+      },
+      {
+        "from": "deployment:sbx-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "cluster:cluster-sbx",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:sbx-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "environment:sbx",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:sbx-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "repository:acme/iac",
+        "type": "sourced_from"
+      },
+      {
+        "from": "deployment:stg-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "service:api",
+        "type": "deploys"
+      },
+      {
+        "from": "deployment:stg-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "cluster:cluster-stg",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:stg-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "environment:stg",
+        "type": "runs_in"
+      },
+      {
+        "from": "deployment:stg-api",
+        "inferred": false,
+        "sources": [
+          "argocd"
+        ],
+        "to": "repository:acme/iac",
+        "type": "sourced_from"
+      },
+      {
+        "evidence": "deployment:dev-api",
+        "from": "service:api",
+        "inferred": true,
+        "sources": [
+          "argocd"
+        ],
+        "to": "repository:acme/iac",
+        "type": "sourced_from"
+      }
+    ],
+    "nodes": [
+      {
+        "attrs": {},
+        "conflicts": [],
+        "key": "cluster:cluster-dev",
+        "kind": "cluster",
+        "name": "cluster-dev",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {},
+        "conflicts": [],
+        "key": "cluster:cluster-qa",
+        "kind": "cluster",
+        "name": "cluster-qa",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {},
+        "conflicts": [],
+        "key": "cluster:cluster-sbx",
+        "kind": "cluster",
+        "name": "cluster-sbx",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {},
+        "conflicts": [],
+        "key": "cluster:cluster-stg",
+        "kind": "cluster",
+        "name": "cluster-stg",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {
+          "config_refs": [],
+          "health_status": "Healthy",
+          "images": [
+            "acme/api"
+          ],
+          "namespace": "api-dev",
+          "project": "team-x",
+          "sync_status": "Synced",
+          "workloads": [
+            "Deployment/api"
+          ]
+        },
+        "conflicts": [],
+        "key": "deployment:dev-api",
+        "kind": "deployment",
+        "name": "dev-api",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {
+          "config_refs": [],
+          "health_status": "Degraded",
+          "images": [
+            "acme/api"
+          ],
+          "namespace": "api-qa",
+          "project": "team-x",
+          "sync_status": "OutOfSync",
+          "workloads": [
+            "Deployment/api"
+          ]
+        },
+        "conflicts": [],
+        "key": "deployment:qa-api",
+        "kind": "deployment",
+        "name": "qa-api",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {
+          "config_refs": [],
+          "health_status": "Healthy",
+          "images": [
+            "acme/api"
+          ],
+          "namespace": "api-sbx",
+          "project": "team-x",
+          "sync_status": "Synced"
+        },
+        "conflicts": [],
+        "key": "deployment:sbx-api",
+        "kind": "deployment",
+        "name": "sbx-api",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {
+          "config_refs": [],
+          "health_status": "Healthy",
+          "images": [
+            "acme/api"
+          ],
+          "namespace": "api-stg",
+          "project": "team-x",
+          "sync_status": "Synced"
+        },
+        "conflicts": [],
+        "key": "deployment:stg-api",
+        "kind": "deployment",
+        "name": "stg-api",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {
+          "tier": "test"
+        },
+        "conflicts": [],
+        "key": "environment:dev",
+        "kind": "environment",
+        "name": "dev",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {
+          "tier": "production"
+        },
+        "conflicts": [],
+        "key": "environment:qa",
+        "kind": "environment",
+        "name": "qa",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {
+          "tier": "test"
+        },
+        "conflicts": [],
+        "key": "environment:sbx",
+        "kind": "environment",
+        "name": "sbx",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {},
+        "conflicts": [],
+        "key": "environment:stg",
+        "kind": "environment",
+        "name": "stg",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      },
+      {
+        "attrs": {},
+        "conflicts": [],
+        "key": "service:api",
+        "kind": "service",
+        "name": "api",
+        "seen_at": "<TODAY>",
+        "sources": [
+          "argocd"
+        ]
+      }
+    ],
+    "organization": "Acme",
+    "version": 1
+  },
+  "lint": [
+    {
+      "detail": "aresta deployment:dev-api sourced_from repository:acme/iac: repository:acme/iac não existe",
+      "path": "graph.json",
+      "rule": "broken-ref",
+      "severity": "warn",
+      "suggestion": "rode o coletor que declara a entidade (scan) ou corrija o coletor que aponta para ela"
+    },
+    {
+      "detail": "aresta deployment:qa-api sourced_from repository:acme/iac: repository:acme/iac não existe",
+      "path": "graph.json",
+      "rule": "broken-ref",
+      "severity": "warn",
+      "suggestion": "rode o coletor que declara a entidade (scan) ou corrija o coletor que aponta para ela"
+    },
+    {
+      "detail": "aresta deployment:sbx-api sourced_from repository:acme/iac: repository:acme/iac não existe",
+      "path": "graph.json",
+      "rule": "broken-ref",
+      "severity": "warn",
+      "suggestion": "rode o coletor que declara a entidade (scan) ou corrija o coletor que aponta para ela"
+    },
+    {
+      "detail": "aresta deployment:stg-api sourced_from repository:acme/iac: repository:acme/iac não existe",
+      "path": "graph.json",
+      "rule": "broken-ref",
+      "severity": "warn",
+      "suggestion": "rode o coletor que declara a entidade (scan) ou corrija o coletor que aponta para ela"
+    },
+    {
+      "detail": "aresta service:api sourced_from repository:acme/iac: repository:acme/iac não existe",
+      "path": "graph.json",
+      "rule": "broken-ref",
+      "severity": "warn",
+      "suggestion": "rode o coletor que declara a entidade (scan) ou corrija o coletor que aponta para ela"
+    },
+    {
+      "detail": "ambiente stg sem marcação em environments: (conta como produção)",
+      "path": "atlas-config.yml",
+      "rule": "untiered-environment",
+      "severity": "warn",
+      "suggestion": "marque o ambiente em environments: do atlas-config.yml com {tier: test} ou {tier: production} (references/config.md)"
+    }
+  ],
+  "lint_errors": 0,
+  "lint_exit": 0,
+  "pages": {
+    "ATLAS.md": "# Atlas — Acme\n\nMapa de como a organização desenvolve e opera software, mantido pela skill `boson-atlas` junto com os agentes.\nO texto fora das regiões geradas é de quem mantém o atlas: o `atlas.py` nunca o reescreve.\n\n## Sobre\n\n<!-- atlas:begin about -->\nEstrutura: `services/` (um serviço por página), `platform/` (infraestrutura e entrega), `conventions/`\n(padrões de código e de repositório), `process/` (como o time trabalha), `glossary.md` (termos), `graph.json`\n(o grafo de entidades e relações) e `snapshots/` (saída dos coletores). Configuração compartilhada em\n`atlas-config.yml`.\n<!-- atlas:end about -->\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- 13 entidades, 17 relações (1 inferidas), 0 conflitos\n- service: 1\n- environment: 4\n- deployment: 4\n- cluster: 4\n- Plataforma: [delivery](platform/delivery.md), [runtime](platform/runtime.md)\n<!-- atlas:end summary -->\n\n## Serviços\n\n<!-- atlas:begin services -->\n- [api](services/api.md) — repositório `acme/iac`\n<!-- atlas:end services -->\n\n## Última coleta\n\n<!-- atlas:begin scans -->\n- argocd: <TODAY> (ok, 13 entidades, 16 relações)\n<!-- atlas:end scans -->\n",
+    "glossary.md": "# Glossário — Acme\n\nTermos, siglas e nomes internos da organização. Escreva à vontade fora da região gerada.\n\n<!-- atlas:begin terms -->\n_(nenhum termo coletado ainda)_\n<!-- atlas:end terms -->\n",
+    "platform/delivery.md": "# Plataforma — delivery\n\nEntidades da categoria `delivery` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### environment\n\n- **dev** (`environment:dev`) — tier: test — visto em <TODAY>\n- **qa** (`environment:qa`) — tier: production — visto em <TODAY>\n- **sbx** (`environment:sbx`) — tier: test — visto em <TODAY>\n- **stg** (`environment:stg`) — visto em <TODAY>\n\n### deployment\n\n- **dev-api** (`deployment:dev-api`) — config_refs: —; health_status: Healthy; images: acme/api; namespace: api-dev; project: team-x; sync_status: Synced; workloads: Deployment/api — visto em <TODAY>\n- **qa-api** (`deployment:qa-api`) — config_refs: —; health_status: Degraded; images: acme/api; namespace: api-qa; project: team-x; sync_status: OutOfSync; workloads: Deployment/api — visto em <TODAY>\n- **sbx-api** (`deployment:sbx-api`) — config_refs: —; health_status: Healthy; images: acme/api; namespace: api-sbx; project: team-x; sync_status: Synced — visto em <TODAY>\n- **stg-api** (`deployment:stg-api`) — config_refs: —; health_status: Healthy; images: acme/api; namespace: api-stg; project: team-x; sync_status: Synced — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+    "platform/runtime.md": "# Plataforma — runtime\n\nEntidades da categoria `runtime` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### cluster\n\n- **cluster-dev** (`cluster:cluster-dev`) — visto em <TODAY>\n- **cluster-qa** (`cluster:cluster-qa`) — visto em <TODAY>\n- **cluster-sbx** (`cluster:cluster-sbx`) — visto em <TODAY>\n- **cluster-stg** (`cluster:cluster-stg`) — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+    "services/api.md": "# api\n\nServiço `service:api` do atlas de Acme. As regiões `atlas:` são geradas pelo `atlas.py build` a partir do\n`graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- Chave: `service:api`\n- Visto em: <TODAY>\n- Fontes: argocd\n<!-- atlas:end summary -->\n\n## Repositório\n\n<!-- atlas:begin repository -->\n- `repository:acme/iac`\n<!-- atlas:end repository -->\n\n## Deployments\n\n<!-- atlas:begin deployments -->\n- **dev**: `dev-api` (Synced, Healthy; cluster `cluster-dev`)\n- **qa**: `qa-api` (OutOfSync, Degraded; cluster `cluster-qa`)\n- **sbx**: `sbx-api` (Synced, Healthy; cluster `cluster-sbx`)\n- **stg**: `stg-api` (Synced, Healthy; cluster `cluster-stg`)\n<!-- atlas:end deployments -->\n\n## Depende de\n\n<!-- atlas:begin depends-on -->\n_(nenhum)_\n<!-- atlas:end depends-on -->\n\n## Usado por\n\n<!-- atlas:begin used-by -->\n_(nenhum)_\n<!-- atlas:end used-by -->\n\n## Donos\n\n<!-- atlas:begin owners -->\n_(nenhum)_\n<!-- atlas:end owners -->\n\n## Pipelines\n\n<!-- atlas:begin pipelines -->\n_(nenhum)_\n<!-- atlas:end pipelines -->\n\n## Fontes\n\n<!-- atlas:begin sources -->\n- argocd (visto em <TODAY>)\n<!-- atlas:end sources -->\n\n## Notas\n\n"
+  }
+}

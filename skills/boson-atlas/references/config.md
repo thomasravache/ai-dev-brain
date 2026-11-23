@@ -18,6 +18,7 @@ credentials:                          # só NOMES; nunca valores
 - `credentials` — por id de coletor: `env` (lista de nomes de variável de ambiente) e `profile` (nome de um profile da ferramenta, por exemplo da AWS CLI ou do `gh`). Cada nome de variável precisa seguir `^[A-Z_][A-Z0-9_]*$`; qualquer outra coisa (por exemplo um token colado no lugar do nome) faz `config` sair com 2 e `doctor` mostrar ERRO com "credentials aceita só nomes de variável: <coletor>", sem repetir o valor e sem gravar nada. Um `profile` com espaços sai do mesmo jeito, com "credentials aceita só um nome de profile, sem espaços: <coletor>".
 - O `atlas.py` nunca lê o valor de uma variável: o `doctor` só confere se o nome existe no ambiente (`definida` ou `não definida`) e mostra o nome do profile sem verificá-lo.
 - `access` — opcional: como esta máquina chega a cada cluster do grafo, só pelo **nome** do contexto do kubeconfig (SPEC-0087, abaixo).
+- `probes` — opcional e desligada por padrão: as consultas só de leitura na infraestrutura por adaptadores declarados (SPEC-0088, abaixo e em `references/probes.md`).
 
 ### Acesso local por cluster (`access:`)
 
@@ -33,7 +34,30 @@ access:
 - A chave é o nome do cluster como está no grafo (`cluster:<nome>`), que pode ser a URL do servidor; o `context` é o nome de um contexto do kubeconfig desta máquina. Os dois são texto de 1 a 256 caracteres, sem quebra de linha nem caractere de controle. O mapa aceita só `clusters`, e cada cluster só `context`.
 - O valor do contexto nunca sai: `config` e `config --json` mostram `context: definido`, o `doctor` mostra `OK acesso <cluster> — contexto definido` (ou `AVISO acesso <cluster> — sem contexto local` para um cluster do grafo sem contexto) e o `context` diz só se há acesso (`access: true | false`).
 - Um item inválido faz `config`, `context` e `lint` do atlas escolhido saírem com 2, e o `doctor` mostra um ERRO `acesso local` (exit 1). A mensagem diz só a posição, a partir de 1, e o motivo, nunca o cluster nem o contexto: `access.clusters: item 2 inválido — o contexto com quebra de linha ou caractere de controle; …`. Os motivos dizem se é `o nome do cluster` ou `o contexto` e são `não é texto`, `vazio`, `com mais de 256 caracteres` e `com quebra de linha ou caractere de controle`; ou `o valor precisa ser um mapa {context: <nome do contexto>}` e `o mapa aceita só a chave context`.
-- `init` e `init --join` mantêm o `access` da entrada que atualizam. O `atlas.py` nunca usa o contexto para chamar o cluster: as probes (SPEC-0088) é que vão usá-lo.
+- `init` e `init --join` mantêm o `access` da entrada que atualizam. O `atlas.py` nunca usa o contexto para chamar o cluster: só o passa ao adaptador de uma probe (SPEC-0088, abaixo).
+
+### Probes (`probes:`)
+
+As probes são consultas **só de leitura** na infraestrutura real (estado do workload, eventos, logs) feitas por adaptadores externos declarados nesta máquina, porque é ela que tem o acesso (ADR-0023). Ficam na camada local (na forma de vários atlas, dentro da entrada do atlas) e vêm **desligadas**:
+
+```yaml
+probes:
+  enabled: false                     # padrão; true liga
+  limits: {lines: 200, since: 30m}   # padrões; lines até 2000, since até 24h
+  adapters:
+    kubernetes:                      # id do adaptador; sem command = o adaptador que vem com a skill
+      command: ["python3", "/caminho/adaptador.py"]   # opcional, lista sem shell
+      verbs: [status, events, logs]  # liberados por esta máquina
+      timeout: 60                    # 1 a 300 segundos
+      credentials: [NOME_DA_ENV]     # só nomes (ADR-0010)
+```
+
+- Sem a chave, ou com `enabled: false`, `probe` sai com 4 ("probes desligadas") sem rodar nada, e os outros comandos ficam como antes.
+- Um campo inválido faz `config` e `probe` saírem com 2 e o `doctor` mostrar ERRO `probes`, com `probes: <campo> inválido — <motivo>` e nunca o valor: `timeout` fora de 1..300, `limits.lines` fora de 1..2000, `limits.since` acima de 24h ou fora do formato `30m`/`2h`, verbo com espaço ou maiúscula, credencial que não é nome de variável (`NOME=valor`), chave desconhecida.
+- `config --json` mostra `probes` com os ids, os comandos, os verbos, o timeout e os **nomes** das credenciais; nunca um valor.
+- `init` e `init --join` mantêm o `probes` da entrada que atualizam.
+- O adaptador recebe só `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`, `TMPDIR`, `TMP` e `TEMP` (e, no Windows, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA`), quando definidos, mais as variáveis declaradas em `credentials` **dele**; nenhuma variável declarada para outro adaptador ou para os coletores chega a ele.
+- O registro de cada probe fica em `probes.log`, na mesma pasta deste `config.yml` (nunca no atlas). Contrato, exits e como escrever um adaptador: `references/probes.md`.
 
 É escrita pelo `atlas.py init` (e pelo `init --join` numa máquina nova, que não aceita `--org`, `--mode` nem `--force`), que mantém as `credentials` já declaradas para o mesmo atlas. `ATLAS_CONFIG_HOME` troca a pasta, útil para testes; para mais de um atlas, use a forma de vários atlas abaixo.
 
@@ -54,7 +78,7 @@ atlases:
 ```
 
 - A forma de um atlas só (`atlas:` + `credentials:`) continua valendo e é a gravada enquanto houver um atlas. O nome dessa entrada é a `organization` do `atlas-config.yml` em minúsculas, com o que não for `[a-z0-9-]` trocado por `-` (vários `-` viram um, sem `-` nas pontas, até 63 caracteres; `Acme Corp` → `acme-corp`); se a `organization` não puder ser lida, o nome é `default`.
-- As duas formas no mesmo arquivo, um nome inválido, um `default` que não está em `atlases` ou uma chave desconhecida numa entrada (só `atlas`, `credentials` e `access`) fazem todos os comandos saírem com 2, citando a chave.
+- As duas formas no mesmo arquivo, um nome inválido, um `default` que não está em `atlases` ou uma chave desconhecida numa entrada (só `atlas`, `credentials`, `access` e `probes`) fazem todos os comandos saírem com 2, citando a chave.
 - As credenciais de um atlas nunca são usadas por outro: `scan`, `config` e `doctor` leem e checam só as do atlas escolhido.
 - O que o isolamento cobre: no `scan`, os coletores recebem o ambiente do shell **sem** as variáveis declaradas em `env` só nas credenciais de outros atlas (uma variável declarada também pelo atlas escolhido continua). Variáveis que nenhum atlas declara chegam como antes. Credenciais por `profile` ou por arquivo (por exemplo `~/.aws/credentials` ou o login do `gh`) não são isoladas pelo `atlas.py`: dependem da configuração de cada coletor, então aponte o coletor de cada atlas para o seu profile.
 - A forma de vários atlas é gravada com as entradas em ordem de nome.
@@ -202,6 +226,8 @@ environments:                  # opcional
 | `acesso local` | — | — | `access:` inválido (posição e motivo, nunca o valor) |
 | `ambientes sem marcação` | — | os ambientes do `graph.json` sem `tier` em `environments:` (contam como produção) | — |
 | `acesso <cluster>` | `contexto definido` (nunca o valor) | `sem contexto local` | — |
+| `probes` (só com a chave) | `ligadas, N adaptador(es)` ou `desligadas` | — | `probes:` inválido (campo e motivo, nunca o valor) |
+| `adaptador <id>` | executável encontrado | executável não encontrado, com as probes desligadas | executável não encontrado (ou sem `command` e sem adaptador na skill), com as probes ligadas |
 
 O `doctor` não executa nenhum processo além do `git config --get remote.origin.url` de leitura do passo do remote (só quando algum atlas declara `remotes:`): usa arquivos, `shutil.which` e `os.environ`. Quando o remote da pasta casa com mais de um atlas no mesmo comprimento, mostra `AVISO remote do projeto — …` com os nomes dos atlas, nunca o remote. Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração local ou com `--atlas`/`ATLAS_NAME` fora da lista. Com vários atlas, o `doctor` confere só o escolhido e as credenciais dele.
 
