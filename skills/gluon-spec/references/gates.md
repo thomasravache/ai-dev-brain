@@ -140,6 +140,8 @@ After every spec branch of the wave is merged into the integration branch, in de
 
 Exact question in SKILL.md, once per wave. Record it in the H2 row of every spec of the wave.
 
+With `delivery_check.verify: true` in `sdd-config.yml`, take the G6 snapshot here (step 1 of "Active verification (SPEC-0091)" under G6), after H2 and before the merge — also when H2 comes from `h2_policy: auto-on-green`, so the merge never happens before the snapshot.
+
 ## G6 — Deploy
 
 The change reaches its users through the pipeline — never through manual steps outside it.
@@ -172,18 +174,23 @@ Rules:
 
 When `delivery_check.verify` in `sdd-config.yml` is `true` (default `false`; no key = off) and the atlas is available under the same `org_context` rules, G6 also checks the deploy actively with `atlas.py verify` from the boson-atlas (`references/verify.md` there), per service of the spec and per environment of `delivery_check.environments` (`[]` = every environment of the service). Without it, the route above is all there is.
 
-1. **Snapshot**, after H2 and before the merge: `python3 <boson-atlas>/scripts/atlas.py verify snapshot --service <id> --env <ambiente> --out <foto> [--atlas <org_context>]`, where `<foto>` is a temporary file of the task, outside the repository and outside the atlas.
-2. **Compare**, after steps 1 and 2 of the route above (the pipeline of the merge commit and the new image in the configuration repository) and after waiting `window_minutes`: `python3 <boson-atlas>/scripts/atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem:tag> --baseline <foto> --window <window_minutes>m --max-new-errors <max_new_errors> --max-new-restarts <max_new_restarts> --json [--atlas <org_context>]`, with the window and limits from the `delivery_check` keys. If the rollout hasn't finished, run it again after the window.
+1. **Snapshot**, after H2 and before the merge (the H2 section says when, `h2_policy: auto-on-green` included): `python3 <boson-atlas>/scripts/atlas.py verify snapshot --service <id> --env <ambiente> --out <foto> [--atlas <org_context>]`, where `<foto>` is a temporary file of the task, outside the repository and outside the atlas.
+2. **Compare**, after steps 1 and 2 of the route above (the pipeline of the merge commit and the new image in the configuration repository) and after waiting `window_minutes`: `python3 <boson-atlas>/scripts/atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem> --baseline <foto> --window <window_minutes>m --max-new-errors <max_new_errors> --max-new-restarts <max_new_restarts> --json [--atlas <org_context>]`, with the window and limits from the `delivery_check` keys.
+   - `--expect-image` is the image of the merge commit found in step 2 of the route (the configuration repository or the pipeline output), written without the registry host, with `:tag` and/or `@digest`; prefer the digest when you have it (`servico@sha256:...`).
+   - Slow rollout: if the `delivery` check failed only because `rollout_complete` is false, run the compare once more, after another window, before applying the verdict; the second result is the one that counts.
 3. **Verdict → G6:**
    - `passou` (exit 0) → G6 PASS for that environment.
    - `degradou` (exit 1) → G6 FAIL; show the rollback suggestion of the output and let the person decide the rollback. The agent never rolls back on its own.
    - `inconclusivo` (exit 5) → the person decides PASS or FAIL from the evidence, and the decision is recorded in the G6 evidence.
    - exit 4 (probes off, or production refused without the confirmation) → the active verification didn't run; follow the rule below.
+   - exit 3 (no atlas configuration on this machine) → record "verificação ativa não executada: sem configuração" and follow the rule below; it does not block G6.
+   - exit 2 (invalid arguments) → read the message, fix the arguments and run once more; if exit 2 repeats, record "verificação ativa não executada: <motivo>" with the reason from the message. It does not block G6.
 4. Write the verdict, the checks and the evidence in the Relatório de Entrega ("Deploy") and in the G6 evidence.
 
 Rules:
 - Production: pass `--confirm-production` only after the person's explicit "yes" in chat for that run, every time; never reuse an earlier yes. In production the verification is passive only, like every probe.
 - Not possible (probes off, no access, no atlas, a service without `delivery`) → record "verificação ativa não executada: <motivo>" in the G6 evidence and in the Relatório de Entrega, and verify with `smoke_test` and `test_e2e` as without this check. It never blocks G6.
+- Without a snapshot (it wasn't taken before the merge, or the file is gone), run the compare without `--baseline`: it only sees the current state, so the result tends to `inconclusivo` and the person decides.
 - The snapshot is a temporary file: delete it at the end of the task, and never commit it.
 
 ## G7 — Done & Docs (Definition of Done)
