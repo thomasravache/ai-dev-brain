@@ -172,6 +172,63 @@ class GluedTokensTest(unittest.TestCase):
         self.assertGreaterEqual(count, 1)
 
 
+def _b64url(seed, size):
+    """Um corpo base64url falso de `size` caracteres, montado em tempo de execução."""
+    return (seed * (size // len(seed) + 1))[:size]
+
+
+def _oversized_cases():
+    """[(nome, texto, segredos que não podem sobrar, saída esperada)] — Emenda v2: JWT e credencial de URL acima
+    dos limites da rodada 1. A saída esperada é a que o _redact_text da `main` (6764f6f^) produz para o mesmo texto
+    (diferencial gravado à mão: nada que a `main` mascara pode deixar de ser mascarado)."""
+    payload = "eyJ" + _b64url("Ab9_-", 9000 - 3)
+    signature = "Sig_" + _b64url("x7Q-", 40)
+    big_header = "eyJ" + _b64url("hbG", 1100 - 3)
+    user = _b64url("u5r", 300)
+    token300, token2000 = _b64url("T0k", 300), _b64url("T0k", 2000)
+    password = "pw-" + "0092"
+    return [
+        ("bearer com payload de 9000",
+         "Authorization: Bearer " + "eyJ" + "hbGciOiJIU" + "." + payload + "." + signature,
+         (payload, signature), "Authorization: Bearer [REDACTED]"),
+        ("jwt com header de 1100",
+         big_header + "." + "eyJ" + "zdWIiOiIxMjMifQ" + "." + "SflKxwRJSMeKKF2QT4fwpM",
+         (big_header, "SflKxwRJSMeKKF2QT4fwpM"), "[REDACTED]"),
+        ("url com senha de 300", "clone https://oauth2:" + token300 + "@gitlab.example.com/x.git ok",
+         (token300,), "clone https://oauth2:[REDACTED]@gitlab.example.com/x.git ok"),
+        ("url com senha de 2000", "clone https://oauth2:" + token2000 + "@gitlab.example.com/x.git ok",
+         (token2000,), "clone https://oauth2:[REDACTED]@gitlab.example.com/x.git ok"),
+        ("url com usuário de 300", "clone https://" + user + ":" + password + "@gitlab.example.com/x.git ok",
+         (password,), "clone https://" + user + ":[REDACTED]@gitlab.example.com/x.git ok"),
+    ]
+
+
+class OversizedSecretsTest(unittest.TestCase):
+    def test_oversized_secrets_leave_no_fragment(self):
+        """SPEC-0092:UT-01 — Emenda v2: JWT com payload de 9000 ou header de 1100 caracteres e credencial de URL com
+        senha de 300 ou 2000 ou usuário de 300: nenhum pedaço de 16 caracteres do segredo sobra."""
+        redact_text = f("_redact_text")
+        for name, text, secrets, _ in _oversized_cases():
+            with self.subTest(case=name):
+                masked, count = redact_text(text, [])
+                self.assertIn("[REDACTED]", masked)
+                self.assertGreaterEqual(count, 1)
+                for secret in secrets:
+                    width = min(16, len(secret))
+                    leaked = [i for i in range(len(secret) - width + 1) if secret[i:i + width] in masked]
+                    self.assertEqual(leaked, [], f"{name}: pedaço do segredo sobrou: {masked[:120]!r}")
+
+    def test_oversized_secrets_match_main_masking(self):
+        """SPEC-0092:UT-01 — Emenda v2 (diferencial): para esses casos a saída e a contagem são as do _redact_text
+        da `main` (só a senha da URL é mascarada; o JWT inteiro)."""
+        redact_text = f("_redact_text")
+        for name, text, _, expected in _oversized_cases():
+            with self.subTest(case=name):
+                masked, count = redact_text(text, [])
+                self.assertEqual(masked, expected, f"{name}: {masked[:120]!r}")
+                self.assertEqual(count, 1)
+
+
 CHILD = """
 import importlib.util, json, sys, time
 spec = importlib.util.spec_from_file_location("atlas", sys.argv[1])
