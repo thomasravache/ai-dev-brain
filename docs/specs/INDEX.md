@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 3, approved 4, in-progress 1, implemented 71
+- Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 3, approved 3, in-progress 2, implemented 71
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -29,7 +29,7 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** SPEC-0088  
+**Em andamento:** SPEC-0088, SPEC-0089  
 **Paradas por impedimento:** —  
 **Próximo lote:** —
 
@@ -37,9 +37,9 @@ Perfil: **minimo**
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0088 | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
-| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 6d) | saiu da onda 1: arquivos em comum com SPEC-0088 |
-| 3 | SPEC-0089 | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full/M | approved | ⛔ aguarda implementação de SPEC-0088 | saiu da onda 2: arquivos em comum com SPEC-0073 |
-| 4 | SPEC-0090 | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full/M | approved | ⛔ aguarda implementação de SPEC-0088; aguarda implementação de SPEC-0089 |  |
+| 2 | SPEC-0089 | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full/M | in-progress | 🔄 em andamento |  |
+| 3 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 6d) | saiu da onda 1: arquivos em comum com SPEC-0088; saiu da onda 2: arquivos em comum com SPEC-0089 |
+| 4 | SPEC-0090 | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full/M | approved | ⛔ aguarda implementação de SPEC-0088; aguarda implementação de SPEC-0089 | saiu da onda 3: arquivos em comum com SPEC-0073 |
 | 5 | SPEC-0091 | gluon-spec: verificação ativa no G6 com atlas.py verify | full/S | approved | ⛔ aguarda implementação de SPEC-0090 |  |
 | 6 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo |
 | 7 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo; saiu da onda 6: touches vazio, não roda em paralelo |
@@ -74,7 +74,7 @@ flowchart LR
   end
   subgraph E0030["SPEC-0030 · boson-atlas: probes — consultas ao vivo na infraestrutura"]
     S0088["SPEC-0088<br/>boson-atlas: núcleo do probe — contrato…"]:::inprogress
-    S0089["SPEC-0089<br/>boson-atlas: adaptador de probe de runt…"]:::approved
+    S0089["SPEC-0089<br/>boson-atlas: adaptador de probe de runt…"]:::inprogress
   end
   subgraph E0067["SPEC-0067 · Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações"]
     S0069["SPEC-0069<br/>photon-brain: configuração, mensagens e…"]:::implemented
@@ -200,7 +200,7 @@ flowchart LR
 | [SPEC-0086](SPEC-0086-boson-atlas-e-gluon-spec-caminho-de-entrega-no-context-e-rot.md) | boson-atlas e gluon-spec: caminho de entrega no context e roteiro de verificação depois do merge | full | feature | implemented | 2026-11-20 | — | — | — |
 | [SPEC-0087](SPEC-0087-boson-atlas-mapa-de-acesso-ambientes-marcados-workloads-e-ac.md) | boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster | full | feature | implemented | 2026-11-22 | SPEC-0075 | — | — |
 | [SPEC-0088](SPEC-0088-boson-atlas-nucleo-do-probe-contrato-de-adaptador-verbos-per.md) | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full | feature | in-progress | 2026-11-22 | SPEC-0030 | — | SPEC-0087@3 |
-| [SPEC-0089](SPEC-0089-boson-atlas-adaptador-de-probe-de-runtime-kubernetes-estado.md) | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full | feature | approved | 2026-11-22 | SPEC-0030 | SPEC-0088 | — |
+| [SPEC-0089](SPEC-0089-boson-atlas-adaptador-de-probe-de-runtime-kubernetes-estado.md) | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full | feature | in-progress | 2026-11-22 | SPEC-0030 | SPEC-0088 | — |
 | [SPEC-0090](SPEC-0090-boson-atlas-verify-foto-antes-do-merge-comparacao-depois-do.md) | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0088, SPEC-0089 | — |
 | [SPEC-0091](SPEC-0091-gluon-spec-verificacao-ativa-no-g6-com-atlas-py-verify.md) | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0090 | — |
 

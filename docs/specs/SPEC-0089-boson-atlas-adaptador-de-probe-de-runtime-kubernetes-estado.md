@@ -4,7 +4,7 @@ title: "boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos 
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
@@ -192,6 +192,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Red: UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0089:<ID>`, falhando pelo motivo certo; `kubectl` falso nos testes (nenhum cluster de verdade)
+- [ ] Green: `assets/probes/kubernetes.py` (status, events e logs; só `kubectl get`/`logs` nos kinds permitidos; imagem sem host, com tag e digest), `references/probes.md`, `SKILL.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
