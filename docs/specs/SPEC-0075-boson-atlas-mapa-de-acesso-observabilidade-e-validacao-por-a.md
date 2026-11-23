@@ -3,13 +3,13 @@ id: SPEC-0075
 title: "boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-11-17
 depends_on: []
 adrs: [ADR-0010, ADR-0011, ADR-0012, ADR-0023, ADR-0024]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0075 — boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço (Épico)

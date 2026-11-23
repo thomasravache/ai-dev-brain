@@ -1,7 +1,7 @@
 ---
 id: ADR-0023
 title: Probes só de leitura por adaptador, com verbos permitidos, produção confirmada e registro local
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-22
 pillars: []

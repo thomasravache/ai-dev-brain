@@ -4,7 +4,7 @@ title: "boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos 
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/assets/probes/**, skills/boson-atlas/references/pro
 adrs: [ADR-0023]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0089 — boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs)

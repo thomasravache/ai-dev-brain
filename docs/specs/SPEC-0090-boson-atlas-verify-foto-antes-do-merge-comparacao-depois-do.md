@@ -4,7 +4,7 @@ title: "boson-atlas: verify — foto antes do merge, comparação depois do depl
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0088, SPEC-0089]
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/ver
 adrs: [ADR-0023, ADR-0024]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0090 — boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito

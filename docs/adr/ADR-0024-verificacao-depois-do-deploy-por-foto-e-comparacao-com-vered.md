@@ -1,7 +1,7 @@
 ---
 id: ADR-0024
 title: Verificação depois do deploy por foto e comparação, com veredito e nada guardado no atlas
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-22
 pillars: []

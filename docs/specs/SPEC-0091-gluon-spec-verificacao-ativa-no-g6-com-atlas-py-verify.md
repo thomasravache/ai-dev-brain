@@ -4,7 +4,7 @@ title: "gluon-spec: verificação ativa no G6 com atlas.py verify"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0090]
@@ -15,8 +15,8 @@ touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, ski
 adrs: [ADR-0024]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0091 — gluon-spec: verificação ativa no G6 com atlas.py verify

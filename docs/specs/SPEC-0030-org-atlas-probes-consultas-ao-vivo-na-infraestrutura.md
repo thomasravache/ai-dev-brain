@@ -3,13 +3,13 @@ id: SPEC-0030
 title: "boson-atlas: probes — consultas ao vivo na infraestrutura"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-10-30
 depends_on: [SPEC-0029]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0030 — boson-atlas: probes — consultas ao vivo na infraestrutura (Épico)

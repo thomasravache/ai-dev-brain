@@ -4,7 +4,7 @@ title: "boson-atlas: núcleo do probe — contrato de adaptador, verbos permitid
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/pro
 adrs: [ADR-0010, ADR-0011, ADR-0023]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0088 — boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local

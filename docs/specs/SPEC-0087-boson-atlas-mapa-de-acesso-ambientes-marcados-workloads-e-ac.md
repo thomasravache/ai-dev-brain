@@ -4,7 +4,7 @@ title: "boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso l
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: in-progress
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/scr
 adrs: [ADR-0010, ADR-0011, ADR-0023]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-23
 ---
 
 # SPEC-0087 — boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster
@@ -214,6 +214,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Red: CH-01 (passa antes), UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0087:<ID>`, falhando pelo motivo certo; fixtures `image-link` e `acme` reaproveitadas, com nomes genéricos
+- [ ] Green: atributo `workloads` no coletor `argocd.py`; `environments` (com `tier`) e `access.clusters` na configuração; campos novos em `delivery.deployments` no `context`; avisos do `doctor`; regra `untiered-environment` no `lint`; `references/`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
