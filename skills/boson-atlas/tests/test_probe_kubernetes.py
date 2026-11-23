@@ -52,6 +52,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from helpers import SKILL, TESTS, Sandbox, fn, output, snapshot
@@ -105,14 +106,16 @@ def probe_input(verb, workloads=("Deployment/api",), lines=200, since=1800, capa
 
 def install_kubectl(folder: Path, record: Path, fail="", fixtures=(CLUSTER,), pod_fail=None):
     """Copia o kubectl falso como `kubectl` (cabeçalho com o Python dos testes) e grava o cenário ao lado dele
-    (`fixtures`: as pastas de respostas, a primeira que tiver o arquivo vale; `pod_fail`: {pod: falha} só no logs)."""
+    (`fixtures`: as pastas de respostas, a primeira que tiver o arquivo vale; `pod_fail`: {pod: falha} só no logs;
+    `now`: o "agora" fixo do cenário, tirado uma vez aqui — SPEC-0094)."""
     folder.mkdir(parents=True, exist_ok=True)
     body = FAKE_KUBECTL.read_text(encoding="utf-8").split("\n", 1)[1]
     target = folder / "kubectl"
     target.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
     target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     scenario = {"record": str(record), "fixtures": [str(path) for path in fixtures], "fail": fail,
-                "pod_fail": dict(pod_fail or {})}
+                "pod_fail": dict(pod_fail or {}),
+                "now": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}
     (folder / "fake-kubectl.json").write_text(json.dumps(scenario), encoding="utf-8")
     return target
 

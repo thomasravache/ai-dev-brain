@@ -7,7 +7,11 @@ Os testes copiam este arquivo como `kubectl` para uma pasta temporária, que vai
 trocado pelo Python dos testes. O cenário fica ao lado da cópia, em `fake-kubectl.json` (o núcleo do probe só passa ao
 adaptador uma base fixa de variáveis, então o dublê não depende do ambiente):
     {"record": "<arquivo .jsonl>", "fixtures": "<pasta com as respostas>" | ["<pasta>", ...], "fail": "" | "forbidden"
-     | "nocontext" | "timeout", "pod_fail": {"<pod>": "forbidden" | "nocontext" | "timeout" | "notfound"}}
+     | "nocontext" | "timeout", "pod_fail": {"<pod>": "forbidden" | "nocontext" | "timeout" | "notfound"},
+     "now": "<AAAA-MM-DDTHH:MM:SS+00:00>"}
+
+- `now` (SPEC-0094): o "agora" fixo do cenário, em UTC, usado em todos os placeholders e no corte do `--since`; sem a
+  chave, cada chamada usa o relógio do próprio processo.
 
 - `record`: cada chamada vira uma linha JSON {"argv": [...]} (também as recusadas).
 - `fixtures`: uma pasta ou uma lista de pastas (vale o `<recurso>.json` da primeira que o tiver; Emenda v5: os testes
@@ -53,7 +57,10 @@ LOGS_VALUE = GLOBAL_VALUE | {"--since", "--tail"}
 LOGS_FLAGS = {"--all-containers", "--timestamps", "--prefix"}
 PLACEHOLDER = re.compile(r"\{\{(now|nano)-(\d+)\}\}|\{\{frac-(\d+)-(\d{1,9})\}\}")
 PREFIX = re.compile(r"^\[pod/(?P<pod>[^/\]]+)/(?P<container>[^\]]+)\] (?P<ts>\S+) ")
-NOW = datetime.now(timezone.utc).replace(microsecond=0)
+# SPEC-0094: o "agora" do cenário (gravado uma vez por `install_kubectl`) vale para todas as chamadas, que são processos
+# separados; sem a chave, o relógio de cada processo.
+NOW = (datetime.fromisoformat(SCENARIO["now"]).astimezone(timezone.utc) if SCENARIO.get("now")
+       else datetime.now(timezone.utc)).replace(microsecond=0)
 
 
 def record(argv):
