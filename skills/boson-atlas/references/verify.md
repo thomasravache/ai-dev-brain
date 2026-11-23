@@ -26,11 +26,13 @@ Para **cada** deployment do serviço no ambiente roda três probes: `runtime sta
 - `restarts` — restarts por pod;
 - `warnings` — os eventos de alerta como `<motivo>|<Kind>/<nome>`, com o nome do pod trocado pelo workload dono (`BackOff` em `api-7f9c-aaaa` ou em `api-7f9c-bbbb` é o mesmo `BackOff|Pod/api`);
 - `error_signatures` — só as assinaturas de nível `error` do `--summary`, com a contagem;
-- `not_verified` — cada verificação que a foto não conseguiu sustentar, com o motivo (probe recusada, com erro ou que falhou; logs cortados sem nenhuma linha = "nenhum pod respondeu").
+- `not_verified` — cada verificação que a foto não conseguiu sustentar, com o motivo (probe recusada, com erro, que falhou ou que voltou cortada; logs cortados sem nenhuma linha = "nenhum pod respondeu").
+
+Todas as probes do `verify` pedem o limite máximo de linhas (`limits.lines` = 2000, o máximo do `probe`). Mesmo assim, uma probe que volta com `truncated: true` **nunca dá `ok`**: um pod pode não ter respondido ou linhas antigas da janela podem ter ficado de fora. Veja as regras das probes cortadas no `compare`.
 
 A foto **não guarda nenhuma linha de log**, nem mascarada, nem amostra: só assinaturas e contagens, já com a redaction. Ela é um arquivo da tarefa: quem chama apaga o arquivo no fim (SPEC-0091).
 
-`--out` precisa ficar **fora da pasta do atlas**: o caminho é resolvido (com `..` e links) antes de qualquer probe, e dentro do atlas sai com 2 sem gravar nada. A pasta de `--out` precisa existir.
+`--out` precisa ficar **fora da pasta do atlas**: o caminho é resolvido (com `..` e links) antes de qualquer probe, e a pasta pai e cada pasta acima dela são comparadas com a pasta do atlas pela **identidade** do arquivo (mesmo `st_dev` e `st_ino`), não pelo texto do caminho; assim nem o nome em outra caixa (macOS) nem um link para dentro do atlas passam. Dentro do atlas sai com 2 sem gravar nada. A pasta de `--out` precisa existir. A foto é gravada num temporário criado de forma exclusiva na pasta de destino e depois renomeado: um arquivo ou link que já exista com nome de temporário nunca é seguido. O arquivo fica legível só pela pessoa (0600).
 
 Exemplo de foto (`verify@1`):
 
@@ -64,7 +66,7 @@ atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem>
     [--confirm-production] [--json] [--atlas X]
 ```
 
-- `--expect-image` — o caminho normalizado da imagem (sem o host do registry) com `:<tag>`, `@<digest>` ou os dois: `acme/api:1.4.2`, `acme/api@sha256:…`. Sem tag nem digest sai com 2.
+- `--expect-image` — a imagem com `:<tag>`, `@<digest>` ou os dois: `acme/api:1.4.2`, `acme/api@sha256:…`. Passa pela mesma normalização do adaptador: o primeiro segmento sai quando tem `.` ou `:` ou é `localhost` (o host do registry, inclusive com porta: `ghcr.io/acme/api:1.4.2` e `localhost:5000/acme/api:1.4.2` viram `acme/api:1.4.2`), o caminho e o digest ficam em minúsculas. Sem tag nem digest sai com 2. **O digest só casa quando o manifesto fixa o digest** (`image: acme/api:1.4.2@sha256:…`): o adaptador lê a imagem do spec do pod, e um manifesto só com a tag não traz digest, então confira pela tag nesse caso.
 - `--baseline` — a foto do `snapshot`, do mesmo serviço e ambiente. Ausente, que não é JSON ou fora do contrato sai com 2. Sem ela, os logs ficam não verificados.
 - `--window` — a janela dos eventos e dos logs (padrão `10m`, até `24h`).
 - `--max-new-errors` e `--max-new-restarts` — o que se tolera (padrão `0` e `0`, conservadores).
@@ -73,13 +75,14 @@ Roda as mesmas três probes por deployment e faz três verificações em cada um
 
 | Verificação | `ok` quando | `failed` quando | `not_verified` quando |
 |---|---|---|---|
-| `delivery` | o rollout terminou e **todo** pod pronto roda a imagem esperada (pelo digest, se dado; senão pela tag) | um pod pronto com outra imagem (o pod e as imagens dele na evidência), rollout não concluído, nenhum pod pronto ou workload não encontrado | a probe de `status` foi recusada, falhou ou respondeu com erro |
-| `runtime` | nenhum pod não pronto, os restarts novos somados ≤ `--max-new-restarts` e nenhum aviso novo | pod não pronto, restarts novos acima do limite, aviso (`<motivo>\|<objeto>`) que não estava na foto ou workload não encontrado (`found: false`) | a probe de `status` (ou só a de `events`, sem outra falha) foi recusada, falhou ou respondeu com erro |
-| `logs` | as assinaturas de erro da janela que não estavam na foto são ≤ `--max-new-errors` | assinaturas novas acima do limite (as novas na evidência) | sem `--baseline` ("sem foto de antes: erros novos e antigos não se separam"); a foto não tem os logs do deployment; logs cortados sem nenhuma linha ("nenhum pod respondeu"); probe recusada, com erro ou que falhou |
+| `delivery` | o rollout terminou e **todo** pod pronto roda a imagem esperada (pelo digest, se dado; senão pela tag) | um pod pronto com outra imagem (o pod e as imagens dele na evidência), rollout não concluído, nenhum pod pronto ou workload não encontrado | a probe de `status` foi recusada, falhou, respondeu com erro ou voltou cortada ("probe de status cortada") |
+| `runtime` | nenhum pod não pronto, os restarts novos somados ≤ `--max-new-restarts` e nenhum aviso novo | pod não pronto, restarts novos acima do limite, aviso (`<motivo>\|<objeto>`) que não estava na foto ou workload não encontrado (`found: false`) | a probe de `status` foi recusada, falhou, respondeu com erro ou voltou cortada; ou a de `events`, sem outra falha, foi recusada, falhou, respondeu com erro ou voltou cortada ("probe de events cortada") |
+| `logs` | as assinaturas de erro da janela que não estavam na foto são ≤ `--max-new-errors` | assinaturas novas acima do limite (as novas na evidência) | sem `--baseline` ("sem foto de antes: erros novos e antigos não se separam"); a foto não tem os logs do deployment; logs cortados sem nenhuma linha ("nenhum pod respondeu"); logs cortados com linhas ("probe de logs cortada"); probe recusada, com erro ou que falhou |
 
 - **Restarts novos** = os de agora menos os da foto, por pod; um pod que não estava na foto (por exemplo depois do rollout) conta desde 0. Sem foto, todos contam.
 - **Avisos novos** = as chaves `<motivo>|<objeto>` que não estavam na foto; sem foto, todos contam.
 - **Assinaturas** = só as de nível `error` do `--summary` (`warn` e `info` não contam).
+- **Probes cortadas** (`truncated: true`, mesmo pedindo o limite máximo de linhas): `status` cortada deixa `delivery` e `runtime` em `not_verified`; `events` cortada deixa `runtime` em `not_verified`, salvo quando ele já deu `failed` por outro motivo (pod não pronto, restarts, workload não encontrado); `logs` cortada, com ou sem itens, deixa `logs` em `not_verified`. Os itens de uma probe cortada nunca sustentam um `ok`.
 
 ### Veredito e exits
 
