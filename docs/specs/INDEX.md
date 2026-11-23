@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **6 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 4, approved 1, implemented 75
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
@@ -56,6 +56,7 @@ Perfil: **minimo**
 | SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | approved | 3/3 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | implemented | 3/3 implementadas |
 | SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
+| SPEC-0093 | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | proposed | 0/0 implementadas |
 
 ## Grafo de Dependências
 
@@ -188,6 +189,7 @@ flowchart LR
 | [SPEC-0090](SPEC-0090-boson-atlas-verify-foto-antes-do-merge-comparacao-depois-do.md) | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full | feature | implemented | 2026-11-22 | SPEC-0075 | SPEC-0088, SPEC-0089 | — |
 | [SPEC-0091](SPEC-0091-gluon-spec-verificacao-ativa-no-g6-com-atlas-py-verify.md) | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | implemented | 2026-11-22 | SPEC-0075 | SPEC-0090 | — |
 | [SPEC-0092](SPEC-0092-boson-atlas-mascara-de-segredos-robusta-padroes-separados-e.md) | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite | fix | proposed | 2026-11-23 | — | — | — |
+| [SPEC-0093](SPEC-0093-photon-brain-uso-pelo-conector-e-em-sessao-na-nuvem-listas-a.md) | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | epic | feature | proposed | 2026-11-23 | — | — | — |
 
 ## ADRs
 
