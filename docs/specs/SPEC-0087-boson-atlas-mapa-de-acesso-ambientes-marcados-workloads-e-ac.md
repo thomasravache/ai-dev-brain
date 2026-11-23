@@ -148,7 +148,7 @@ lint
 - **`tier` do deployment:**
   - é `production` quando algum dos seus ambientes é de produção;
   - é `test` só quando todos os ambientes são de teste;
-  - fica ausente quando algum ambiente não tem marcação.
+  - fica ausente quando algum ambiente não tem marcação, mesmo que outro seja de produção (quem consome trata a ausência como produção, ADR-0023).
 - **Leituras:**
   - `doctor` e `lint` leem as marcações da chave `environments`;
   - o `doctor` lê os ambientes e os clusters do `graph.json`;
