@@ -94,7 +94,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — 1e4789c | 2026-11-23 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8, skipped=1)) — 2579a11 | 2026-11-23 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 8517316 | 2026-11-23 |
-| G3 Arquitetura | PENDING | | |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — a95f261 | 2026-11-23 |
 | G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major: JWT com payload acima de 8192 ou header acima de 1024 deixa de ser mascarado; credencial de URL com usuário ou senha acima de 256 deixa de ser mascarada (vazamentos novos em relação à main) | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
