@@ -17,6 +17,9 @@
         ],
         "images": [
           "acme/api"
+        ],
+        "workloads": [
+          "Deployment/api"
         ]
       },
       "source": "argocd"
@@ -36,6 +39,9 @@
         ],
         "images": [
           "acme/api"
+        ],
+        "workloads": [
+          "Deployment/api"
         ]
       },
       "source": "argocd"
@@ -56,6 +62,9 @@
         ],
         "images": [
           "acme/web"
+        ],
+        "workloads": [
+          "Deployment/web"
         ]
       },
       "source": "argocd"
@@ -72,6 +81,9 @@
         "config_refs": [],
         "images": [
           "ingress-nginx/controller"
+        ],
+        "workloads": [
+          "Deployment/ingress-nginx-controller"
         ]
       },
       "source": "argocd"

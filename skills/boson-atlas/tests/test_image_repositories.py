@@ -101,11 +101,13 @@ def image_edges(graph):
 
 
 def without_images(snapshot):
-    """Cópia do snapshot sem o atributo images dos deployments (o que um coletor anterior à SPEC-0082 grava)."""
+    """Cópia do snapshot sem o atributo images dos deployments (o que um coletor anterior à SPEC-0082 grava); sem
+    workloads também, que é ainda mais novo (SPEC-0087, Emenda v2: expected-acme.json passou a ter o atributo)."""
     data = copy.deepcopy(snapshot)
     for item in data.get("entities", []):
         if isinstance(item.get("attrs"), dict):
             item["attrs"].pop("images", None)
+            item["attrs"].pop("workloads", None)
     return data
 
 

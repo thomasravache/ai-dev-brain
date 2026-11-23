@@ -16,8 +16,8 @@ Contrato (seção 6 da SPEC-0087) que estes testes fixam:
     coletor argocd: deployment.attrs.workloads = ["<Kind>/<nome>", ...] ordenada, de status.resources com kind em
         {Deployment, StatefulSet, DaemonSet, Rollout} e nome pela regra de nome simples; nenhum -> sem o atributo.
     context --json: cada item de delivery.deployments ganha tier (só com marcação), namespace, workloads e access
-        (true | false). Markdown: a linha do ambiente ganha "; tier `x`", "; namespace `x`", "; workloads `x`" e
-        "; sem acesso local" quando access é false.
+        (true | false; só com cluster). Markdown: a linha do ambiente ganha "; tier `x`", "; namespace `x`",
+        "; workloads `x`" e "; sem acesso local" quando access é false.
     doctor: AVISO de ambientes sem marcação ("sem marcação: dev, qa (conta como produção)") e AVISO "acesso
         <cluster>" "sem contexto local" (OK "contexto definido", sem o valor).
     lint: regra "untiered-environment" (aviso), um achado por ambiente sem tier.
@@ -28,10 +28,11 @@ Leituras literais desta suíte (ver o relatório do test-writer):
       data de hoje por <TODAY>). Como as fixtures já têm namespace e cluster, as chaves "namespace" e "access" de
       delivery.deployments (e as partes "; namespace" e "; sem acesso local" do Markdown) são tiradas antes de
       comparar; "tier" e "workloads" não podem aparecer. No doctor e no lint, só os avisos novos são tirados.
-    - Formato das linhas do doctor: o texto inteiro da linha ("<STATUS> <item> — <detalhe>") é que é procurado, porque
-      a spec não diz onde fica o " — "; a ordem das partes novas na linha do Markdown não é verificada.
-    - Exit 2 do access inválido: exigido em config --json e lint; no doctor, exit diferente de 0 com a mensagem
-      (padrão do image_repositories na SPEC-0082).
+    - Emenda v2: as linhas do doctor seguem "<STATUS> <rótulo> — <detalhe>" e os testes procuram só os pedaços do
+      contrato no texto inteiro da linha; access inválido = ERRO no doctor com exit 1, exit 2 em config --json, build
+      e lint; access só existe quando o deployment tem cluster; a chave de access.clusters pode ser a URL do
+      servidor; no Markdown, depois de cluster, sync e health: tier, namespace, workloads (juntos por ", " num
+      trecho em crase só) e "sem acesso local".
 
 Isolamento: HOME, XDG_CONFIG_HOME e ATLAS_CONFIG_HOME temporários (helpers.Sandbox); sem rede; sem kubectl; nomes
 genéricos (acme, globex, team-x); o contexto local é só um nome falso.
@@ -399,14 +400,15 @@ class LocalAccessTest(AccessCase):
 
     def test_an_invalid_context_exits_2_without_the_value(self):
         """SPEC-0087:UT-03 — contexto vazio, com quebra de linha ou com mais de 256 caracteres no item 2: exit 2 com
-        "access.clusters: item 2 inválido — <motivo>" em config --json e lint; o doctor acusa (exit diferente de 0)
-        com a mesma mensagem; o valor nunca sai."""
+        "access.clusters: item 2 inválido — <motivo>" em config --json e lint; o doctor acusa com uma linha ERRO e o
+        exit de erro de sempre (1) (Emenda v2); o valor nunca sai."""
         for label, context, piece in INVALID_CONTEXTS:
             with self.subTest(caso=label):
                 self.write_local(access_yaml([("cluster-dev", SECRET_CONTEXT), ("cluster-qa", context)]))
                 results = [self.cli("config", "--json", code=2), self.cli("lint", code=2)]
-                doctor = self.cli("doctor", code=None)
-                self.assertNotEqual(doctor.returncode, 0, output(doctor))
+                doctor = self.cli("doctor", code=1)
+                errors = [f"{st} {i} — {d}" for st, i, d in doctor_lines(doctor.stdout) if st == "ERRO"]
+                self.assertTrue([x for x in errors if ACCESS_ITEM_RE.search(x)], output(doctor))
                 for result in results + [doctor]:
                     text = output(result)
                     match = ACCESS_ITEM_RE.search(text)
@@ -479,25 +481,37 @@ class MultiAtlasAccessTest(unittest.TestCase):
 
 
 class ContextFieldsTest(AccessCase):
-    """Snapshots gravados (replay) com namespace e workloads; dev marcado como test; acesso só a cluster-dev."""
+    """Snapshots gravados (replay) com namespace e workloads (dev-api com dois); dev marcado como test."""
 
-    def setUp(self):
-        super().setUp()
+    URL_CLUSTER = "https://kubernetes.default.svc"
+
+    def write_snapshots(self, dev_cluster="cluster-dev", qa_cluster=True):
+        """dev-api roda em `dev_cluster`; sem `qa_cluster`, qa-api fica sem cluster no grafo (Emenda v2)."""
         snapshots = image_link_snapshots()
-        for entity in snapshots["gitops"]["entities"]:
+        gitops = snapshots["gitops"]
+        workloads = {"dev-api": ["StatefulSet/api-cache", "Deployment/api"], "qa-api": ["Deployment/api"]}
+        for entity in gitops["entities"]:
             if entity["kind"] == "deployment":
-                env = entity["id"].split("-", 1)[0]
-                entity["attrs"]["namespace"] = f"api-{env}"
-                entity["attrs"]["workloads"] = ["Deployment/api"]
+                entity["attrs"]["namespace"] = f"api-{entity['id'].split('-', 1)[0]}"
+                entity["attrs"]["workloads"] = sorted(workloads[entity["id"]])
+            if entity["kind"] == "cluster" and entity["id"] == "cluster-dev":
+                entity["id"] = entity["name"] = dev_cluster
+        for relation in gitops["relations"]:
+            if relation["to"] == "cluster:cluster-dev":
+                relation["to"] = f"cluster:{dev_cluster}"
+        if not qa_cluster:
+            gitops["entities"] = [e for e in gitops["entities"] if (e["kind"], e["id"]) != ("cluster", "cluster-qa")]
+            gitops["relations"] = [r for r in gitops["relations"] if r["to"] != "cluster:cluster-qa"]
         facts = self.atlas / "facts"
-        facts.mkdir()
+        facts.mkdir(exist_ok=True)
         for cid, data in snapshots.items():
             (facts / f"{cid}.json").write_text(json.dumps(data), encoding="utf-8")
         self.collectors = [("scm", "code", ["python3", REPLAY, "scm", "code", "{atlas}/facts/scm.json"]),
                            ("gitops", "delivery", ["python3", REPLAY, "gitops", "delivery",
                                                    "{atlas}/facts/gitops.json"])]
 
-    def run_context(self, environments, access):
+    def run_context(self, environments, access, **snapshot_options):
+        self.write_snapshots(**snapshot_options)
         self.configure(self.collectors, environments_yaml(environments) if environments else "")
         self.write_local(access_yaml(access) if access else "")
         self.cli("scan")
@@ -506,34 +520,62 @@ class ContextFieldsTest(AccessCase):
         return deployments_of(package), self.cli("context", "api").stdout
 
     def test_json_and_markdown_bring_tier_namespace_workloads_and_access(self):
-        """SPEC-0087:UT-04 — dev (tier test, acesso a cluster-dev) e qa (sem tier, sem acesso): dev-api traz tier
-        test, namespace api-dev, workloads [Deployment/api] e access true; qa-api não tem tier e tem access false. A
-        linha do Markdown de dev traz as partes em crase e não diz "sem acesso local"; a de qa diz."""
+        """SPEC-0087:UT-04 (Emenda v2) — dev (tier test, acesso a cluster-dev, dois workloads) e qa (sem tier, sem
+        acesso): dev-api traz tier test, namespace api-dev, workloads ordenados e access true; qa-api não tem tier e
+        tem access false. No Markdown, as partes novas vêm depois de cluster, sync e health, na ordem tier,
+        namespace, workloads (juntos por ", " num trecho em crase só) e "sem acesso local"."""
         deployments, markdown = self.run_context([("dev", "{tier: test}")], [("cluster-dev", SECRET_CONTEXT)])
         dev, qa = deployments["dev-api"], deployments["qa-api"]
         self.assertEqual({k: dev.get(k) for k in NEW_DEPLOYMENT_KEYS},
-                         {"tier": "test", "namespace": "api-dev", "workloads": ["Deployment/api"], "access": True})
+                         {"tier": "test", "namespace": "api-dev", "workloads": ["Deployment/api", "StatefulSet/api-cache"],
+                          "access": True})
         self.assertNotIn("tier", qa)
         self.assertEqual({k: qa.get(k) for k in ("namespace", "workloads", "access")},
                          {"namespace": "api-qa", "workloads": ["Deployment/api"], "access": False})
-        dev_line, qa_line = env_line(markdown, "dev", "dev-api"), env_line(markdown, "qa", "qa-api")
-        for part in ("; tier `test`", "; namespace `api-dev`", "; workloads `Deployment/api`"):
-            self.assertIn(part, dev_line)
-        self.assertNotIn("sem acesso local", dev_line)
-        self.assertIn("; sem acesso local", qa_line)
-        self.assertNotIn("tier", qa_line)
-        self.assertIn("; namespace `api-qa`", qa_line)
+        self.assertEqual(env_line(markdown, "dev", "dev-api"),
+                         "- dev: `dev-api` — cluster `cluster-dev`; sync `Synced`; health `Healthy`; tier `test`; "
+                         "namespace `api-dev`; workloads `Deployment/api, StatefulSet/api-cache`")
+        self.assertEqual(env_line(markdown, "qa", "qa-api"),
+                         "- qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`; "
+                         "namespace `api-qa`; workloads `Deployment/api`; sem acesso local")
         self.assertNotIn(SECRET_CONTEXT, markdown + json.dumps(deployments))
 
     def test_without_access_every_deployment_has_access_false(self):
         """SPEC-0087:UT-04 — sem access nesta máquina e sem environments: access false e sem tier nos dois
-        deployments; as duas linhas dizem "sem acesso local"."""
+        deployments; as duas linhas terminam em "; sem acesso local"."""
         deployments, markdown = self.run_context([], [])
         for name in ("dev-api", "qa-api"):
             self.assertIs(deployments[name].get("access"), False, deployments[name])
             self.assertNotIn("tier", deployments[name])
         for env, name in (("dev", "dev-api"), ("qa", "qa-api")):
-            self.assertIn("; sem acesso local", env_line(markdown, env, name))
+            self.assertTrue(env_line(markdown, env, name).endswith("; sem acesso local"), markdown)
+
+    def test_a_deployment_without_a_cluster_has_no_access_key(self):
+        """SPEC-0087:UT-04 (Emenda v2) — qa-api sem cluster no grafo: sem a chave access e sem "sem acesso local" na
+        linha; dev-api (com cluster e acesso) continua com access true."""
+        deployments, markdown = self.run_context([], [("cluster-dev", SECRET_CONTEXT)], qa_cluster=False)
+        self.assertEqual(deployments["qa-api"]["clusters"], [], "qa-api ainda tem cluster: o teste não vale")
+        self.assertNotIn("access", deployments["qa-api"])
+        self.assertIs(deployments["dev-api"].get("access"), True, deployments["dev-api"])
+        qa_line = env_line(markdown, "qa", "qa-api")
+        self.assertNotIn("acesso", qa_line)
+        self.assertTrue(qa_line.endswith("; workloads `Deployment/api`"), qa_line)
+
+    def test_a_cluster_named_by_its_server_url_is_a_valid_access_key(self):
+        """SPEC-0087:UT-03 e UT-04 (Emenda v2) — o cluster de dev-api é a URL do servidor
+        (https://kubernetes.default.svc): access.clusters com essa chave é aceito (config --json exit 0), dev-api tem
+        access true, o doctor mostra o OK "contexto definido" desse cluster e o valor não sai."""
+        deployments, markdown = self.run_context([], [(self.URL_CLUSTER, SECRET_CONTEXT)], dev_cluster=self.URL_CLUSTER)
+        self.assertEqual(deployments["dev-api"]["clusters"], [self.URL_CLUSTER])
+        self.assertIs(deployments["dev-api"].get("access"), True, deployments["dev-api"])
+        self.assertIs(deployments["qa-api"].get("access"), False, deployments["qa-api"])
+        config = self.cli("config", "--json")
+        doctor, lines = self.doctor_text_lines()
+        defined = [x for x in lines if x.startswith("OK ") and f"acesso {self.URL_CLUSTER}" in x]
+        self.assertEqual(len(defined), 1, lines)
+        self.assertIn("contexto definido", defined[0])
+        for text in (markdown, json.dumps(deployments), output(config), output(doctor)):
+            self.assertNotIn(SECRET_CONTEXT, text)
 
 
 # --------------------------------------------------------------------------- UT-05

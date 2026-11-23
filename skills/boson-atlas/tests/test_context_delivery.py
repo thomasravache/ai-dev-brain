@@ -569,6 +569,9 @@ class DeliveryScanTest(unittest.TestCase):
 
 SERVICE_TYPES = {"key": str, "name": str, "score": (int, float), "reason": str, "page": str, "repositories": list,
                  "deployments": list, "owners": list, "attrs": dict, "seen_at": str}
+# chaves de delivery.deployments: as da SPEC-0086 mais tier, namespace, workloads e access (SPEC-0087, Emenda v2)
+DEPLOYMENT_KEYS = {"id", "environments", "clusters", "images", "sync_status", "health_status", "tier", "namespace",
+                   "workloads", "access"}
 PACKAGE_TYPES = {"version": str, "query": str, "warnings": list, "services": list, "dependencies": list,
                  "rules": list, "hints": list, "omitted": list}
 
@@ -624,8 +627,7 @@ class DeliveryContractTest(unittest.TestCase):
                                  sorted(p["id"] for p in delivery["pipelines"]))
                 for item in delivery["deployments"]:
                     self.assertTrue({"id", "environments", "clusters", "images"} <= set(item), item)
-                    self.assertTrue(set(item) <= {"id", "environments", "clusters", "images", "sync_status",
-                                                  "health_status"}, item)
+                    self.assertTrue(set(item) <= DEPLOYMENT_KEYS, item)  # SPEC-0087 (Emenda v2): chaves novas
                     for key in ("environments", "clusters", "images"):
                         self.assertIsInstance(item[key], list)
                 self.assertEqual([d["id"] for d in delivery["deployments"]],
@@ -634,6 +636,46 @@ class DeliveryContractTest(unittest.TestCase):
         for item in data["dependencies"]:
             self.assertTrue({"from", "to", "type", "inferred"} <= set(item))
         self.assertTrue(re.match(r"\S", data["version"]))
+
+    def test_the_new_deployment_keys_of_spec_0087_have_the_contract_types(self):
+        """SPEC-0086:CT-01 (SPEC-0087, Emenda v2) — fixture acme com payments-prod num cluster (com contexto local),
+        namespace e workloads, e o ambiente prod marcado como production: o deployment de delivery tem só as chaves
+        do contrato, com tier e namespace texto, workloads lista de texto ordenada e access booleano; backoffice-prod
+        (sem cluster) não tem access."""
+        atlas = self.sandbox.atlas
+        path = atlas / "graph.json"
+        graph = json.loads(path.read_text(encoding="utf-8"))
+        for node in graph["nodes"]:
+            if node["key"] == "deployment:payments-prod":
+                node["attrs"].update(namespace="payments", workloads=["Deployment/payments"])
+            if node["key"] == "environment:prod":
+                node["attrs"]["tier"] = "production"
+        graph["nodes"].append({"key": "cluster:cluster-x", "kind": "cluster", "name": "cluster-x", "attrs": {},
+                               "sources": ["facts"], "seen_at": graph["nodes"][0]["seen_at"], "conflicts": []})
+        graph["nodes"].sort(key=lambda n: n["key"])
+        graph["edges"].append({"from": "deployment:payments-prod", "to": "cluster:cluster-x", "type": "runs_in",
+                               "sources": ["facts"], "inferred": False})
+        graph["edges"].sort(key=lambda e: (e["from"], e["type"], e["to"]))
+        path.write_text(json.dumps(graph, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        local = self.sandbox.config_home / "config.yml"
+        local.write_text(local.read_text(encoding="utf-8")
+                         + "access:\n  clusters:\n    cluster-x: {context: ctx-x-NAO}\n", encoding="utf-8")
+        result = self.sandbox.run("context", "--json", "--hops", "2", "cashout", "backoffice", "payments")
+        self.assertEqual(result.returncode, 0, output(result))
+        self.assertNotIn("ctx-x-NAO", output(result))
+        data = json.loads(result.stdout)
+        found = {}
+        for service in data["services"]:
+            for item in service.get("delivery", {}).get("deployments", []):
+                self.assertTrue(set(item) <= DEPLOYMENT_KEYS, item)
+                found[item["id"]] = item
+        payments = found.get("payments-prod")
+        self.assertIsNotNone(payments, found)
+        self.assertEqual({k: payments.get(k) for k in ("tier", "namespace", "workloads", "access")},
+                         {"tier": "production", "namespace": "payments", "workloads": ["Deployment/payments"],
+                          "access": True})
+        self.assertIsInstance(payments["access"], bool)
+        self.assertNotIn("access", found.get("backoffice-prod", {}), found)
 
 
 if __name__ == "__main__":
