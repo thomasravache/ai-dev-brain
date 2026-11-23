@@ -19,7 +19,8 @@ jobs:
   ci:
     # Fixo em 24.04: o Python 3.9 não tem build para 26.04 em actions/python-versions (verificado em 2026-10-14).
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # 20 min: a suíte passou de 10 min no Python 3.9 com os testes das probes (SPEC-0088/0089, 2026-11-23).
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
