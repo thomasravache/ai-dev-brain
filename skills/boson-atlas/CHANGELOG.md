@@ -9,6 +9,17 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.15] - 2026-11-23
+
+### Added
+- Comando `probe <capacidade> <verbo> --service <id> --env <ambiente> [--since 30m] [--lines N] [--summary] [--confirm-production] [--json]`: consulta **só de leitura** na infraestrutura por um adaptador externo declarado (contrato novo `probe@1`: `--describe` acrescentado ao fim do `command`, entrada JSON no stdin com o alvo montado do grafo e do mapa de acesso, saída JSON validada com chaves fechadas). **Desligado por padrão**: sem `probes.enabled: true` sai com 4 ("probes desligadas") sem rodar nada. Recusa com exit 4 o verbo fora da interseção entre os verbos do adaptador e os `verbs` da máquina, o ambiente de produção ou sem `tier` sem `--confirm-production`, o cluster sem `access.clusters` e a capacidade sem adaptador. A saída é cortada em `--lines` (padrão 200, até 2000; excedente = `truncated: true`), lida até 1 MB, com timeout por adaptador (padrão 60 s, até 300), e todo texto passa pela redaction do atlas mais e-mail, CPF, CNPJ, `Bearer` e `<nome>=<valor>` de senha ou token, inclusive a mensagem de erro. Saída inválida, JSON inválido, timeout ou adaptador ausente saem com 1 e o motivo, sem item. `--summary` agrupa as linhas de log por nível e assinatura (números, hexadecimais, UUIDs, e-mails e textos entre aspas viram marcadores). O adaptador recebe só um ambiente mínimo (`PATH`, `HOME`, idioma, pasta temporária) mais as credenciais declaradas nele, por nome. Cada probe deixa uma linha em `probes.log` na pasta da configuração local, sem o resultado, a mensagem nem o contexto; nada vai para o atlas (SPEC-0088, ADR-0023).
+- Chave local `probes` (`enabled`, `limits`, `adapters.<id>` com `command`, `verbs`, `timeout` e `credentials` só por nome), também dentro de uma entrada da forma de vários atlas; inválida faz `config` e `probe` saírem com 2 com `probes: <campo> inválido — <motivo>`, sem o valor. `config --json` mostra a chave; `init` e `init --join` a mantêm (SPEC-0088, ADR-0010).
+- `doctor`: com a chave `probes`, a linha `probes` (ligadas ou desligadas) e uma por adaptador, `adaptador <id>`, com o executável encontrado ou não; sem a chave, o `doctor` fica igual (SPEC-0088).
+- `references/probes.md`: configuração, passos e exits do `probe`, contrato `probe@1` com exemplos válidos e inválidos, redaction, `--summary`, registro local e como escrever um adaptador (SPEC-0088).
+
+### Changed
+- **Compatibilidade:** a versão anterior não tem o `probe` e recusa a chave `probes` dentro de uma entrada da forma de vários atlas; na forma de um atlas só, ela ignora a chave. Rollback: `probes.enabled: false` ou tirar a chave (SPEC-0088).
+
 ## [2026.11.14] - 2026-11-23
 
 ### Added
