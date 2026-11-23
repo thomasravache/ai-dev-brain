@@ -65,13 +65,13 @@ One call per run, argv as a list without a shell, stdin closed (no prompt), 120 
 | `argocd` | `argocd app list -o json` |
 | `kubectl` | `kubectl get applications.argoproj.io -A -o json` |
 
-Nothing else is called: no `app get`, `app manifests` or `app resources`, no Secrets, no rendered manifests, no cluster state beyond the Application objects. From each Application only `metadata.name`, `metadata.labels`, `spec.project`, `spec.destination`, `spec.source` / `spec.sources`, `status.sync.status` / `status.health.status` and `status.summary.images` are read; annotations (such as `last-applied-configuration`), `status.resources`, `status.history` and `status.sync.comparedTo` are ignored.
+Nothing else is called: no `app get`, `app manifests` or `app resources`, no Secrets, no rendered manifests, no cluster state beyond the Application objects. From each Application only `metadata.name`, `metadata.labels`, `spec.project`, `spec.destination`, `spec.source` / `spec.sources`, `status.sync.status` / `status.health.status`, `status.summary.images` and, of `status.resources`, only the `kind` and `name` of each item are read; annotations (such as `last-applied-configuration`), every other field of `status.resources`, `status.history` and `status.sync.comparedTo` are ignored.
 
 ## Output
 
 | Entity | Attributes |
 |---|---|
-| `deployment:<Application name>` | `project`, `namespace` (destination), `sync_status`, `health_status`, `config_refs`, and `images` when there is a valid image (see [`images`](#images)) |
+| `deployment:<Application name>` | `project`, `namespace` (destination), `sync_status`, `health_status`, `config_refs`, `images` when there is a valid image (see [`images`](#images)) and `workloads` when there is a valid workload (see [`workloads`](#workloads)) |
 | `service:<service>` (label `--service-label`, else the Helm `nameOverride`, else `--service-pattern`, else the Application name) | none |
 | `environment:<environment>` (label `--env-label`, else the destination namespace) | none |
 | `cluster:<destination.server>`, or `cluster:<destination.name>` when there is no server | none |
@@ -142,6 +142,10 @@ A sorted list, without repetition, of the images the deployment runs, only as th
 The scheme (`oci://`, `docker://`), the digest (`@sha256:…`), the tag (`:1.4.2`, in the last segment) and the registry host (the first segment when it has `.` or `:` or is `localhost`) are removed and the rest is lower case; it must match `^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*$`, else the image is dropped whole. The digest is only `sha256:`, `sha384:` or `sha512:` followed by hexadecimal; any other text after `@` (a credential, even one that looks like `alg:hex` as in `admin:secret@registry:5000`, or another algorithm such as `md5:`) drops the whole image (Emenda v3). Nothing of a dropped image leaves, not even on stderr. A deployment without a valid image has no `images` attribute (not an empty list), so its snapshot stays as before 2026.11.12.
 
 The `build` uses `images` to link the service to the repository of the code (rule 4, `references/graph.md`); tags and digests are execution data and never enter the atlas.
+
+### `workloads`
+
+A sorted list, without repetition, of the workloads that run the deployment, as `<Kind>/<name>` (SPEC-0087): `["Deployment/api", "Rollout/api-canary"]`. Taken from `status.resources` of the Application, only the items whose `kind` is `Deployment`, `StatefulSet`, `DaemonSet` or `Rollout` and whose `name` is a simple name (letters, digits, `.`, `_` and `-`, no space or template). Any other kind (`Service`, `ConfigMap`, a `Secret`) never leaves, not even its name; of each item only `kind` and `name` are read. A deployment without a valid workload has no `workloads` attribute (not an empty list), so its snapshot stays as before 2026.11.14. It is a list of scalars: the contract stays `@1`, and an older version only keeps it in the node. The `context` brings it in `delivery.deployments` (`references/context.md`), with the namespace, so a probe can name its target without guessing.
 
 ## `--input` formats
 

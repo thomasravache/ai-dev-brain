@@ -28,7 +28,7 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.13"
+ATLAS_VERSION = "2026.11.14"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -36,9 +36,9 @@ PAGES_DIR = ASSETS_DIR / "pages"
 
 SHARED_FILE = "atlas-config.yml"
 MODES = ("repo", "local")
-LOCAL_KEYS = ("atlas", "credentials")
+LOCAL_KEYS = ("atlas", "credentials", "access")
 SHARED_KEYS = ("version", "organization", "mode", "language", "stale_days", "categories", "collectors",
-               "redaction", "curation", "ci", "remotes", "image_repositories")
+               "redaction", "curation", "ci", "remotes", "image_repositories", "environments")
 REQUIRED_SHARED = ("version", "organization", "mode")
 SHARED_VERSION = "1"
 STRUCTURE_DIRS = ("services", "platform", "conventions", "process", "snapshots")
@@ -256,6 +256,8 @@ def dump_yaml(data: dict, indent: int = 0) -> str:
     pad, lines = " " * indent, []
     for key, value in data.items():
         name = fmt_scalar(key)
+        if ":" in name and not name.startswith('"'):  # a key like https://host: parse_yaml reads it back quoted
+            name = json.dumps(str(key), ensure_ascii=False)
         if isinstance(value, dict) and value:
             lines.append(f"{pad}{name}:\n{dump_yaml(value, indent + 2)}")
         elif isinstance(value, list) and value:
@@ -549,6 +551,96 @@ def validate_image_repositories(mapping) -> dict:
     return dict(mapping)
 
 
+# the tier of an environment (SPEC-0087, ADR-0023): an environment without one counts as production for consumers
+TIERS = ("test", "production")
+# the simple name rule of an environment of the graph: letters, digits, . _ - (no space, no "/")
+ENVIRONMENT_NAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?\Z")
+ENVIRONMENTS_HINT = "use <ambiente>: {tier: test} ou {tier: production}, como dev: {tier: test}"
+
+
+def environment_item_problem(name, value):
+    """Reason why an item of `environments:` is invalid, the first that applies (the name, the value, the tier), or
+    None. Fixed text that never quotes the item (the rule of SPEC-0080 and SPEC-0082)."""
+    if not isinstance(name, str) or not ENVIRONMENT_NAME_RE.match(name):
+        return "o nome do ambiente está fora da regra de nome (letras, dígitos, . _ -, sem espaço)"
+    if not isinstance(value, dict):
+        return "o valor precisa ser um mapa {tier: test | production}"
+    unknown = [key for key in value if key != "tier"]
+    if unknown:
+        return "o mapa aceita só a chave tier"
+    if value.get("tier") not in TIERS:
+        return "tier precisa ser test ou production"
+    return None
+
+
+def validate_environments(mapping) -> dict:
+    """environments = {<environment>: {tier: test | production}} of atlas-config.yml (SPEC-0087): {environment:
+    tier}, or AtlasError (code 2) with the position (from 1) and the reason of the first invalid item, never its
+    text."""
+    if mapping in ("", None):
+        return {}
+    if not isinstance(mapping, dict):
+        raise AtlasError(f"environments precisa ser um mapa — {ENVIRONMENTS_HINT}", 2)
+    for position, (name, value) in enumerate(mapping.items(), start=1):
+        reason = environment_item_problem(name, value)
+        if reason:  # position and reason only: no text of the item
+            raise AtlasError(f"environments: item {position} inválido — {reason}; {ENVIRONMENTS_HINT}", 2)
+    return {name: value["tier"] for name, value in mapping.items()}
+
+
+ACCESS_TEXT_MAX = 256
+ACCESS_HINT = "use access: {clusters: {<cluster>: {context: <nome do contexto do kubeconfig>}}}"
+ACCESS_DEFINED = "definido"  # what config shows instead of a context: only that it exists
+
+
+def _access_text_problem(text, what):
+    """Reason why `text` is not a text of 1 to 256 characters without a line break (or another control character),
+    or None. Never quotes the text."""
+    if not isinstance(text, str):
+        return f"{what} não é texto"
+    if not text:
+        return f"{what} vazio"
+    if len(text) > ACCESS_TEXT_MAX:
+        return f"{what} com mais de {ACCESS_TEXT_MAX} caracteres"
+    if any(is_control(c) for c in text):
+        return f"{what} com quebra de linha ou caractere de controle"
+    return None
+
+
+def validate_access(access) -> dict:
+    """access = {clusters: {<cluster>: {context: <name>}}} of one entry of the local layer (SPEC-0087): {cluster:
+    context}, or AtlasError (code 2) with the position (from 1) and the reason of the first invalid item. The
+    context is a name of this machine's kubeconfig and is never printed, not even in an error."""
+    if access in ("", None):
+        return {}
+    if not isinstance(access, dict) or any(key != "clusters" for key in access):
+        raise AtlasError(f"access aceita só a chave clusters — {ACCESS_HINT}", 2)
+    clusters = access.get("clusters")
+    if clusters in ("", None):
+        return {}
+    if not isinstance(clusters, dict):
+        raise AtlasError(f"access.clusters precisa ser um mapa — {ACCESS_HINT}", 2)
+    for position, (cluster, entry) in enumerate(clusters.items(), start=1):
+        reason = _access_text_problem(cluster, "o nome do cluster")
+        if reason is None:
+            if not isinstance(entry, dict):
+                reason = "o valor precisa ser um mapa {context: <nome do contexto>}"
+            elif any(key != "context" for key in entry):
+                reason = "o mapa aceita só a chave context"
+            else:
+                reason = _access_text_problem(entry.get("context"), "o contexto")
+        if reason:  # position and reason only: never the cluster nor the context
+            raise AtlasError(f"access.clusters: item {position} inválido — {reason}; {ACCESS_HINT}", 2)
+    return {str(cluster): entry["context"] for cluster, entry in clusters.items()}
+
+
+def access_view(access: dict) -> dict:
+    """What config shows of a valid `access`: each cluster with "definido" in place of its context (SPEC-0087)."""
+    if not access:
+        return {}
+    return {"clusters": {cluster: {"context": ACCESS_DEFINED} for cluster in access}}
+
+
 def ci_env_names(ci) -> list:
     names = ci.get("env") if isinstance(ci, dict) else None
     return [] if names in ("", None) else [names] if isinstance(names, str) else list(names)
@@ -837,6 +929,8 @@ def load_config(config_home=None, choice=None) -> dict:
     validate_credentials(credentials)
     values["credentials"] = credentials if isinstance(credentials, dict) else {}
     origins["credentials"] = ORIGIN_LOCAL if "credentials" in local else ORIGIN_DEFAULT
+    values["access"] = access_view(validate_access(local.get("access")))  # never the context (SPEC-0087)
+    origins["access"] = ORIGIN_LOCAL if "access" in local else ORIGIN_DEFAULT
     if values["atlas"]:
         require_readable_atlas(values["atlas"])
     shared_path = Path(values["atlas"]) / SHARED_FILE if values["atlas"] else None
@@ -844,7 +938,8 @@ def load_config(config_home=None, choice=None) -> dict:
     validate_ci(shared.get("ci"))
     validate_remotes(shared.get("remotes"))
     validate_image_repositories(shared.get("image_repositories"))
-    defaults = dict(default_shared(), organization="", mode="", remotes=[], image_repositories={})
+    validate_environments(shared.get("environments"))
+    defaults = dict(default_shared(), organization="", mode="", remotes=[], image_repositories={}, environments={})
     for key in SHARED_KEYS:
         found = key in shared
         values[key] = shared[key] if found else defaults.get(key, "")
@@ -853,8 +948,11 @@ def load_config(config_home=None, choice=None) -> dict:
             "atlases": atlas_list(config)}
 
 
-def render_local_config(atlas: str, credentials=None) -> str:
-    return LOCAL_HEADER + dump_yaml({"atlas": atlas, "credentials": credentials or {}})
+def render_local_config(atlas: str, credentials=None, access=None) -> str:
+    data = {"atlas": atlas, "credentials": credentials or {}}
+    if access:  # SPEC-0087: kept as it is (only names of this machine's contexts)
+        data["access"] = access
+    return LOCAL_HEADER + dump_yaml(data)
 
 
 def render_atlases(entries: dict, default) -> str:
@@ -862,10 +960,13 @@ def render_atlases(entries: dict, default) -> str:
     working), the multi form (`default:` + `atlases:`) with two or more (ADR-0021)."""
     if len(entries) == 1:
         (entry,) = entries.values()
-        return render_local_config(entry_atlas(entry), entry.get("credentials") or {})
+        return render_local_config(entry_atlas(entry), entry.get("credentials") or {}, entry.get("access"))
     data = {"default": default} if default else {}
-    data["atlases"] = {name: {"atlas": entry_atlas(entry), "credentials": entry.get("credentials") or {}}
-                       for name, entry in sorted(entries.items())}
+    data["atlases"] = {}
+    for name, entry in sorted(entries.items()):
+        data["atlases"][name] = {"atlas": entry_atlas(entry), "credentials": entry.get("credentials") or {}}
+        if entry.get("access"):
+            data["atlases"][name]["access"] = entry["access"]
     return LOCAL_HEADER + dump_yaml(data)
 
 
@@ -920,7 +1021,10 @@ def updated_local(atlas_path: str, name, organization, make_default=False) -> di
                          f"{same[0]} (ou omita --name)", 2)
     credentials = (entries.get(name) or {}).get("credentials")
     validate_credentials(credentials)
+    access = (entries.get(name) or {}).get("access")
     entries[name] = {"atlas": atlas_path, "credentials": credentials if isinstance(credentials, dict) else {}}
+    if access:
+        entries[name]["access"] = access
     default = config["default"]
     if config["form"] == "single":
         default = next(iter(config["entries"]))  # the only atlas was the default
@@ -1577,7 +1681,14 @@ def scan_config(choice=None):
         raise AtlasError(f"atlas sem atlas-config.yml — rode init: {shared_path}", 2)
     shared = read_yaml(shared_path)
     validate_image_repositories(shared.get("image_repositories"))  # SPEC-0082: exit 2 before any collector runs
+    validate_environments(shared.get("environments"))  # SPEC-0087: the same for environments
     return Path(atlas), shared
+
+
+def chosen_access(choice=None) -> dict:
+    """{cluster: context} of `access` of the chosen atlas's entry (SPEC-0087); invalid = AtlasError (code 2)."""
+    config, name, _ = chosen_atlas(choice=choice)
+    return validate_access(config["entries"][name].get("access"))
 
 
 def declared_env_names(entry) -> set:
@@ -1992,6 +2103,7 @@ class _Index:
         image_map = graph.get(IMAGE_MAP_KEY)
         self.image_map = image_map if isinstance(image_map, dict) else {}
         self.repositories, self.by_name = _repository_lookup(self.nodes)
+        self.access = set()  # clusters this machine has a local context for (context only, SPEC-0087)
 
     def targets(self, key, rtype, kind=None) -> list:
         return [e["to"] for e in self.out.get((key, rtype), []) if kind is None or e["to"].startswith(kind + ":")]
@@ -2321,7 +2433,8 @@ def build_atlas(atlas: Path, shared: dict) -> dict:
     state = state if isinstance(state, dict) else {}
     organization = str(shared.get("organization") or "")
     image_map = validate_image_repositories(shared.get("image_repositories"))
-    graph = infer_relations(merge_snapshots(snapshots, ids, state), image_map)
+    graph = with_tiers(infer_relations(merge_snapshots(snapshots, ids, state), image_map),
+                       validate_environments(shared.get("environments")))
     today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     text = render_graph(graph, organization, today)
     graph_path = atlas / GRAPH_FILE
@@ -2347,6 +2460,17 @@ def build_atlas(atlas: Path, shared: dict) -> dict:
     return {"ok": True, "nodes": len(graph["nodes"]), "edges": len(graph["edges"]),
             "inferred": sum(1 for e in graph["edges"] if e.get("inferred")),
             "conflicts": sum(len(n["conflicts"]) for n in graph["nodes"]), "pages": updated, "warnings": warnings}
+
+
+def with_tiers(graph: dict, tiers: dict) -> dict:
+    """The graph with attrs.tier on each environment named in `environments:` (SPEC-0087); the others stay without
+    tier (they count as production for consumers, ADR-0023)."""
+    for node in graph["nodes"]:
+        if node.get("kind") == "environment":
+            tier = tiers.get(str(node["key"]).split(":", 1)[1])
+            if tier:
+                node["attrs"] = dict(sorted({**node["attrs"], "tier": tier}.items()))
+    return graph
 
 
 def build_line(report: dict) -> str:
@@ -2927,6 +3051,7 @@ def _delivery(key, repositories, index):
             if attrs.get(name):
                 item[name] = str(attrs[name])
         item["images"] = sorted(_deployment_images(deployment, index))
+        item.update(_access_fields(deployment, attrs, index))
         deployment_items.append(item)
     return {"code_repositories": [r.split(":", 1)[1] for r in sorted(code)],
             "config_repositories": (sorted(r.split(":", 1)[1] for r in repositories if r not in code)
@@ -2934,6 +3059,37 @@ def _delivery(key, repositories, index):
             "pipelines": pipeline_items,
             "images": _code_images(code_edges, deployments, index),
             "deployments": deployment_items}
+
+
+def _deployment_tier(deployment, index):
+    """The tier of a deployment from its environments (SPEC-0087): "production" when one is production, "test" when
+    all are test; None without an environment or when one has no tier (it counts as production, ADR-0023)."""
+    tiers = [index.nodes.get(e, {}).get("attrs", {}).get("tier")
+             for e in index.targets(deployment, "runs_in", "environment")]
+    if not tiers or any(tier not in TIERS for tier in tiers):
+        return None
+    return "production" if "production" in tiers else "test"
+
+
+def _access_fields(deployment, attrs, index) -> dict:
+    """tier, namespace, workloads and access of a deployment of delivery (SPEC-0087), each only with a value; access
+    only when the deployment runs in a cluster (true when this machine has a local context for one of them)."""
+    fields = {}
+    tier = _deployment_tier(deployment, index)
+    if tier:
+        fields["tier"] = tier
+    if isinstance(attrs.get("namespace"), str) and attrs["namespace"]:
+        fields["namespace"] = attrs["namespace"]
+    workloads = attrs.get("workloads")
+    if isinstance(workloads, list):
+        workloads = sorted({str(w) for w in workloads if isinstance(w, str) and w})
+        if workloads:
+            fields["workloads"] = workloads
+    clusters = index.targets(deployment, "runs_in", "cluster")
+    if clusters:
+        names = {index.name(c) for c in clusters} | {c.split(":", 1)[1] for c in clusters}
+        fields["access"] = bool(names & index.access)
+    return fields
 
 
 def _dependencies(starts, index, hops) -> list:
@@ -3038,11 +3194,12 @@ def _fit(package: dict, max_chars: int) -> dict:
     return keep(low)
 
 
-def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, today=None) -> dict:
+def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, today=None, access=None) -> dict:
     """Read-only package for a task (references/context.md): staleness warnings, the services found by the query
     terms (name, id, attrs and the team notes of their pages, by score), the dependency edges up to `hops` steps,
     the confirmed (rules) and inferred (hints) conventions of the organization and of the services' repositories,
-    and what did not fit in max_chars (omitted). An atlas without scan = empty package with the warning."""
+    and what did not fit in max_chars (omitted). An atlas without scan = empty package with the warning. `access`:
+    the clusters this machine has a local context for (only their names, SPEC-0087)."""
     atlas = Path(atlas)
     today = today or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     shared_path = atlas / SHARED_FILE
@@ -3068,6 +3225,7 @@ def build_context(atlas: Path, query: str, hops=1, limit=8, max_chars=30000, tod
     except AtlasError:
         image_map = {}
     index = _Index({**graph, IMAGE_MAP_KEY: image_map}, _existing_service_pages(atlas))
+    index.access = {str(cluster) for cluster in (access or ())}
     organization = str(shared.get("organization") or graph.get("organization") or "")
     terms = _query_terms(query)
     found = []
@@ -3135,7 +3293,12 @@ def _delivery_lines(delivery) -> list:
     for item in delivery["deployments"]:
         parts = [f"{label} {value}" for label, value in (
             ("cluster", code(item["clusters"])), ("sync", code([item["sync_status"]]) if "sync_status" in item else ""),
-            ("health", code([item["health_status"]]) if "health_status" in item else "")) if value]
+            ("health", code([item["health_status"]]) if "health_status" in item else ""),
+            ("tier", code([item["tier"]]) if "tier" in item else ""),
+            ("namespace", code([item["namespace"]]) if "namespace" in item else ""),
+            ("workloads", f"`{', '.join(item['workloads'])}`" if item.get("workloads") else "")) if value]
+        if item.get("access") is False:
+            parts.append("sem acesso local")
         lines.append(f"  - {', '.join(item['environments']) or 'sem ambiente'}: `{item['id']}`"
                      + (f" — {'; '.join(parts)}" if parts else ""))
     return ["- Entrega:"] + lines
@@ -3198,8 +3361,9 @@ def cmd_context(args):
     if args.max_chars < 1:
         raise AtlasError(f"--max-chars precisa ser maior que zero: {args.max_chars}", 2)
     atlas, _ = scan_config(args.atlas)
+    access = chosen_access(args.atlas)  # only the cluster names go on: the context never leaves (SPEC-0087)
     query = " ".join(args.query).strip()
-    package = build_context(atlas, query, args.hops, args.limit, args.max_chars)
+    package = build_context(atlas, query, args.hops, args.limit, args.max_chars, access=set(access))
     nothing = not package["services"]
     if args.json:
         data = {"version": ATLAS_VERSION, **package}
@@ -3218,7 +3382,7 @@ def cmd_context(args):
 # ---------------------------------------------------------------- lint (read-only checks of the atlas)
 
 LINT_RULES = ("secret-leak", "config", "failed-collector", "stale", "broken-ref", "pending-convention",
-              "orphan-page")
+              "orphan-page", "untiered-environment")
 LINT_ERRORS = ("secret-leak", "config", "failed-collector")
 VCS_DIRS = (".git", ".hg", ".svn", ".bzr", "_darcs", ".jj")
 LINT_IGNORED_FILES = (".DS_Store", "Thumbs.db", "desktop.ini")
@@ -3240,6 +3404,8 @@ LINT_SUGGESTIONS = {
                           "NOME --via \"PR #n\"|local` ou `curate reject <id> ...`",
     "orphan-page": "confirme com o time se a entidade foi desligada; se sim, apague a página (decisão do time) ou "
                    "mova as notas para outra página",
+    "untiered-environment": "marque o ambiente em environments: do atlas-config.yml com {tier: test} ou "
+                            "{tier: production} (references/config.md)",
 }
 SHARED_SUGGESTION = "corrija o atlas-config.yml (references/config.md e references/collector-contract.md)"
 READ_SUGGESTION = ("regrave o arquivo em UTF-8 válido; se é gerado (snapshots/, graph.json, regiões), rode "
@@ -3690,6 +3856,39 @@ def _lint_orphans(files: _AtlasFiles, stale_days, today) -> list:
     return findings
 
 
+def graph_environments(graph) -> list:
+    """Sorted ids of the environment nodes of a graph (graph.json); [] for a missing or malformed graph."""
+    nodes = graph.get("nodes") if isinstance(graph, dict) else None
+    return sorted({str(n["key"]).split(":", 1)[1] for n in (nodes if isinstance(nodes, list) else [])
+                   if isinstance(n, dict) and n.get("kind") == "environment" and isinstance(n.get("key"), str)
+                   and ":" in n["key"]})
+
+
+def graph_clusters(graph) -> list:
+    """Sorted names of the cluster nodes of a graph (graph.json); [] for a missing or malformed graph."""
+    nodes = graph.get("nodes") if isinstance(graph, dict) else None
+    return sorted({str(n.get("name") or n["key"].split(":", 1)[1]) for n in (nodes if isinstance(nodes, list) else [])
+                   if isinstance(n, dict) and n.get("kind") == "cluster" and isinstance(n.get("key"), str)
+                   and ":" in n["key"]})
+
+
+def untiered_environments(graph, shared) -> list:
+    """Environments of the graph without a tier in `environments:` (SPEC-0087); [] when the map is invalid (the
+    config rule and the doctor already report it)."""
+    try:
+        tiers = validate_environments(shared.get("environments") if isinstance(shared, dict) else None)
+    except AtlasError:
+        return []
+    return [name for name in graph_environments(graph) if name not in tiers]
+
+
+def _lint_untiered(files: _AtlasFiles, shared) -> list:
+    """One untiered-environment finding (warn) per environment of graph.json without a tier (SPEC-0087)."""
+    return [_finding("untiered-environment", SHARED_FILE,
+                     f"ambiente {name} sem marcação em environments: (conta como produção)")
+            for name in untiered_environments(files.json(GRAPH_FILE), shared)]
+
+
 def _mask_all(text, extras) -> str:
     """text with every piece that matches a secret pattern (built-in or extra) masked."""
     return _redact_text(str(text), [regex for _, regex in extras])[0]
@@ -3762,6 +3961,8 @@ def run_lint(atlas: Path, rules=None, today=None) -> list:
         findings += _lint_conventions(files, extras)
     if "orphan-page" in rules:
         findings += _lint_orphans(files, stale_days, today)
+    if "untiered-environment" in rules:
+        findings += _lint_untiered(files, shared)
     if "config" in rules:  # last, after every JSON file was parsed and checked
         _graph_shape(files)
         for rel in sorted(r for r in files.texts if r.startswith(f"{SNAPSHOTS_DIR}/") and r.endswith(".json")):
@@ -3795,6 +3996,7 @@ def _lint_atlas(choice=None) -> Path:
         raise AtlasError(f"não consegui ler {path}: {_yaml_problem(e)}", 1) from None
     config = local_atlases(path, local)
     name, _ = select_atlas(config, choice)
+    validate_access(config["entries"][name].get("access"))  # SPEC-0087: exit 2, as config --json
     atlas = entry_atlas(config["entries"][name])
     if not atlas:
         raise AtlasError(f"atlas não definido em {where(config, name)} — rode init (ou init --join)", 3)
@@ -3805,7 +4007,8 @@ def _lint_atlas(choice=None) -> Path:
 
 
 def _lint_image_repositories(atlas: Path) -> None:
-    """An invalid `image_repositories:` ends lint with exit 2, as config --json and build (SPEC-0082). An unreadable
+    """An invalid `image_repositories:` (SPEC-0082) or `environments:` (SPEC-0087) ends lint with exit 2, as
+    config --json and build. An unreadable
     or invalid atlas-config.yml is left to the config rule of the lint."""
     path = atlas / SHARED_FILE
     try:
@@ -3813,6 +4016,7 @@ def _lint_image_repositories(atlas: Path) -> None:
     except (OSError, UnicodeDecodeError, ValueError):
         return
     validate_image_repositories(shared.get("image_repositories"))
+    validate_environments(shared.get("environments"))  # SPEC-0087: exit 2 too
 
 
 def cmd_lint(args):
@@ -4271,6 +4475,11 @@ def check_shared(data: dict) -> list:
             validate_image_repositories(data["image_repositories"])
         except AtlasError as e:
             problems.append(str(e))
+    if "environments" in data:
+        try:
+            validate_environments(data["environments"])
+        except AtlasError as e:
+            problems.append(str(e))
     problems += [f"caminho absoluto em {key}" for key, _ in absolute_values(data)]
     return problems
 
@@ -4430,6 +4639,11 @@ def doctor_rows(config_home=None, choice=None) -> list:
     except AtlasError as e:
         rows.append(("ERRO", "configuração local", f"{e} ({path})"))
         credentials = {}
+    try:
+        access = validate_access(local.get("access"))
+    except AtlasError as e:  # position and reason only: never the context (SPEC-0087)
+        rows.append(("ERRO", "acesso local", f"{e} ({path})"))
+        access = None
     entries = config["entries"]
     rows.append(("OK", "Atlas configurados", f"{len(entries)} ({_names(entries)})"))
     rows += other_atlas_items(config, name)
@@ -4460,7 +4674,28 @@ def doctor_rows(config_home=None, choice=None) -> list:
         return rows + credential_checks(credentials)
     rows.append(("OK", "pasta do atlas", atlas))
     rows += found + old_copy_items(Path(atlas)) + collector_checks((shared or {}).get("collectors"))
-    return rows + credential_checks(credentials)
+    return rows + credential_checks(credentials) + access_map_items(Path(atlas), shared, access)
+
+
+def access_map_items(atlas: Path, shared, access) -> list:
+    """doctor rows of the access map (SPEC-0087), from graph.json: one AVISO with the environments without a tier
+    (they count as production) and, when `access` is valid, one row per cluster: OK "contexto definido" (never the
+    context) or AVISO "sem contexto local"."""
+    try:
+        graph = read_json_file(atlas / GRAPH_FILE)
+    except (AtlasError, OSError):  # an unreadable graph.json is the lint's to report
+        graph = None
+    rows = []
+    untiered = untiered_environments(graph, shared or {})
+    if untiered:
+        rows.append(("AVISO", "ambientes sem marcação", f"{', '.join(untiered)} (conta como produção)"))
+    if access is not None:
+        for cluster in graph_clusters(graph):
+            if cluster in access:
+                rows.append(("OK", f"acesso {cluster}", "contexto definido"))
+            else:
+                rows.append(("AVISO", f"acesso {cluster}", "sem contexto local"))
+    return rows
 
 
 def old_copy_items(atlas: Path) -> list:

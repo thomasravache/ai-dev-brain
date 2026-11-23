@@ -9,6 +9,20 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.14] - 2026-11-23
+
+### Added
+- Coletor `argocd`: atributo `workloads` no `deployment`, a lista ordenada e sem repetição de `<Kind>/<nome>` dos workloads da Application, de `status.resources`, só com `Deployment`, `StatefulSet`, `DaemonSet` ou `Rollout` e nome simples (`["Deployment/api", "Rollout/api-canary"]`). De cada item só `kind` e `name` são lidos; um `Service`, `ConfigMap` ou `Secret` nunca sai, nem o nome. Deployment sem workload válido não ganha o atributo. O contrato continua `boson-atlas/collector@1` (lista de escalares), e a versão anterior só ignora o atributo (SPEC-0087, ADR-0011).
+- Chave opcional `environments:` no `atlas-config.yml` compartilhado (`dev: {tier: test}`, `prod: {tier: production}`): o `build` grava `attrs.tier` no nó `environment`; um ambiente fora do mapa fica sem `tier` e conta como produção para quem consome (ADR-0023). Um item inválido faz `config`, `scan`, `build`, `context`, `curate`, `vendor` e `lint` saírem com 2 com a posição e o motivo, nunca o item (`environments: item 2 inválido — tier precisa ser test ou production; …`), e o `doctor` mostra o problema como ERRO; o modelo `assets/atlas-config.yml` traz o exemplo comentado (SPEC-0087).
+- Chave opcional `access.clusters` na configuração local da máquina (na forma de vários atlas, dentro da entrada de cada atlas): `<cluster>: {context: <nome do contexto do kubeconfig>}`, só o nome, de 1 a 256 caracteres e sem quebra de linha; a chave pode ser a URL do servidor. O valor nunca sai: `config` e `config --json` mostram `context: definido`, o `doctor` mostra `OK acesso <cluster> — contexto definido` ou `AVISO acesso <cluster> — sem contexto local`, e o `context` diz só se há acesso. Um item inválido faz `config`, `context` e `lint` saírem com 2 (`access.clusters: item 2 inválido — <motivo>`, sem o item) e é ERRO `acesso local` no `doctor`. `init` e `init --join` mantêm o `access` da entrada (SPEC-0087, ADR-0010).
+- `context`: cada item de `delivery.deployments` ganha, quando há valor, `tier`, `namespace`, `workloads` e `access` (`true | false`, só quando o deployment tem cluster). Na linha do ambiente em Markdown, depois de `cluster`, `sync` e `health`: `` tier `test` ``, `` namespace `api` ``, `` workloads `Deployment/api, StatefulSet/api-cache` `` e `sem acesso local` (SPEC-0087).
+- `doctor`: `AVISO ambientes sem marcação — dev, qa (conta como produção)` e uma linha por cluster do grafo, `acesso <cluster>` (SPEC-0087).
+- `lint`: regra nova `untiered-environment` (AVISO), um achado por ambiente sem `tier`; não muda o exit (SPEC-0087).
+
+### Changed
+- **Atualize todas as máquinas antes de declarar `environments:`:** a versão anterior (2026.11.13) ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: environments`. O `access` é local e não afeta outras máquinas, mas a versão anterior recusa a chave `access` dentro de uma entrada da forma de vários atlas. Rollback: tire as chaves novas; os snapshots com `workloads` continuam válidos (SPEC-0087).
+- **Aviso de upgrade:** o primeiro `scan` grava `workloads` nos deployments e o `diff` mostra o atributo novo; sem `environments:`, o `doctor` e o `lint` passam a avisar dos ambientes sem marcação, e o `doctor` de cada cluster sem contexto local (SPEC-0087).
+
 ## [2026.11.13] - 2026-11-20
 
 ### Added

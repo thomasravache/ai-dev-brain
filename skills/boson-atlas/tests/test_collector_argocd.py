@@ -10,7 +10,8 @@ Contrato esperado de assets/collectors/argocd.py (o Implementer segue estes test
         stdout: um objeto boson-atlas/collector@1 com collector "argocd", category "delivery", collected_at ISO 8601
         UTC e source "argocd" em cada entidade e relação; exit 0.
         entidades: deployment:<metadata.name> {project, namespace (de destino), sync_status, health_status,
-                       config_refs} (só esses), name = nome da Application
+                       config_refs} (só esses; mais images, SPEC-0082, e workloads, SPEC-0087, quando há), name =
+                       nome da Application
                    service:<serviço>, environment:<ambiente>, cluster:<destination.server, ou destination.name
                        quando não há server>; name = id, attrs {}; cada chave uma vez só na saída
         relações:  deployment -> service (deploys); deployment -> environment (runs_in);
@@ -87,8 +88,9 @@ GUIDE = "veja references/collectors/argocd.md"
 NO_ACCESS = "sem acesso às Applications"
 INVALID = "resposta inválida da CLI"
 IN_CLUSTER = "https://kubernetes.default.svc"
-# SPEC-0082 (Emenda v2): os deployments das fixtures acme têm status.summary.images, logo também trazem images
-DEPLOYMENT_ATTRS = {"project", "namespace", "sync_status", "health_status", "config_refs", "images"}
+# SPEC-0082 (Emenda v2): os deployments das fixtures acme têm status.summary.images, logo também trazem images;
+# SPEC-0087 (Emenda v2): e têm Deployment em status.resources, logo também trazem workloads
+DEPLOYMENT_ATTRS = {"project", "namespace", "sync_status", "health_status", "config_refs", "images", "workloads"}
 # pedaços das fixtures que nunca podem sair do coletor: credenciais, valores inteiros, chaves fora da lista,
 # anotações e o Secret listado entre os recursos da Application
 NEVER_OUT = ("fake-pass", "not-a-real-token", "fakepublickey", "sslmode", "debug=1", "5432", "/payments",
@@ -240,12 +242,14 @@ class MapApplicationTest(unittest.TestCase):
     def test_application_becomes_deployment_service_environment_and_cluster(self):
         """SPEC-0035:UT-01 — uma Application gera deployment, service, environment e cluster, com deploys e
         runs_in (ambiente e cluster); SPEC-0082:UT-01 (Emenda v2) — o deployment traz images, porque a
-        Application tem status.summary.images."""
+        Application tem status.summary.images; SPEC-0087:UT-02 (Emenda v3) — e workloads, porque status.resources tem
+        o Deployment ingress-nginx-controller."""
         entities, relations = function("map_application")(application("ingress-nginx"))
         self.assertEqual(sorted(entities, key=canonical), sorted([
             {"kind": "deployment", "id": "ingress-nginx", "name": "ingress-nginx",
              "attrs": {"project": "platform", "namespace": "ingress", "sync_status": "Synced",
-                       "health_status": "Healthy", "config_refs": [], "images": ["ingress-nginx/controller"]},
+                       "health_status": "Healthy", "config_refs": [], "images": ["ingress-nginx/controller"],
+                       "workloads": ["Deployment/ingress-nginx-controller"]},
              "source": "argocd"},
             entity("service", "ingress-nginx"),
             entity("environment", "prod"),
@@ -260,13 +264,15 @@ class MapApplicationTest(unittest.TestCase):
     def test_deployment_has_only_the_contract_attributes(self):
         """SPEC-0035:UT-01 — o deployment traz só project, namespace, sync_status, health_status e config_refs,
         com o estado de sync e de saúde da Application; SPEC-0082:UT-01 (Emenda v2) — e images, porque a
-        Application tem status.summary.images."""
+        Application tem status.summary.images; SPEC-0087:UT-02 (Emenda v2) — e workloads, porque status.resources tem
+        o Deployment api."""
         entities, _ = function("map_application")(application("api-staging"))
         deployment = next(e for e in entities if e["kind"] == "deployment")
         self.assertEqual(deployment["id"], "api-staging")
         self.assertEqual(deployment["name"], "api-staging")
         self.assertEqual(set(deployment["attrs"]), DEPLOYMENT_ATTRS)
         self.assertEqual(deployment["attrs"]["images"], ["acme/api"])
+        self.assertEqual(deployment["attrs"].get("workloads"), ["Deployment/api"])
         self.assertEqual(deployment["attrs"]["project"], "payments")
         self.assertEqual(deployment["attrs"]["namespace"], "payments-staging")
         self.assertEqual(deployment["attrs"]["sync_status"], "OutOfSync")

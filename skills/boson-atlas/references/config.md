@@ -17,6 +17,23 @@ credentials:                          # só NOMES; nunca valores
 - `atlas` — pasta do atlas. Cada máquina grava o seu caminho **absoluto** (o `init` e o `init --join` gravam assim); um caminho relativo editado à mão vira ERRO no `doctor`.
 - `credentials` — por id de coletor: `env` (lista de nomes de variável de ambiente) e `profile` (nome de um profile da ferramenta, por exemplo da AWS CLI ou do `gh`). Cada nome de variável precisa seguir `^[A-Z_][A-Z0-9_]*$`; qualquer outra coisa (por exemplo um token colado no lugar do nome) faz `config` sair com 2 e `doctor` mostrar ERRO com "credentials aceita só nomes de variável: <coletor>", sem repetir o valor e sem gravar nada. Um `profile` com espaços sai do mesmo jeito, com "credentials aceita só um nome de profile, sem espaços: <coletor>".
 - O `atlas.py` nunca lê o valor de uma variável: o `doctor` só confere se o nome existe no ambiente (`definida` ou `não definida`) e mostra o nome do profile sem verificá-lo.
+- `access` — opcional: como esta máquina chega a cada cluster do grafo, só pelo **nome** do contexto do kubeconfig (SPEC-0087, abaixo).
+
+### Acesso local por cluster (`access:`)
+
+O nome do contexto do kubectl muda de máquina para máquina e pode trazer o id da conta, então fica só na camada local (na forma de vários atlas, dentro da entrada do atlas), nunca no `atlas-config.yml`:
+
+```yaml
+access:
+  clusters:
+    cluster-dev: {context: <nome do contexto do kubeconfig>}
+    "https://kubernetes.default.svc": {context: <outro contexto>}
+```
+
+- A chave é o nome do cluster como está no grafo (`cluster:<nome>`), que pode ser a URL do servidor; o `context` é o nome de um contexto do kubeconfig desta máquina. Os dois são texto de 1 a 256 caracteres, sem quebra de linha nem caractere de controle. O mapa aceita só `clusters`, e cada cluster só `context`.
+- O valor do contexto nunca sai: `config` e `config --json` mostram `context: definido`, o `doctor` mostra `OK acesso <cluster> — contexto definido` (ou `AVISO acesso <cluster> — sem contexto local` para um cluster do grafo sem contexto) e o `context` diz só se há acesso (`access: true | false`).
+- Um item inválido faz `config`, `context` e `lint` do atlas escolhido saírem com 2, e o `doctor` mostra um ERRO `acesso local` (exit 1). A mensagem diz só a posição, a partir de 1, e o motivo, nunca o cluster nem o contexto: `access.clusters: item 2 inválido — o contexto com quebra de linha ou caractere de controle; …`. Os motivos dizem se é `o nome do cluster` ou `o contexto` e são `não é texto`, `vazio`, `com mais de 256 caracteres` e `com quebra de linha ou caractere de controle`; ou `o valor precisa ser um mapa {context: <nome do contexto>}` e `o mapa aceita só a chave context`.
+- `init` e `init --join` mantêm o `access` da entrada que atualizam. O `atlas.py` nunca usa o contexto para chamar o cluster: as probes (SPEC-0088) é que vão usá-lo.
 
 É escrita pelo `atlas.py init` (e pelo `init --join` numa máquina nova, que não aceita `--org`, `--mode` nem `--force`), que mantém as `credentials` já declaradas para o mesmo atlas. `ATLAS_CONFIG_HOME` troca a pasta, útil para testes; para mais de um atlas, use a forma de vários atlas abaixo.
 
@@ -37,7 +54,7 @@ atlases:
 ```
 
 - A forma de um atlas só (`atlas:` + `credentials:`) continua valendo e é a gravada enquanto houver um atlas. O nome dessa entrada é a `organization` do `atlas-config.yml` em minúsculas, com o que não for `[a-z0-9-]` trocado por `-` (vários `-` viram um, sem `-` nas pontas, até 63 caracteres; `Acme Corp` → `acme-corp`); se a `organization` não puder ser lida, o nome é `default`.
-- As duas formas no mesmo arquivo, um nome inválido, um `default` que não está em `atlases` ou uma chave desconhecida numa entrada (só `atlas` e `credentials`) fazem todos os comandos saírem com 2, citando a chave.
+- As duas formas no mesmo arquivo, um nome inválido, um `default` que não está em `atlases` ou uma chave desconhecida numa entrada (só `atlas`, `credentials` e `access`) fazem todos os comandos saírem com 2, citando a chave.
 - As credenciais de um atlas nunca são usadas por outro: `scan`, `config` e `doctor` leem e checam só as do atlas escolhido.
 - O que o isolamento cobre: no `scan`, os coletores recebem o ambiente do shell **sem** as variáveis declaradas em `env` só nas credenciais de outros atlas (uma variável declarada também pelo atlas escolhido continua). Variáveis que nenhum atlas declara chegam como antes. Credenciais por `profile` ou por arquivo (por exemplo `~/.aws/credentials` ou o login do `gh`) não são isoladas pelo `atlas.py`: dependem da configuração de cada coletor, então aponte o coletor de cada atlas para o seu profile.
 - A forma de vários atlas é gravada com as entradas em ordem de nome.
@@ -133,6 +150,7 @@ redaction: {extra_patterns: []}
 - `redaction.extra_patterns` — regex extras de mascaramento antes de gravar (SPEC-0033).
 - `remotes` — prefixos `host/caminho` dos repositórios da organização (acima, SPEC-0080).
 - `image_repositories` — mapa opcional `imagem → <dono>/<repositório>` para a regra 4 do `build` (SPEC-0082, abaixo).
+- `environments` — mapa opcional `ambiente → {tier: test | production}` (SPEC-0087, abaixo).
 
 Chave ausente usa o padrão (origem `padrão` no `config`).
 
@@ -150,6 +168,21 @@ image_repositories:            # opcional
 - Um item inválido faz `config`, `scan`, `build`, `context`, `curate`, `vendor` e `lint` do atlas escolhido saírem com 2, e o `doctor` mostra o mesmo problema como ERRO no `atlas-config.yml`. A mensagem nunca cita o item: diz só a posição, a partir de 1, e o primeiro motivo, por exemplo `image_repositories: item 2 inválido — o repositório tem maiúsculas; use "<imagem>": <dono>/<repositório>, como "acme/legacy-api": acme/api-v1`. Os motivos dizem se é `a imagem` ou `o repositório` e são, nesta ordem: `não é texto`, `vazio`, `tem esquema (ex.: https://)`, `tem @`, `tem espaço ou caractere de controle`, `tem maiúsculas`, `fora da regra de nome` e, só para o repositório, `precisa ser <dono>/<nome> (exatamente uma /)`.
 - Atualize todas as máquinas antes de declarar `image_repositories:`: a versão anterior ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: image_repositories`.
 
+### Ambientes marcados (`environments:`)
+
+Se um ambiente é de teste ou de produção é um fato da organização, então fica no `atlas-config.yml` compartilhado:
+
+```yaml
+environments:                  # opcional
+  dev:  {tier: test}
+  prod: {tier: production}
+```
+
+- A chave é o nome do ambiente como está no grafo (`environment:<nome>`), pela regra de nome simples (letras, dígitos, `.`, `_` e `-`, sem espaço); o valor é um mapa só com `tier`, que é `test` ou `production`.
+- O `build` grava `attrs.tier` no nó `environment` de cada ambiente do mapa; um ambiente fora do mapa fica sem `tier` e **conta como produção** para quem consome (probes e verificação, ADR-0023). O `doctor` mostra `AVISO ambientes sem marcação — dev, qa (conta como produção)` e o `lint` tem um achado `untiered-environment` por ambiente (`references/maintenance.md`).
+- Um item inválido faz `config`, `scan`, `build`, `context`, `curate`, `vendor` e `lint` do atlas escolhido saírem com 2, e o `doctor` mostra o mesmo problema como ERRO no `atlas-config.yml`. A mensagem nunca cita o item: `environments: item 2 inválido — tier precisa ser test ou production; …`. Os motivos são `o nome do ambiente está fora da regra de nome`, `o valor precisa ser um mapa {tier: test | production}`, `o mapa aceita só a chave tier` e `tier precisa ser test ou production`.
+- Atualize todas as máquinas antes de declarar `environments:`: a versão anterior ignora a chave nos comandos, mas o `lint` dela acusa `chave desconhecida: environments`.
+
 ## O que o `doctor` confere
 
 | Item | OK | AVISO | ERRO |
@@ -166,6 +199,9 @@ image_repositories:            # opcional
 | `pasta .org-atlas/ no atlas` | — | o atlas ainda tem a cópia da skill no nome antigo: `vendor --ci <ci> --force` (grava `.boson-atlas/skill`) e depois `git rm -r .org-atlas` (`references/modes.md`) | — |
 | `coletor <id>` | executável encontrado | — | executável não encontrado ou sem `command` |
 | `credencial <coletor> <NOME>` | `definida` | `não definida` | — |
+| `acesso local` | — | — | `access:` inválido (posição e motivo, nunca o valor) |
+| `ambientes sem marcação` | — | os ambientes do `graph.json` sem `tier` em `environments:` (contam como produção) | — |
+| `acesso <cluster>` | `contexto definido` (nunca o valor) | `sem contexto local` | — |
 
 O `doctor` não executa nenhum processo além do `git config --get remote.origin.url` de leitura do passo do remote (só quando algum atlas declara `remotes:`): usa arquivos, `shutil.which` e `os.environ`. Quando o remote da pasta casa com mais de um atlas no mesmo comprimento, mostra `AVISO remote do projeto — …` com os nomes dos atlas, nunca o remote. Exit 0 sem ERRO, 1 com ERRO, 3 sem configuração local ou com `--atlas`/`ATLAS_NAME` fora da lista. Com vários atlas, o `doctor` confere só o escolhido e as credenciais dele.
 

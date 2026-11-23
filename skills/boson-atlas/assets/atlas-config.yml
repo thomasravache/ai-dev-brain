@@ -40,3 +40,10 @@ curation: {min_share: 0.6, min_total: 20, min_repos: 3}
 # Chave = caminho da imagem sem registry, tag nem digest; valor = <dono>/<repositório>; tudo em minúsculas. Ex.:
 #   image_repositories:
 #     "acme/legacy-api": acme/api-v1
+# environments: se cada ambiente do grafo é de teste ou de produção (references/config.md, SPEC-0087). Opcional.
+# O build grava o tier no nó environment; ambiente fora do mapa conta como produção (ADR-0023), e o doctor e o lint
+# avisam. Chave = nome do ambiente como está no grafo; tier = test | production. O contexto do kubectl de cada
+# cluster NÃO vai aqui: fica na configuração local da máquina (access.clusters). Ex.:
+#   environments:
+#     dev:  {tier: test}
+#     prod: {tier: production}
