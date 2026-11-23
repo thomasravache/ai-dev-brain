@@ -9,9 +9,9 @@ created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0090]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/tests/**, skills/gluon-spec/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0024]
 external: []
 size: S
@@ -112,6 +112,12 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
     verificações (ok, failed, not_verified com motivo)
   o arquivo da foto é apagado no fim da tarefa; nunca entra em commit
 ```
+
+**Esclarecimentos (Emenda v2):**
+- **`whats-new`:** continua lendo só as chaves de primeiro nível. Um projeto sem `delivery_check` vê as quatro chaves novas citadas no comentário da chave; o `spec_graph.py` não muda para listar subchaves.
+- **Teste da SPEC-0086:** a checagem das chaves de `delivery_check` no template passa a aceitar chaves a mais (subconjunto), porque esta spec acrescenta quatro.
+- **Subseção:** no G6 do `gates.md`, a subseção se chama "Active verification (SPEC-0091)". Os vereditos aparecem com o exit ao lado, e a confirmação de produção vale por execução.
+- **SKILL.md:** a frase nova entra no parágrafo de `delivery_check` que já existe no passo 7.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -250,3 +256,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0091`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-23 | Esclarecimentos (Emenda v2): `whats-new` só no primeiro nível; teste da SPEC-0086 aceita chaves a mais; nome da subseção; vereditos com exit; confirmação por execução; frase no parágrafo existente | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
