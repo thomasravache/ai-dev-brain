@@ -302,7 +302,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — majors da rodada 1 resolvidos (Emenda v5); 1 minor (imagem do Docker Hub com e sem library/ dá degradou falso) e 2 nits no radar — 32e47d0 | 2026-11-23 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 2f2c1f9 | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
 | G7 Pronto & Docs | PENDING | | |
 
 ### Histórico de reprovações
