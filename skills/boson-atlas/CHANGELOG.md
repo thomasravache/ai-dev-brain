@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.16] - 2026-11-23
+
+### Added
+- Adaptador de probe `kubernetes` da skill (`assets/probes/kubernetes.py`, contrato `probe@1`, capacidade `runtime`), usado quando `probes.adapters.kubernetes` não tem `command`. **Só leitura**, pelo `kubectl` da máquina, com o contexto e o namespace do alvo: `status` (por workload, réplicas desejadas, atualizadas, prontas e disponíveis e `rollout_complete`; por pod, fase, pronto, restarts, imagens sem o host do registry com tag e digest e o motivo do último término; workload ausente = `found: false`), `events` (só `Warning` dos workloads, dos pods deles e dos ReplicaSets do `Deployment`, na janela, mensagem até 300 caracteres) e `logs` (um `logs pod/<nome>` por pod do workload, até 10 em ordem de nome, todos os containers, juntados por horário, as `lines` mais recentes; `truncated: true` quando sobra linha ou há mais de 10 pods). Lista fechada: só `get` de `deployments`, `statefulsets`, `daemonsets`, `rollouts`, `replicasets`, `pods` e `events` com `-o json` e `logs pod/<nome>`, no máximo um `get` por recurso, sempre com `--context`, `-n` e `--request-timeout=20s`; verbo fora da lista, kind fora de `Deployment`/`StatefulSet`/`DaemonSet`/`Rollout` (um `Secret` ou `ConfigMap`) e nome fora do DNS-1123 ou começando com `-` são recusados ("chamada não permitida") sem chamar o `kubectl`. Erros (`kubectl não encontrado`, `sem permissão (Forbidden)`, `contexto inexistente`, `timeout`) saem com exit 0 e `status: error`, sem o texto do `kubectl` nem o contexto (SPEC-0089, ADR-0023).
+- `references/probes/kubernetes.md`: como configurar (`probes.adapters.kubernetes`, `verbs`, `KUBECONFIG` opcional em `credentials`, o `--request-timeout` fixo), a permissão mínima sugerida (ClusterRole de leitura sem `secrets`), as chamadas, a saída de cada verbo e os erros (SPEC-0089).
+
 ## [2026.11.15] - 2026-11-23
 
 ### Added
