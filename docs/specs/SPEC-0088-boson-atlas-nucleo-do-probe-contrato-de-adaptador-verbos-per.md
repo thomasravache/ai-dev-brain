@@ -217,6 +217,8 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
   - `service`, `deployment` e `environment` seguem a regra de nome simples do atlas;
   - nenhum desses campos começa com `-`.
   Assim nenhum adaptador recebe um texto que pareça uma opção de linha de comando.
+- **Campo `adapter` da saída:** precisa ser igual ao id do adaptador que rodou. Diferente, a saída está fora do contrato (exit 1).
+- **Regras de nome:** a "regra de nome simples" é a do `ENVIRONMENT_NAME_RE` de `references/config.md`. No `Kind/nome`, o Kind só não pode começar com `-`.
 - **Documentação:** a lista do ambiente do adaptador em `references/config.md` e `references/probes.md` fica igual à do código.
 
 **Design:** N/A — sem interface gráfica.
