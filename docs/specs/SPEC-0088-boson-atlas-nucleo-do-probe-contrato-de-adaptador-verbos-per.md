@@ -324,12 +324,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Red: CH-01 (passa antes), UT-01 a UT-06, IT-01 e CT-01 com a tag `SPEC-0088:<ID>`, falhando pelo motivo certo; adaptadores falsos em `tests/fixtures/fake-probes/` (ok, erro, lento, saída inválida, eco das credenciais por nome)
-- [ ] Green: comando `probe` no `atlas.py` (contrato `probe@1`, verbos permitidos, produção confirmada, limites, redação, `--summary`, registro `probes.log` sem resultados), chave local `probes` validada, `references/probes.md`, `references/config.md`, `SKILL.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: CH-01 (passa antes), UT-01 a UT-06, IT-01 e CT-01 com a tag `SPEC-0088:<ID>`, falhando pelo motivo certo; adaptadores falsos em `tests/fixtures/fake-probes/` (ok, erro, lento, saída inválida, eco das credenciais por nome)
+- [x] Green: comando `probe` no `atlas.py` (contrato `probe@1`, verbos permitidos, produção confirmada, limites, redação, `--summary`, registro `probes.log` sem resultados), chave local `probes` validada, `references/probes.md`, `references/config.md`, `SKILL.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -358,37 +358,71 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- `atlas.py probe <capacidade> <verbo> --service --env` consulta a infraestrutura ao vivo por adaptadores que a máquina declara na configuração local `probes`. Vem desligado por padrão.
+- Proteções no núcleo, para qualquer adaptador (ADR-0023):
+  - só os verbos que o adaptador declara e a configuração libera;
+  - produção ou ambiente sem marcação só com `--confirm-production`;
+  - recusa sem acesso local ao cluster;
+  - limites de linhas, de janela, de tempo e de bytes;
+  - campos do alvo conferidos antes de rodar;
+  - saída validada contra `probe@1` e mascarada (segredos, contexto do kubeconfig e valores das credenciais, numa passada só);
+  - registro local `probes.log` sem resultados.
+- `--summary` resume logs por assinatura. `doctor` mostra o estado das probes e dos adaptadores.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `scripts/atlas.py`:
+  - subcomando `probe`; validação `validate_probes`;
+  - validadores `validate_probe_describe`, `validate_probe_input` e `validate_probe_output`;
+  - `run_collector` ganhou entrada pelo stdin e limite de bytes;
+  - `target_problem` e `cluster_problem` conferem o alvo;
+  - `_redact_text` agora mascara pela união dos trechos casados no texto original, e o `scan` e o `lint` ficaram mais seguros, com os goldens iguais.
+- `references/probes.md`, `references/config.md`, `references/redaction.md` e `SKILL.md`.
+- Emendas:
+  - v2: perguntas do G1;
+  - v3: relatório do implementer;
+  - v4: rodada 1 do G4 (contexto vazando quando o adaptador o ecoa, JSON aninhado, `command` relativo, campos do alvo);
+  - v5: rodada 2 (ordem da máscara, variantes, surrogate, clusters);
+  - v6: rodada 3 (máscara numa passada só).
+- G4 aprovado na rodada 4.
+- Versões: ATLAS_VERSION 2026.11.15, plugin 2026.11.28.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Sem `probes` ou desligadas, nada muda e nenhum processo roda (exit 4) | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-01 | Configuração `probes` validada sem mostrar valores; `command` relativo recusado | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-02 | Verbos pela interseção; adaptador ausente; campos do alvo e clusters conferidos antes de rodar | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-03 | Produção e sem marcação exigem `--confirm-production`; sem acesso local, recusa | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-04 | Saída validada, cortada e mascarada numa passada só (contexto, credenciais, variantes); JSON inválido, NaN e surrogate; timeout | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-05 | `probes.log` local, uma linha por probe, sem resultados | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-06 | `--summary` agrupa por nível e assinatura; janela vazia é exit 0 | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| IT-01 | Adaptador falso de verdade: entrada exata, credenciais só por nome, nada vaza | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
+| CT-01 | Exemplos de `probe@1` válidos e inválidos, lidos também do `references/probes.md` | PASS | `test_probe.py` — CI do PR #63 (run 45135256745, Python 3.9 e 3.15) e suíte local no G2/G5 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). A entrega chega pelo plugin `fermion` 2026.11.28, depois do merge do PR #63.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- SPEC-0092 (proposta): tokens colados na alternância do `SECRET_RE` e regex `url`/`jwt` lentas em entrada hostil. Os dois problemas já existiam na `main` e foram achados no G4, rodada 4.
+- Radar (sem spec):
+  - contexto de 1 ou 2 caracteres mascara demais;
+  - `--describe` roda antes das recusas de verbo, produção e acesso, como diz o contrato.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0088`. -->
