@@ -88,6 +88,34 @@
           }
         }
       }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "ReplicaSet",
+      "metadata": {
+        "name": "batch-6c4d",
+        "namespace": "acme-apps",
+        "labels": {
+          "app": "batch",
+          "pod-template-hash": "6c4d"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "batch",
+            "controller": true
+          }
+        ]
+      },
+      "spec": {
+        "selector": {
+          "matchLabels": {
+            "app": "batch",
+            "pod-template-hash": "6c4d"
+          }
+        }
+      }
     }
   ]
 }

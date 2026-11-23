@@ -11,7 +11,8 @@ Contrato (seção 6 da SPEC-0089) que estes testes fixam:
     chamadas permitidas, sempre com --context <target.context>, -n <target.namespace> e --request-timeout:
         kubectl get <recurso> [<nome>] -o json    recurso ∈ deployments, statefulsets, daemonsets, rollouts,
                                                   replicasets, pods, events
-        kubectl logs <Kind>/<nome> --all-containers --timestamps --since=<s>s --tail=<n> --prefix
+        kubectl logs pod/<nome> --all-containers --timestamps --since=<s>s --tail=<lines> --prefix
+        (Emenda v3: um get pods e um logs por pod do workload, até 10 pods em ordem de nome; --request-timeout=20s)
     status: um item por workload ({kind: workload, workload, found, desired, updated, ready, available,
         rollout_complete}) e um por pod ({kind: pod, workload, pod, phase, ready, restarts, images,
         last_termination}); imagem = caminho normalizado (SPEC-0082) + ":<tag>" + "@<digest>", sem o host.
@@ -19,18 +20,20 @@ Contrato (seção 6 da SPEC-0089) que estes testes fixam:
         message até 300 caracteres.
     logs: {workload, pod, container, ts, line}, os mais recentes até limits.lines; excedente -> truncated: true.
 
-Leituras conservadoras desta suíte (ADR-0023; listadas no relatório do test-writer para o Architect):
+Leituras desta suíte (ADR-0023), confirmadas na Emenda v3 da SPEC-0089:
     - "todo argv começa com get ou logs" (UT-05): as opções globais vêm depois do subcomando.
     - As únicas opções aceitas são as do contrato: em get, --context, -n/--namespace, --request-timeout e -o json;
       em logs, essas (sem -o) mais --all-containers, --timestamps, --prefix, --since e --tail. Nada de -l, -A,
       --kubeconfig, --raw ou outra. Com espaço ou "=" tanto faz; a ordem das opções também.
-    - "No máximo um get por tipo de recurso e um logs por workload" vale para cada execução do adaptador.
+    - Em cada execução do adaptador: no máximo um get por recurso e no máximo um logs por pod (logs só na forma
+      pod/<nome>, até 10 pods por workload, em ordem de nome; mais de 10 pods -> truncated: true).
     - --since é exatamente since_seconds em segundos ("1800s"); --tail é um inteiro de 1 a limits.lines;
-      --request-timeout é um número positivo (com s, m ou ms, ou sem unidade). O valor exato da folga não é fixado.
+      --request-timeout é exatamente 20s.
     - Erro da ferramenta e chamada recusada saem com exit 0 e status "error" (references/probes.md, "Escrever um
       adaptador", passo 5).
-    - Um verbo fora de status/events/logs, ou um workload de kind fora da lista (Secret, ConfigMap), é
-      "chamada não permitida", sem nenhuma chamada ao kubectl.
+    - Um verbo fora de status/events/logs, um workload de kind fora da lista (Secret, ConfigMap), ou um nome de
+      workload ou namespace fora do DNS-1123 ou começando com "-", é "chamada não permitida", sem nenhuma chamada
+      ao kubectl.
     - A redaction das linhas fica com o núcleo: o UT-03 não exige que o adaptador mascare nem que deixe de mascarar;
       o IT-01 confere que um e-mail de linha de log sai mascarado pelo núcleo.
     - IT-01 usa o adaptador sem `command` (Emenda v2: o núcleo cai em assets/probes/kubernetes.py) e sem
@@ -67,12 +70,13 @@ WORKER_IMAGE = "acme/worker:2.0.0"
 API_PODS = ("api-7f9c-aaaa", "api-7f9c-bbbb", "api-7f9c-cccc")
 WORKER_PODS = ("worker-5d8b-aaaa", "worker-5d8b-bbbb")
 RESOURCES = ("deployments", "statefulsets", "daemonsets", "rollouts", "replicasets", "pods", "events")
-LOG_KINDS = {"deployment", "statefulset", "daemonset", "rollout", "replicaset", "pod"}
+REQUEST_TIMEOUT = "20s"
+MAX_LOG_PODS = 10
+BATCH_PODS = tuple(f"batch-6c4d-p{n:02d}" for n in range(1, 13))
 GLOBAL_OPTIONS = {"--context", "-n", "--namespace", "--request-timeout"}
 GET_OPTIONS = GLOBAL_OPTIONS | {"-o", "--output"}
 LOGS_OPTIONS = GLOBAL_OPTIONS | {"--since", "--tail"}
 LOGS_FLAGS = {"--all-containers", "--timestamps", "--prefix"}
-TIMEOUT_RE = re.compile(r"^\d+(?:\.\d+)?(?:ms|s|m)?$")
 TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 WORKLOAD_KEYS = {"kind", "workload", "found", "desired", "updated", "ready", "available", "rollout_complete"}
 POD_KEYS = {"kind", "workload", "pod", "phase", "ready", "restarts", "images", "last_termination"}
@@ -152,9 +156,8 @@ def call_problems(argv, data) -> list:
         words, options, unknown = parse_argv(argv[1:], LOGS_OPTIONS, LOGS_FLAGS)
         if "-o" in options:
             problems.append("logs com -o")
-        kind = words[0].partition("/")[0].lower() if len(words) == 1 and "/" in words[0] else None
-        if kind not in LOG_KINDS:
-            problems.append(f"logs de algo fora da lista: {words}")
+        if len(words) != 1 or not words[0].startswith("pod/") or len(words[0]) <= len("pod/"):
+            problems.append(f"logs fora da forma pod/<nome>: {words}")
         missing = LOGS_FLAGS - set(options)
         if missing:
             problems.append(f"logs sem {sorted(missing)}")
@@ -169,8 +172,8 @@ def call_problems(argv, data) -> list:
         problems.append("--context diferente do target.context")
     if options.get("-n") != target["namespace"]:
         problems.append(f"-n diferente do target.namespace: {options.get('-n')}")
-    if not TIMEOUT_RE.match(str(options.get("--request-timeout"))) or str(options.get("--request-timeout"))[0] == "0":
-        problems.append(f"--request-timeout ausente ou inválido: {options.get('--request-timeout')}")
+    if options.get("--request-timeout") != REQUEST_TIMEOUT:
+        problems.append(f"--request-timeout diferente de {REQUEST_TIMEOUT}: {options.get('--request-timeout')}")
     return problems
 
 
@@ -229,14 +232,16 @@ class KubectlCase(unittest.TestCase):
 
     def assertAllowedCalls(self, data):
         """SPEC-0089:UT-05 — todo argv começa com get ou logs, com um recurso da lista e as opções do contrato; no
-        máximo um get por recurso e um logs por workload; nenhum Secret nem ConfigMap."""
+        máximo um get por recurso, um logs por pod e 10 pods por workload; nenhum Secret nem ConfigMap."""
         calls = self.calls()
         for argv in calls:
             self.assertEqual(call_problems(argv, data), [], argv)
         gets = [words_of(a)[0] for a in calls if a[0] == "get"]
         for resource in set(gets):
             self.assertLessEqual(gets.count(resource), 1, f"mais de um get de {resource}: {calls}")
-        self.assertLessEqual(sum(1 for a in calls if a[0] == "logs"), len(data["target"]["workloads"]), calls)
+        logs = [tuple(words_of(a)) for a in calls if a[0] == "logs"]
+        self.assertEqual(len(logs), len(set(logs)), f"mais de um logs do mesmo pod: {calls}")
+        self.assertLessEqual(len(logs), MAX_LOG_PODS * len(data["target"]["workloads"]), calls)
 
     def assertError(self, out, message):
         self.assertEqual(out["status"], "error", out)
@@ -335,8 +340,8 @@ class LogsTest(KubectlCase):
     def test_the_most_recent_lines_of_every_pod_and_container_with_truncation(self):
         """SPEC-0089:UT-03 — dois pods, dois containers e 300 linhas: `logs` com lines 100 devolve as 100 mais
         recentes (requests 201 a 300), cada uma com workload, pod, container, ts e line (sem o prefixo do kubectl),
-        e truncated: true; uma única chamada `logs Deployment/api` com --all-containers --timestamps --prefix
-        --since=1800s --tail."""
+        e truncated: true; um get pods e um `logs pod/<nome>` por pod de api (os 3, em ordem de nome), com
+        --all-containers --timestamps --prefix --since=1800s --tail e --request-timeout=20s."""
         self.install()
         out = self.run_probe(probe_input("logs", lines=100))
         self.assertEqual(out["status"], "ok", out)
@@ -358,9 +363,24 @@ class LogsTest(KubectlCase):
         self.assertEqual({(i["pod"], i["container"]) for i in out["items"]},
                          {("api-7f9c-aaaa", "api"), ("api-7f9c-aaaa", "proxy"), ("api-7f9c-bbbb", "api"),
                           ("api-7f9c-bbbb", "proxy")})
-        logs = [a for a in self.calls() if a[0] == "logs"]
-        self.assertEqual(len(logs), 1, self.calls())
-        self.assertEqual([w.lower() for w in words_of(logs[0])], ["deployment/api"])
+        logs = [words_of(a) for a in self.calls() if a[0] == "logs"]
+        self.assertEqual(logs, [[f"pod/{name}"] for name in API_PODS], self.calls())
+        self.assertEqual([words_of(a) for a in self.calls() if a[0] == "get"].count(["pods"]), 1, self.calls())
+
+    def test_more_than_ten_pods_reads_the_first_ten_by_name_and_truncates(self):
+        """SPEC-0089:UT-03 — workload batch com 12 pods (fora de ordem no cluster), uma linha cada, lines 2000:
+        `logs` chama `logs pod/<nome>` só para os 10 primeiros em ordem de nome (p01 a p10), devolve só as linhas
+        deles e truncated: true (mais de 10 pods)."""
+        self.install()
+        out = self.run_probe(probe_input("logs", workloads=("Deployment/batch",), lines=2000))
+        self.assertEqual(out["status"], "ok", out)
+        self.assertIs(out["truncated"], True, out)
+        first = BATCH_PODS[:MAX_LOG_PODS]
+        logs = [words_of(a) for a in self.calls() if a[0] == "logs"]
+        self.assertEqual(logs, [[f"pod/{name}"] for name in first], self.calls())
+        self.assertEqual(sorted(i["pod"] for i in out["items"]), list(first), out)
+        for item in out["items"]:
+            self.assertEqual(item["workload"], "Deployment/batch")
 
     def test_fewer_lines_than_the_limit_are_not_truncated(self):
         """SPEC-0089:UT-03 — com lines 2000 (acima das 300 linhas) saem as 300, truncated: false."""
@@ -413,18 +433,22 @@ class AllowListTest(KubectlCase):
                 self.assertError(out, REFUSED)
                 self.assertEqual(self.calls(), [], "o kubectl rodou numa chamada recusada")
 
-    def test_a_workload_name_that_looks_like_an_option_never_becomes_one(self):
-        """SPEC-0089:UT-05 — nomes de workload com cara de opção ou de outro recurso não viram argumento do
-        kubectl: toda chamada continua na lista fechada (sem --raw, -A, secrets…)."""
+    def test_names_outside_dns_1123_or_starting_with_a_dash_are_refused_without_any_call(self):
+        """SPEC-0089:UT-05 — nomes de workload ou namespace fora do DNS-1123 ou que começam com "-" (cara de opção,
+        com espaço, maiúsculas, vazios), em cada verbo: status error "chamada não permitida" e nenhuma chamada ao
+        kubectl (Emenda v3)."""
+        cases = [{"workloads": (w,)} for w in ("Deployment/--raw=/api/v1/secrets", "Deployment/-A",
+                                                "Deployment/api secrets", "Deployment/API", "Deployment/",
+                                                "Deployment/api/x")]
+        cases += [{"namespace": ns} for ns in ("-A", "--all-namespaces", "acme apps", "Acme")]
         self.install()
-        for workload in ("Deployment/--raw=/api/v1/secrets", "Deployment/-A", "Deployment/api secrets"):
+        for case in cases:
             for verb in ("status", "events", "logs"):
-                with self.subTest(workload=workload, verb=verb):
+                with self.subTest(verb=verb, **{k: str(v) for k, v in case.items()}):
                     self.record.unlink(missing_ok=True)
-                    out = self.run_probe(probe_input(verb, workloads=(workload,)))
-                    self.assertIn(out["status"], ("ok", "error"))
-                    for argv in self.calls():
-                        self.assertFalse([a for a in argv if a in ("-A", "--all-namespaces") or "raw" in a], argv)
+                    out = self.run_probe(probe_input(verb, **case))
+                    self.assertError(out, REFUSED)
+                    self.assertEqual(self.calls(), [], "o kubectl rodou com um nome recusado")
 
     def test_every_call_of_every_verb_is_get_or_logs_of_an_allowed_resource(self):
         """SPEC-0089:UT-05 — status, events e logs de Deployment/api e StatefulSet/db: cada argv começa com get ou

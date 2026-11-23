@@ -115,6 +115,43 @@
         "readyReplicas": 1,
         "availableReplicas": 1
       }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "batch",
+        "namespace": "acme-apps",
+        "generation": 3,
+        "labels": {
+          "app": "batch"
+        }
+      },
+      "spec": {
+        "replicas": 12,
+        "selector": {
+          "matchLabels": {
+            "app": "batch"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "batch"
+            }
+          },
+          "spec": {
+            "containers": []
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 3,
+        "replicas": 12,
+        "updatedReplicas": 12,
+        "readyReplicas": 12,
+        "availableReplicas": 12
+      }
     }
   ]
 }

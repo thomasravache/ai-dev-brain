@@ -11,7 +11,8 @@ adaptador uma base fixa de variáveis, então o dublê não depende do ambiente)
 
 - `record`: cada chamada vira uma linha JSON {"argv": [...]} (também as recusadas).
 - `fixtures`: `<recurso>.json` (objeto List, como `kubectl get <recurso> -o json`; recurso sem arquivo = lista vazia)
-  e `logs.json` ({"<kind>/<nome>": ["[pod/<pod>/<container>] <horário> <texto>", ...]}).
+  e `logs.json` ({"<Kind>/<workload>": ["[pod/<pod>/<container>] <horário> <texto>", ...]}; o dublê filtra pelo pod
+  pedido).
   Nos textos, `{{now-N}}` vira o horário de N segundos atrás (`AAAA-MM-DDTHH:MM:SSZ`) e `{{nano-N}}` o mesmo com
   nanossegundos (o formato de `kubectl logs --timestamps`).
 - `fail`: falha simulada com a mensagem da CLI real e exit 1:
@@ -21,7 +22,9 @@ adaptador uma base fixa de variáveis, então o dublê não depende do ambiente)
 Chamadas aceitas (qualquer outra: exit 2, "chamada fora da lista do dublê"):
     get <recurso> [<nome>] -o json        recurso ∈ deployments, statefulsets, daemonsets, rollouts, replicasets,
                                           pods, events (com nome inexistente: NotFound, exit 1)
-    logs <kind>/<nome> --all-containers --timestamps --since=<s>s --tail=<n> --prefix
+    logs pod/<nome> --all-containers --timestamps --since=<s>s --tail=<n> --prefix   (só pod/, um pod por chamada:
+                                          o `logs Deployment/x` de verdade lê um pod só — Emenda v3; pod sem
+                                          linhas = saída vazia)
     opções globais aceitas: --context, -n/--namespace, --request-timeout (com espaço ou `=`).
 `--since` descarta as linhas mais velhas que a janela; `--tail` guarda as últimas n de cada (pod, container).
 """
@@ -40,11 +43,6 @@ LOGS_VALUE = GLOBAL_VALUE | {"--since", "--tail"}
 LOGS_FLAGS = {"--all-containers", "--timestamps", "--prefix"}
 PLACEHOLDER = re.compile(r"\{\{(now|nano)-(\d+)\}\}")
 PREFIX = re.compile(r"^\[pod/(?P<pod>[^/\]]+)/(?P<container>[^\]]+)\] (?P<ts>\S+) ")
-KINDS = {"deployment": "deployment", "deployments": "deployment", "deploy": "deployment",
-         "statefulset": "statefulset", "statefulsets": "statefulset", "sts": "statefulset",
-         "daemonset": "daemonset", "daemonsets": "daemonset", "ds": "daemonset",
-         "rollout": "rollout", "rollouts": "rollout", "replicaset": "replicaset", "replicasets": "replicaset",
-         "rs": "replicaset", "pod": "pod", "pods": "pod", "po": "pod"}
 NOW = datetime.now(timezone.utc).replace(microsecond=0)
 
 
@@ -143,22 +141,15 @@ def logs(argv):
     if len(words) != 1 or "/" not in words[0]:
         return refuse(argv)
     kind, _, name = words[0].partition("/")
-    kind = KINDS.get(kind.lower())
     since = re.match(r"^(\d+)s$", str(options.get("--since", "")))
     tail = re.match(r"^\d+$", str(options.get("--tail", "")))
-    if kind is None or not name or not since or not tail or not LOGS_FLAGS <= set(options):
+    if kind != "pod" or not name or not since or not tail or not LOGS_FLAGS <= set(options):
         return refuse(argv)
     code = failure(options, "pods")
     if code:
         return code
-    table = {key.lower(): lines for key, lines in load("logs.json", {}).items()}
-    if kind == "pod":
-        lines = [line for rows in table.values() for line in rows if PREFIX.match(line).group("pod") == name]
-    else:
-        lines = table.get(f"{kind}/{name.lower()}")
-        if lines is None:
-            print(f'Error from server (NotFound): {kind}s.apps "{name}" not found', file=sys.stderr)
-            return 1
+    lines = [line for rows in load("logs.json", {}).values() for line in rows
+             if PREFIX.match(line).group("pod") == name]
     limit = NOW - timedelta(seconds=int(since.group(1)))
     streams = {}
     for line in lines:

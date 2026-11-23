@@ -307,5 +307,19 @@
     "[pod/worker-5d8b-bbbb/worker] {{nano-47}} ERROR out of memory 3",
     "[pod/worker-5d8b-bbbb/worker] {{nano-46}} ERROR out of memory 4",
     "[pod/worker-5d8b-bbbb/worker] {{nano-45}} ERROR out of memory 5"
+  ],
+  "Deployment/batch": [
+    "[pod/batch-6c4d-p01/batch] {{nano-99}} INFO batch job 01 done",
+    "[pod/batch-6c4d-p02/batch] {{nano-98}} INFO batch job 02 done",
+    "[pod/batch-6c4d-p03/batch] {{nano-97}} INFO batch job 03 done",
+    "[pod/batch-6c4d-p04/batch] {{nano-96}} INFO batch job 04 done",
+    "[pod/batch-6c4d-p05/batch] {{nano-95}} INFO batch job 05 done",
+    "[pod/batch-6c4d-p06/batch] {{nano-94}} INFO batch job 06 done",
+    "[pod/batch-6c4d-p07/batch] {{nano-93}} INFO batch job 07 done",
+    "[pod/batch-6c4d-p08/batch] {{nano-92}} INFO batch job 08 done",
+    "[pod/batch-6c4d-p09/batch] {{nano-91}} INFO batch job 09 done",
+    "[pod/batch-6c4d-p10/batch] {{nano-90}} INFO batch job 10 done",
+    "[pod/batch-6c4d-p11/batch] {{nano-89}} INFO batch job 11 done",
+    "[pod/batch-6c4d-p12/batch] {{nano-88}} INFO batch job 12 done"
   ]
 }
