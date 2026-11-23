@@ -40,6 +40,7 @@ import spec_graph as sg
 from test_delivery_check import LAST_SEEN, NO_BLOCK, PRODUCTION, section
 from test_org_context import new_keys
 from test_spec_graph import Project
+from test_whats_new import vendor_tool
 
 _USER_ENV = {}
 
@@ -306,6 +307,155 @@ class ContractTest(unittest.TestCase):
                             self.fail(f"gates.md (G6): {verdict} citado com o exit {num}, não {code}")
         self.assertTrue(chunks_with(text, r"exit\s*4\b|\(4\)", r"probe|recus|refus"),
                         "gates.md (G6): sem o exit 4 (probes desligadas ou produção recusada)")
+
+
+H2_HEADING = "## H2 — Integration approval (human)"
+TOOL_VERSION = "2026.11.10"
+PREVIOUS_VERSION = "2026.11.9"
+CHANGELOG = SKILL / "CHANGELOG.md"
+BEFORE_MERGE = r"before (?:the )?merg|antes do merge"
+PERSON = r"\b(?:user|person|human|pessoa)\b"
+ONCE = r"\bonce\b|uma vez|one more time|mais uma vez"
+
+
+def changelog_section(version: str) -> str:
+    """Texto da seção datada `## [version] - AAAA-MM-DD` do CHANGELOG da gluon-spec, até o próximo `## `."""
+    lines = CHANGELOG.read_text(encoding="utf-8").splitlines()
+    header = re.compile(rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}$")
+    start = next((i for i, line in enumerate(lines) if header.match(line)), None)
+    if start is None:
+        raise AssertionError(f"CHANGELOG da gluon-spec sem a seção datada '## [{version}] - AAAA-MM-DD'")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return "\n".join(lines[start:end])
+
+
+class SnapshotAtH2Test(unittest.TestCase):
+    def test_h2_section_takes_the_snapshot_before_the_merge_even_on_auto_on_green(self):
+        """SPEC-0091:UT-02 (Emenda v3) — a seção H2 do gates.md diz que, com delivery_check.verify: true, a foto do
+        G6 (verify snapshot) é tirada ali, antes do merge, inclusive com h2_policy: auto-on-green."""
+        text = section(GATES, H2_HEADING)
+        found = chunks_with(text, r"delivery_check\.verify", r"snapshot|foto", BEFORE_MERGE)
+        self.assertTrue(found, "gates.md (H2): não diz que a foto do G6 é tirada ali, antes do merge, com "
+                               "delivery_check.verify")
+        self.assertTrue([c for c in found if "auto-on-green" in c],
+                        "gates.md (H2): não diz que a foto também é tirada com h2_policy: auto-on-green")
+        self.assertRegex("\n".join(found), r"G6", "gates.md (H2): a foto não aponta para o G6")
+
+    def test_g6_says_compare_without_snapshot_runs_without_baseline_and_tends_to_inconclusive(self):
+        """SPEC-0091:UT-02 (Emenda v3) — gates.md (G6): sem foto, o compare roda sem --baseline e o veredito tende a
+        inconclusivo."""
+        text = active_section()
+        found = chunks_with(text, r"without (?:a |the )?snapshot|no snapshot|snapshot (?:is )?missing|sem (?:a )?foto",
+                            r"without `?--baseline|no `?--baseline|sem `?--baseline", r"\binconclusivo\b")
+        self.assertTrue(found, "gates.md (G6): não diz que, sem foto, o compare roda sem --baseline e tende a "
+                               "inconclusivo")
+
+    def test_skill_step_6_points_to_the_snapshot_before_the_merge(self):
+        """SPEC-0091:UT-04 (Emenda v3) — a SKILL.md (passo 6) cita a foto da verificação ativa antes do merge e aponta
+        para o gates.md; o passo 7 continua com um único parágrafo com delivery_check (SPEC-0086)."""
+        text = section(SKILL_MD, "### 6. INTEGRATE (G5 + H2)")
+        found = chunks_with(text, r"delivery_check\.verify|verify snapshot|snapshot|foto", BEFORE_MERGE)
+        self.assertTrue(found, "SKILL.md (passo 6): não cita a foto antes do merge")
+        self.assertTrue([c for c in found if "gates.md" in c], "SKILL.md (passo 6): a foto não aponta para o gates.md")
+        paragraphs = [p for p in re.split(r"\n\s*\n", step7()) if "delivery_check" in p]
+        self.assertEqual(len(paragraphs), 1, "SKILL.md (passo 7): delivery_check fora de um único parágrafo")
+
+
+class ToolVersionTest(unittest.TestCase):
+    def test_tool_version_and_dated_changelog_section(self):
+        """SPEC-0091:UT-01 (Emenda v3) — SDD_TOOL_VERSION é 2026.11.10 e o CHANGELOG tem a seção datada [2026.11.10]
+        com a entrada da verificação ativa (não só em [Unreleased])."""
+        self.assertEqual(sg.SDD_TOOL_VERSION, TOOL_VERSION, "spec_graph.py: SDD_TOOL_VERSION não subiu")
+        text = changelog_section(TOOL_VERSION)
+        self.assertIn("SPEC-0091", text, "CHANGELOG [2026.11.10]: sem a entrada da SPEC-0091")
+        self.assertIn("atlas.py verify", text, "CHANGELOG [2026.11.10]: sem a verificação ativa com atlas.py verify")
+        self.assertIn("delivery_check", text, "CHANGELOG [2026.11.10]: sem as chaves de delivery_check")
+
+
+class WhatsNewIntegrationTest(unittest.TestCase):
+    def test_whats_new_from_previous_version_shows_the_new_section(self):
+        """SPEC-0091:IT-01 — num projeto temporário com tools/sdd em 2026.11.9 e um sdd-config.yml com o
+        delivery_check da SPEC-0086, o spec_graph.py whats-new da skill, rodado como processo, mostra a seção
+        [2026.11.10] com a verificação ativa e as quatro chaves novas de delivery_check."""
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        home = tmp / "home"
+        home.mkdir()
+        project = Project(tmp / "projeto", config_extra="delivery_check:\n  enabled: true\n  environments: []\n")
+        vendor_tool(project.root, PREVIOUS_VERSION)
+        res = project.run("whats-new", env={"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config")})
+        out = res.stdout + res.stderr
+        self.assertEqual(res.returncode, 0, out)
+        self.assertIn(f"Novidades desde {PREVIOUS_VERSION}:", res.stdout, out)
+        header = re.search(rf"^## \[{re.escape(TOOL_VERSION)}\] - \d{{4}}-\d{{2}}-\d{{2}}$", res.stdout, re.MULTILINE)
+        self.assertTrue(header, f"whats-new: sem a seção [{TOOL_VERSION}]:\n{out}")
+        body = res.stdout[header.end():]
+        nxt = re.search(r"^## ", body, re.MULTILINE)
+        body = body[:nxt.start()] if nxt else body
+        self.assertIn("SPEC-0091", body, f"whats-new [{TOOL_VERSION}]: sem a entrada da verificação ativa:\n{out}")
+        self.assertIn("atlas.py verify", body, f"whats-new [{TOOL_VERSION}]: sem atlas.py verify:\n{out}")
+        for key in NEW_KEYS:
+            self.assertRegex(body, rf"\b{key}\b", f"whats-new [{TOOL_VERSION}]: sem a chave {key}:\n{out}")
+
+
+class CompareDetailsTest(unittest.TestCase):
+    def test_slow_rollout_runs_compare_once_more_before_the_verdict(self):
+        """SPEC-0091:UT-03 (Emenda v3) — gates.md (G6): se delivery falhou só porque rollout_complete é falso, o
+        agente roda o compare mais uma vez, depois de outra janela, antes de aplicar o veredito."""
+        found = chunks_with(active_section(), r"rollout_complete", r"compare|again|de novo|novamente", ONCE)
+        self.assertTrue(found, "gates.md (G6): sem a regra do rollout lento (rollout_complete falso → compare mais "
+                               "uma vez)")
+        joined = "\n".join(found)
+        self.assertRegex(joined, re.compile(r"\bdelivery\b", re.IGNORECASE),
+                         "gates.md (G6): o rollout lento não diz que é a verificação delivery que falhou")
+        self.assertRegex(joined, re.compile(r"window|janela", re.IGNORECASE),
+                         "gates.md (G6): o rollout lento não espera outra janela")
+        self.assertRegex(joined, re.compile(r"verdict|veredito", re.IGNORECASE),
+                         "gates.md (G6): o rollout lento não vem antes de aplicar o veredito")
+
+    def test_expect_image_comes_from_route_step_2_without_registry_host_digest_preferred(self):
+        """SPEC-0091:UT-03 (Emenda v3) — gates.md (G6): --expect-image é a imagem do commit do merge achada no passo 2
+        do roteiro, sem o host do registro, com :tag e/ou @digest, de preferência o digest."""
+        found = chunks_with(active_section(), r"--expect-image", r"step 2|passo 2", r"merge")
+        self.assertTrue(found, "gates.md (G6): --expect-image não vem da imagem do merge achada no passo 2 do roteiro")
+        joined = "\n".join(found)
+        self.assertRegex(joined, re.compile(r"(?:without|no|sem)[^.\n]*(?:registry|registro)[^.\n]*host|"
+                                            r"(?:without|no|sem)[^.\n]*host[^.\n]*(?:registry|registro)", re.IGNORECASE),
+                         "gates.md (G6): --expect-image não diz que vai sem o host do registro")
+        self.assertRegex(joined, re.compile(r"digest", re.IGNORECASE), "gates.md (G6): --expect-image sem o digest")
+        self.assertRegex(joined, re.compile(r"prefer", re.IGNORECASE),
+                         "gates.md (G6): --expect-image não prefere o digest")
+
+    def test_exit_3_and_exit_2_are_not_executed_without_blocking(self):
+        """SPEC-0091:UT-03 (Emenda v3) — gates.md (G6): exit 3 → "verificação ativa não executada: sem configuração";
+        exit 2 → corrige os argumentos uma vez e, se repetir, "não executada" com o motivo; nenhum bloqueia o G6."""
+        text = active_section()
+        exit3 = chunks_with(text, r"exit\s*3\b|\(3\)", r"não executada|not run|didn't run|did not run")
+        self.assertTrue([c for c in exit3 if re.search(r"sem configuração|no configuration|not configured|"
+                                                       r"without configuration", c, re.IGNORECASE)],
+                        "gates.md (G6): exit 3 não vira 'verificação ativa não executada: sem configuração'")
+        exit2 = chunks_with(text, r"exit\s*2\b|\(2\)", r"argument|argumento", ONCE)
+        self.assertTrue(exit2, "gates.md (G6): exit 2 não leva a corrigir os argumentos uma vez")
+        self.assertTrue([c for c in exit2 if re.search(r"não executada|not run|didn't run|did not run", c,
+                                                       re.IGNORECASE)],
+                        "gates.md (G6): exit 2 repetido não vira 'não executada' com o motivo")
+        self.assertRegex("\n".join(exit3 + exit2), NO_BLOCK, "gates.md (G6): exits 2 e 3 não dizem que não bloqueiam")
+
+
+class SkillRollbackTest(unittest.TestCase):
+    def test_skill_step_7_production_suggests_rollback_and_the_person_decides(self):
+        """SPEC-0091:UT-04 (Emenda v3) — a frase de produção do passo 7 da SKILL.md não manda reverter por conta
+        própria: sugere o rollback e a pessoa decide."""
+        text = step7()
+        paragraph = next((p for p in re.split(r"\n\s*\n", text) if PRODUCTION.search(p)), "")
+        self.assertTrue(paragraph, "SKILL.md (passo 7): sem a frase de produção")
+        self.assertNotRegex(paragraph, re.compile(r"(?<!never )(?<!not )(?<!suggest )(?<!suggest a )\broll back\b|"
+                                                  r"\breverta\b", re.IGNORECASE),
+                            "SKILL.md (passo 7): a frase de produção ainda manda reverter por conta própria")
+        self.assertRegex(paragraph, re.compile(r"suggest(?:s|ing)? (?:a |the )?roll ?back|sugir[ae] o rollback",
+                                               re.IGNORECASE), "SKILL.md (passo 7): não sugere o rollback")
+        self.assertRegex(paragraph, re.compile(PERSON + r"[^.\n]*decid|decid[^.\n]*" + PERSON, re.IGNORECASE),
+                         "SKILL.md (passo 7): o rollback não fica com a decisão da pessoa")
 
 
 if __name__ == "__main__":
