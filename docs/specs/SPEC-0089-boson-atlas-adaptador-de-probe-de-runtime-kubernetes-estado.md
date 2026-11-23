@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/**, skills/boson-atlas/references/probes/**, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/fixtures/kubernetes/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0023]
@@ -126,6 +126,24 @@ erros → status: "error", items: [], message: "kubectl não encontrado" | "sem 
 - **`touches`:** ganha `scripts/atlas.py` (só o `ATLAS_VERSION`), `SKILL.md`, o CHANGELOG da boson-atlas e o `plugin.json`, porque toda mudança em `skills/**` sobe a versão do plugin (SPEC-0056).
 - **Ambiente do adaptador:** pela Emenda v3 da SPEC-0088, o adaptador recebe só a base fixa mais as credenciais declaradas. Para usar um kubeconfig fora do padrão, a pessoa declara `KUBECONFIG` nas `credentials` do adaptador. Sem a declaração, vale o `~/.kube/config` do HOME.
 - **Comando padrão:** sem `command` na configuração, o núcleo usa `assets/probes/kubernetes.py` (Emenda v3 da SPEC-0088).
+
+**Esclarecimentos (Emenda v3):**
+- **Ordem do argv:** todo argv começa com `get` ou `logs`. `--context`, `-n` e `--request-timeout` vêm depois do subcomando.
+- **Opções permitidas:** só as do contrato. Não entram `-l`, `-A`, `--kubeconfig`, `--raw` nem qualquer outra; os pods são casados com o seletor do workload no próprio adaptador, depois de `get pods`.
+- **Logs por pod:** o `kubectl logs Deployment/x` de verdade lê um pod só. Por isso o adaptador faz:
+  1. `get pods -o json` uma vez;
+  2. `logs pod/<nome> --all-containers --timestamps --since=<s>s --tail=<lines>` para cada pod do workload, até 10 pods, em ordem de nome;
+  3. junta as linhas, ordena por `ts` e fica com as `lines` mais recentes. `truncated` é verdadeiro quando sobrou linha ou quando houve mais de 10 pods.
+- **Limites das chamadas:**
+  - no máximo um `get` por recurso em cada execução;
+  - no máximo um `logs` por pod;
+  - o `--tail` fica entre 1 e `limits.lines`.
+- **Tempo:** a entrada `probe@1` não traz o timeout do núcleo. O adaptador usa `--request-timeout=20s` fixo, abaixo do timeout padrão do núcleo, e o `references/probes/kubernetes.md` diz isso.
+- **Erros:**
+  - erro de cluster ou recusa sai com exit 0 e `status: error`, como diz o passo 5 de "Escrever um adaptador";
+  - um verbo ou recurso fora da lista dá a mensagem "chamada não permitida", sem chamar o `kubectl`;
+  - o timeout é reconhecido por "deadline exceeded", "timeout" ou "i/o timeout" no stderr.
+- **Nomes:** o adaptador recusa nomes de workload, namespace ou pod que não seguem o DNS-1123 ou que começam com `-` ("chamada não permitida"), mesmo que o núcleo já confira (Emenda v4 da SPEC-0088).
 
 **Design:** N/A — sem interface gráfica.
 
@@ -264,3 +282,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): `touches` com versão, SKILL.md, CHANGELOG e plugin; `KUBECONFIG` só declarado; comando padrão | Planejamento depois da Emenda v3 da SPEC-0088 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 3 | 2026-11-23 | Esclarecimentos (Emenda v3): ordem do argv; só as opções do contrato; logs por pod (até 10) juntados por `ts`; limites das chamadas e do `--tail`; `--request-timeout=20s`; erros com exit 0; nomes recusados | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
