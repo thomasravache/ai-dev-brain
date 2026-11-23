@@ -9,9 +9,9 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/assets/probes/**, skills/boson-atlas/references/probes/**, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/fixtures/kubernetes/**]
+touches: [skills/boson-atlas/assets/probes/**, skills/boson-atlas/references/probes/**, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/fixtures/kubernetes/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0023]
 external: []
 size: M
@@ -122,6 +122,11 @@ erros → status: "error", items: [], message: "kubectl não encontrado" | "sem 
   "contexto inexistente" | "chamada não permitida" | "timeout"
 ```
 
+**Esclarecimentos (Emenda v2):**
+- **`touches`:** ganha `scripts/atlas.py` (só o `ATLAS_VERSION`), `SKILL.md`, o CHANGELOG da boson-atlas e o `plugin.json`, porque toda mudança em `skills/**` sobe a versão do plugin (SPEC-0056).
+- **Ambiente do adaptador:** pela Emenda v3 da SPEC-0088, o adaptador recebe só a base fixa mais as credenciais declaradas. Para usar um kubeconfig fora do padrão, a pessoa declara `KUBECONFIG` nas `credentials` do adaptador. Sem a declaração, vale o `~/.kube/config` do HOME.
+- **Comando padrão:** sem `command` na configuração, o núcleo usa `assets/probes/kubernetes.py` (Emenda v3 da SPEC-0088).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -193,7 +198,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 - [ ] Red: UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0089:<ID>`, falhando pelo motivo certo; `kubectl` falso nos testes (nenhum cluster de verdade)
-- [ ] Green: `assets/probes/kubernetes.py` (status, events e logs; só `kubectl get`/`logs` nos kinds permitidos; imagem sem host, com tag e digest), `references/probes.md`, `SKILL.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Green: `assets/probes/kubernetes.py` (status, events e logs; só `kubectl get`/`logs` nos kinds permitidos; imagem sem host, com tag e digest), `references/probes/kubernetes.md`, `SKILL.md`, `ATLAS_VERSION` (só a versão no `atlas.py`), CHANGELOG da boson-atlas e `version` do `plugin.json`
 - [ ] Validar: suíte completa + arquitetura (G2/G3)
 - [ ] Review independente (G4)
 - [ ] Integração + CI verde (G5) e H2
@@ -258,3 +263,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0089`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-23 | Esclarecimentos (Emenda v2): `touches` com versão, SKILL.md, CHANGELOG e plugin; `KUBECONFIG` só declarado; comando padrão | Planejamento depois da Emenda v3 da SPEC-0088 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
