@@ -95,7 +95,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=8, skipped=1)) — 2579a11 | 2026-11-23 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 8517316 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — a95f261 | 2026-11-23 |
-| G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major: JWT com payload acima de 8192 ou header acima de 1024 deixa de ser mascarado; credencial de URL com usuário ou senha acima de 256 deixa de ser mascarada (vazamentos novos em relação à main) | 2026-11-23 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — os vazamentos da rodada 1 foram fechados (Emenda v2); o fuzz contra a main só mostra o resíduo documentado; o pior caso hostil leva 1,7 s/MB (minor, no radar); o commit seguinte só resolveu o conflito de versão do plugin.json — a2dd3ca | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -103,6 +103,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: JWT com payload acima de 8192 ou header acima de 1024 deixa de ser mascarado; credencial de URL com usuário ou senha acima de 256 deixa de ser mascarada (vazamentos novos em relação à main) — 6764f6f
+- G4 PASS 2026-11-23 — depois de 1 reprovação(ões)
 
 ## 9. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
