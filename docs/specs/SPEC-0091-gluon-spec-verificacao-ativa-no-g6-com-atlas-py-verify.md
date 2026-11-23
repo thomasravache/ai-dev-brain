@@ -223,7 +223,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 6bd2520 | 2026-11-22 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=18, skipped=1)) — 7a0f1b2 | 2026-11-23 |
-| G2 Green | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — daecfc1 | 2026-11-23 |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major: nenhuma instrução manda tirar a foto antes do merge (H2/passo 6); SDD_TOOL_VERSION e seção datada do CHANGELOG ausentes (touches sem o spec_graph.py); minors: rollout lento, origem do --expect-image, exits 2 e 3, passo 7 fala em reverter | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
