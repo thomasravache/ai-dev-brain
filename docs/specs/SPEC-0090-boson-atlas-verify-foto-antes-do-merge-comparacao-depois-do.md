@@ -4,7 +4,7 @@ title: "boson-atlas: verify — foto antes do merge, comparação depois do depl
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0088, SPEC-0089]
@@ -303,7 +303,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 2f2c1f9 | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 1948a43 | 2026-11-23 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: --out aceito dentro do atlas com outra caixa no macOS; status cortado ainda dá passou; minors: logs e eventos cortados, --expect-image sem normalização, baseline de outro serviço sem teste; nit: arquivo temporário seguindo link — afa1d4d
