@@ -253,7 +253,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — fd14843 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 7c91684 | 2026-11-23 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — M1 e M2 da rodada 1 resolvidos (Emenda v5); 3 minors no radar (JSON muito aninhado, nenhum pod respondeu sem mensagem, Unauthorized no meio da execução) — ec3ff9c | 2026-11-23 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 9e5382f | 2026-11-23 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
