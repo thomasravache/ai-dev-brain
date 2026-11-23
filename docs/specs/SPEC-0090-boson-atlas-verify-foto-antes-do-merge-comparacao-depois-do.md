@@ -4,12 +4,12 @@ title: "boson-atlas: verify — foto antes do merge, comparação depois do depl
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-22
 parent: SPEC-0075
 depends_on: [SPEC-0088, SPEC-0089]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/verify.md, skills/boson-atlas/references/probes.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0023, ADR-0024]
@@ -126,6 +126,13 @@ atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem>
   nada é gravado no atlas; cada probe entra no registro local (SPEC-0088)
 ```
 
+**Esclarecimentos (Emenda v2):**
+- **Probes que voltam cortadas ou vazias:**
+  - o adaptador Kubernetes (Emenda v5 da SPEC-0089) pula os pods que não respondem e marca `truncated`;
+  - quando a probe de `logs` volta com `truncated: true` e nenhum item, a verificação `logs` fica `not_verified`, com o motivo "nenhum pod respondeu", e nunca `ok`;
+  - quando a probe de `status` volta com `found: false` para o workload, a verificação `runtime` fica `failed`.
+- **Contexto da probe:** o `verify` chama o mesmo caminho do `probe` (mesmas proteções, registro e máscara da SPEC-0088); não roda adaptador por conta própria.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -216,6 +223,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [ ] Red: CH-01 (passa antes), UT-01 a UT-06, IT-01 e CT-01 com a tag `SPEC-0090:<ID>`, falhando pelo motivo certo; adaptadores falsos de probe (sem `kubectl` de verdade)
+- [ ] Green: `verify snapshot` e `verify compare` no `atlas.py` (`verify@1`, foto fora do atlas, verificações delivery, runtime e logs, veredito e exits), `references/verify.md`, `references/probes.md`, `SKILL.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [ ] Validar: suíte completa + arquitetura (G2/G3)
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -276,3 +289,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0090`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-23 | Esclarecimentos (Emenda v2): logs cortados e sem item são `not_verified`; workload não encontrado é `failed`; o `verify` usa o caminho do `probe` | Achados do G4 da SPEC-0089 e planejamento | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
