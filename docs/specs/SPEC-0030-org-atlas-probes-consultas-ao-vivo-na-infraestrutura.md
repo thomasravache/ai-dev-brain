@@ -3,7 +3,7 @@ id: SPEC-0030
 title: "boson-atlas: probes — consultas ao vivo na infraestrutura"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-10-30
 depends_on: [SPEC-0029]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
@@ -98,11 +98,11 @@ A marcação dos ambientes e o acesso por cluster vêm da SPEC-0087 (filha da SP
 
 ## 7. Critérios de Aceite do Épico
 <!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-- [ ] Um verbo fora da lista permitida é recusado antes de executar — SPEC-0088:UT-02
-- [ ] Probe em produção (ou em ambiente sem marcação) sem confirmação não roda — SPEC-0088:UT-03
-- [ ] Token, e-mail e os padrões de redaction saem mascarados — SPEC-0088:UT-04
-- [ ] Nenhum resultado de probe é gravado no atlas, e o registro local não guarda resultado — SPEC-0088:UT-05
-- [ ] O adaptador de runtime só chama `get` e `logs` em recursos permitidos — SPEC-0089:UT-05
+- [x] Um verbo fora da lista permitida é recusado antes de executar — SPEC-0088:UT-02
+- [x] Probe em produção (ou em ambiente sem marcação) sem confirmação não roda — SPEC-0088:UT-03
+- [x] Token, e-mail e os padrões de redaction saem mascarados — SPEC-0088:UT-04
+- [x] Nenhum resultado de probe é gravado no atlas, e o registro local não guarda resultado — SPEC-0088:UT-05
+- [x] O adaptador de runtime só chama `get` e `logs` em recursos permitidos — SPEC-0089:UT-05
 
 ## 8. Questões em Aberto
 <!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
@@ -123,6 +123,19 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico: o que foi entregue, como (ondas e deploys com versão/data), resultado dos critérios de aceite com os testes que os provam, métricas pós-release, pendências como novas specs. `spec_graph.py report SPEC-0030` ajuda a montar. -->
+
+### O que foi entregue
+- **SPEC-0088** (PR #63, plugin 2026.11.28): núcleo do probe, com o contrato `probe@1`, verbos permitidos, produção confirmada, limites, máscara numa passada só e o registro local `probes.log`, sem resultados.
+- **SPEC-0089** (PR #65, plugin 2026.11.29): adaptador de runtime Kubernetes só de leitura (estado, eventos e logs).
+
+As duas são consumidas pelo `verify` da SPEC-0090 (épico SPEC-0075).
+
+### Critérios de aceite
+Todos marcados na seção 7. Cada um é provado pelo teste citado ao lado, que passou no CI do PR da sua filha.
+
+### Pendências
+- SPEC-0092 (proposta): tokens colados na máscara e regex lentas em entrada hostil.
+- Ficaram para depois, como diz a decomposição: adaptadores de SQL, nuvem e observabilidade, e a política de probes no servidor MCP.
 
 ## 12. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->

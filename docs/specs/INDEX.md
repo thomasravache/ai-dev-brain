@@ -4,7 +4,7 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
+- Validação (G0): **6 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
 - Specs: proposed 4, approved 1, implemented 75
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
@@ -48,12 +48,12 @@ Perfil: **minimo**
 | SPEC-0002 | Modo privado: SDD fora do repositório do time | implemented | 4/4 implementadas |
 | SPEC-0016 | Second brain: skill de segundo cérebro no Obsidian | implemented | 11/11 implementadas |
 | SPEC-0029 | org-atlas: mapa da organização para agentes | implemented | 10/10 implementadas |
-| SPEC-0030 | boson-atlas: probes — consultas ao vivo na infraestrutura | approved | 2/2 implementadas |
+| SPEC-0030 | boson-atlas: probes — consultas ao vivo na infraestrutura | implemented | 2/2 implementadas |
 | SPEC-0031 | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | implemented | 8/8 implementadas |
 | SPEC-0065 | gluon-spec: segurança como parte da spec e dos gates | proposed | 0/0 implementadas |
 | SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | implemented | 2/2 implementadas |
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
-| SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | approved | 3/3 implementadas |
+| SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | implemented | 3/3 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | implemented | 3/3 implementadas |
 | SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
 | SPEC-0093 | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | proposed | 0/0 implementadas |
@@ -127,7 +127,7 @@ flowchart LR
 | [SPEC-0027](SPEC-0027-second-brain-padroes-de-conflito-reais-e-ajustes-do-lint.md) | second-brain: ajustes do lint, da busca e da exportação | lite | fix | implemented | 2026-10-30 | SPEC-0016 | SPEC-0023, SPEC-0024, SPEC-0026 | — |
 | [SPEC-0028](SPEC-0028-second-brain-padroes-de-copia-de-conflito-reais-por-provedor.md) | second-brain: padrões de cópia de conflito reais por provedor | lite | feature | proposed | 2026-10-30 | — | SPEC-0023 | — |
 | [SPEC-0029](SPEC-0029-org-atlas-mapa-da-organizacao-para-agentes.md) | org-atlas: mapa da organização para agentes | epic | feature | implemented | 2026-10-30 | — | — | — |
-| [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | boson-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | approved | 2026-10-30 | — | SPEC-0029 | — |
+| [SPEC-0030](SPEC-0030-org-atlas-probes-consultas-ao-vivo-na-infraestrutura.md) | boson-atlas: probes — consultas ao vivo na infraestrutura | epic | feature | implemented | 2026-10-30 | — | SPEC-0029 | — |
 | [SPEC-0031](SPEC-0031-distribuicao-plugin-mcp-marca-e-manutencao.md) | Distribuição do ai-dev-brain: plugin, servidor MCP, marca e manutenção | epic | feature | implemented | 2026-10-30 | — | SPEC-0029 | — |
 | [SPEC-0032](SPEC-0032-org-atlas-esqueleto-configuracao-init-e-doctor.md) | org-atlas: esqueleto, configuração em duas camadas, init e doctor | full | feature | implemented | 2026-10-30 | SPEC-0029 | — | — |
 | [SPEC-0033](SPEC-0033-org-atlas-scan-contrato-snapshots-diff-redaction.md) | org-atlas: scan com contrato dos coletores, snapshots, diff e redaction | full | feature | implemented | 2026-10-30 | SPEC-0029 | SPEC-0032 | — |
@@ -171,7 +171,7 @@ flowchart LR
 | [SPEC-0072](SPEC-0072-fermion-doctor-e-guarda-de-nomes-cobrem-os-nomes-tecnicos-an.md) | fermion_doctor e guarda de nomes cobrem os nomes técnicos antigos | lite | feature | implemented | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071 | — |
 | [SPEC-0073](SPEC-0073-remocao-dos-nomes-tecnicos-antigos-na-versao-anunciada.md) | Remoção dos nomes técnicos antigos na versão anunciada | lite | refactor | approved | 2026-11-16 | SPEC-0067 | SPEC-0069, SPEC-0070, SPEC-0071, SPEC-0072 | — |
 | [SPEC-0074](SPEC-0074-gluon-spec-retrospectiva-entre-projetos-spec-graph-py-retro.md) | gluon-spec: retrospectiva entre projetos (spec_graph.py retro) | full | feature | implemented | 2026-11-17 | SPEC-0066 | — | — |
-| [SPEC-0075](SPEC-0075-boson-atlas-mapa-de-acesso-observabilidade-e-validacao-por-a.md) | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | epic | feature | approved | 2026-11-17 | — | — | — |
+| [SPEC-0075](SPEC-0075-boson-atlas-mapa-de-acesso-observabilidade-e-validacao-por-a.md) | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | epic | feature | implemented | 2026-11-17 | — | — | — |
 | [SPEC-0076](SPEC-0076-boson-atlas-coletor-argocd-reconhece-nome-do-servico-sufixos.md) | boson-atlas: coletor argocd reconhece nome do serviço, sufixos .NET, filas e tópicos | lite | fix | implemented | 2026-11-17 | — | — | — |
 | [SPEC-0077](SPEC-0077-boson-atlas-mais-de-uma-organizacao-por-maquina.md) | boson-atlas: mais de uma organização por máquina | epic | feature | implemented | 2026-11-17 | — | — | — |
 | [SPEC-0078](SPEC-0078-gluon-spec-ajustes-do-processo-apontados-pela-primeira-retro.md) | gluon-spec: ajustes do processo apontados pela primeira retrospectiva | full | feature | implemented | 2026-11-17 | SPEC-0066 | SPEC-0074 | — |
