@@ -250,7 +250,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 28d568a | 2026-11-22 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=69, skipped=1)) — 5de393e | 2026-11-23 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 494e071 | 2026-11-23 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — fd14843 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8295938 | 2026-11-23 |
 | G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major: rollout_complete sempre falso em Rollout (observedGeneration em texto); logs falham inteiros com um pod Pending ou iniciando; minors: JSON malformado do kubectl, ordem abaixo do segundo, eventos das ReplicaSets do Rollout | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
