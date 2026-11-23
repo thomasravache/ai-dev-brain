@@ -257,7 +257,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 1): APPROVED — sem blocker/major; 1 minor (nome com quebra de linha final passa no HOST_RE, já existente) e 2 nits no Relatório de Entrega; o FAIL anterior foi só o veredito escrito sem a palavra APPROVED — 0f4bd97 | 2026-11-23 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — e5bbfe9 | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
 | G7 Pronto & Docs | PENDING | | |
 
 ### Histórico de reprovações
