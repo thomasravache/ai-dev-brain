@@ -8,6 +8,8 @@
     deep            "[" repetido 100000 vezes (aninhamento profundo: RecursionError no parser; Emenda v4)
     nan             item com NaN (constante fora do JSON padrão; Emenda v4)
     infinity        item com Infinity e -Infinity (Emenda v4)
+    surrogate-line  item com "line": "\\ud800 bad" (surrogate solto: não vira UTF-8; Emenda v5)
+    surrogate-value item com um valor "x \\udfff" (surrogate solto num valor qualquer; Emenda v5)
 
 Todas (menos deep) trazem o marcador ITEM-MARCADOR-0088 num item, que nunca pode aparecer na saída do núcleo.
 Uso: python3 invalid.py --record <arquivo> --kind <tipo> [--adapter <id>]
@@ -34,6 +36,12 @@ if kind in ("nan", "infinity"):
     print('{"contract": "probe@1", "adapter": "' + adapter + '", "capability": "runtime", "verb": "status", '
           '"status": "ok", "items": [{"name": "ITEM-MARCADOR-0088", "valor": ' + value + ', "outro": ' + other
           + '}], "truncated": false, "message": "ok"}')
+    sys.exit(0)
+if kind in ("surrogate-line", "surrogate-value"):
+    item = '"line": "\\ud800 bad"' if kind == "surrogate-line" else '"valor": "x \\udfff"'
+    print('{"contract": "probe@1", "adapter": "' + adapter + '", "capability": "runtime", "verb": "status", '
+          '"status": "ok", "items": [{"name": "ITEM-MARCADOR-0088", ' + item + '}], "truncated": false, '
+          '"message": "ok"}')
     sys.exit(0)
 if kind == "badjson":
     print('{"contract": "probe@1", "items": [{"name": "ITEM-MARCADOR-0088"}')

@@ -59,7 +59,8 @@ Os passos, nesta ordem:
    Os campos do alvo que vêm do atlas são conferidos antes de qualquer processo rodar (nem o `--describe`); fora da regra → exit 2 `alvo inválido no atlas: …`, sem citar o valor:
    - `namespace` (quando há) segue o DNS-1123: minúsculas, dígitos e `-`, até 63, sem começar nem terminar com `-`;
    - cada `workload` é `Kind/nome`, com o nome em DNS-1123 subdomínio (até 253) e o Kind sem começar com `-`;
-   - `service`, `deployment` e `environment` seguem a regra de nome simples do atlas (`ENVIRONMENT_NAME_RE` de `references/config.md`: letras, dígitos, `.`, `_` e `-`, começando e terminando com letra ou dígito).
+   - `service`, `deployment` e `environment` seguem a regra de nome simples do atlas (`ENVIRONMENT_NAME_RE` de `references/config.md`: letras, dígitos, `.`, `_` e `-`, começando e terminando com letra ou dígito);
+   - cada nome em `clusters` segue a regra de nome simples ou é uma URL de servidor (`https://kubernetes.default.svc`) sem espaço, sem caractere de controle e sem `-` no começo (Emenda v5).
    Assim nenhum adaptador recebe um texto que pareça uma opção de linha de comando.
 4. **Adaptador:** o primeiro em `adapters` cujo `--describe` declara a capacidade. Nenhum → exit 4 `nenhum adaptador para <capacidade>`.
 5. **Verbo:** fora de (verbos do `--describe` ∩ `verbs` da configuração) → exit 4 `verbo <v> não permitido`. O adaptador não roda.
@@ -71,7 +72,7 @@ Os passos, nesta ordem:
 | Exit | Quando |
 |---|---|
 | 0 | ok |
-| 1 | adaptador ausente, com erro (`status: error`, exit diferente de 0), tempo esgotado, saída acima de 1 MB, JSON inválido (inclusive aninhamento profundo e `NaN`/`Infinity`) ou fora do contrato — com o motivo e sem nenhum item |
+| 1 | adaptador ausente, com erro (`status: error`, exit diferente de 0), tempo esgotado, saída acima de 1 MB, JSON inválido (inclusive aninhamento profundo, `NaN`/`Infinity` e texto com surrogate solto) ou fora do contrato — com o motivo e sem nenhum item |
 | 2 | argumento ou configuração inválida, alvo inexistente ou com campo fora da regra |
 | 3 | sem configuração local |
 | 4 | recusado: desligadas, sem adaptador, verbo, produção sem confirmação, sem acesso local |
@@ -136,6 +137,7 @@ Chaves fechadas: `contract` (`probe@1`), `adapter` e `capabilities` (mapa `<capa
 - O núcleo corta em `lines` itens; o excedente vira `truncated: true`.
 - Todo texto (itens, chaves e `message`, também a de erro) passa pela redaction antes de sair.
 - JSON padrão só: `NaN`, `Infinity`, `-Infinity`, número fora do intervalo do ponto flutuante e aninhamento profundo demais contam como JSON inválido (exit 1, sem traceback); nenhum número fora do JSON padrão sai em `--json`.
+- Texto que não vira UTF-8: uma string (chave ou valor) com surrogate solto (`"\ud800"`) conta como JSON inválido (exit 1, sem traceback).
 
 ```json probe@1 output invalid
 {"contract": "probe@1", "adapter": "kubernetes", "capability": "runtime", "verb": "status", "status": "ok", "items": [{"name": "api", "spec": {"replicas": 1}}], "truncated": false}
@@ -152,6 +154,14 @@ O núcleo valida os três com `validate_probe_describe`, `validate_probe_input` 
 Valem os padrões do `references/redaction.md` e o `redaction.extra_patterns` do atlas, mais os de dados pessoais e segredos de linha de log: e-mail, CPF, CNPJ, `Bearer <token>` e `<nome>=<valor>` quando o nome diz senha, segredo, token ou chave (`token=…`, `password: …`, `api_key=…`). O trecho vira `[REDACTED]`. O stderr de um adaptador com falha é mascarado inteiro antes de ser cortado (últimas 20 linhas).
 
 Além disso, o valor do contexto escolhido (`target.context`) e os valores das credenciais declaradas do adaptador são mascarados, literalmente, em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato.
+
+Máscara numa passada só (Emenda v6):
+
+1. todos os padrões de segredo (os do `references/redaction.md`, os de linha de log acima e o `redaction.extra_patterns`) e todos os literais (o contexto e os valores das credenciais, com as variantes abaixo) procuram casamentos no texto original;
+2. os trechos casados são juntados (os que se sobrepõem ou se encostam viram um só);
+3. cada trecho resultante é trocado uma vez por `[REDACTED]`.
+
+Assim nenhuma máscara impede a outra, em qualquer ordem: um contexto curto, como `api`, não impede que `api_key=<valor>` seja mascarado; uma senha com cara de e-mail, ou com `token=<x>` no meio, sai inteira mascarada; e a máscara nunca roda sobre um marcador já escrito (nada de `[RE[REDACTED]TED]`). Cada padrão mascara o mesmo pedaço de sempre (o de URL, por exemplo, guarda `esquema://usuário:` e o `@`). A máscara literal não diferencia maiúsculas e pega, de cada valor, a forma crua, a escapada como dentro de uma string JSON (com e sem `/` escrito `\/`) e a codificada em URL (`%3A`, `%2F`…).
 
 ## Resumo de logs (`--summary`)
 

@@ -1314,31 +1314,47 @@ def compile_extra_pattern(index: int, pattern):
     return regex
 
 
-def _mask(match) -> str:
-    prefix = match.group("url")
-    return f"{prefix}{REDACTED}@" if prefix else REDACTED
+def _secret_span(match) -> tuple:
+    """The part of a SECRET_RE match that is masked: the "url" pattern keeps scheme://user: and the last @ (it masks
+    only the password, even when empty); every other pattern masks the whole match."""
+    if match.group("url") is not None:
+        return match.end("url"), match.end() - 1
+    return match.start(), match.end()
+
+
+def _masked_spans(text: str, extras: list) -> tuple:
+    """(merged spans, count): every secret pattern and every extra pattern (in the probe, also PROBE_PATTERNS and
+    the literals) finds its matches in the ORIGINAL text; the spans are joined (overlapping or touching ones become
+    one) so no mask hides a match from another, in any order (Emenda v6 of SPEC-0088). Zero-width matches of an
+    extra pattern (\\b, lookarounds) never mask. count = the occurrences: overlapping matches count once (a span
+    already masked is not counted again), touching ones count apart."""
+    spans = [_secret_span(match) for match in SECRET_RE.finditer(text)]
+    for pattern in extras:
+        spans += [match.span() for match in pattern.finditer(text) if match.end() > match.start()]
+    merged, count, reach = [], 0, -1
+    for start, end in sorted(spans):
+        if start >= reach:
+            count += 1
+        reach = max(reach, end) if start < reach else end
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return merged, count
 
 
 def _redact_text(text: str, extras: list) -> tuple:
-    text, count = SECRET_RE.subn(_mask, text)
-    for pattern in extras:
-        text, n = _sub_non_empty(pattern, text)
-        count += n
-    return text, count
-
-
-def _sub_non_empty(pattern, text: str) -> tuple:
-    """pattern.subn(REDACTED, text) that ignores zero-width matches (\\b, lookarounds): they never mask."""
-    count = 0
-
-    def mask(match):
-        nonlocal count
-        if not match.group(0):
-            return ""
-        count += 1
-        return REDACTED
-
-    return pattern.sub(mask, text), count
+    """(text with each merged span of _masked_spans replaced once by [REDACTED], count): one pass, never a mask
+    over a marker already written (no [RE[REDACTED]TED])."""
+    spans, count = _masked_spans(text, extras)
+    if not spans:
+        return text, count
+    parts, position = [], 0
+    for start, end in spans:
+        parts += [text[position:start], REDACTED]
+        position = end
+    parts.append(text[position:])
+    return "".join(parts), count
 
 
 def _redact_keys(item: dict, extras: list) -> tuple:
@@ -4563,6 +4579,7 @@ PROBES_DIR = ASSETS_DIR / "probes"  # adapters that come with the skill (an adap
 PROBE_WORD_RE = re.compile(r"^[a-z][a-z0-9_-]{0,62}\Z")  # adapter ids, capabilities and verbs
 SIMPLE_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 # the target fields that come from the atlas (Emenda v4 of SPEC-0088): no adapter gets text that looks like an option
+CLUSTER_URL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://\S+\Z")  # a server URL in target.clusters
 DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\Z")  # DNS-1123 label, up to 63
 DNS_SUBDOMAIN_RE = re.compile(r"^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*\Z")
 DNS_SUBDOMAIN_MAX = 253
@@ -5014,6 +5031,23 @@ def _adapter_failure(aid, step, error: CollectorError, extras) -> AtlasError:
     return AtlasError(text, 1)
 
 
+def _reject_surrogates(data) -> None:
+    """ValueError when a string (key or value) of the adapter output has a lone surrogate (no UTF-8; Emenda v5)."""
+    stack = [data]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            try:
+                item.encode("utf-8")
+            except UnicodeEncodeError:
+                raise ValueError("surrogate solto") from None
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+
+
 def _reject_constant(name):
     raise ValueError(f"{name} não é JSON padrão")
 
@@ -5025,21 +5059,49 @@ def _finite_float(text):
     return value
 
 
+def literal_variants(value: str) -> set:
+    """The forms of a value that the literal mask catches (Emenda v5): raw, escaped as inside a JSON string (ASCII
+    or not, with or without "/" as "\\/") and URL-encoded (no safe characters)."""
+    forms = {value, urllib.parse.quote(value, safe="")}
+    for ascii_only in (True, False):
+        escaped = json.dumps(value, ensure_ascii=ascii_only)[1:-1]
+        forms |= {escaped, escaped.replace("/", "\\/")}
+    return {form for form in forms if form}
+
+
 def literal_masks(values) -> list:
-    """Patterns that mask each non-empty value literally (the context and the declared credentials, Emenda v4)."""
-    unique = sorted({v for v in values if isinstance(v, str) and v}, key=len, reverse=True)
-    return [re.compile(re.escape(value)) for value in unique]
+    """Patterns that mask each non-empty value literally (the context and the declared credentials, Emenda v4), in
+    every form of literal_variants and without case difference (Emenda v5). They match the original text together
+    with the secret patterns and the spans are joined (Emenda v6), so neither breaks the other."""
+    forms = set()
+    for value in values:
+        if isinstance(value, str) and value:
+            forms |= literal_variants(value)
+    unique = sorted(forms, key=lambda form: (-len(form), form))
+    return [re.compile(re.escape(form), re.IGNORECASE) for form in unique]
 
 
-def adapter_masks(adapter: dict) -> list:
-    """literal_masks of the values (in this environment) of the credentials declared in the adapter."""
-    return literal_masks(os.environ.get(name, "") for name in adapter["credentials"])
+def adapter_values(adapter: dict) -> list:
+    """The values (in this environment) of the credentials declared in the adapter."""
+    return [os.environ.get(name, "") for name in adapter["credentials"]]
+
+
+def cluster_problem(cluster) -> bool:
+    """True when a target.clusters entry is neither a simple name (ENVIRONMENT_NAME_RE) nor a server URL without
+    space or control character and not starting with - (Emenda v5)."""
+    if not isinstance(cluster, str):
+        return True
+    if ENVIRONMENT_NAME_RE.match(cluster):
+        return False
+    return (cluster.startswith("-") or not CLUSTER_URL_RE.match(cluster)
+            or any(ch.isspace() or not ch.isprintable() for ch in cluster))
 
 
 def target_problem(target: dict, service: str):
     """Why a target field from the atlas is out of the rules of Emenda v4 (fixed text, never the value), or None:
     namespace a DNS-1123 label, each workload Kind/name (name a DNS-1123 subdomain, Kind not starting with -),
-    service, deployment and environment by the simple name rule (ENVIRONMENT_NAME_RE)."""
+    service, deployment and environment by the simple name rule (ENVIRONMENT_NAME_RE); each cluster by
+    cluster_problem (Emenda v5)."""
     for what, value in (("service", service), ("environment", target["environment"]),
                         ("deployment", target["deployment"])):
         if not isinstance(value, str) or not ENVIRONMENT_NAME_RE.match(value):
@@ -5053,6 +5115,9 @@ def target_problem(target: dict, service: str):
                 or not DNS_SUBDOMAIN_RE.match(name)):
             return ("workload fora de Kind/nome (o nome em DNS-1123 subdomínio, até 253; nenhum dos dois começa "
                     "com -)")
+    if any(cluster_problem(cluster) for cluster in target["clusters"]):
+        return ("cluster fora da regra de nome (letras, dígitos, . _ -) ou de URL de servidor (sem espaço, sem "
+                "caractere de controle, sem começar com -)")
     return None
 
 
@@ -5065,7 +5130,9 @@ def _run_adapter(aid, argv, adapter, extras, input_text=None) -> dict:
     except CollectorError as e:
         raise _adapter_failure(aid, step, e, extras) from None
     try:
-        return json.loads(stdout, parse_constant=_reject_constant, parse_float=_finite_float)
+        data = json.loads(stdout, parse_constant=_reject_constant, parse_float=_finite_float)
+        _reject_surrogates(data)
+        return data
     except (ValueError, RecursionError):  # also NaN/Infinity, numbers out of range and deep nesting (Emenda v4)
         raise AtlasError(f"adaptador {aid}: {step} — a saída não é JSON válido (contrato {PROBE_CONTRACT})",
                          1) from None
@@ -5076,15 +5143,16 @@ def _contract_failure(aid, what, problems, extras) -> AtlasError:
     return AtlasError(f"adaptador {aid}: {what} fora do contrato {PROBE_CONTRACT} — {'; '.join(shown)}", 1)
 
 
-def choose_adapter(probes, capability, extras) -> tuple:
+def choose_adapter(probes, capability, extras, literals) -> tuple:
     """(id, adapter, argv, verbs of the capability) of the first adapter whose --describe declares the capability;
-    none = AtlasError (code 4). The core appends --describe to the end of the command."""
+    none = AtlasError (code 4). The core appends --describe to the end of the command. `extras` are the secret
+    patterns; `literals` the values masked literally with them, in one pass (the context; Emenda v6)."""
     for aid, adapter in probes["adapters"].items():
         argv = adapter_command(aid, adapter)
         if argv is None:
             raise AtlasError(f"probes: adapters.{aid}.command inválido — sem command e a skill não traz o adaptador "
                              f"{aid}", 2)
-        masks = extras + adapter_masks(adapter)
+        masks = extras + literal_masks(literals + adapter_values(adapter))
         described = _run_adapter(aid, argv + ["--describe"], adapter, masks)
         problems = validate_probe_describe(described)
         if problems:
@@ -5138,11 +5206,13 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
         raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
     reachable = [c for c in target["clusters"] if c in access or target["cluster_ids"].get(c) in access]
     context = (access.get(reachable[0]) or access[target["cluster_ids"][reachable[0]]]) if reachable else None
-    extras = literal_masks([context]) + extras  # the context never shows in what comes from the adapter
+    # the context never shows in what comes from the adapter; patterns and literals mask in one pass (Emenda v6)
+    patterns = extras
+    extras = patterns + literal_masks([context])
     extras_box[:] = extras
-    aid, adapter, argv, declared = choose_adapter(probes, args.capability, extras)
+    aid, adapter, argv, declared = choose_adapter(probes, args.capability, patterns, [context])
     record["adapter"] = aid
-    extras = extras + adapter_masks(adapter)
+    extras = patterns + literal_masks([context] + adapter_values(adapter))
     extras_box[:] = extras
     allowed = [verb for verb in declared if verb in adapter["verbs"]]
     if args.verb not in allowed:
@@ -5178,7 +5248,8 @@ def _probe(args, record: dict, probes: dict, entry: dict, extras_box: list) -> i
     if data["status"] == "error":
         if args.json:
             result = {key: data[key] for key in ("contract", "adapter", "capability", "verb", "status")}
-            print(json.dumps(probe_mask(dict(result, items=[], truncated=False, message=message), extras),
+            # the message is already masked: masking it again would put a marker inside a marker (Emenda v6)
+            print(json.dumps(dict(probe_mask(result, extras), items=[], truncated=False, message=message),
                              ensure_ascii=False, indent=2, allow_nan=False))
         print(f"erro: adaptador {aid} respondeu com erro: {message or '(sem mensagem)'}", file=sys.stderr)
         return 1

@@ -9,9 +9,9 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
 consumes_contract: [SPEC-0087@3]
-contract_version: 5
+contract_version: 6
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/references/redaction.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
 external: []
 size: M
@@ -231,6 +231,16 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
 - **Texto que não vira UTF-8:** uma string com surrogate solto na saída do adaptador conta como JSON inválido (exit 1, sem traceback).
 - **Clusters do alvo:** cada nome em `target.clusters` segue a regra de nome simples. Uma URL de servidor também vale, desde que sem espaço, sem caractere de controle e sem `-` no começo. Fora disso, é exit 2 antes de rodar qualquer coisa, como os outros campos do alvo (Emenda v4).
 
+**Esclarecimentos (Emenda v6):**
+- **Máscara numa passada só:**
+  1. todos os padrões de segredo e todos os literais (contexto e valores das credenciais, com as variantes da Emenda v5) procuram casamentos no texto original;
+  2. os trechos casados são juntados (união dos intervalos);
+  3. cada trecho resultante é trocado uma vez por `[REDACTED]`.
+
+  Assim nenhuma máscara impede a outra, em qualquer ordem: uma senha com cara de e-mail sai inteira mascarada, e `api_key=<valor>` também, com contexto `api`. Esta regra substitui a ordem da Emenda v5.
+
+- **Alcance:** a mesma função passa a servir também a máscara do `scan` e do `lint`, que ficam mais seguros e com os goldens iguais. Por isso o `touches` ganha `skills/boson-atlas/references/redaction.md`.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -327,9 +337,9 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — c2bbfa3 | 2026-11-22 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=49, skipped=1)) — 677c563 | 2026-11-23 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 0c39417 | 2026-11-23 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 85fba98 | 2026-11-23 |
-| G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major M1: o contexto do kubeconfig vaza quando o adaptador o ecoa (stderr, message, itens); minors: JSON muito aninhado dá traceback, --summary com zero itens, command relativo, campos do alvo sem restrição; nits: NaN, doc do ambiente | 2026-11-23 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 4f9feb8 | 2026-11-23 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — df49b5d | 2026-11-23 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 4): APPROVED — rodadas 2 e 3 também APPROVED, com minors corrigidos nas Emendas v5 e v6; ficam 2 minors que já existiam na main (tokens colados na alternância do SECRET_RE; regex url/jwt quadráticas em entrada hostil), na SPEC nova de robustez da máscara — 692c1a4 | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -337,6 +347,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major M1: o contexto do kubeconfig vaza quando o adaptador o ecoa (stderr, message, itens); minors: JSON muito aninhado dá traceback, --summary com zero itens, command relativo, campos do alvo sem restrição; nits: NaN, doc do ambiente — 8350967
+- G4 PASS 2026-11-23 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -387,3 +398,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | 3 | 2026-11-23 | Esclarecimentos (Emenda v3): linhas do `doctor`; redação a mais só nas probes; ambiente do adaptador por lista permitida; escolha do alvo e do adaptador; `assets/probes/<id>.py` por padrão; status do registro | Relatório do implementer no G2 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 4 | 2026-11-23 | Esclarecimentos (Emenda v4): contexto mascarado na saída do adaptador; JSON aninhado e NaN inválidos; `--summary` vazio é exit 0; `command` relativo recusado; campos do alvo conferidos; doc do ambiente | Achados da rodada 1 do G4 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 5 | 2026-11-23 | Esclarecimentos (Emenda v5): padrões de segredo antes dos literais; variantes do contexto (JSON, URL, maiúsculas); surrogate solto é JSON inválido; clusters do alvo conferidos | Achados minor da rodada 2 do G4 (um deles reabria vazamento de segredo) | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 6 | 2026-11-23 | Esclarecimentos (Emenda v6): máscara por união dos trechos casados no texto original, numa passada só, no lugar da ordem da Emenda v5 | Achado minor da rodada 3 do G4 (valor de credencial em parte casado por um padrão vazava o resto) | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |

@@ -34,7 +34,7 @@ Não são proibidas: `monkey`, `author`, `tokenizer`, `primary_key`, `sort_keys`
 
 Token colado a pontuação (`_ghp_…`, `=ghp_…`, `token:ghp_…`) é mascarado. Dentro de uma palavra comum não há falso positivo: `laughs_abcdefghijklmnopqrstuvwxyz` e `ASIAPACIFICNORTHEAST1` ficam como estão. Um token do GitHub colado a letras (por exemplo no meio de uma linha longa de log) só é mascarado com o tamanho exato do token (36 caracteres depois do prefixo).
 
-Os padrões são aplicados nessa ordem; um trecho já mascarado não é contado de novo. Cada ocorrência conta 1 (uma URL com senha e um token no mesmo texto contam 2).
+Todos os padrões (estes e os do `redaction.extra_patterns`) procuram casamentos no texto original e os trechos casados são juntados: cada trecho resultante vira um `[REDACTED]` só, então nenhum padrão impede outro e não aparece marcador aninhado (SPEC-0088, Emenda v6). Casamentos que se sobrepõem contam uma vez só (um trecho já mascarado não é contado de novo); cada ocorrência conta 1 (uma URL com senha e um token no mesmo texto contam 2).
 
 Não há detecção por entropia: só padrões conhecidos e os da configuração (SPEC-0033). O `lint` reforça a varredura no atlas inteiro (SPEC-0039).
 
