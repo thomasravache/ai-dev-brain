@@ -8,7 +8,7 @@ status: approved
 created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
-consumes_contract: [SPEC-0087@2]
+consumes_contract: [SPEC-0087@3]
 contract_version: 1
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
@@ -58,7 +58,7 @@ Depois de executar, o núcleo valida e limita a saída, mascara segredos e regis
 
 ## 3. Dependências
 - **Implementações necessárias:** N/A
-- **Contratos consumidos:** SPEC-0087@2. São usados o `tier` do ambiente, o `namespace` e os `workloads` do deployment, e `access.clusters` da configuração local.
+- **Contratos consumidos:** SPEC-0087@3. São usados o `tier` do ambiente, o `namespace` e os `workloads` do deployment, e `access.clusters` da configuração local.
 - **Pré-requisitos externos:** N/A
 
 ## 4. Decisão Arquitetural

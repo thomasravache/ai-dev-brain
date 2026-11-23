@@ -9,9 +9,9 @@ created: 2026-11-22
 parent: SPEC-0075
 depends_on: []
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/references/**, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/assets/collectors/argocd.py, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/atlas-config.yml, skills/boson-atlas/references/**, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/SKILL.md, mcp/tests/**, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
 external: []
 size: M
@@ -143,6 +143,23 @@ lint
 - **`access.clusters`:** a chave é o nome do cluster como está no grafo, e pode ser uma URL do servidor (por exemplo `https://kubernetes.default.svc`). Basta ser um texto de 1 a 256 caracteres, sem quebra de linha.
 - **Linhas do `doctor`:** seguem o formato das outras linhas (`<rótulo> — <detalhe>`). Os testes conferem só os pedaços do contrato. Um `access` inválido aparece como ERRO no `doctor`, com o exit de erro de sempre do `doctor` (1). O exit 2 vale para `config --json`, `build` e `lint`.
 - **Markdown:** as partes novas vêm depois de `cluster`, `sync` e `health`, nesta ordem: `tier`, `namespace`, `workloads`, `sem acesso local`. Vários workloads vão juntos, separados por vírgula, dentro do mesmo trecho em crase.
+
+**Esclarecimentos (Emenda v3):**
+- **`tier` do deployment:**
+  - é `production` quando algum dos seus ambientes é de produção;
+  - é `test` só quando todos os ambientes são de teste;
+  - fica ausente quando algum ambiente não tem marcação.
+- **Leituras:**
+  - `doctor` e `lint` leem as marcações da chave `environments`;
+  - o `doctor` lê os ambientes e os clusters do `graph.json`;
+  - `scan` e `build` não leem `access`, que é local. O exit 2 de um `access` inválido vale para `config`, `context` e `lint`.
+- **Testes antigos que mudam com esta spec:** são as expectativas exatas que ganham as partes novas, na lista abaixo. Quem as atualiza é o test-writer, num commit `test(...)` antes do `feat(...)`.
+  - `test_collector_argocd`: a lista de entidades de `map_application`;
+  - `test_context_delivery`: UT-01, UT-03 e IT-01 (`namespace`, `access: false`, "; sem acesso local");
+  - `mcp/tests/test_atlas_context_delivery.py` UT-05;
+  - `test_lint`: a lista de regras e os casos "sem achado", que ganham o aviso `untiered-environment` quando o ambiente não tem marcação.
+- **Golden do CH-01:** normaliza a `version` do pacote, como já faz com a pasta e a data.
+- **`touches`:** ganha `skills/boson-atlas/SKILL.md` (lista de regras do `lint`) e `mcp/tests/**`.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -289,3 +306,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): CH-01 sem `status.resources`; testes antigos atualizados pelo test-writer; `access` só com cluster; chave de `access.clusters` pode ser URL; formato e exit do `doctor`; ordem das partes no Markdown | Perguntas do test-writer no G1 | SPEC-0088 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 3 | 2026-11-23 | Esclarecimentos (Emenda v3): `tier` do deployment com vários ambientes; o que `doctor`, `lint`, `scan` e `build` leem; testes antigos a atualizar; versão normalizada no golden; `touches` com `SKILL.md` e `mcp/tests/**` | Relatório do implementer no G2 | SPEC-0088 | thomas, 2026-11-23 (piloto automático com o recomendado) |
