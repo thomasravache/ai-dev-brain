@@ -6,7 +6,7 @@ type: feature
 status: proposed
 created: 2026-11-17
 depends_on: []
-adrs: [ADR-0010, ADR-0011, ADR-0012]
+adrs: [ADR-0010, ADR-0011, ADR-0012, ADR-0023, ADR-0024]
 external: []
 approved_by:
 approved_at:
@@ -132,47 +132,128 @@ approved_at:
 <!-- type: feature | migration | foundation (produto novo: ver references/greenfield.md). O épico não é executado: define visão, decisões, decomposição e entrega. Quem executa são as specs filhas (tier full ou lite, tamanho S/M, `parent: SPEC-0075`). A ordem de execução é calculada a partir do frontmatter das filhas (`spec_graph.py waves`). -->
 
 ## 1. Visão
-{{Resultado de negócio e técnico esperado ao final do épico.}}
+Depois do merge de um PR, o agente consegue provar que a entrega chegou e está funcionando no ambiente, além de passar nos testes. Ele vê três coisas:
+- a versão nova em execução;
+- o workload de pé;
+- nenhum erro novo nos logs.
+
+Tudo é feito só lendo, com um veredito e as evidências no Relatório de Entrega. Para isso, o atlas guarda o mapa de acesso: onde fica cada coisa e se o ambiente é de teste ou de produção. A execução fica com as probes da SPEC-0030, que trazem as proteções. Tudo é agnóstico de ferramenta e configurável por projeto e por máquina.
 
 ## 2. Escopo
-**Objetivos (dentro do escopo):**
-- {{O que o épico entrega}}
+**Objetivos (dentro do escopo, primeira entrega: entrega + runtime + logs — decisão de thomas em 2026-11-22):**
+- **Mapa de acesso (SPEC-0087):**
+  - marcação `tier` dos ambientes;
+  - `workloads` dos deployments;
+  - acesso local por cluster, só pelo nome do contexto;
+  - esses campos no `context`, com avisos no `doctor` e no `lint`.
+- **Probes (filhas da SPEC-0030):** o núcleo `atlas.py probe` (SPEC-0088) e o adaptador de runtime Kubernetes (SPEC-0089), que traz estado, eventos e logs.
+- **`atlas.py verify` (SPEC-0090):** a foto antes do merge, a comparação depois do deploy e o veredito `passou | degradou | inconclusivo`.
+- **G6 da gluon-spec (SPEC-0091):** a verificação ativa com `delivery_check.verify`, sobre o roteiro da SPEC-0086.
 
-**Não-objetivos (fora do escopo):**
-- {{O que fica explicitamente de fora}}
+**Não-objetivos (fora do escopo desta entrega; ficam como ondas seguintes):**
+- **Fontes de log externas** (Loki, CloudWatch), **métricas** contra a linha de base (golden signals) e **traces**.
+- **Banco** (usuário só leitura), **mensageria** (fila, DLQ, assinaturas) e **simulação de IAM**.
+- **Smoke ou E2E** no ambiente `test` a partir do atlas (suítes e jornadas curadas), **URLs públicas** e **contas de teste por referência**.
+- **Onboarding** em linguagem simples, **métricas de uso** para sugerir campos e **DORA**.
+- **Coletores automáticos** de contextos, log groups e hosts de Ingress.
+- **Ações de escrita com aprovação** (rollback, restart, redrive): radar, desligadas por padrão.
 
 ## 3. Arquitetura Alvo
-**Contexto:** {{Projeto existente: arquitetura atual (ADRs as-is) e o que muda — se muda, type: migration | Projeto novo: stack e arquitetura definidas nos ADRs de fundação}}
+**Contexto:** projeto existente. Pontos de partida:
+- **mapa e grafo:** a boson-atlas é o mapa (ADR-0011 coletores, ADR-0022 imagem e repositório);
+- **context:** o `context` entrega o caminho de entrega (SPEC-0086);
+- **G6:** o G6 da gluon-spec já monta o roteiro de onde olhar.
 
-{{Como o sistema fica ao final: módulos, fronteiras, fluxos principais, contratos entre as filhas. Diagrama se ajudar.}}
+Nada muda na arquitetura das skills. Entram duas camadas novas na boson-atlas:
+- **probe:** a execução só de leitura;
+- **verify:** a comparação.
 
-**Decisões (ADRs):** {{ADR-NNNN — decisão. Toda decisão transversal vira ADR (liste também no frontmatter `adrs`) | N/A}}
+```text
+atlas (compartilhado)          config.yml (máquina)          projeto (sdd-config.yml)
+ environments: tier             access.clusters (contexto)    delivery_check.verify / limites
+ grafo: deployments,            probes: enabled, adaptadores
+   workloads, namespace               │
+        │                             ▼
+        └──────► atlas.py probe ──► adaptador probe@1 (kubernetes: get, logs) ──► cluster
+                     ▲
+                     │ (status, events, logs --summary)
+              atlas.py verify snapshot / compare ──► veredito + evidências
+                     ▲
+                     │
+           gluon-spec G6 (foto antes do merge, compare depois do deploy, Relatório de Entrega)
+```
 
-**Regras de arquitetura a garantir (G3):** {{ex: Domain não referencia Infrastructure; módulos só se comunicam por contratos públicos — cada regra com o teste de arquitetura que a garante}}
+Contratos entre as filhas:
+- **SPEC-0087@1:** `environments`/`tier`, `workloads` e `access.clusters`, usados pela SPEC-0088.
+- **`probe@1` (SPEC-0088):** usado pelas SPEC-0089 e SPEC-0090.
+- **`verify@1` (SPEC-0090):** usado pela SPEC-0091.
+
+**Decisões (ADRs):**
+- **ADR-0023:** probes só de leitura por adaptador, com verbos permitidos, produção confirmada e registro local.
+- **ADR-0024:** verificação por foto e comparação, com veredito e nada guardado no atlas.
+
+Valem também:
+- **ADR-0010:** credenciais por nome;
+- **ADR-0011:** contrato de coletores;
+- **ADR-0012:** curadoria, para as ondas com jornadas.
+
+**Regras de arquitetura a garantir (G3):**
+- **Verbos permitidos:** nenhuma probe roda verbo fora da lista (SPEC-0088 UT-02).
+- **Chamadas do adaptador:** o adaptador de runtime só chama `get` e `logs` em recursos permitidos (SPEC-0089 UT-05).
+- **Produção:** produção ou ambiente sem marcação exige confirmação (SPEC-0088 UT-03).
+- **Nada no atlas:** nenhuma probe nem `verify` grava no atlas (SPEC-0088 UT-05, SPEC-0090 UT-06).
+- **Contexto local:** o contexto local nunca sai em saída nenhuma (SPEC-0087 UT-03, IT-01).
 
 ## 4. Decomposição
-<!-- Uma linha por spec filha. As colunas de dependência são informativas: a fonte da verdade é o frontmatter de cada filha. -->
 | Spec | Título | Tier | Tipo | Tamanho | Depende de | Consome contrato de |
 |---|---|---|---|---|---|---|
-| {{SPEC-NNNN}} | {{título}} | {{full}} | {{feature}} | {{M}} | {{—}} | {{—}} |
+| SPEC-0087 | boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster | full | feature | M | — | — |
+| SPEC-0090 | boson-atlas: verify — foto, comparação e veredito | full | feature | M | SPEC-0088, SPEC-0089 | — |
+| SPEC-0091 | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | S | SPEC-0090 | — |
+| depois | Fontes de log externas e métricas contra a linha de base (adaptadores de observabilidade) | full | feature | M | SPEC-0090 | — |
+| depois | Banco e mensageria na verificação (adaptadores SQL e de filas, só leitura) | full | feature | M | SPEC-0090 | — |
+| depois | Smoke e E2E no ambiente `test` a partir das jornadas curadas, URLs e contas por referência | full | feature | M | SPEC-0091 | — |
+| depois | Onboarding do mapa de acesso e métricas de uso para sugerir campos | full | feature | M | SPEC-0087 | — |
+
+A SPEC-0090 depende também do núcleo do probe (SPEC-0088) e do adaptador de runtime Kubernetes (SPEC-0089). As duas são filhas do épico SPEC-0030 e entram na mesma ordem de execução.
 
 ## 5. Estratégia de Entrega
-- **Ambientes:** {{ex: staging automático a cada merge; produção via pipeline com aprovação}}
-- **Entrega por onda:** {{o que vai para produção ao fim de cada onda e o que fica atrás de feature flag}}
-- **Feature flags:** {{nome — o que controla — critério para ligar e para remover | N/A}}
-- **Rollback:** {{como reverter cada onda}}
-- **Métricas de sucesso pós-release:** {{o que observar e por quanto tempo}}
+- **Ambientes:** N/A, sem deploy. As skills vão por versão do plugin.
+- **Entrega por onda:** pela ordem do `waves`:
+  - SPEC-0087, depois SPEC-0088;
+  - SPEC-0089, depois SPEC-0090;
+  - SPEC-0091 por último.
+
+  Cada filha sai num PR próprio.
+- **Feature flags:**
+  - `probes.enabled` (local, desligado por padrão);
+  - `delivery_check.verify` (projeto, `false` por padrão).
+
+  Ligar fica com a pessoa, quando a máquina tiver acesso de leitura configurado.
+- **Rollback:** desligar as duas chaves ou reverter o merge da filha.
+- **Métricas de sucesso pós-release:** uma entrega real verificada num ambiente `test`, com veredito `passou` ou `degradou` correto e nenhum segredo nem contexto local na conversa.
 
 ## 6. Riscos & Mitigações
-- {{risco — mitigação | N/A}}
+- **Probe com efeito colateral:** a credencial só de leitura é a barreira principal. A lista fechada no adaptador e no núcleo reforça (ADR-0023).
+- **Falso "passou":** uma verificação que não roda vira `not_verified`, e o veredito fica `inconclusivo`, nunca `passou` (SPEC-0090 UT-05).
+- **Erro antigo contado como novo:** a comparação é contra a foto, e sem foto os logs ficam `not_verified` (ADR-0024).
+- **Produção:** confirmação a cada execução, verificação só passiva lá, e ambiente sem marcação tratado como produção.
+- **Segredo na conversa:** redaction em toda saída de probe e nenhum valor de contexto ou credencial impresso.
+- **Escopo grande:** primeira entrega limitada a entrega, runtime e logs; o resto em ondas.
 
 ## 7. Critérios de Aceite do Épico
-<!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-- [ ] {{critério verificável — SPEC-NNNN:E2E-01}}
+- [ ] Uma verificação completa (`snapshot` → deploy → `compare`) dá `passou` num estado saudável e `degradou` com CrashLoop ou erro novo — SPEC-0090:IT-01
+- [ ] Nenhuma probe roda verbo fora da lista nem em produção sem confirmação — SPEC-0088:UT-02, SPEC-0088:UT-03
+- [ ] O adaptador de runtime só chama `get` e `logs` em recursos permitidos — SPEC-0089:UT-05
+- [ ] Nada é gravado no atlas por probe ou verify — SPEC-0088:UT-05, SPEC-0090:UT-06
+- [ ] O mapa de acesso chega ao `context` sem expor o contexto local — SPEC-0087:IT-01
+- [ ] O G6 descreve a verificação ativa, a confirmação de produção e o caminho sem probes — SPEC-0091:UT-02, SPEC-0091:UT-03
 
 ## 8. Questões em Aberto
-<!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
-{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}
+- [x] SPEC-0075 e SPEC-0030 se fundem ou se relacionam? — A SPEC-0075 usa as probes da SPEC-0030. O núcleo e o adaptador de runtime são filhas da SPEC-0030 e vêm antes da verificação (thomas, 2026-11-22).
+- [x] Até onde vai a primeira entrega? — Entrega, runtime e logs. Banco, mensageria, métricas e smoke ficam para ondas seguintes (thomas, 2026-11-22).
+- [x] A verificação é skill nova ou parte da gluon-spec? — O comando `verify` fica na boson-atlas, porque depende do mapa e das probes. O uso no G6 fica na gluon-spec (recomendação do arquiteto; revisável no H1).
+- [x] Ações de escrita entram? — Não nesta entrega. Continuam no radar, opt-in e desligadas por padrão (recomendação do arquiteto; revisável no H1).
 
 ## 9. Aprovação (H1)
 Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com ele. Registrada no frontmatter (`approved_by`, `approved_at`) do épico e de cada filha.
