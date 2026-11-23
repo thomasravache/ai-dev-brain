@@ -1,0 +1,854 @@
+"""Núcleo do probe: contrato de adaptador probe@1, verbos permitidos, produção confirmada, limites, redaction, resumo
+de logs e registro local (SPEC-0088: CH-01, UT-01 a UT-06, IT-01 e CT-01; ADR-0023, ADR-0010, ADR-0011).
+
+Contrato (seção 6 da SPEC-0088) que estes testes fixam:
+
+    config.yml (local; na forma com vários atlas, dentro da entrada do atlas):
+        probes: {enabled, limits: {lines, since}, adapters: {<id>: {command, verbs, timeout, credentials}}}
+        inválido -> exit 2 (config --json e probe) com "probes: <campo> inválido — <motivo>", sem o valor.
+    atlas.py probe <capacidade> <verbo> --service <id> --env <ambiente> [--since] [--lines] [--summary]
+        [--confirm-production] [--json]
+        exit 0 ok · 1 erro do adaptador ou saída inválida · 2 argumento ou configuração inválida · 4 recusado.
+        Recusas (exit 4): "probes desligadas"; "nenhum adaptador para <c>"; "verbo <v> não permitido";
+        "ambiente <a> é de produção ou sem marcação: ... --confirm-production"; "sem acesso local ao cluster <c>".
+    adaptador: <command> --describe -> {"contract": "probe@1", "adapter", "capabilities": {<c>: [verbos]}};
+        entrada JSON no stdin; saída JSON validada (chaves fechadas, itens com escalares ou listas de escalares).
+    registro: <pasta da configuração local>/probes.log, uma linha JSON por probe com exatamente as chaves
+        at, atlas, service, environment, capability, verb, adapter, status, exit, confirmed_production.
+
+Funções de scripts/atlas.py exigidas pelo CT-01 (nomes escolhidos por este test-writer; ver o relatório):
+    validate_probe_describe(data) -> list[str]   # problemas; [] = válida
+    validate_probe_input(data) -> list[str]
+    validate_probe_output(data) -> list[str]
+
+Leituras conservadoras desta suíte (ADR-0023; listadas no relatório do test-writer para o Architect):
+    - CH-01 tem duas partes: a guarda (os comandos de hoje dão as mesmas saídas sem a chave probes ou com
+      enabled: false — golden fixtures/probe/spec-0088-ch01-golden.json, gravado com o código anterior à SPEC-0088)
+      passa agora; a recusa do `probe` desligado (exit 4) só passa com o subcomando. Na comparação, as linhas do
+      doctor sobre probes/adaptadores e a chave "probes" do config --json são tiradas (o doctor ganha essas
+      linhas pela spec).
+    - O núcleo acrescenta "--describe" ao fim do command; command aceita caminho absoluto (exemplo da spec).
+    - Os itens de log trazem o horário em "ts" (first_ts e last_ts vêm dele) e o texto em "line".
+    - "Só as credenciais declaradas nele": um nome declarado nas credenciais de outro adaptador ou dos coletores
+      não chega ao adaptador.
+    - Probe recusada (exit 4 por verbo ou produção) também vai para o probes.log; o registro com probes desligadas
+      não é verificado.
+    - CT-01 lê de references/probes.md os blocos ```json probe@1 <describe|input|output> <valid|invalid>.
+
+Isolamento: HOME, XDG_CONFIG_HOME e ATLAS_CONFIG_HOME temporários (helpers.Sandbox); sem rede; nenhum kubectl ou
+CLI de nuvem (os adaptadores são os scripts falsos de fixtures/fake-probes/); tokens montados em tempo de execução;
+nomes genéricos (acme, api, cluster-dev).
+"""
+import copy
+import json
+import re
+import sys
+import time
+import unittest
+
+from helpers import (
+    SKILL,
+    TESTS,
+    Sandbox,
+    atlas,
+    doctor_lines,
+    fn,
+    normalize,
+    output,
+    snapshot,
+)
+from test_access_map import (
+    IMAGE_LINK_APPS,
+    TIMESTAMP_RE,
+    access_yaml,
+    collectors_yaml,
+    environments_yaml,
+    resource,
+    with_resources,
+)
+
+SPEC = "SPEC-0088"
+FAKES = TESTS / "fixtures" / "fake-probes"
+GOLDEN = TESTS / "fixtures" / "probe" / "spec-0088-ch01-golden.json"
+PROBES_DOC = SKILL / "references" / "probes.md"
+PATTERN = r"^(?:dev|qa|stg|sbx)-(?P<service>.+)$"
+CONTEXTS = {"cluster-dev": "ctx-local-dev-0088", "cluster-qa": "ctx-local-qa-0088",
+            "cluster-stg": "ctx-local-stg-0088"}  # cluster-sbx fica sem acesso local de propósito
+ENVIRONMENTS = [("dev", "{tier: test}"), ("qa", "{tier: production}"), ("sbx", "{tier: test}")]  # stg sem tier
+LOG_KEYS = {"at", "atlas", "service", "environment", "capability", "verb", "adapter", "status", "exit",
+            "confirmed_production"}
+OUTPUT_KEYS = {"contract", "adapter", "capability", "verb", "status", "items", "truncated", "message"}
+OUTPUT_REQUIRED = OUTPUT_KEYS - {"message"}
+SUMMARY_KEYS = {"signature", "level", "count", "first_ts", "last_ts", "sample"}
+MARKER = "ITEM-MARCADOR-0088"
+ERROR_MESSAGE = "MENSAGEM-ERRO-0088"
+FAKE_VALUE = "valor-falso-SPEC0088-NAO"
+FIELD_RE = r"probes: [\w.\[\]-]*{field}[\w.\[\]-]* inválido — \S"
+DISABLED = "probes desligadas"
+UUID = "5f2b8c1e-3d4a-4b6c-9e8f-0a1b2c3d4e5f"
+
+
+def f(name):
+    return fn(name, SPEC)
+
+
+def fake_token():
+    return "ghp_" + "Zx9" * 12  # montado em tempo de execução, como nos coletores falsos
+
+
+def fake_email(n=""):
+    return f"pessoa{n}.falsa" + "@" + "example.com"
+
+
+# --------------------------------------------------------------------------- apoio
+
+
+def probe_apps():
+    """Applications de image-link (dev-api, qa-api) mais stg-api (ambiente sem tier) e sbx-api (tier test, cluster sem
+    acesso local); dev-api com o workload Deployment/api."""
+    base = json.loads(IMAGE_LINK_APPS.read_text(encoding="utf-8"))
+    apps = list(base)
+    for env in ("stg", "sbx"):
+        app = copy.deepcopy(base[0])
+        app["metadata"]["name"] = f"{env}-api"
+        app["metadata"]["labels"]["env"] = env
+        app["spec"]["destination"] = {"name": f"cluster-{env}", "namespace": f"api-{env}"}
+        apps.append(app)
+    return with_resources(apps, {"dev-api": [resource("Deployment", "api")],
+                                 "qa-api": [resource("Deployment", "api", "api-qa")]})
+
+
+def local_text(atlas_path, extra="", access=None, credentials="{}"):
+    access = CONTEXTS if access is None else access
+    text = f"atlas: {json.dumps(str(atlas_path))}\ncredentials: {credentials}\n"
+    if access:
+        text += access_yaml(list(access.items()))
+    return text + extra
+
+
+def adapter_yaml(aid, command, verbs=("status", "events", "logs"), timeout=5, credentials=(), raw=None):
+    """Uma entrada de probes.adapters (indentada para ficar sob `  adapters:`); raw = linhas extras já prontas."""
+    lines = [f"    {aid}:", "      command: [" + ", ".join(json.dumps(str(a)) for a in command) + "]"]
+    if verbs is not None:
+        lines.append("      verbs: [" + ", ".join(json.dumps(v) for v in verbs) + "]")
+    if timeout is not None:
+        lines.append(f"      timeout: {timeout}")
+    if credentials:
+        lines.append("      credentials: [" + ", ".join(json.dumps(c) for c in credentials) + "]")
+    lines += list(raw or ())
+    return "\n".join(lines) + "\n"
+
+
+def probes_yaml(adapters, enabled=True, limits="{lines: 200, since: 30m}", indent=""):
+    text = "probes:\n" + f"  enabled: {'true' if enabled else 'false'}\n"
+    if limits is not None:
+        text += f"  limits: {limits}\n"
+    text += "  adapters:\n" + "".join(adapters)
+    return "".join(indent + line + "\n" for line in text.splitlines())
+
+
+def build_probe_atlas(box: Sandbox, local_extra=""):
+    """init --mode local, Applications fora do atlas, environments e access; scan e build."""
+    out = box.init(mode="local")
+    assert out.returncode == 0, output(out)
+    inputs = box.atlas.parent / "inputs"
+    inputs.mkdir(exist_ok=True)
+    (inputs / "apps.json").write_text(json.dumps(probe_apps()), encoding="utf-8")
+    command = ["python3", "{skill}/assets/collectors/argocd.py", "--from", "argocd", "--input",
+               "{atlas}/../inputs/apps.json", "--service-pattern", PATTERN]
+    (box.atlas / "atlas-config.yml").write_text(collectors_yaml([("argocd", "delivery", command)])
+                                                 + environments_yaml(ENVIRONMENTS), encoding="utf-8")
+    box.write_local(local_text(box.atlas, local_extra))
+    for step in ("scan", "build"):
+        out = box.run(step)
+        assert out.returncode == 0, f"{step} falhou: {output(out)}"
+
+
+def find_key(data, key):
+    if isinstance(data, dict):
+        if key in data:
+            return data[key]
+        for value in data.values():
+            found = find_key(value, key)
+            if found is not None:
+                return found
+    elif isinstance(data, list):
+        for value in data:
+            found = find_key(value, key)
+            if found is not None:
+                return found
+    return None
+
+
+class ProbeCase(unittest.TestCase):
+    """Um atlas por classe (o probe nunca escreve no atlas); cada teste tem a própria pasta de configuração local e o
+    próprio registro de processos do dublê."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.box = Sandbox()
+        try:
+            build_probe_atlas(cls.box)
+        except BaseException:
+            cls.box.cleanup()
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.box.cleanup()
+
+    def setUp(self):
+        name = self.id().rsplit(".", 1)[-1]
+        self.cfg = self.box.root / "cfg" / name
+        self.record = self.box.root / "calls" / f"{name}.jsonl"
+        self.record.parent.mkdir(parents=True, exist_ok=True)
+
+    def fake(self, script, *extra, adapter="fake"):
+        return [sys.executable, str(FAKES / script), "--record", str(self.record), "--adapter", adapter, *extra]
+
+    def configure(self, probes_text, access=None, credentials="{}"):
+        self.box.write_local(local_text(self.box.atlas, probes_text, access, credentials), config_home=self.cfg)
+
+    def configure_ok(self, verbs=("status", "events", "logs"), described="status,events,logs", extra=(), **opts):
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("ok.py", "--verbs", f"runtime={described}",
+                                                                     *extra), verbs=verbs)]), **opts)
+
+    def probe(self, *args, env=None):
+        result = self.box.run("probe", *args, config_home=self.cfg, env=env)
+        self.assertNotIn("Traceback", output(result), output(result))
+        return result
+
+    def calls(self, mode=None):
+        if not self.record.exists():
+            return []
+        rows = [json.loads(line) for line in self.record.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [r for r in rows if mode is None or r["mode"] == mode]
+
+    def log(self):
+        path = self.cfg / "probes.log"
+        if not path.exists():
+            return []
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    def assertExit(self, result, code):
+        self.assertEqual(result.returncode, code, output(result))
+
+    def assertArgumentError(self, result, text):
+        """exit 2 do próprio subcomando probe (não o "invalid choice" do argparse de hoje), com `text` no motivo."""
+        self.assertExit(result, 2)
+        self.assertNotIn("invalid choice", output(result))
+        self.assertIn(text, output(result))
+
+    def assertRefused(self, result, text):
+        self.assertExit(result, 4)
+        self.assertIn(text, output(result))
+        self.assertEqual(self.calls("run"), [], "o adaptador rodou numa probe recusada")
+
+    def json_out(self, result):
+        self.assertExit(result, 0)
+        return json.loads(result.stdout)
+
+
+# --------------------------------------------------------------------------- CH-01
+
+
+def _normalize(text, root, today):
+    text = text.replace(str(root), "<ROOT>")
+    text = TIMESTAMP_RE.sub("<TS>", text)
+    return text.replace(today, "<TODAY>")
+
+
+def ch01_outputs(probes_text="", recorder=None):
+    """Atlas novo com o mapa de acesso e a configuração local (+ probes_text); saídas dos comandos de hoje,
+    normalizadas (gravam o golden e servem à comparação)."""
+    box = Sandbox()
+    try:
+        build_probe_atlas(box, probes_text.replace("<RECORD>", str(recorder or box.root / "calls.jsonl")))
+        today = json.loads((box.atlas / "snapshots" / "_scan.json").read_text(encoding="utf-8"))["argocd"]["seen_at"]
+
+        def norm(text):
+            return _normalize(text, box.root, today)
+
+        pages = {p.relative_to(box.atlas).as_posix(): norm(p.read_text(encoding="utf-8"))
+                 for p in sorted(box.atlas.rglob("*.md"))}
+        graph = json.loads(norm((box.atlas / "graph.json").read_text(encoding="utf-8")))
+        context_json = json.loads(norm(box.run("context", "--json", "api").stdout))
+        if context_json.get("version") == atlas().ATLAS_VERSION:
+            context_json["version"] = "<VERSION>"
+        context_markdown = norm(box.run("context", "api").stdout)
+        doctor = box.run("doctor")
+        lint = box.run("lint", "--json")
+        lint_data = json.loads(norm(lint.stdout))
+        config = box.run("config", "--json")
+        return {"graph": graph, "pages": pages, "context_json": context_json, "context_markdown": context_markdown,
+                "doctor": [norm(f"{s} {i} — {d}") for s, i, d in doctor_lines(doctor.stdout)],
+                "doctor_exit": doctor.returncode, "lint": lint_data["findings"], "lint_errors": lint_data["errors"],
+                "lint_exit": lint.returncode, "config": json.loads(norm(config.stdout)),
+                "config_exit": config.returncode, "recorded": (box.root / "calls.jsonl").exists()}
+    finally:
+        box.cleanup()
+
+
+def without_probe_additions(outputs: dict) -> dict:
+    """Tira o que a SPEC-0088 acrescenta às saídas de hoje: a chave probes do config --json e as linhas de probes e
+    adaptadores do doctor."""
+    data = copy.deepcopy(outputs)
+    for part in ("values", "origins"):
+        data["config"].get(part, {}).pop("probes", None)
+    data["doctor"] = [line for line in data["doctor"]
+                      if not re.match(r"^\S+ [^—]*(probe|adaptador)", line, re.IGNORECASE)]
+    return data
+
+
+def record_golden():  # pragma: no cover — rodado uma vez, com o código anterior à SPEC-0088
+    data = ch01_outputs()
+    data.pop("recorded")
+    GOLDEN.parent.mkdir(parents=True, exist_ok=True)
+    GOLDEN.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+DISABLED_PROBES = ("probes:\n  enabled: false\n  adapters:\n    fake:\n"
+                   f"      command: [{json.dumps(sys.executable)}, {json.dumps(str(FAKES / 'ok.py'))}, "
+                   "\"--record\", \"<RECORD>\"]\n      verbs: [status]\n      timeout: 5\n")
+
+
+class CharacterizationTest(unittest.TestCase):
+    def test_todays_commands_give_todays_outputs_without_probes_or_disabled(self):
+        """SPEC-0088:CH-01 — sem a chave probes, e com probes.enabled: false e um adaptador declarado, scan, build,
+        context, doctor, lint e config --json dão as saídas do golden gravado antes da mudança (a não ser pelas
+        linhas novas do doctor sobre probes e pela chave probes do config); nenhum adaptador roda."""
+        golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
+        for name, text in (("sem a chave", ""), ("enabled: false", DISABLED_PROBES)):
+            with self.subTest(variant=name):
+                got = without_probe_additions(ch01_outputs(text))
+                self.assertFalse(got.pop("recorded"), "um adaptador rodou com probes desligadas")
+                self.assertTrue(got["context_json"]["services"], "o context não achou serviço: o teste não vale")
+                for key in sorted(golden):
+                    if key == "pages":
+                        self.assertEqual(sorted(got["pages"]), sorted(golden["pages"]))
+                        for path, page in golden["pages"].items():
+                            self.assertEqual(got["pages"][path], page, path)
+                    else:
+                        self.assertEqual(got[key], golden[key], key)
+
+
+class DisabledProbeTest(ProbeCase):
+    def test_probe_without_the_key_or_disabled_is_refused_without_running_anything(self):
+        """SPEC-0088:CH-01 — sem a chave probes, e com enabled: false, `probe runtime status --service api --env dev`
+        sai com 4, "probes desligadas", e nenhum processo do adaptador roda (nem o --describe)."""
+        variants = (("sem a chave", ""),
+                    ("enabled: false", probes_yaml([adapter_yaml("fake", self.fake("ok.py"))], enabled=False)))
+        for name, text in variants:
+            with self.subTest(variant=name):
+                self.configure(text)
+                result = self.probe("runtime", "status", "--service", "api", "--env", "dev")
+                self.assertExit(result, 4)
+                self.assertIn(DISABLED, output(result))
+                self.assertEqual(self.calls(), [], "um processo do adaptador rodou com probes desligadas")
+
+
+# --------------------------------------------------------------------------- UT-01
+
+
+class ConfigTest(ProbeCase):
+    def test_a_valid_probes_key_shows_in_config_json_without_credential_values(self):
+        """SPEC-0088:UT-01 — probes com adaptador, verbos, timeout e credenciais válidos: config --json sai com 0 e
+        mostra enabled, o adaptador, os verbos, o timeout e os nomes das credenciais; o valor da credencial no
+        ambiente nunca aparece."""
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("ok.py"), verbs=("status", "logs"), timeout=7,
+                                                 credentials=("PROBE_FAKE_TOKEN",))]))
+        result = self.box.run("config", "--json", config_home=self.cfg, env={"PROBE_FAKE_TOKEN": FAKE_VALUE})
+        self.assertExit(result, 0)
+        self.assertNotIn(FAKE_VALUE, output(result))
+        probes = find_key(json.loads(result.stdout), "probes")
+        self.assertIsInstance(probes, dict, f"config --json sem a chave probes: {result.stdout}")
+        probes = normalize(probes)
+        self.assertIn(probes.get("enabled"), ("True", "true"))
+        adapter = probes.get("adapters", {}).get("fake")
+        self.assertIsInstance(adapter, dict, probes)
+        self.assertEqual(adapter.get("verbs"), ["status", "logs"])
+        self.assertEqual(adapter.get("timeout"), "7")
+        self.assertEqual(adapter.get("credentials"), ["PROBE_FAKE_TOKEN"])
+
+    def invalid_cases(self):
+        def adapter(**opts):
+            return probes_yaml([adapter_yaml("fake", self.fake("ok.py"), **opts)])
+
+        return [
+            ("timeout 0", adapter(timeout=0), "timeout", None),
+            ("timeout acima de 300", adapter(timeout=4242), "timeout", "4242"),
+            ("lines 0", probes_yaml([adapter_yaml("fake", self.fake("ok.py"))], limits="{lines: 0, since: 30m}"),
+             "lines", None),
+            ("lines acima de 2000", probes_yaml([adapter_yaml("fake", self.fake("ok.py"))],
+                                                limits="{lines: 7777, since: 30m}"), "lines", "7777"),
+            ("since acima de 24h", probes_yaml([adapter_yaml("fake", self.fake("ok.py"))],
+                                               limits="{lines: 200, since: 99h}"), "since", "99h"),
+            ("verbo com espaço", adapter(verbs=("status", "get pods")), "verbs", "get pods"),
+            ("credencial com valor", adapter(credentials=(f"PROBE_FAKE_TOKEN={FAKE_VALUE}",)), "credentials",
+             FAKE_VALUE),
+        ]
+
+    def test_an_invalid_field_exits_2_without_the_value(self):
+        """SPEC-0088:UT-01 — timeout fora de 1..300, lines fora de 1..2000, since acima de 24h, verbo com espaço e
+        credencial com valor: config --json e probe saem com 2, "probes: <campo> inválido — <motivo>", sem o valor
+        e sem rodar o adaptador."""
+        for name, text, field, value in self.invalid_cases():
+            for command in (("config", "--json"), ("probe", "runtime", "status", "--service", "api", "--env", "dev")):
+                with self.subTest(case=name, command=command[0]):
+                    self.configure(text)
+                    result = self.box.run(*command, config_home=self.cfg)
+                    self.assertNotIn("Traceback", output(result))
+                    self.assertExit(result, 2)
+                    self.assertRegex(output(result), FIELD_RE.format(field=field))
+                    if value is not None:
+                        self.assertNotIn(value, output(result))
+                    self.assertEqual(self.calls("run"), [])
+
+    def test_probes_inside_an_entry_of_the_multi_atlas_form(self):
+        """SPEC-0088:UT-01 — na forma com vários atlas, probes fica dentro da entrada: config --json sai com 0 e mostra
+        probes, e `probe runtime status` roda o adaptador da entrada escolhida."""
+        entry = local_text(self.box.atlas, probes_yaml([adapter_yaml("fake", self.fake("ok.py"))]))
+        text = "default: acme\natlases:\n  acme:\n" + "".join(f"    {line}\n" for line in entry.splitlines())
+        self.box.write_local(text, config_home=self.cfg)
+        result = self.box.run("config", "--json", config_home=self.cfg)
+        self.assertExit(result, 0)
+        self.assertIsInstance(find_key(json.loads(result.stdout), "probes"), dict)
+        result = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json")
+        self.assertExit(result, 0)
+        self.assertEqual(len(self.calls("run")), 1)
+
+    def test_doctor_shows_probes_on_or_off_and_each_adapter_found_or_not(self):
+        """SPEC-0088:UT-01 (doctor, seção 2) — com probes ligadas, uma linha das probes ("ligadas") e uma por
+        adaptador: o encontrado em OK, o de executável ausente fora de OK; desligadas, a linha diz "desligadas"."""
+        missing = str(self.box.root / "nao-existe" / "adaptador-ausente")
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("ok.py")),
+                                    adapter_yaml("ausente", [missing], verbs=("status",))]))
+        result = self.box.run("doctor", config_home=self.cfg)
+        self.assertNotIn("Traceback", output(result))
+        rows = [(s, f"{i} — {d}") for s, i, d in doctor_lines(result.stdout)]
+        probe_rows = [text for _, text in rows if "probe" in text.lower()]
+        self.assertTrue(any("ligad" in text.lower() and "deslig" not in text.lower() for text in probe_rows),
+                        result.stdout)
+        fake_rows = [s for s, text in rows if re.search(r"\bfake\b", text)]
+        missing_rows = [s for s, text in rows if re.search(r"\bausente\b", text)]
+        self.assertEqual(fake_rows[:1], ["OK"], result.stdout)
+        self.assertTrue(missing_rows and missing_rows[0] != "OK", result.stdout)
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("ok.py"))], enabled=False))
+        result = self.box.run("doctor", config_home=self.cfg)
+        self.assertTrue(any("probe" in f"{i} {d}".lower() and "deslig" in f"{i} {d}".lower()
+                            for _, i, d in doctor_lines(result.stdout)), result.stdout)
+
+
+# --------------------------------------------------------------------------- UT-02
+
+
+class VerbsTest(ProbeCase):
+    def test_a_verb_outside_the_intersection_is_refused_and_the_adapter_never_runs(self):
+        """SPEC-0088:UT-02 — adaptador declara runtime: [status, logs] e a configuração libera [status]: `probe
+        runtime logs` e `probe runtime delete` saem com 4, "verbo <v> não permitido", sem rodar o adaptador."""
+        self.configure_ok(verbs=("status",), described="status,logs")
+        for verb in ("logs", "delete"):
+            with self.subTest(verb=verb):
+                result = self.probe("runtime", verb, "--service", "api", "--env", "dev")
+                self.assertRefused(result, f"verbo {verb} não permitido")
+
+    def test_a_verb_allowed_by_the_config_but_not_declared_by_the_adapter_is_refused(self):
+        """SPEC-0088:UT-02 — configuração libera [status, delete] e o adaptador declara [status, logs]: delete sai
+        com 4 sem rodar; status (na interseção) roda uma vez e sai com 0."""
+        self.configure_ok(verbs=("status", "delete"), described="status,logs")
+        self.assertRefused(self.probe("runtime", "delete", "--service", "api", "--env", "dev"),
+                           "verbo delete não permitido")
+        self.assertExit(self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json"), 0)
+        self.assertEqual(len(self.calls("run")), 1)
+
+    def test_a_capability_without_adapter_is_refused(self):
+        """SPEC-0088:UT-02 (passo 3 do contrato) — nenhum adaptador declara sql: exit 4, "nenhum adaptador para
+        sql", sem rodar nada."""
+        self.configure_ok()
+        self.assertRefused(self.probe("sql", "status", "--service", "api", "--env", "dev"),
+                           "nenhum adaptador para sql")
+
+    def test_a_target_without_deployment_exits_2(self):
+        """SPEC-0088:UT-02 (passo 2 do contrato) — serviço ou ambiente sem deployment no grafo: exit 2 do probe, com o
+        nome procurado no motivo, sem rodar."""
+        self.configure_ok()
+        for args in (("--service", "api", "--env", "nope"), ("--service", "nope", "--env", "dev")):
+            with self.subTest(args=args):
+                self.assertArgumentError(self.probe("runtime", "status", *args), "nope")
+                self.assertEqual(self.calls("run"), [])
+
+
+# --------------------------------------------------------------------------- UT-03
+
+
+class ProductionTest(ProbeCase):
+    def test_production_and_untiered_environments_need_confirmation(self):
+        """SPEC-0088:UT-03 — qa (tier production) e stg (sem tier): sem --confirm-production, exit 4 com a mensagem do
+        contrato e o adaptador sem rodar; com a opção, roda e registra confirmed_production: true."""
+        self.configure_ok()
+        for env in ("qa", "stg"):
+            with self.subTest(env=env):
+                before = len(self.calls("run"))
+                result = self.probe("runtime", "status", "--service", "api", "--env", env)
+                self.assertExit(result, 4)
+                self.assertIn(f"ambiente {env} é de produção ou sem marcação", output(result))
+                self.assertIn("--confirm-production", output(result))
+                self.assertEqual(len(self.calls("run")), before)
+                result = self.probe("runtime", "status", "--service", "api", "--env", env, "--confirm-production",
+                                    "--json")
+                self.assertExit(result, 0)
+                self.assertEqual(len(self.calls("run")), before + 1)
+                last = self.log()[-1]
+                self.assertEqual((last["environment"], last["confirmed_production"]), (env, True))
+
+    def test_a_test_environment_runs_without_confirmation(self):
+        """SPEC-0088:UT-03 — dev (tier test) roda sem --confirm-production e registra confirmed_production: false."""
+        self.configure_ok()
+        self.assertExit(self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json"), 0)
+        self.assertEqual(len(self.calls("run")), 1)
+        last = self.log()[-1]
+        self.assertEqual((last["environment"], last["confirmed_production"]), ("dev", False))
+
+    def test_a_cluster_without_local_access_is_refused(self):
+        """SPEC-0088:UT-03 — sbx (tier test) roda em cluster-sbx, que não está em access.clusters: exit 4, "sem acesso
+        local ao cluster cluster-sbx"; qa confirmado sem cluster-qa em access também sai com 4."""
+        self.configure_ok()
+        self.assertRefused(self.probe("runtime", "status", "--service", "api", "--env", "sbx"),
+                           "sem acesso local ao cluster cluster-sbx")
+        self.configure_ok(access={"cluster-dev": CONTEXTS["cluster-dev"]})
+        self.assertRefused(self.probe("runtime", "status", "--service", "api", "--env", "qa", "--confirm-production"),
+                           "sem acesso local ao cluster cluster-qa")
+
+
+# --------------------------------------------------------------------------- UT-04
+
+
+class OutputTest(ProbeCase):
+    def items_file(self, items, name="items.json"):
+        path = self.box.root / "items" / f"{self.id().rsplit('.', 1)[-1]}-{name}"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(items), encoding="utf-8")
+        return str(path)
+
+    def test_secrets_in_items_are_masked(self):
+        """SPEC-0088:UT-04 — item com token=ghp_... e um e-mail (no texto e num campo): exit 0, nem o token nem o
+        e-mail aparecem; o texto mascarado traz [REDACTED]."""
+        token, email = fake_token(), fake_email()
+        items = [{"ts": "2026-11-20T10:00:00Z", "line": f"login ok token={token} para {email}", "user": email}]
+        self.configure_ok(extra=("--items", self.items_file(items)))
+        result = self.probe("runtime", "logs", "--service", "api", "--env", "dev", "--json")
+        data = self.json_out(result)
+        for secret in (token, email):
+            self.assertNotIn(secret, output(result))
+        self.assertIn("[REDACTED]", data["items"][0]["line"])
+
+    def test_items_above_the_limit_are_truncated(self):
+        """SPEC-0088:UT-04 — o adaptador devolve 500 itens: com --lines 50 saem 50 e truncated: true; sem --lines, vale
+        probes.limits.lines (20)."""
+        self.configure_ok(extra=("--repeat", "500"))
+        data = self.json_out(self.probe("runtime", "status", "--service", "api", "--env", "dev", "--lines", "50",
+                                        "--json"))
+        self.assertEqual((len(data["items"]), data["truncated"]), (50, True))
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("ok.py", "--repeat", "500"))],
+                                   limits="{lines: 20, since: 30m}"))
+        data = self.json_out(self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json"))
+        self.assertEqual((len(data["items"]), data["truncated"]), (20, True))
+
+    def test_invalid_output_exits_1_with_the_reason_and_no_item(self):
+        """SPEC-0088:UT-04 — chave fora do contrato, JSON inválido, item com objeto, contract errado e status fora de
+        ok|error: exit 1 com o motivo e nenhum item impresso (o marcador do item nunca aparece)."""
+        reasons = {"unknown-key": "chave_extra_0088", "badjson": "json"}
+        for kind in ("unknown-key", "badjson", "nested-item", "wrong-contract", "bad-status"):
+            with self.subTest(kind=kind):
+                self.configure(probes_yaml([adapter_yaml("fake", self.fake("invalid.py", "--kind", kind))]))
+                for extra in ((), ("--json",)):
+                    result = self.probe("runtime", "status", "--service", "api", "--env", "dev", *extra)
+                    self.assertExit(result, 1)
+                    self.assertNotIn(MARKER, output(result))
+                    self.assertTrue(output(result).strip(), "exit 1 sem motivo")
+                    if kind in reasons:
+                        self.assertIn(reasons[kind], output(result).lower())
+
+    def test_a_timeout_exits_1_with_the_reason_and_no_item(self):
+        """SPEC-0088:UT-04 — adaptador que demora mais que o timeout (1 s): exit 1 com o motivo (tempo esgotado), sem
+        item, em bem menos que o sono do adaptador."""
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("slow.py"), timeout=1)]))
+        started = time.monotonic()
+        result = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json")
+        self.assertLess(time.monotonic() - started, 20)
+        self.assertExit(result, 1)
+        self.assertNotIn(MARKER, output(result))
+        self.assertRegex(output(result).lower(), r"tempo|timeout")
+
+    def test_an_error_message_is_masked(self):
+        """SPEC-0088:UT-04 — adaptador com status error e message com token e e-mail: exit 1, a mensagem aparece com o
+        token e o e-mail mascarados."""
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("error.py"))]))
+        for extra in ((), ("--json",)):
+            with self.subTest(extra=extra):
+                result = self.probe("runtime", "status", "--service", "api", "--env", "dev", *extra)
+                self.assertExit(result, 1)
+                self.assertIn(ERROR_MESSAGE, output(result))
+                self.assertNotIn("ghp_" + "Qw8" * 12, output(result))
+                self.assertNotIn("pessoa.falsa" + "@" + "example.com", output(result))
+
+    def test_limits_out_of_range_in_the_arguments_exit_2(self):
+        """SPEC-0088:UT-04 (limites) — --lines 0 ou acima de 2000 e --since acima de 24h: exit 2, sem rodar."""
+        self.configure_ok()
+        for args in (("--lines", "0"), ("--lines", "2001"), ("--since", "25h"), ("--since", "abc")):
+            with self.subTest(args=args):
+                result = self.probe("runtime", "status", "--service", "api", "--env", "dev", *args)
+                self.assertArgumentError(result, args[0].lstrip("-"))
+                self.assertEqual(self.calls("run"), [])
+
+
+# --------------------------------------------------------------------------- UT-05
+
+
+class LocalLogTest(ProbeCase):
+    def test_each_probe_leaves_one_local_line_without_results_and_nothing_in_the_atlas(self):
+        """SPEC-0088:UT-05 — probes com sucesso, com erro e recusadas (verbo e produção): probes.log na pasta da
+        configuração local com uma linha por probe, exatamente as chaves do contrato, sem items, message nem o
+        contexto; a árvore do atlas fica igual (conteúdo e mtime)."""
+        self.configure(probes_yaml([
+            adapter_yaml("fake", self.fake("ok.py", "--verbs", "runtime=status,logs"), verbs=("status", "logs")),
+            adapter_yaml("broken", self.fake("error.py", "--verbs", "failing=status", adapter="broken"),
+                         verbs=("status",)),
+        ]))
+        before = snapshot(self.box.atlas)
+        runs = [(("runtime", "status", "--env", "dev", "--json"), 0, "fake", "dev", "runtime", "status"),
+                (("failing", "status", "--env", "dev"), 1, "broken", "dev", "failing", "status"),
+                (("runtime", "delete", "--env", "dev"), 4, "fake", "dev", "runtime", "delete"),
+                (("runtime", "status", "--env", "qa"), 4, "fake", "qa", "runtime", "status")]
+        for args, code, *_ in runs:
+            self.assertExit(self.probe(args[0], args[1], "--service", "api", *args[2:]), code)
+        self.assertEqual(snapshot(self.box.atlas), before, "o probe mudou a pasta do atlas")
+        lines = self.log()
+        self.assertEqual(len(lines), len(runs), lines)
+        for line, (_, code, adapter, env, capability, verb) in zip(lines, runs):
+            self.assertEqual(set(line), LOG_KEYS)
+            self.assertEqual((line["atlas"], line["service"], line["environment"], line["capability"], line["verb"],
+                              line["adapter"], line["exit"]), ("acme", "api", env, capability, verb, adapter, code))
+            self.assertIs(line["confirmed_production"], False)
+            self.assertIsInstance(line["at"], str)
+        self.assertEqual([line["status"] for line in lines[:2]], ["ok", "error"])
+        text = (self.cfg / "probes.log").read_text(encoding="utf-8")
+        for forbidden in (ERROR_MESSAGE, "restarts", *CONTEXTS.values(), '"items"', '"message"'):
+            self.assertNotIn(forbidden, text)
+        self.assertFalse(list(self.box.atlas.rglob("probes.log")))
+
+
+# --------------------------------------------------------------------------- UT-06
+
+
+class SummaryTest(ProbeCase):
+    def summary(self, items):
+        path = self.box.root / "items" / f"{self.id().rsplit('.', 1)[-1]}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(items), encoding="utf-8")
+        self.configure_ok(extra=("--items", str(path)))
+        result = self.probe("runtime", "logs", "--service", "api", "--env", "dev", "--summary", "--json")
+        return result, self.json_out(result)["items"]
+
+    def test_log_lines_are_grouped_by_level_and_signature(self):
+        """SPEC-0088:UT-06 — ERROR user 123 not found, ERROR user 456 not found, WARN retry 3 of 5 e ERROR id <uuid>
+        failed: duas assinaturas de erro (a do user com 2, primeiro e último horário certos; a do UUID com 1) e uma de
+        aviso, ordenadas por nível e contagem, com exatamente as chaves do contrato."""
+        lines = [("2026-11-20T10:00:00Z", "ERROR user 123 not found"), ("2026-11-20T10:01:00Z", "WARN retry 3 of 5"),
+                 ("2026-11-20T10:02:00Z", "ERROR user 456 not found"),
+                 ("2026-11-20T10:03:00Z", f"ERROR id {UUID} failed")]
+        _, items = self.summary([{"ts": ts, "line": line} for ts, line in lines])
+        self.assertEqual(len(items), 3, items)
+        for item in items:
+            self.assertEqual(set(item), SUMMARY_KEYS)
+        self.assertEqual([i["level"] for i in items], ["error", "error", "warn"])
+        user, uuid_item, warn = items
+        self.assertEqual((user["count"], user["first_ts"], user["last_ts"]),
+                         (2, "2026-11-20T10:00:00Z", "2026-11-20T10:02:00Z"))
+        self.assertTrue(user["signature"].startswith("ERROR user ") and user["signature"].endswith(" not found"),
+                        user["signature"])
+        for number in ("123", "456"):
+            self.assertNotIn(number, user["signature"])
+        self.assertIn(user["sample"], {"ERROR user 123 not found", "ERROR user 456 not found"})
+        self.assertEqual((uuid_item["count"], uuid_item["first_ts"], uuid_item["last_ts"]),
+                         (1, "2026-11-20T10:03:00Z", "2026-11-20T10:03:00Z"))
+        self.assertNotIn(UUID, uuid_item["signature"])
+        self.assertNotIn("5f2b", uuid_item["signature"])
+        self.assertIn("failed", uuid_item["signature"])
+        self.assertEqual(warn["count"], 1)
+        self.assertIn("retry", warn["signature"])
+        self.assertIsNone(re.search(r"\b[35]\b", warn["signature"]), warn["signature"])
+
+    def test_hex_emails_and_quoted_text_are_replaced_and_samples_are_masked(self):
+        """SPEC-0088:UT-06 — hexadecimais de 8 ou mais, e-mails e textos entre aspas viram marcadores: duas linhas INFO
+        que só diferem neles dão uma assinatura info × 2; duas sem nível dão uma other × 2; a amostra sai mascarada."""
+        lines = [("2026-11-20T11:00:00Z", f"INFO cache deadbeef0123 refreshed for {fake_email(1)}"),
+                 ("2026-11-20T11:01:00Z", 'job "nightly" done'),
+                 ("2026-11-20T11:02:00Z", f"INFO cache cafebabe4567 refreshed for {fake_email(2)}"),
+                 ("2026-11-20T11:03:00Z", 'job "weekly" done')]
+        result, items = self.summary([{"ts": ts, "line": line} for ts, line in lines])
+        self.assertEqual([(i["level"], i["count"]) for i in items], [("info", 2), ("other", 2)], items)
+        for text in ("deadbeef0123", "cafebabe4567", "nightly", "weekly", "@example.com"):
+            self.assertNotIn(text, items[0]["signature"] + items[1]["signature"])
+        self.assertNotIn("@example.com", output(result))
+
+
+# --------------------------------------------------------------------------- IT-01
+
+
+class EndToEndTest(ProbeCase):
+    def test_the_cli_runs_a_real_fake_adapter_with_only_its_declared_credentials(self):
+        """SPEC-0088:IT-01 — atlas temporário com o mapa de acesso e o adaptador falso env_names.py: `atlas.py probe
+        runtime status --service api --env dev --json` sai com 0; a saída segue probe@1; a entrada no stdin é a do
+        contrato (alvo, contexto local e limites padrão; --since 2h --lines 50 viram since_seconds 7200 e lines 50);
+        o registro ganha uma linha por probe; o adaptador recebe a credencial declarada nele e não as declaradas
+        em outro adaptador ou nos coletores; nenhum valor de credencial aparece em saída, registro ou atlas."""
+        self.configure(probes_yaml([
+            adapter_yaml("fake", self.fake("env_names.py", "--verbs", "runtime=status,logs"),
+                         credentials=("PROBE_FAKE_TOKEN",)),
+            adapter_yaml("other", self.fake("env_names.py", "--verbs", "other=status", adapter="other"),
+                         verbs=("status",), credentials=("OTHER_ADAPTER_TOKEN",)),
+        ]), credentials="{argocd: {env: [COLLECTOR_ARGO_TOKEN]}}")
+        values = {"PROBE_FAKE_TOKEN": FAKE_VALUE + "-1", "OTHER_ADAPTER_TOKEN": FAKE_VALUE + "-2",
+                  "COLLECTOR_ARGO_TOKEN": FAKE_VALUE + "-3"}
+        before = snapshot(self.box.atlas)
+        result = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json", env=values)
+        data = self.json_out(result)
+        self.assertLessEqual(set(data), OUTPUT_KEYS)
+        self.assertLessEqual(OUTPUT_REQUIRED, set(data))
+        self.assertEqual({k: data[k] for k in ("contract", "adapter", "capability", "verb", "status", "truncated")},
+                         {"contract": "probe@1", "adapter": "fake", "capability": "runtime", "verb": "status",
+                          "status": "ok", "truncated": False})
+        names = [item["name"] for item in data["items"]]
+        self.assertIn("PROBE_FAKE_TOKEN", names)
+        self.assertNotIn("OTHER_ADAPTER_TOKEN", names)
+        self.assertNotIn("COLLECTOR_ARGO_TOKEN", names)
+        runs = self.calls("run")
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0]["input"], {
+            "contract": "probe@1", "capability": "runtime", "verb": "status",
+            "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "clusters": ["cluster-dev"],
+                       "context": CONTEXTS["cluster-dev"], "namespace": "api-dev", "workloads": ["Deployment/api"]},
+            "limits": {"lines": 200, "since_seconds": 1800}})
+        self.assertEqual(len(self.log()), 1)
+        result2 = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--since", "2h", "--lines", "50",
+                             "--json", env=values)
+        self.assertExit(result2, 0)
+        self.assertEqual(self.calls("run")[-1]["input"]["limits"], {"lines": 50, "since_seconds": 7200})
+        self.assertEqual(len(self.log()), 2)
+        texts = [output(result), output(result2), (self.cfg / "probes.log").read_text(encoding="utf-8")]
+        texts += [p.read_text(encoding="utf-8", errors="replace") for p in self.box.atlas.rglob("*") if p.is_file()]
+        for text in texts:
+            for value in values.values():
+                self.assertNotIn(value, text)
+        self.assertNotIn(CONTEXTS["cluster-dev"], output(result) + texts[2])
+        self.assertEqual(snapshot(self.box.atlas), before)
+
+
+# --------------------------------------------------------------------------- CT-01
+
+
+VALID = {
+    "describe": [{"contract": "probe@1", "adapter": "kubernetes", "capabilities": {"runtime": ["status", "events",
+                                                                                               "logs"]}}],
+    "input": [{"contract": "probe@1", "capability": "runtime", "verb": "logs",
+               "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "clusters": ["cluster-dev"],
+                          "context": "ctx-dev", "namespace": "api", "workloads": ["Deployment/api"]},
+               "limits": {"lines": 200, "since_seconds": 1800}}],
+    "output": [{"contract": "probe@1", "adapter": "kubernetes", "capability": "runtime", "verb": "logs",
+                "status": "ok", "items": [{"ts": "2026-11-20T10:00:00Z", "line": "INFO up", "containers": ["api", "x"],
+                                           "restarts": 0, "ready": True}],
+                "truncated": False, "message": "texto curto"},
+               {"contract": "probe@1", "adapter": "kubernetes", "capability": "runtime", "verb": "status",
+                "status": "error", "items": [], "truncated": False, "message": "falhou"}],
+}
+
+
+def _without(data, key):
+    data = copy.deepcopy(data)
+    data.pop(key)
+    return data
+
+
+def _with(data, **changes):
+    data = copy.deepcopy(data)
+    data.update(changes)
+    return data
+
+
+INVALID = {
+    "describe": [
+        _without(VALID["describe"][0], "contract"),
+        _with(VALID["describe"][0], contract="probe@2"),
+        _with(VALID["describe"][0], capabilities="runtime"),
+        _with(VALID["describe"][0], capabilities={"runtime": ["status", "get pods"]}),
+    ],
+    "input": [
+        _without(VALID["input"][0], "target"),
+        _with(VALID["input"][0], contract="probe@2"),
+        _with(VALID["input"][0], limits={"lines": 5000, "since_seconds": 1800}),
+    ],
+    "output": [
+        _with(VALID["output"][0], chave_extra_0088="x"),
+        _with(VALID["output"][0], status="talvez"),
+        _with(VALID["output"][0], contract="probe@9"),
+        _with(VALID["output"][0], items={"name": "api"}),
+        _with(VALID["output"][0], items=[{"name": "api", "spec": {"replicas": 1}}]),
+        _with(VALID["output"][0], items=[{"name": "api", "list": [{"nested": 1}]}]),
+        _without(VALID["output"][0], "items"),
+    ],
+}
+DOC_BLOCK_RE = re.compile(r"```json probe@1 (describe|input|output) (valid|invalid)[ \t]*\n(.*?)```", re.DOTALL)
+
+
+class ContractTest(unittest.TestCase):
+    def validator(self, kind):
+        return f(f"validate_probe_{kind}")
+
+    def assertValid(self, kind, data):
+        problems = self.validator(kind)(copy.deepcopy(data))
+        self.assertEqual(list(problems), [], data)
+
+    def assertInvalid(self, kind, data):
+        problems = list(self.validator(kind)(copy.deepcopy(data)))
+        self.assertTrue(problems, f"{kind} inválido aceito: {data}")
+        self.assertTrue(all(isinstance(p, str) and p.strip() for p in problems), problems)
+
+    def test_valid_examples_pass_and_each_invalid_one_is_refused_with_the_reason(self):
+        """SPEC-0088:CT-01 — exemplos de --describe, entrada e saída de probe@1: os válidos passam (sem problemas) e
+        cada inválido (sem contract, contract errado, tipos errados, verbo com espaço, chave fora do contrato, item com
+        objeto, lines acima de 2000) é recusado com um motivo em texto; a chave fora do contrato aparece no motivo."""
+        for kind in VALID:
+            self.validator(kind)
+        for kind, examples in VALID.items():
+            for i, data in enumerate(examples):
+                with self.subTest(kind=kind, valid=i):
+                    self.assertValid(kind, data)
+        for kind, examples in INVALID.items():
+            for i, data in enumerate(examples):
+                with self.subTest(kind=kind, invalid=i):
+                    self.assertInvalid(kind, data)
+        problems = self.validator("output")(copy.deepcopy(INVALID["output"][0]))
+        self.assertIn("chave_extra_0088", " ".join(problems))
+
+    def test_the_examples_of_references_probes_md_follow_the_validator(self):
+        """SPEC-0088:CT-01 — references/probes.md traz exemplos em blocos ```json probe@1 <describe|input|output>
+        <valid|invalid>, ao menos um válido e um inválido de cada; o validador aceita os válidos e recusa os
+        inválidos."""
+        self.assertTrue(PROBES_DOC.is_file(), f"{PROBES_DOC} não existe ({SPEC})")
+        blocks = DOC_BLOCK_RE.findall(PROBES_DOC.read_text(encoding="utf-8"))
+        found = {(kind, validity) for kind, validity, _ in blocks}
+        for kind in ("describe", "input", "output"):
+            for validity in ("valid", "invalid"):
+                self.assertIn((kind, validity), found, f"probes.md sem exemplo {kind} {validity}")
+        for kind, validity, body in blocks:
+            with self.subTest(kind=kind, validity=validity, body=body[:60]):
+                data = json.loads(body)
+                if validity == "valid":
+                    self.assertValid(kind, data)
+                else:
+                    self.assertInvalid(kind, data)
+
+
+if __name__ == "__main__":
+    unittest.main()
