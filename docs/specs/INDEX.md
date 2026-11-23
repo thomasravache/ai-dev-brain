@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 27 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 4, approved 3, implemented 73
+- Validação (G0): **6 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 4, approved 2, implemented 74
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -31,17 +31,16 @@ Perfil: **minimo**
 
 **Em andamento:** —  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0090
+**Próximo lote:** SPEC-0091
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
 | 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 6d) |  |
-| 2 | SPEC-0090 | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
+| 2 | SPEC-0091 | gluon-spec: verificação ativa no G6 com atlas.py verify | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 3 | SPEC-0091 | gluon-spec: verificação ativa no G6 com atlas.py verify | full/S | approved | ⛔ aguarda implementação de SPEC-0090 |  |
-| 4 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
-| 5 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo |
-| 6 | SPEC-0092 | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0090; saiu da onda 3: arquivos em comum com SPEC-0091; saiu da onda 4: arquivos em comum com SPEC-0083; saiu da onda 5: arquivos em comum com SPEC-0085 |
+| 3 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
+| 4 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
+| 5 | SPEC-0092 | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0091; saiu da onda 3: arquivos em comum com SPEC-0083; saiu da onda 4: arquivos em comum com SPEC-0085 |
 
 ## Épicos
 
@@ -55,7 +54,7 @@ Perfil: **minimo**
 | SPEC-0065 | gluon-spec: segurança como parte da spec e dos gates | proposed | 0/0 implementadas |
 | SPEC-0066 | Dogfooding: o Fermion valida e melhora o próprio repositório | implemented | 2/2 implementadas |
 | SPEC-0067 | Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações | approved | 4/5 implementadas |
-| SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | approved | 1/3 implementadas |
+| SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | approved | 2/3 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | implemented | 3/3 implementadas |
 | SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
 | SPEC-0093 | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | proposed | 0/0 implementadas |
@@ -73,10 +72,6 @@ flowchart LR
   subgraph E0016["SPEC-0016 · Second brain: skill de segundo cérebro no Obsidian"]
     S0023["SPEC-0023<br/>second-brain: manutenção do vault (lint)"]:::implemented
   end
-  subgraph E0030["SPEC-0030 · boson-atlas: probes — consultas ao vivo na infraestrutura"]
-    S0088["SPEC-0088<br/>boson-atlas: núcleo do probe — contrato…"]:::implemented
-    S0089["SPEC-0089<br/>boson-atlas: adaptador de probe de runt…"]:::implemented
-  end
   subgraph E0067["SPEC-0067 · Aposentar os nomes técnicos antigos (second-brain, org-atlas) sem quebrar instalações"]
     S0069["SPEC-0069<br/>photon-brain: configuração, mensagens e…"]:::implemented
     S0070["SPEC-0070<br/>boson-atlas: configuração, pasta .boson…"]:::implemented
@@ -85,7 +80,7 @@ flowchart LR
     S0073["SPEC-0073<br/>Remoção dos nomes técnicos antigos na v…"]:::approved
   end
   subgraph E0075["SPEC-0075 · boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço"]
-    S0090["SPEC-0090<br/>boson-atlas: verify — foto antes do mer…"]:::approved
+    S0090["SPEC-0090<br/>boson-atlas: verify — foto antes do mer…"]:::implemented
     S0091["SPEC-0091<br/>gluon-spec: verificação ativa no G6 com…"]:::approved
   end
   S0023 --> S0028
@@ -97,9 +92,6 @@ flowchart LR
   S0070 --> S0073
   S0071 --> S0073
   S0072 --> S0073
-  S0088 --> S0089
-  S0088 --> S0090
-  S0089 --> S0090
   S0090 --> S0091
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
@@ -200,7 +192,7 @@ flowchart LR
 | [SPEC-0087](SPEC-0087-boson-atlas-mapa-de-acesso-ambientes-marcados-workloads-e-ac.md) | boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster | full | feature | implemented | 2026-11-22 | SPEC-0075 | — | — |
 | [SPEC-0088](SPEC-0088-boson-atlas-nucleo-do-probe-contrato-de-adaptador-verbos-per.md) | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full | feature | implemented | 2026-11-22 | SPEC-0030 | — | SPEC-0087@3 |
 | [SPEC-0089](SPEC-0089-boson-atlas-adaptador-de-probe-de-runtime-kubernetes-estado.md) | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full | feature | implemented | 2026-11-22 | SPEC-0030 | SPEC-0088 | — |
-| [SPEC-0090](SPEC-0090-boson-atlas-verify-foto-antes-do-merge-comparacao-depois-do.md) | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0088, SPEC-0089 | — |
+| [SPEC-0090](SPEC-0090-boson-atlas-verify-foto-antes-do-merge-comparacao-depois-do.md) | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full | feature | implemented | 2026-11-22 | SPEC-0075 | SPEC-0088, SPEC-0089 | — |
 | [SPEC-0091](SPEC-0091-gluon-spec-verificacao-ativa-no-g6-com-atlas-py-verify.md) | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0090 | — |
 | [SPEC-0092](SPEC-0092-boson-atlas-mascara-de-segredos-robusta-padroes-separados-e.md) | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite | fix | proposed | 2026-11-23 | — | — | — |
 | [SPEC-0093](SPEC-0093-photon-brain-uso-pelo-conector-e-em-sessao-na-nuvem-listas-a.md) | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | epic | feature | proposed | 2026-11-23 | — | — | — |
