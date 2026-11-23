@@ -4,7 +4,7 @@ title: "boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos 
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
@@ -237,12 +237,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Red: UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0089:<ID>`, falhando pelo motivo certo; `kubectl` falso nos testes (nenhum cluster de verdade)
-- [ ] Green: `assets/probes/kubernetes.py` (status, events e logs; só `kubectl get`/`logs` nos kinds permitidos; imagem sem host, com tag e digest), `references/probes/kubernetes.md`, `SKILL.md`, `ATLAS_VERSION` (só a versão no `atlas.py`), CHANGELOG da boson-atlas e `version` do `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0089:<ID>`, falhando pelo motivo certo; `kubectl` falso nos testes (nenhum cluster de verdade)
+- [x] Green: `assets/probes/kubernetes.py` (status, events e logs; só `kubectl get`/`logs` nos kinds permitidos; imagem sem host, com tag e digest), `references/probes/kubernetes.md`, `SKILL.md`, `ATLAS_VERSION` (só a versão no `atlas.py`), CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -253,10 +253,10 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — fd14843 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 7c91684 | 2026-11-23 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — M1 e M2 da rodada 1 resolvidos (Emenda v5); 3 minors no radar (JSON muito aninhado, nenhum pod respondeu sem mensagem, Unauthorized no meio da execução) — ec3ff9c | 2026-11-23 |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 9e5382f | 2026-11-23 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 11b7c3a | 2026-11-23 |
 
 ### Histórico de reprovações
 - G1 FAIL 2026-11-23 — verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0089:CH-01 — 77eeec5
@@ -273,37 +273,61 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- Adaptador de probe `kubernetes` (`assets/probes/kubernetes.py`), usado pelo núcleo da SPEC-0088 quando a configuração local não traz `command`. Ele responde a três consultas de runtime, só de leitura:
+  - `status`: réplicas, rollout completo, imagens, restarts e última terminação dos pods;
+  - `events`: avisos recentes do workload;
+  - `logs`: as linhas mais recentes dos pods.
+- Só roda `kubectl get … -o json` e `kubectl logs pod/<nome>`, nos recursos permitidos, nunca segredos nem configmaps, e sem shell.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Python só com a biblioteca padrão.
+- Os nomes passam pelo DNS-1123 antes de virar argumento, e o contexto e o namespace vêm da entrada do núcleo.
+- `--request-timeout=20s`, com timeout de 30 s no processo.
+- Mensagens de erro fixas: o stderr do `kubectl` e o contexto nunca saem.
+- `references/probes/kubernetes.md` traz a configuração, um ClusterRole só de leitura sugerido e as chamadas feitas.
+- Emendas:
+  - v2: `touches` e ambiente;
+  - v3: perguntas do G1 (logs por pod, opções fechadas, timeout fixo);
+  - v4: escolhas do implementer;
+  - v5: rodada 1 do G4 (Rollout, pods que não respondem, resposta malformada, ordem fina, eventos do Rollout).
+- G4 aprovado na rodada 2.
+- Versões: ATLAS_VERSION 2026.11.16, plugin 2026.11.29.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | `status`: réplicas, `rollout_complete` (também Rollout com `observedGeneration` em texto), imagens sem host com tag e digest, restarts e última terminação; `found: false` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-02 | `events`: só Warnings na janela, do workload, dos pods e das ReplicaSets dele (Deployment e Rollout), mensagem cortada | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-03 | `logs`: por pod (até 10), juntados por `ts` com fração de segundo, `--tail`, pods que não respondem pulados com `truncated` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-04 | Erros (kubectl ausente, Forbidden, contexto, timeout, resposta malformada, entrada inválida) como `status: error`, exit 0, sem contexto nem traceback | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-05 | Todo argv é `get … -o json` ou `logs pod/<nome> …`, com opções fechadas; nomes inválidos recusados sem chamar o kubectl | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| IT-01 | Pelo núcleo: comando padrão, contexto e namespace do mapa de acesso, registro e máscara | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| CT-01 | `--describe` e as saídas passam pelos validadores de `probe@1` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). A entrega chega pelo plugin `fermion` 2026.11.29.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Achados minor do G4 que ficaram no radar:
+- JSON muito aninhado do `kubectl` ainda dá traceback (o kubectl não gera isso);
+- quando nenhum pod responde, o resultado é `ok` vazio com `truncated`; a SPEC-0090 trata esse caso como `not_verified` na Emenda v2;
+- um `Unauthorized` no meio da execução pula o pod em vez de falhar.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0089`. -->

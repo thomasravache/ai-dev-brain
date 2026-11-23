@@ -1701,6 +1701,23 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
+def write_exclusive(path: Path, text: str) -> None:
+    """write_atomic for a file outside the atlas (the verify snapshot, Emenda v5 of SPEC-0090): the temporary file is
+    created exclusively (mkstemp) in the destination folder, then renamed over `path`; a pre-existing file or link
+    with a fixed temporary name is never followed. The file is private to the person (0600)."""
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def read_json_file(path: Path):
     """Parsed JSON of a file, or None when it does not exist or is not valid JSON (unreadable = AtlasError)."""
     if not path.is_file():
@@ -5346,6 +5363,8 @@ EXPECT_IMAGE_RE = re.compile(r"^(?P<path>[a-z0-9][a-z0-9._/-]*[a-z0-9]|[a-z0-9])
 LIMIT_RE = re.compile(r"^\d{1,6}\Z")
 NO_BASELINE = "sem foto de antes: erros novos e antigos não se separam"
 NO_POD = "nenhum pod respondeu (probe de logs cortada e sem linha)"
+# a probe that came back with truncated: true (Emenda v5): its checks are not verified, never ok
+CUT_PROBE = "probe de {verb} cortada: um pod ou uma linha da janela pode ter ficado de fora"
 # the suggestion of `degradou` never carries a command (Emenda v3): checked before it is printed
 SUGGESTION_COMMAND_RE = re.compile(r"\bkubectl\b|\bargocd\b|\bhelm\b|\bgit (?:revert|push|reset|checkout)\b|^\s*\$ ",
                                    re.MULTILINE)
@@ -5473,6 +5492,26 @@ def parse_image_ref(value) -> tuple:
     return path, tag, digest
 
 
+EXPECT_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+
+
+def normalize_expected_image(value) -> str:
+    """--expect-image normalized like the adapter's normalize_image (Emenda v5 of SPEC-0090): the scheme and the
+    registry host (first segment with "." or ":" or "localhost") taken out, the path and the digest in lower case.
+    The text is returned as is when it does not split (EXPECT_IMAGE_RE then refuses it)."""
+    text = str(value or "").strip()
+    match = EXPECT_SCHEME_RE.match(text)
+    text = text[match.end():] if match else text
+    text, at, digest = text.partition("@")
+    head, sep, last = text.rpartition("/")
+    last, colon, tag = last.partition(":")
+    segments = (head.split("/") if sep else []) + [last]
+    first = segments[0].lower()
+    if len(segments) > 1 and ("." in first or ":" in first or first == "localhost"):
+        segments = segments[1:]
+    return "/".join(segments).lower() + (f":{tag}" if colon else "") + (f"@{digest.lower()}" if at else "")
+
+
 def image_matches(image, expected: tuple) -> bool:
     """True when a pod image is the expected one: the same path and the digest, when given; else the tag."""
     path, tag, digest = parse_image_ref(image)
@@ -5503,10 +5542,31 @@ def _inside(path: Path, folder: Path) -> bool:
         return False
 
 
+def _same_folder(path: Path, identity: tuple) -> bool:
+    """True when `path` is the folder of `identity` (st_dev, st_ino): the file, not the text of the path."""
+    try:
+        info = os.stat(path)
+    except OSError:
+        return False
+    return (info.st_dev, info.st_ino) == identity
+
+
 def _verify_out(value, atlas: Path) -> Path:
-    """The --out of the snapshot, resolved (.., symlinks): never inside the atlas folder (ADR-0024), exit 2."""
+    """The --out of the snapshot, resolved (.., symlinks): never inside the atlas folder (ADR-0024), exit 2. The
+    parent folder and every folder above it are compared with the atlas folder by identity (st_dev, st_ino, Emenda
+    v5 of SPEC-0090), so neither another case (macOS) nor a link into the atlas gets through."""
     out = Path(os.path.expanduser(str(value))).resolve()
-    if _inside(out, Path(atlas).expanduser().resolve()):
+    folder = Path(atlas).expanduser().resolve()
+    inside = _inside(out, folder)
+    if not inside:
+        try:
+            info = os.stat(folder)
+        except OSError:
+            info = None
+        if info is not None:
+            identity = (info.st_dev, info.st_ino)
+            inside = any(_same_folder(p, identity) for p in (out.parent, *out.parent.parents))
+    if inside:
         raise AtlasError("--out dentro da pasta do atlas: a foto é um arquivo da tarefa, fora do atlas "
                          "(references/verify.md)", 2)
     if out.is_dir():
@@ -5570,7 +5630,7 @@ def _verify_observe(setup, args, target, window: str) -> dict:
     seen = {}
     for verb in VERIFY_VERBS:
         query = argparse.Namespace(capability="runtime", verb=verb, service=args.service, env=args.env,
-                                   since=window, lines=None, summary=verb == "logs",
+                                   since=window, lines=PROBE_LINES_MAX, summary=verb == "logs",
                                    confirm_production=args.confirm_production, atlas=args.atlas, json=True)
         try:
             outcome = run_probe(query, setup["name"], setup["probes"], setup["entry"], target["deployment"])
@@ -5580,6 +5640,8 @@ def _verify_observe(setup, args, target, window: str) -> dict:
         result = outcome["result"]
         if result["status"] != "ok":
             seen[verb] = {"reason": f"probe {verb} respondeu com erro: {outcome['message'] or '(sem mensagem)'}"}
+        elif result["truncated"]:  # a cut probe never gives ok (Emenda v5): a pod or an old line may be missing
+            seen[verb] = {"reason": NO_POD if verb == "logs" and not result["items"] else CUT_PROBE.format(verb=verb)}
         else:
             seen[verb] = {"result": result}
     return seen
@@ -5641,13 +5703,8 @@ def _observed(target, seen) -> dict:
 
 
 def _logs_problem(seen):
-    """Why the logs of one observation cannot be used, or None."""
-    if "reason" in seen["logs"]:
-        return seen["logs"]["reason"]
-    result = seen["logs"]["result"]
-    if result["truncated"] and not result["items"]:
-        return NO_POD
-    return None
+    """Why the logs of one observation cannot be used (refused, failed or cut), or None."""
+    return seen["logs"].get("reason")
 
 
 def cmd_verify_snapshot(args) -> int:
@@ -5677,7 +5734,7 @@ def cmd_verify_snapshot(args) -> int:
     problems = validate_verify_snapshot(photo)
     if problems:  # never written out of the contract
         raise AtlasError(f"foto fora do contrato {VERIFY_CONTRACT} — {'; '.join(problems[:10])}", 1)
-    write_atomic(out, json.dumps(photo, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    write_exclusive(out, json.dumps(photo, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     print(f"foto {VERIFY_CONTRACT} gravada em {out}: {args.service} em {args.env}, {len(deployments)} deployment(s), "
           f"{len(not_verified)} verificação(ões) não feita(s)")
     for item in not_verified:
@@ -5694,7 +5751,7 @@ def _delivery_check(target, seen, expect: str) -> dict:
     deployment = target["deployment"]
     if "reason" in seen["status"]:
         return _check(deployment, "delivery", "not_verified", {"expected": expect}, seen["status"]["reason"])
-    expected = parse_image_ref(expect)
+    expected = parse_image_ref(normalize_expected_image(expect))
     workloads, pods = _status_parts(seen)
     missing = sorted(str(w.get("workload")) for w in workloads if w.get("found") is False)
     complete = bool(workloads) and all(w.get("rollout_complete") is True for w in workloads)
@@ -5828,7 +5885,7 @@ def cmd_verify_compare(args) -> int:
     """verify compare (SPEC-0090, ADR-0024): delivery, runtime and logs of each deployment against the snapshot and
     the expected image; verdict passou (0), degradou (1) or inconclusivo (5). Nothing is written to the atlas."""
     setup = _verify_setup(args)
-    match = EXPECT_IMAGE_RE.match(args.expect_image or "")
+    match = EXPECT_IMAGE_RE.match(normalize_expected_image(args.expect_image))
     if not match or not (match.group("tag") or match.group("digest")):
         raise AtlasError("--expect-image inválido — use o caminho da imagem com :<tag> e/ou @<digest> (ex.: "
                          "acme/api:1.4.2)", 2)

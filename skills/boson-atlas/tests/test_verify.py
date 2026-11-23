@@ -61,6 +61,7 @@ import sys
 import unittest
 
 from helpers import SKILL, TESTS, Sandbox, output, snapshot
+from helpers import atlas as atlas_module
 from test_access_map import collectors_yaml, environments_yaml, resource
 from test_probe import (
     CONTEXTS,
@@ -1064,6 +1065,156 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(checks["logs"]["status"], "failed", checks["logs"])
         self.assertIn("timeout calling", json.dumps(checks["logs"]["evidence"]))
         self.assertIn(CONFIG_REPO, data["suggestion"])
+
+
+# --------------------------------------------------------------------------- Emenda v5 (achados da rodada 1 do G4)
+
+STATUS_CUT = "probe de status cortada"
+LOGS_CUT = "probe de logs cortada"
+
+
+def cut(state, verb):
+    """O estado com a resposta do `verb` marcada truncated: true (os itens continuam os de um caso que passaria)."""
+    state = copy.deepcopy(state)
+    state[verb]["truncated"] = True
+    return state
+
+
+class OutIdentityTest(VerifyCase):
+    """SPEC-0090:UT-01 (Emenda v5) — o --out fica fora do atlas pela identidade da pasta (st_dev, st_ino), não pelo
+    texto do caminho; a foto vai para um temporário exclusivo, que nunca segue um link existente."""
+
+    def link(self, name, target):
+        path = self.box.root / name
+        if path.is_symlink() or path.exists():
+            path.unlink()
+        path.symlink_to(target, target_is_directory=target.is_dir())
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        return path
+
+    def test_out_with_the_atlas_folder_in_another_case_exits_2(self):
+        """SPEC-0090:UT-01 (Emenda v5) — num sistema de arquivos sem distinção de caixa (macOS), `--out` com o nome
+        da pasta do atlas em outra caixa é a pasta do atlas: exit 2, nada gravado, nenhuma probe roda."""
+        name = self.box.atlas.name
+        other = self.box.atlas.parent / (name.upper() if name.upper() != name else name.lower())
+        if other.name == name or not other.exists() or not os.path.samefile(other, self.box.atlas):
+            self.skipTest("sistema de arquivos com distinção de caixa: o caso não existe aqui")
+        self.set_state(**{d: deployment_state(d, image=OLD_IMAGE) for d in DEPLOYMENTS})
+        out = other / "foto-caixa.json"
+        self.addCleanup(lambda: (self.box.atlas / "foto-caixa.json").unlink(missing_ok=True))
+        run = self.take(out)
+        self.assertExit(run, 2)
+        self.assertFalse((self.box.atlas / "foto-caixa.json").exists(), "a foto foi gravada dentro do atlas")
+        self.assertNoRun()
+
+    def test_out_under_a_link_into_the_atlas_exits_2(self):
+        """SPEC-0090:UT-01 (Emenda v5) — a pasta pai do --out é um link para a pasta do atlas: exit 2, nada gravado,
+        nenhuma probe roda."""
+        self.set_state(**{d: deployment_state(d, image=OLD_IMAGE) for d in DEPLOYMENTS})
+        link = self.link("link-para-o-atlas", self.box.atlas)
+        self.addCleanup(lambda: (self.box.atlas / "foto-link.json").unlink(missing_ok=True))
+        run = self.take(link / "foto-link.json")
+        self.assertExit(run, 2)
+        self.assertFalse((self.box.atlas / "foto-link.json").exists(), "a foto foi gravada dentro do atlas")
+        self.assertNoRun()
+
+    def test_a_planted_temp_link_into_the_atlas_is_not_followed(self):
+        """SPEC-0090:UT-01 (Emenda v5) — existe `foto.json.tmp` na pasta da tarefa, um link para um arquivo dentro do
+        atlas: o snapshot grava a foto (exit 0) sem seguir o link — a pasta do atlas fica igual (conferido no
+        verify), o alvo do link não é criado e o --out é um arquivo comum."""
+        self.set_state(**{d: deployment_state(d, image=OLD_IMAGE) for d in DEPLOYMENTS})
+        planted = self.box.atlas / "plantado.json"
+        self.addCleanup(lambda: planted.unlink(missing_ok=True))
+        out = self.task / "foto.json"
+        tmp = self.task / "foto.json.tmp"
+        tmp.symlink_to(planted)
+        run = self.take(out)
+        self.assertFalse(planted.exists(), "a foto seguiu o link do temporário e foi gravada dentro do atlas")
+        self.assertExit(run, 0)
+        self.assertTrue(out.is_file() and not out.is_symlink(), "o --out não é um arquivo comum")
+        self.assertEqual(snapshot_problems(json.loads(out.read_text(encoding="utf-8"))), [])
+
+
+class CutProbesTest(VerifyCase):
+    """SPEC-0090:UT-02, UT-03 e UT-04 (Emenda v5) — probe que volta com truncated: true nunca dá ok, mesmo com itens
+    que, inteiros, passariam."""
+
+    def test_a_cut_status_probe_leaves_delivery_and_runtime_not_verified(self):
+        """SPEC-0090:UT-02/UT-03 (Emenda v5) — a probe de status de dev-api volta cortada, com os itens de um rollout
+        saudável: delivery e runtime de dev-api ficam not_verified ("probe de status cortada"); veredito
+        inconclusivo, exit 5."""
+        self.set_state(**{"dev-api": cut(deployment_state("dev-api"), "status")})
+        data = self.result(self.compare(), "inconclusivo")
+        for name in ("delivery", "runtime"):
+            item = self.check(data, "dev-api", name)
+            self.assertEqual(item["status"], "not_verified", item)
+            self.assertIn(STATUS_CUT, item["reason"])
+
+    def test_a_cut_events_probe_leaves_runtime_not_verified_unless_failed(self):
+        """SPEC-0090:UT-03 (Emenda v5) — a probe de events de dev-api volta cortada (sem aviso novo nos itens): runtime
+        not_verified e veredito inconclusivo; com um pod não pronto, o runtime continua failed."""
+        self.set_state(**{"dev-api": cut(deployment_state("dev-api"), "events")})
+        data = self.result(self.compare(), "inconclusivo")
+        item = self.check(data, "dev-api", "runtime")
+        self.assertEqual(item["status"], "not_verified", item)
+        self.assertTrue(item["reason"], item)
+        self.set_state(**{"dev-api": cut(deployment_state("dev-api", not_ready=("api-7f9c-cccc",)), "events")})
+        data = self.result(self.compare(), "degradou")
+        self.assertEqual(self.check(data, "dev-api", "runtime")["status"], "failed")
+
+    def test_a_cut_logs_probe_with_items_leaves_logs_not_verified(self):
+        """SPEC-0090:UT-04 (Emenda v5) — a probe de logs de dev-api volta cortada com itens (só a assinatura que já
+        estava na foto): logs not_verified ("probe de logs cortada"), nunca ok; veredito inconclusivo."""
+        state = deployment_state("dev-api", logs=["ERROR user 1 not found", "INFO request 1 ok"])
+        self.set_state(**{"dev-api": cut(state, "logs")})
+        baseline = self.write_baseline(baseline_data(**{"dev-api": {"error_signatures": {OLD_SIGNATURE: 2}}}))
+        data = self.result(self.compare(baseline=baseline), "inconclusivo")
+        item = self.check(data, "dev-api", "logs")
+        self.assertEqual(item["status"], "not_verified", item)
+        self.assertIn(LOGS_CUT, item["reason"])
+
+    def test_probes_ask_for_the_maximum_line_limit(self):
+        """SPEC-0090:UT-01/UT-04 (Emenda v5) — snapshot e compare pedem todas as probes com limits.lines igual ao
+        máximo do núcleo (PROBE_LINES_MAX), não com o padrão da configuração."""
+        maximum = atlas_module().PROBE_LINES_MAX
+        self.set_state(**{d: deployment_state(d, image=OLD_IMAGE) for d in DEPLOYMENTS})
+        self.assertExit(self.take(), 0)
+        self.set_state()
+        self.result(self.compare(baseline=self.task / "foto.json"))
+        runs = self.calls("run")
+        self.assertTrue(runs)
+        self.assertEqual({(c["input"]["verb"], c["input"]["limits"]["lines"]) for c in runs},
+                         {(verb, maximum) for verb in READ_VERBS})
+
+
+class NormalizedImageTest(VerifyCase):
+    def delivery(self, expect):
+        self.set_state()
+        return self.check(self.result(self.compare(expect=expect)), "dev-api", "delivery")
+
+    def test_the_expected_image_is_normalized_like_the_adapter(self):
+        """SPEC-0090:UT-02 (Emenda v5) — o adaptador devolve acme/api:1.4.2@sha256:<novo> (registro tirado, digest em
+        minúsculas): `--expect-image ghcr.io/acme/api:1.4.2`, `localhost:5000/acme/api:1.4.2` e o digest em
+        maiúsculas dão delivery ok."""
+        hex_digest = NEW_DIGEST.split(":", 1)[1]
+        for expect in ("ghcr.io/acme/api:1.4.2", "localhost:5000/acme/api:1.4.2",
+                       f"acme/api@sha256:{hex_digest.upper()}", f"ghcr.io/acme/api:1.4.2@sha256:{hex_digest.upper()}"):
+            with self.subTest(expect=expect):
+                item = self.delivery(expect)
+                self.assertEqual(item["status"], "ok", item)
+
+
+class BaselineScopeTest(VerifyCase):
+    def test_a_baseline_of_another_service_or_environment_exits_2(self):
+        """SPEC-0090:CT-01 (Emenda v5) — `--baseline` com a foto de outro serviço (web) ou de outro ambiente (qa):
+        compare sai com 2, sem veredito e sem rodar probe."""
+        for name, data in (("outro serviço", dict(baseline_data(), service="web")),
+                           ("outro ambiente", dict(baseline_data(), environment="qa"))):
+            with self.subTest(case=name):
+                run = self.compare(baseline=self.write_baseline(data, f"{name.replace(' ', '-')}.json"))
+                self.assertExit(run, 2)
+                self.assertNotIn('"verdict"', run.stdout)
+                self.assertNoRun()
 
 
 if __name__ == "__main__":
