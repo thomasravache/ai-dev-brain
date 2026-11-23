@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
 consumes_contract: [SPEC-0087@3]
-contract_version: 3
+contract_version: 5
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
@@ -202,6 +202,35 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
   - os exit 2 depois da checagem de ligado também entram no registro;
   - a configuração inválida não entra.
 
+**Esclarecimentos (Emenda v4):**
+- **Contexto mascarado (M1 do G4):** depois de escolher o contexto, o núcleo mascara o valor dele em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato. Vale o mesmo para os valores das credenciais declaradas do adaptador.
+- **JSON do adaptador:**
+  - aninhamento profundo (`RecursionError`) e as constantes `NaN`/`Infinity` contam como JSON inválido (exit 1, sem traceback);
+  - nenhum número fora do JSON padrão sai em `--json`.
+- **`--summary`:**
+  - sem itens, sai exit 0 com zero assinaturas, porque uma janela vazia é resposta válida;
+  - itens sem nenhum `line` continuam dando exit 2.
+- **`command` local:** o primeiro elemento é um nome sem separador de pasta (procurado no PATH) ou um caminho absoluto. Um caminho relativo é recusado na validação (exit 2) e no `doctor`.
+- **Campos do alvo:** antes de rodar, o núcleo confere os campos que vêm do atlas e recusa com exit 2, sem rodar nada:
+  - `namespace` segue o DNS-1123 (até 63 caracteres);
+  - cada `workload` é `Kind/nome`, com o nome em DNS-1123 subdomínio;
+  - `service`, `deployment` e `environment` seguem a regra de nome simples do atlas;
+  - nenhum desses campos começa com `-`.
+  Assim nenhum adaptador recebe um texto que pareça uma opção de linha de comando.
+- **Campo `adapter` da saída:** precisa ser igual ao id do adaptador que rodou. Diferente, a saída está fora do contrato (exit 1).
+- **Regras de nome:** a "regra de nome simples" é a do `ENVIRONMENT_NAME_RE` de `references/config.md`. No `Kind/nome`, o Kind só não pode começar com `-`.
+- **Documentação:** a lista do ambiente do adaptador em `references/config.md` e `references/probes.md` fica igual à do código.
+
+**Esclarecimentos (Emenda v5):**
+- **Ordem da máscara:**
+  1. os padrões de segredo (regras do atlas, `PROBE_PATTERNS` e `redaction.extra_patterns`) rodam primeiro, no texto original;
+  2. depois vêm os literais (o contexto e os valores das credenciais).
+
+  Um contexto curto, como `api`, não pode impedir que `api_key=<valor>` seja mascarado.
+- **Variantes do contexto e das credenciais:** a máscara literal pega também, sem diferença de maiúsculas, a forma escapada em JSON (inclusive `\/`) e a forma codificada em URL.
+- **Texto que não vira UTF-8:** uma string com surrogate solto na saída do adaptador conta como JSON inválido (exit 1, sem traceback).
+- **Clusters do alvo:** cada nome em `target.clusters` segue a regra de nome simples. Uma URL de servidor também vale, desde que sem espaço, sem caractere de controle e sem `-` no começo. Fora disso, é exit 2 antes de rodar qualquer coisa, como os outros campos do alvo (Emenda v4).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -298,13 +327,16 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — c2bbfa3 | 2026-11-22 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=49, skipped=1)) — 677c563 | 2026-11-23 |
-| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 811e601 | 2026-11-23 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8cc8d7b | 2026-11-23 |
-| G4 Review | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 0c39417 | 2026-11-23 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 85fba98 | 2026-11-23 |
+| G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major M1: o contexto do kubeconfig vaza quando o adaptador o ecoa (stderr, message, itens); minors: JSON muito aninhado dá traceback, --summary com zero itens, command relativo, campos do alvo sem restrição; nits: NaN, doc do ambiente | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major M1: o contexto do kubeconfig vaza quando o adaptador o ecoa (stderr, message, itens); minors: JSON muito aninhado dá traceback, --summary com zero itens, command relativo, campos do alvo sem restrição; nits: NaN, doc do ambiente — 8350967
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -353,3 +385,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|---|---|
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): CH-01 em guarda e recusa; nomes do validador e marcação dos exemplos; `ts`/`line` e ordem do `--summary`; credenciais por adaptador; `--describe` no fim; registro das recusas; mensagens | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 3 | 2026-11-23 | Esclarecimentos (Emenda v3): linhas do `doctor`; redação a mais só nas probes; ambiente do adaptador por lista permitida; escolha do alvo e do adaptador; `assets/probes/<id>.py` por padrão; status do registro | Relatório do implementer no G2 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 4 | 2026-11-23 | Esclarecimentos (Emenda v4): contexto mascarado na saída do adaptador; JSON aninhado e NaN inválidos; `--summary` vazio é exit 0; `command` relativo recusado; campos do alvo conferidos; doc do ambiente | Achados da rodada 1 do G4 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 5 | 2026-11-23 | Esclarecimentos (Emenda v5): padrões de segredo antes dos literais; variantes do contexto (JSON, URL, maiúsculas); surrogate solto é JSON inválido; clusters do alvo conferidos | Achados minor da rodada 2 do G4 (um deles reabria vazamento de segredo) | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |

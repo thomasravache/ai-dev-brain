@@ -692,6 +692,242 @@ class SummaryTest(ProbeCase):
             self.assertNotIn(text, items[0]["signature"] + items[1]["signature"])
         self.assertNotIn("@example.com", output(result))
 
+    def test_summary_without_items_exits_0_with_zero_signatures(self):
+        """SPEC-0088:UT-06 (Emenda v4) — adaptador sem itens (janela vazia) com --summary: exit 0 e zero assinaturas,
+        em --json e em texto."""
+        result, items = self.summary([])
+        self.assertEqual(items, [], result.stdout)
+        self.assertExit(self.probe("runtime", "logs", "--service", "api", "--env", "dev", "--summary"), 0)
+
+    def test_summary_of_items_without_line_still_exits_2(self):
+        """SPEC-0088:UT-06 (Emenda v4) — itens sem nenhum line com --summary: exit 2, em --json e em texto."""
+        path = self.box.root / "items" / f"{self.id().rsplit('.', 1)[-1]}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps([{"name": "api", "ready": "1/1"}]), encoding="utf-8")
+        self.configure_ok(extra=("--items", str(path)))
+        for extra in ((), ("--json",)):
+            with self.subTest(extra=extra):
+                self.assertExit(self.probe("runtime", "logs", "--service", "api", "--env", "dev", "--summary",
+                                           *extra), 2)
+
+
+# --------------------------------------------------------------------------- Emenda v4 (achados da rodada 1 do G4)
+
+
+CONTEXT_DEV = CONTEXTS["cluster-dev"]
+CREDENTIAL_VALUE = FAKE_VALUE + "-credencial"
+
+
+class ContextMaskingTest(ProbeCase):
+    """Emenda v4 — o contexto escolhido e os valores das credenciais declaradas são mascarados em tudo o que vem do
+    adaptador (itens, chaves, message, cauda do stderr, amostra do --summary, falha do contrato)."""
+
+    def run_echo(self, mode, verb="status", extra=()):
+        self.configure(probes_yaml([adapter_yaml("fake", self.fake("echo_context.py", "--mode", mode, "--env-name",
+                                                                   "PROBE_FAKE_TOKEN"),
+                                                 credentials=("PROBE_FAKE_TOKEN",))]))
+        results = []
+        for flag in ((), ("--json",)):
+            result = self.probe("runtime", verb, "--service", "api", "--env", "dev", *extra, *flag,
+                                env={"PROBE_FAKE_TOKEN": CREDENTIAL_VALUE})
+            runs = self.calls("run")
+            self.assertTrue(runs, "o adaptador não rodou: o teste não vale")
+            self.assertEqual(runs[-1]["input"]["target"]["context"], CONTEXT_DEV)
+            results.append(result)
+        return results
+
+    def assertMasked(self, results):
+        log = (self.cfg / "probes.log").read_text(encoding="utf-8") if (self.cfg / "probes.log").exists() else ""
+        for text in [output(r) for r in results] + [log]:
+            self.assertNotIn(CONTEXT_DEV, text, "o contexto escolhido vazou na saída do probe")
+            self.assertNotIn(CREDENTIAL_VALUE, text, "o valor de uma credencial declarada vazou na saída do probe")
+
+    def test_context_echoed_in_stderr_on_exit_1_is_masked(self):
+        """SPEC-0088:UT-04 (Emenda v4) — adaptador que sai com 1 e escreve o contexto e o valor da credencial
+        declarada no stderr: o probe sai com 1 e a cauda do stderr mostrada não traz nenhum dos dois (texto e
+        --json); o probes.log também não."""
+        results = self.run_echo("stderr")
+        for result in results:
+            self.assertExit(result, 1)
+        self.assertMasked(results)
+
+    def test_context_echoed_in_the_error_message_is_masked(self):
+        """SPEC-0088:UT-04 (Emenda v4) — status error com o contexto e o valor da credencial na message: exit 1 e a
+        mensagem mostrada (texto e --json) sem nenhum dos dois."""
+        results = self.run_echo("message")
+        for result in results:
+            self.assertExit(result, 1)
+        self.assertMasked(results)
+
+    def test_context_echoed_in_item_keys_and_values_is_masked(self):
+        """SPEC-0088:UT-04 (Emenda v4) — itens cuja chave e cujo valor são o contexto (e o valor da credencial):
+        exit 0 e nem as chaves nem os valores impressos (texto e --json) trazem os dois."""
+        results = self.run_echo("items")
+        for result in results:
+            self.assertExit(result, 0)
+        self.assertMasked(results)
+
+    def test_context_echoed_in_log_lines_is_masked_in_the_summary(self):
+        """SPEC-0088:UT-06 (Emenda v4) — linhas de log com o contexto e o valor da credencial no meio, com --summary:
+        exit 0 e nem a amostra nem a assinatura (texto e --json) trazem os dois."""
+        results = self.run_echo("summary", verb="logs", extra=("--summary",))
+        for result in results:
+            self.assertExit(result, 0)
+        self.assertMasked(results)
+
+    def test_context_in_a_key_of_an_output_outside_the_contract_is_masked(self):
+        """SPEC-0088:UT-04 (Emenda v4) — item com o contexto (e o valor da credencial) como chave de um objeto: exit 1
+        por saída fora do contrato, e o texto da falha não cita a chave crua."""
+        results = self.run_echo("contract")
+        for result in results:
+            self.assertExit(result, 1)
+        self.assertMasked(results)
+
+    def test_context_echoed_as_the_adapter_field_is_masked(self):
+        """SPEC-0088:UT-04 (Emenda v4) — o campo adapter da saída é o próprio contexto: ele não aparece na saída do
+        probe (texto e --json)."""
+        self.assertMasked(self.run_echo("adapter"))
+
+
+class InvalidJsonV4Test(ProbeCase):
+    def test_deep_nesting_nan_and_infinity_exit_1_as_invalid_json(self):
+        """SPEC-0088:UT-04 (Emenda v4) — saída com "[" × 100000 (RecursionError no parser), com NaN ou com
+        Infinity/-Infinity: exit 1 como JSON inválido, com o motivo, sem traceback e sem item impresso; nenhuma
+        constante fora do JSON padrão sai em --json."""
+        for kind in ("deep", "nan", "infinity"):
+            self.configure(probes_yaml([adapter_yaml("fake", self.fake("invalid.py", "--kind", kind))]))
+            for extra in ((), ("--json",)):
+                with self.subTest(kind=kind, extra=extra):
+                    result = self.probe("runtime", "status", "--service", "api", "--env", "dev", *extra)
+                    self.assertExit(result, 1)
+                    self.assertNotIn(MARKER, output(result))
+                    self.assertIn("json", output(result).lower())
+                    for constant in ("NaN", "Infinity"):
+                        self.assertNotIn(constant, result.stdout)
+
+
+class CommandPathTest(ProbeCase):
+    def relative_scripts(self):
+        """box.root/x.py e box.root/rel/x.py, executáveis, que repassam ao ok.py (o cwd da CLI nos testes é
+        box.root: se o caminho relativo fosse aceito, o doctor os acharia)."""
+        body = (f"#!{sys.executable}\nimport os, sys\nos.execv({sys.executable!r}, [{sys.executable!r}, "
+                f"{str(FAKES / 'ok.py')!r}] + sys.argv[1:])\n")
+        for rel in ("x.py", "rel/x.py"):
+            path = self.box.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(body, encoding="utf-8")
+            path.chmod(0o755)
+
+    def test_a_relative_command_is_refused_in_config_probe_and_doctor(self):
+        """SPEC-0088:UT-01 (Emenda v4) — command com caminho relativo que tem separador (./x.py, rel/x.py): config
+        --json e probe saem com 2, "probes: ...command inválido — ...", sem rodar o adaptador; o doctor mostra um
+        ERRO (e não OK) para ele."""
+        self.relative_scripts()
+        for rel in ("./x.py", "rel/x.py"):
+            with self.subTest(command=rel):
+                self.configure(probes_yaml([adapter_yaml("fake", [rel, "--record", str(self.record)])]))
+                result = self.box.run("config", "--json", config_home=self.cfg)
+                self.assertNotIn("Traceback", output(result))
+                self.assertExit(result, 2)
+                self.assertRegex(output(result), FIELD_RE.format(field="command"))
+                result = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json")
+                self.assertExit(result, 2)
+                self.assertRegex(output(result), FIELD_RE.format(field="command"))
+                self.assertEqual(self.calls(), [], "o adaptador de command relativo rodou")
+                rows = doctor_lines(self.box.run("doctor", config_home=self.cfg).stdout)
+                self.assertFalse([r for r in rows if r[0] == "OK" and re.search(r"\bfake\b", r[1])], rows)
+                errors = [r for r in rows if r[0] == "ERRO" and re.search(r"probe|adaptador", r[1], re.IGNORECASE)]
+                self.assertTrue(errors, rows)
+
+    def test_a_bare_name_on_path_and_an_absolute_path_stay_valid(self):
+        """SPEC-0088:UT-01 (Emenda v4, guarda) — command com nome sem separador achado no PATH (python3) e com caminho
+        absoluto: config --json sai com 0, o probe roda e o doctor mostra o adaptador em OK."""
+        absolute = self.fake("ok.py")
+        bare = ["python3", *absolute[1:]]
+        for command in (bare, absolute):
+            with self.subTest(command=command[0]):
+                self.configure(probes_yaml([adapter_yaml("fake", command)]))
+                self.assertExit(self.box.run("config", "--json", config_home=self.cfg), 0)
+                self.assertExit(self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json"), 0)
+                rows = doctor_lines(self.box.run("doctor", config_home=self.cfg).stdout)
+                self.assertEqual([r[0] for r in rows if re.search(r"\bfake\b", r[1])][:1], ["OK"], rows)
+
+
+def _rename(graph, old, new):
+    """graph com o nó `old` (chave kind:id) trocado por `new` nas chaves, nos nomes e nas arestas."""
+    for node in graph["nodes"]:
+        if node["key"] == old:
+            node["key"] = new
+            node["name"] = new.split(":", 1)[1]
+    for edge in graph["edges"]:
+        for side in ("from", "to", "evidence"):
+            if edge.get(side) == old:
+                edge[side] = new
+    return graph
+
+
+def _set_attr(key, attr, value):
+    def change(graph):
+        for node in graph["nodes"]:
+            if node["key"] == key:
+                node["attrs"][attr] = value
+        return graph
+    return change
+
+
+def _renamed(old, new):
+    return lambda graph: _rename(graph, old, new)
+
+
+DEV_DEPLOYMENT = "deployment:dev-api"
+TARGET_CASES = [
+    ("namespace com maiúscula", _set_attr(DEV_DEPLOYMENT, "namespace", "Api-Dev"), ()),
+    ("namespace com _", _set_attr(DEV_DEPLOYMENT, "namespace", "api_dev"), ()),
+    ("namespace com .", _set_attr(DEV_DEPLOYMENT, "namespace", "api.dev"), ()),
+    ("namespace com 64", _set_attr(DEV_DEPLOYMENT, "namespace", "a" * 64), ()),
+    ("namespace com -", _set_attr(DEV_DEPLOYMENT, "namespace", "-api-dev"), ()),
+    ("workload sem Kind", _set_attr(DEV_DEPLOYMENT, "workloads", ["api"]), ()),
+    ("workload com maiúscula", _set_attr(DEV_DEPLOYMENT, "workloads", ["Deployment/Api"]), ()),
+    ("workload com _", _set_attr(DEV_DEPLOYMENT, "workloads", ["Deployment/api_x"]), ()),
+    ("workload com nome -", _set_attr(DEV_DEPLOYMENT, "workloads", ["Deployment/-api"]), ()),
+    ("workload com -", _set_attr(DEV_DEPLOYMENT, "workloads", ["-Deployment/api"]), ()),
+    ("workload acima de 253", _set_attr(DEV_DEPLOYMENT, "workloads", ["Deployment/" + "a" * 254]), ()),
+    ("deployment com -", _renamed(DEV_DEPLOYMENT, "deployment:-dev-api"), ()),
+    ("deployment com espaço", _renamed(DEV_DEPLOYMENT, "deployment:dev api"), ()),
+    ("deployment com /", _renamed(DEV_DEPLOYMENT, "deployment:dev/api"), ()),
+    ("service com -", _renamed("service:api", "service:-api"), ("--service=-api",)),
+    ("service com espaço", _renamed("service:api", "service:api x"), ("--service", "api x")),
+    ("environment com -", _renamed("environment:dev", "environment:-dev"), ("--env=-dev",)),
+    ("environment com /", _renamed("environment:dev", "environment:dev/x"), ("--env", "dev/x")),
+]
+
+
+class TargetFieldsTest(ProbeCase):
+    def test_target_fields_out_of_the_rules_exit_2_without_running_anything(self):
+        """SPEC-0088:UT-02 (passo 2 do contrato, Emenda v4) — graph.json com namespace fora do DNS-1123, workload fora
+        de Kind/nome DNS-1123 subdomínio, campo começando com - e service, deployment ou environment fora da regra de
+        nome simples: `probe` sai com 2 e nenhum processo do adaptador roda (nem o --describe, nem a consulta)."""
+        graph_path = self.box.atlas / "graph.json"
+        original = graph_path.read_text(encoding="utf-8")
+        self.configure_ok()
+        try:
+            for name, change, args in TARGET_CASES:
+                with self.subTest(case=name):
+                    graph_path.write_text(json.dumps(change(json.loads(original))), encoding="utf-8")
+                    args = args or ("--service", "api", "--env", "dev")
+                    if not any(a.startswith("--service") for a in args):
+                        args = ("--service", "api", *args)
+                    if not any(a.startswith("--env") for a in args):
+                        args = (*args, "--env", "dev")
+                    before = len(self.calls())
+                    result = self.probe("runtime", "status", *args, "--confirm-production", "--json")
+                    self.assertExit(result, 2)
+                    self.assertEqual(len(self.calls()), before, "um processo do adaptador rodou com o alvo inválido")
+        finally:
+            graph_path.write_text(original, encoding="utf-8")
+        result = self.probe("runtime", "status", "--service", "api", "--env", "dev", "--json")
+        self.assertExit(result, 0)  # guarda: o alvo de verdade roda (o teste não vale sem isso)
+
 
 # --------------------------------------------------------------------------- IT-01
 

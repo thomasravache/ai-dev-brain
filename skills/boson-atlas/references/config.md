@@ -56,7 +56,7 @@ probes:
 - Um campo inválido faz `config` e `probe` saírem com 2 e o `doctor` mostrar ERRO `probes`, com `probes: <campo> inválido — <motivo>` e nunca o valor: `timeout` fora de 1..300, `limits.lines` fora de 1..2000, `limits.since` acima de 24h ou fora do formato `30m`/`2h`, verbo com espaço ou maiúscula, credencial que não é nome de variável (`NOME=valor`), chave desconhecida.
 - `config --json` mostra `probes` com os ids, os comandos, os verbos, o timeout e os **nomes** das credenciais; nunca um valor.
 - `init` e `init --join` mantêm o `probes` da entrada que atualizam.
-- O adaptador recebe só `PATH`, `HOME`, o idioma e a pasta temporária do ambiente, mais as variáveis declaradas em `credentials` **dele**; nenhuma variável declarada para outro adaptador ou para os coletores chega a ele.
+- O adaptador recebe só `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`, `TMPDIR`, `TMP` e `TEMP` (e, no Windows, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA`), quando definidos, mais as variáveis declaradas em `credentials` **dele**; nenhuma variável declarada para outro adaptador ou para os coletores chega a ele.
 - O registro de cada probe fica em `probes.log`, na mesma pasta deste `config.yml` (nunca no atlas). Contrato, exits e como escrever um adaptador: `references/probes.md`.
 
 É escrita pelo `atlas.py init` (e pelo `init --join` numa máquina nova, que não aceita `--org`, `--mode` nem `--force`), que mantém as `credentials` já declaradas para o mesmo atlas. `ATLAS_CONFIG_HOME` troca a pasta, útil para testes; para mais de um atlas, use a forma de vários atlas abaixo.

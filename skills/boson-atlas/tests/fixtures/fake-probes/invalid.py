@@ -5,8 +5,11 @@
     nested-item     item com um valor que é objeto (só escalar ou lista de escalares)
     wrong-contract  contract diferente de probe@1
     bad-status      status fora de ok | error
+    deep            "[" repetido 100000 vezes (aninhamento profundo: RecursionError no parser; Emenda v4)
+    nan             item com NaN (constante fora do JSON padrão; Emenda v4)
+    infinity        item com Infinity e -Infinity (Emenda v4)
 
-Todas trazem o marcador ITEM-MARCADOR-0088 num item, que nunca pode aparecer na saída do núcleo.
+Todas (menos deep) trazem o marcador ITEM-MARCADOR-0088 num item, que nunca pode aparecer na saída do núcleo.
 Uso: python3 invalid.py --record <arquivo> --kind <tipo> [--adapter <id>]
 """
 import json
@@ -22,6 +25,15 @@ with open(record_path, "a", encoding="utf-8") as handle:
 if mode == "describe":
     print(json.dumps({"contract": "probe@1", "adapter": adapter,
                       "capabilities": {"runtime": ["status", "events", "logs"]}}))
+    sys.exit(0)
+if kind == "deep":
+    print("[" * 100000)
+    sys.exit(0)
+if kind in ("nan", "infinity"):
+    value, other = ("NaN", "NaN") if kind == "nan" else ("Infinity", "-Infinity")
+    print('{"contract": "probe@1", "adapter": "' + adapter + '", "capability": "runtime", "verb": "status", '
+          '"status": "ok", "items": [{"name": "ITEM-MARCADOR-0088", "valor": ' + value + ', "outro": ' + other
+          + '}], "truncated": false, "message": "ok"}')
     sys.exit(0)
 if kind == "badjson":
     print('{"contract": "probe@1", "items": [{"name": "ITEM-MARCADOR-0088"}')
