@@ -1275,19 +1275,19 @@ SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and mas
     ("private-key", rf"-----BEGIN {PRIVATE_KEY_HEADER}(?:.*?-----END {PRIVATE_KEY_HEADER}|.*\Z)"),
     # user may be empty (the scheme and :// followed directly by :password and @host); the password runs up to
     # the last @ before a space, so / and @ inside it are masked too (when in doubt, more is masked, never less).
-    # Bounded so the time stays linear on hostile input (SPEC-0092): scheme up to 32 characters, user up to 256,
-    # the password up to its first @ up to 256 (the pieces after that first @ are not bounded: the match already
-    # succeeded there, so they never backtrack)
-    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\s/:@]{0,256}:)[^\s@]{0,256}@(?:[^\s@]*@)*"),
+    # Linear on hostile input without capping realistic sizes (SPEC-0092, Emenda v2): the scheme is up to 32
+    # characters; the user never crosses : or /; the password is read up to its first @ without crossing another
+    # ://, or, when it contains ://, up to 256 characters (the pieces after that first @ never backtrack)
+    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\s/:@]*:)(?:(?:(?!://)[^\s@])*|[^\s@]{0,256})@(?:[^\s@]*@)*"),
     # tokens glued to punctuation (_ghp_, =ghp_, token:ghp_) are masked too
     ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),
     # GitHub: standalone (not inside a word: laughs_...) or, glued to text, the exact 36-character body
     ("github", r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{36}(?![A-Za-z0-9])"),
     ("slack", r"xox[abposr]-[A-Za-z0-9-]{10,}"),
     ("aws-access-key", r"(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),  # not ASIAPACIFIC...1
-    # header up to 1024 and payload up to 8192 characters keep the time linear on hostile input (SPEC-0092); the
-    # signature, the last part, never backtracks and is not bounded
-    ("jwt", r"eyJ[A-Za-z0-9_-]{8,1024}\.[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,}"),
+    # Linear on hostile input (SPEC-0092, Emenda v2): unbounded only at the start of a base64 run (lookbehind), or,
+    # glued to base64 before it (ghp_...eyJ...), header up to 1024 and payload up to 8192 characters
+    ("jwt", r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|eyJ[A-Za-z0-9_-]{8,1024}\.[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,}"),
 )
 # one compiled regex per built-in pattern, each matched on its own over the original text: a single alternation
 # matches left to right without overlap, so the match of one token would hide a token glued to it (SPEC-0092)
