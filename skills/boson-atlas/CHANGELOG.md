@@ -9,6 +9,11 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.18] - 2026-11-23
+
+### Fixed
+- Máscara de segredos: cada padrão embutido casa sozinho no texto original e os trechos entram na mesma união da Emenda v6 da SPEC-0088, então um token colado a outro não escapa mais em parte (`xoxb-1234567890-ghp_…` e `ghp_…` seguido de um JWT saem `[REDACTED]` inteiros). As regex `url` e `jwt` têm agora tamanho máximo (URL: esquema até 32 caracteres, usuário até 256, senha até o primeiro `@` até 256; JWT: cabeçalho até 1024 e corpo até 8192), e a máscara leva tempo linear em entrada hostil (1 MB de `a://:` ou de `eyJ…` repetido em menos de 2 s, antes 25 s a mais de 60 s). Texto normal é mascarado como antes, com a mesma contagem. `references/redaction.md` documenta o casamento por padrão e os limites e avisa que o desempenho das regex do `extra_patterns` é responsabilidade do time (SPEC-0092).
+
 ## [2026.11.17] - 2026-11-23
 
 ### Added

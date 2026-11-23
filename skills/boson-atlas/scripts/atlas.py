@@ -33,7 +33,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.17"
+ATLAS_VERSION = "2026.11.18"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -1274,17 +1274,24 @@ PRIVATE_KEY_HEADER = r"[A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----"  # PEM (RSA, EC, O
 SECRET_PATTERNS = (  # (name, regex); the "url" one keeps scheme://user: and masks only the password
     ("private-key", rf"-----BEGIN {PRIVATE_KEY_HEADER}(?:.*?-----END {PRIVATE_KEY_HEADER}|.*\Z)"),
     # user may be empty (the scheme and :// followed directly by :password and @host); the password runs up to
-    # the last @ before a space, so / and @ inside it are masked too (when in doubt, more is masked, never less)
-    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]*:)(?:[^\s@]*@)+"),
+    # the last @ before a space, so / and @ inside it are masked too (when in doubt, more is masked, never less).
+    # Bounded so the time stays linear on hostile input (SPEC-0092): scheme up to 32 characters, user up to 256,
+    # the password up to its first @ up to 256 (the pieces after that first @ are not bounded: the match already
+    # succeeded there, so they never backtrack)
+    ("url", r"(?P<url>\b[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\s/:@]{0,256}:)[^\s@]{0,256}@(?:[^\s@]*@)*"),
     # tokens glued to punctuation (_ghp_, =ghp_, token:ghp_) are masked too
     ("github-pat", r"github_pat_[A-Za-z0-9_]{20,}"),
     # GitHub: standalone (not inside a word: laughs_...) or, glued to text, the exact 36-character body
     ("github", r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{36}(?![A-Za-z0-9])"),
     ("slack", r"xox[abposr]-[A-Za-z0-9-]{10,}"),
     ("aws-access-key", r"(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),  # not ASIAPACIFIC...1
-    ("jwt", r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+    # header up to 1024 and payload up to 8192 characters keep the time linear on hostile input (SPEC-0092); the
+    # signature, the last part, never backtracks and is not bounded
+    ("jwt", r"eyJ[A-Za-z0-9_-]{8,1024}\.[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,}"),
 )
-SECRET_RE = re.compile("|".join(f"(?:{regex})" for _, regex in SECRET_PATTERNS), re.DOTALL)
+# one compiled regex per built-in pattern, each matched on its own over the original text: a single alternation
+# matches left to right without overlap, so the match of one token would hide a token glued to it (SPEC-0092)
+SECRET_RE = tuple(re.compile(regex, re.DOTALL) for _, regex in SECRET_PATTERNS)
 _EXTRA_CACHE = {}
 
 
@@ -1316,9 +1323,9 @@ def compile_extra_pattern(index: int, pattern):
 
 
 def _secret_span(match) -> tuple:
-    """The part of a SECRET_RE match that is masked: the "url" pattern keeps scheme://user: and the last @ (it masks
-    only the password, even when empty); every other pattern masks the whole match."""
-    if match.group("url") is not None:
+    """The part of a match of a SECRET_RE pattern that is masked: the "url" pattern keeps scheme://user: and the
+    last @ (it masks only the password, even when empty); every other pattern masks the whole match."""
+    if "url" in match.re.groupindex and match.group("url") is not None:
         return match.end("url"), match.end() - 1
     return match.start(), match.end()
 
@@ -1329,7 +1336,7 @@ def _masked_spans(text: str, extras: list) -> tuple:
     one) so no mask hides a match from another, in any order (Emenda v6 of SPEC-0088). Zero-width matches of an
     extra pattern (\\b, lookarounds) never mask. count = the occurrences: overlapping matches count once (a span
     already masked is not counted again), touching ones count apart."""
-    spans = [_secret_span(match) for match in SECRET_RE.finditer(text)]
+    spans = [_secret_span(match) for regex in SECRET_RE for match in regex.finditer(text)]
     for pattern in extras:
         spans += [match.span() for match in pattern.finditer(text) if match.end() > match.start()]
     merged, count, reach = [], 0, -1
@@ -3536,7 +3543,7 @@ VCS_DIRS = (".git", ".hg", ".svn", ".bzr", "_darcs", ".jj")
 LINT_IGNORED_FILES = (".DS_Store", "Thumbs.db", "desktop.ini")
 LINT_MAX_BYTES = 32 * 1024 * 1024  # a bigger file is not read (config finding): the lint stays fast and bounded
 LINT_OPEN_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
-SECRET_REGEXES = tuple((name, re.compile(regex, re.DOTALL)) for name, regex in SECRET_PATTERNS)
+SECRET_REGEXES = tuple((name, regex) for (name, _), regex in zip(SECRET_PATTERNS, SECRET_RE))
 LINK_RE = re.compile(r"!?\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?(?:\s+[\"'][^)]*[\"'])?\s*\)")
 CODE_SPAN_RE = re.compile(r"`[^`\n]*`")
 FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
