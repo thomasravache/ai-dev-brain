@@ -25,16 +25,33 @@ Não são proibidas: `monkey`, `author`, `tokenizer`, `primary_key`, `sort_keys`
 | Padrão | Regex (Python `re`) | O que vira `[REDACTED]` |
 |---|---|---|
 | Chave privada (PEM e PGP) | `-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----` até o `-----END ... PRIVATE KEY[ BLOCK]-----` correspondente (ou até o fim do texto, se o bloco não fecha); cobre `RSA`, `EC`, `OPENSSH` e `PGP PRIVATE KEY BLOCK` | o bloco inteiro, com o corpo |
-| Credencial em URL | `\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]*:(?:[^\s@]*@)+` | só a senha, até o último `@` antes de um espaço: `https://bot:[REDACTED]@host/...`, `redis://:[REDACTED]@cache:6379` (usuário vazio); senha com `/` ou `@` some inteira. Na dúvida mascara mais: `https://host:8080/x?to=a@b` perde `8080/x?to=a` |
+| Credencial em URL | `\b[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\s/:@]*:(?:(?:(?!://)[^\s@])*\|[^\s@]{0,256})@(?:[^\s@]*@)*` | só a senha, até o último `@` antes de um espaço: `https://bot:[REDACTED]@host/...`, `redis://:[REDACTED]@cache:6379` (usuário vazio); senha com `/` ou `@` some inteira. Na dúvida mascara mais: `https://host:8080/x?to=a@b` perde `8080/x?to=a` |
 | Token fine-grained do GitHub | `github_pat_[A-Za-z0-9_]{20,}` | o token |
 | Tokens do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) | `(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}` ou, colado a letras ou dígitos, `gh[pousr]_[A-Za-z0-9]{36}(?![A-Za-z0-9])` (o formato exato do token) | o token |
 | Tokens do Slack (`xoxb-`, `xoxp-`, `xoxa-`...) | `xox[abposr]-[A-Za-z0-9-]{10,}` | o token |
 | Chave de acesso da AWS (`AKIA`, `ASIA`) | `(?:AKIA\|ASIA)[0-9A-Z]{16}(?![0-9A-Z])` | a chave |
-| JWT | `eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}` | o token inteiro (cabeçalho, corpo e assinatura) |
+| JWT | `(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}` ou, colado a base64 antes dele, `eyJ[A-Za-z0-9_-]{8,1024}\.[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,}` | o token inteiro (cabeçalho, corpo e assinatura) |
 
 Token colado a pontuação (`_ghp_…`, `=ghp_…`, `token:ghp_…`) é mascarado. Dentro de uma palavra comum não há falso positivo: `laughs_abcdefghijklmnopqrstuvwxyz` e `ASIAPACIFICNORTHEAST1` ficam como estão. Um token do GitHub colado a letras (por exemplo no meio de uma linha longa de log) só é mascarado com o tamanho exato do token (36 caracteres depois do prefixo).
 
-Todos os padrões (estes e os do `redaction.extra_patterns`) procuram casamentos no texto original e os trechos casados são juntados: cada trecho resultante vira um `[REDACTED]` só, então nenhum padrão impede outro e não aparece marcador aninhado (SPEC-0088, Emenda v6). Casamentos que se sobrepõem contam uma vez só (um trecho já mascarado não é contado de novo); cada ocorrência conta 1 (uma URL com senha e um token no mesmo texto contam 2).
+Cada padrão embutido roda **sozinho** no texto original, não numa alternância única (que acharia os casamentos da esquerda para a direita, sem sobreposição, e deixaria um token colado a outro escapar em parte: `xoxb-…-ghp_…`, `ghp_…eyJ….…`) (SPEC-0092). Todos os padrões (estes e os do `redaction.extra_patterns`) procuram casamentos no texto original e os trechos casados são juntados: cada trecho resultante vira um `[REDACTED]` só, então nenhum padrão impede outro e não aparece marcador aninhado (SPEC-0088, Emenda v6). Casamentos que se sobrepõem contam uma vez só (um trecho já mascarado não é contado de novo); cada ocorrência conta 1 (uma URL com senha e um token no mesmo texto contam 2).
+
+### Tempo linear e o que fica de fora
+
+A máscara leva tempo linear mesmo com entrada hostil ou com defeito: 1 MB de `a://:` repetido ou de `eyJ…` repetido é mascarado em bem menos de 2 s (SPEC-0092). Para isso, nenhuma parte que pode voltar atrás (backtracking) atravessa o começo de outro casamento possível, sem limitar os tamanhos reais:
+
+- **Credencial em URL:** o usuário não atravessa `:` nem `/`; a senha é lida até o primeiro `@` sem atravessar outro `://` (token OAuth usado como senha, de vários KB, é mascarado inteiro). Os pedaços depois desse primeiro `@` não têm limite (o casamento já deu certo ali e não volta atrás).
+- **JWT:** sem limite quando começa no início de uma sequência base64 (não colado a letra, dígito, `_` ou `-` antes do `eyJ`); colado a base64 antes dele (`ghp_…eyJ…`), cabeçalho até 1024 caracteres e corpo até 8192.
+
+Casos que esses padrões não mascaram inteiros (resíduo aceito):
+
+- senha de URL acima de 256 caracteres que contém `://`;
+- esquema de URL acima de 32 caracteres;
+- JWT colado a base64 antes dele e, ao mesmo tempo, com cabeçalho acima de 1024 ou corpo acima de 8192 caracteres.
+
+**Problema conhecido (já existia antes):** dois JWTs colados sem separador (`eyJ….….…eyJ….….…`) deixam parte do segundo sem máscara; fica para uma spec futura.
+
+Se a organização usa um formato desses, acrescente-o em `redaction.extra_patterns`.
 
 Não há detecção por entropia: só padrões conhecidos e os da configuração (SPEC-0033). O `lint` reforça a varredura no atlas inteiro (SPEC-0039).
 
@@ -53,6 +70,7 @@ redaction:
 - Regex inválida, item vazio ou regex que casa com o texto vazio (por exemplo `z*`, que poria `[REDACTED]` entre cada caractere) faz o `scan` sair com 2 antes de rodar qualquer coletor, com `redaction.extra_patterns[<i>] não é uma regex válida: ...` ou `redaction.extra_patterns[<i>] casa com o texto vazio — exija ao menos um caractere` — a mensagem cita a posição, não o texto da regex.
 - Casamento de largura zero (`\b`, `(?=a)`, `^`) nunca mascara nada: só trechos com pelo menos um caractere viram `[REDACTED]` e contam.
 - O `atlas-config.yml` vai junto com o atlas: coloque nele o **formato** do segredo, nunca um segredo de verdade.
+- **O desempenho das regex do `extra_patterns` é responsabilidade do time.** Elas rodam como estão, sem limite de tempo, em toda saída de coletor, nas probes e no `lint`: evite repetição aninhada ou sem limite seguida de algo que pode falhar (`(a+)+b`, `.*x.*y`), que leva tempo quadrático ou exponencial numa entrada longa e trava o `scan` ou a `probe`. Use repetição com tamanho máximo (`{20,64}`), como os padrões embutidos.
 - Prefira regex específica (prefixo fixo + tamanho): uma regex genérica demais mascara nomes e ids comuns e deixa o diff do atlas instável.
 
 ## Quando um segredo escapou
