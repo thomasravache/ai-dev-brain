@@ -9,7 +9,7 @@ created: 2026-11-23
 parent:
 depends_on: []
 consumes_contract: []
-touches: [skills/boson-atlas/tests/fixtures/kubernetes/fake_kubectl.py, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/test_fake_kubectl_clock.py]
+touches: [skills/boson-atlas/tests/fixtures/kubernetes/fake_kubectl.py, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/test_fake_kubectl_clock.py, .claude-plugin/plugin.json]
 adrs: []
 external: []
 size: S
@@ -121,3 +121,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-23 | `touches` ganha `.claude-plugin/plugin.json`, porque mudança em `skills/**` (inclusive testes) sobe a versão do plugin (SPEC-0056) | Checagem de versão do plugin no G2 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
