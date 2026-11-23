@@ -1,0 +1,121 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "ReplicaSet",
+      "metadata": {
+        "name": "api-7f9c",
+        "namespace": "acme-apps",
+        "labels": {
+          "app": "api",
+          "pod-template-hash": "7f9c"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "api",
+            "controller": true
+          }
+        ]
+      },
+      "spec": {
+        "selector": {
+          "matchLabels": {
+            "app": "api",
+            "pod-template-hash": "7f9c"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "ReplicaSet",
+      "metadata": {
+        "name": "worker-5d8b",
+        "namespace": "acme-apps",
+        "labels": {
+          "app": "worker",
+          "pod-template-hash": "5d8b"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "worker",
+            "controller": true
+          }
+        ]
+      },
+      "spec": {
+        "selector": {
+          "matchLabels": {
+            "app": "worker",
+            "pod-template-hash": "5d8b"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "ReplicaSet",
+      "metadata": {
+        "name": "billing-9a1e",
+        "namespace": "acme-apps",
+        "labels": {
+          "app": "billing",
+          "pod-template-hash": "9a1e"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "billing",
+            "controller": true
+          }
+        ]
+      },
+      "spec": {
+        "selector": {
+          "matchLabels": {
+            "app": "billing",
+            "pod-template-hash": "9a1e"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "ReplicaSet",
+      "metadata": {
+        "name": "batch-6c4d",
+        "namespace": "acme-apps",
+        "labels": {
+          "app": "batch",
+          "pod-template-hash": "6c4d"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "batch",
+            "controller": true
+          }
+        ]
+      },
+      "spec": {
+        "selector": {
+          "matchLabels": {
+            "app": "batch",
+            "pod-template-hash": "6c4d"
+          }
+        }
+      }
+    }
+  ]
+}

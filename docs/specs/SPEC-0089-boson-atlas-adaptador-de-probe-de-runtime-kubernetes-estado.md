@@ -4,14 +4,14 @@ title: "boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos 
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
 consumes_contract: []
-contract_version: 1
+contract_version: 5
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/assets/probes/**, skills/boson-atlas/references/probes/**, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/fixtures/kubernetes/**]
+touches: [skills/boson-atlas/assets/probes/**, skills/boson-atlas/references/probes/**, skills/boson-atlas/tests/test_probe_kubernetes.py, skills/boson-atlas/tests/fixtures/kubernetes/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0023]
 external: []
 size: M
@@ -122,6 +122,51 @@ erros → status: "error", items: [], message: "kubectl não encontrado" | "sem 
   "contexto inexistente" | "chamada não permitida" | "timeout"
 ```
 
+**Esclarecimentos (Emenda v2):**
+- **`touches`:** ganha `scripts/atlas.py` (só o `ATLAS_VERSION`), `SKILL.md`, o CHANGELOG da boson-atlas e o `plugin.json`, porque toda mudança em `skills/**` sobe a versão do plugin (SPEC-0056).
+- **Ambiente do adaptador:** pela Emenda v3 da SPEC-0088, o adaptador recebe só a base fixa mais as credenciais declaradas. Para usar um kubeconfig fora do padrão, a pessoa declara `KUBECONFIG` nas `credentials` do adaptador. Sem a declaração, vale o `~/.kube/config` do HOME.
+- **Comando padrão:** sem `command` na configuração, o núcleo usa `assets/probes/kubernetes.py` (Emenda v3 da SPEC-0088).
+
+**Esclarecimentos (Emenda v3):**
+- **Ordem do argv:** todo argv começa com `get` ou `logs`. `--context`, `-n` e `--request-timeout` vêm depois do subcomando.
+- **Opções permitidas:** só as do contrato. Não entram `-l`, `-A`, `--kubeconfig`, `--raw` nem qualquer outra; os pods são casados com o seletor do workload no próprio adaptador, depois de `get pods`.
+- **Logs por pod:** o `kubectl logs Deployment/x` de verdade lê um pod só. Por isso o adaptador faz:
+  1. `get pods -o json` uma vez;
+  2. `logs pod/<nome> --all-containers --timestamps --since=<s>s --tail=<lines>` para cada pod do workload, até 10 pods, em ordem de nome;
+  3. junta as linhas, ordena por `ts` e fica com as `lines` mais recentes. `truncated` é verdadeiro quando sobrou linha ou quando houve mais de 10 pods.
+- **Limites das chamadas:**
+  - no máximo um `get` por recurso em cada execução;
+  - no máximo um `logs` por pod;
+  - o `--tail` fica entre 1 e `limits.lines`.
+- **Tempo:** a entrada `probe@1` não traz o timeout do núcleo. O adaptador usa `--request-timeout=20s` fixo, abaixo do timeout padrão do núcleo, e o `references/probes/kubernetes.md` diz isso.
+- **Erros:**
+  - erro de cluster ou recusa sai com exit 0 e `status: error`, como diz o passo 5 de "Escrever um adaptador";
+  - um verbo ou recurso fora da lista dá a mensagem "chamada não permitida", sem chamar o `kubectl`;
+  - o timeout é reconhecido por "deadline exceeded", "timeout" ou "i/o timeout" no stderr.
+- **Nomes:** o adaptador recusa nomes de workload, namespace ou pod que não seguem o DNS-1123 ou que começam com `-` ("chamada não permitida"), mesmo que o núcleo já confira (Emenda v4 da SPEC-0088).
+
+**Esclarecimentos (Emenda v4):**
+- **`events` de um Deployment:** lê também `replicasets` (um `get` a mais) e inclui os eventos Warning das ReplicaSets dele, como FailedCreate.
+- **Workload não encontrado:** vira o item `{kind, workload, found: false, rollout_complete: false}`, sem contagem de réplicas.
+- **Pods:**
+  - casados pelo `spec.selector`, com `matchLabels` e `matchExpressions`; um seletor vazio não casa nada;
+  - as imagens vêm de `spec.containers`.
+- **Cluster sem o tipo `rollouts`:** conta como lista vazia, não como erro.
+- **Mensagens de erro a mais:** "falha do kubectl", "resposta inválida do kubectl" e "entrada inválida". Nenhuma traz o stderr do kubectl nem o contexto.
+- **Corte:**
+  - `logs` tem `truncated` verdadeiro também quando um contêiner chegou ao `--tail`;
+  - os itens ficam abaixo de cerca de 900 KB, tirando os mais antigos, para não passar do limite de leitura do núcleo;
+  - os eventos vêm do mais antigo para o mais novo e ficam os `lines` mais recentes.
+- **Processo:** o `kubectl` roda com timeout de 30 s, acima do `--request-timeout=20s`.
+- **`references/probes.md`:** fora do `touches`; o link para `references/probes/kubernetes.md` fica no `SKILL.md`.
+
+**Esclarecimentos (Emenda v5):**
+- **`rollout_complete` de Rollout:** `observedGeneration` pode vir como texto de dígitos (Argo Rollouts) e vale como número.
+- **Logs com pod que não responde:** quando um pod está Pending ou com os contêineres esperando, ou quando o `logs` dele falha com erro que não é Forbidden, contexto ausente nem timeout, o adaptador pula esse pod, segue com os outros e marca `truncated` verdadeiro. A verificação continua com os logs dos pods que respondem.
+- **Resposta malformada do `kubectl`:** campos que deviam ser objeto e não são viram "resposta inválida do kubectl" (`status: error`, exit 0, sem traceback). Um contexto com caractere nulo é recusado como entrada inválida.
+- **Ordem dos logs:** o `ts` é comparado com a fração de segundo (até nanossegundos), também quando o kubectl omite os zeros do fim.
+- **Eventos de Rollout:** como no Deployment, incluem os Warnings das ReplicaSets do Rollout.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -143,7 +188,7 @@ erros → status: "error", items: [], message: "kubectl não encontrado" | "sem 
 
 ## 7. Artefato B — Plano de Testes (TDD)
 ### 7.1 Testes de Caracterização
-- N/A — adaptador novo, sem comportamento anterior. O CH-01 do núcleo (SPEC-0088) cobre o resto.
+- N/A — adaptador novo, sem comportamento anterior. A caracterização do núcleo fica na SPEC-0088.
 
 ### 7.2 Testes Unitários
 - **UT-01** — Com o dublê de kubectl devolvendo:
@@ -192,20 +237,32 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+- [x] Red: UT-01 a UT-05, IT-01 e CT-01 com a tag `SPEC-0089:<ID>`, falhando pelo motivo certo; `kubectl` falso nos testes (nenhum cluster de verdade)
+- [x] Green: `assets/probes/kubernetes.py` (status, events e logs; só `kubectl get`/`logs` nos kinds permitidos; imagem sem host, com tag e digest), `references/probes/kubernetes.md`, `SKILL.md`, `ATLAS_VERSION` (só a versão no `atlas.py`), CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — 28d568a | 2026-11-22 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=69, skipped=1)) — 5de393e | 2026-11-23 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — fd14843 | 2026-11-23 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 7c91684 | 2026-11-23 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — M1 e M2 da rodada 1 resolvidos (Emenda v5); 3 minors no radar (JSON muito aninhado, nenhum pod respondeu sem mensagem, Unauthorized no meio da execução) — ec3ff9c | 2026-11-23 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 9e5382f | 2026-11-23 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 11b7c3a | 2026-11-23 |
+
+### Histórico de reprovações
+- G1 FAIL 2026-11-23 — verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0089:CH-01 — 77eeec5
+- G1 PASS 2026-11-23 — depois de 1 reprovação(ões)
+- G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: rollout_complete sempre falso em Rollout (observedGeneration em texto); logs falham inteiros com um pod Pending ou iniciando; minors: JSON malformado do kubectl, ordem abaixo do segundo, eventos das ReplicaSets do Rollout — 4b1dc22
+- G4 PASS 2026-11-23 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -216,39 +273,67 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- Adaptador de probe `kubernetes` (`assets/probes/kubernetes.py`), usado pelo núcleo da SPEC-0088 quando a configuração local não traz `command`. Ele responde a três consultas de runtime, só de leitura:
+  - `status`: réplicas, rollout completo, imagens, restarts e última terminação dos pods;
+  - `events`: avisos recentes do workload;
+  - `logs`: as linhas mais recentes dos pods.
+- Só roda `kubectl get … -o json` e `kubectl logs pod/<nome>`, nos recursos permitidos, nunca segredos nem configmaps, e sem shell.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- Python só com a biblioteca padrão.
+- Os nomes passam pelo DNS-1123 antes de virar argumento, e o contexto e o namespace vêm da entrada do núcleo.
+- `--request-timeout=20s`, com timeout de 30 s no processo.
+- Mensagens de erro fixas: o stderr do `kubectl` e o contexto nunca saem.
+- `references/probes/kubernetes.md` traz a configuração, um ClusterRole só de leitura sugerido e as chamadas feitas.
+- Emendas:
+  - v2: `touches` e ambiente;
+  - v3: perguntas do G1 (logs por pod, opções fechadas, timeout fixo);
+  - v4: escolhas do implementer;
+  - v5: rodada 1 do G4 (Rollout, pods que não respondem, resposta malformada, ordem fina, eventos do Rollout).
+- G4 aprovado na rodada 2.
+- Versões: ATLAS_VERSION 2026.11.16, plugin 2026.11.29.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | `status`: réplicas, `rollout_complete` (também Rollout com `observedGeneration` em texto), imagens sem host com tag e digest, restarts e última terminação; `found: false` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-02 | `events`: só Warnings na janela, do workload, dos pods e das ReplicaSets dele (Deployment e Rollout), mensagem cortada | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-03 | `logs`: por pod (até 10), juntados por `ts` com fração de segundo, `--tail`, pods que não respondem pulados com `truncated` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-04 | Erros (kubectl ausente, Forbidden, contexto, timeout, resposta malformada, entrada inválida) como `status: error`, exit 0, sem contexto nem traceback | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-05 | Todo argv é `get … -o json` ou `logs pod/<nome> …`, com opções fechadas; nomes inválidos recusados sem chamar o kubectl | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| IT-01 | Pelo núcleo: comando padrão, contexto e namespace do mapa de acesso, registro e máscara | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| CT-01 | `--describe` e as saídas passam pelos validadores de `probe@1` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). A entrega chega pelo plugin `fermion` 2026.11.29.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Achados minor do G4 que ficaram no radar:
+- JSON muito aninhado do `kubectl` ainda dá traceback (o kubectl não gera isso);
+- quando nenhum pod responde, o resultado é `ok` vazio com `truncated`; a SPEC-0090 trata esse caso como `not_verified` na Emenda v2;
+- um `Unauthorized` no meio da execução pula o pod em vez de falhar.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0089`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-23 | Esclarecimentos (Emenda v2): `touches` com versão, SKILL.md, CHANGELOG e plugin; `KUBECONFIG` só declarado; comando padrão | Planejamento depois da Emenda v3 da SPEC-0088 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 3 | 2026-11-23 | Esclarecimentos (Emenda v3): ordem do argv; só as opções do contrato; logs por pod (até 10) juntados por `ts`; limites das chamadas e do `--tail`; `--request-timeout=20s`; erros com exit 0; nomes recusados | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 4 | 2026-11-23 | Esclarecimentos (Emenda v4): eventos das ReplicaSets; workload não encontrado; casamento de pods; sem `rollouts`; mensagens a mais; cortes; timeout do processo; link no `SKILL.md` | Relatório do implementer no G2 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 5 | 2026-11-23 | Esclarecimentos (Emenda v5): `observedGeneration` em texto; pods que não respondem pulados com `truncated`; resposta malformada e contexto com nulo; ordem por fração de segundo; eventos das ReplicaSets do Rollout | Achados da rodada 1 do G4 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |

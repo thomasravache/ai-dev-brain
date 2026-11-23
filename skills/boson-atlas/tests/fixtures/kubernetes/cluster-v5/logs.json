@@ -1,0 +1,17 @@
+{
+  "Deployment/queue": [
+    "[pod/queue-4f2a-aaaa/queue] {{nano-50}} INFO queue message a1",
+    "[pod/queue-4f2a-aaaa/queue] {{nano-40}} INFO queue message a2",
+    "[pod/queue-4f2a-cccc/queue] {{nano-45}} INFO queue message c1",
+    "[pod/queue-4f2a-cccc/queue] {{nano-35}} INFO queue message c2"
+  ],
+  "Deployment/clock": [
+    "[pod/clock-7c1e-aaaa/app] {{frac-120-12}} INFO tick 4 at .12",
+    "[pod/clock-7c1e-aaaa/app] {{frac-119-0}} INFO tick 7 at the next second",
+    "[pod/clock-7c1e-aaaa/side] {{frac-120-0}} INFO tick 1 without fraction",
+    "[pod/clock-7c1e-aaaa/side] {{frac-120-5}} INFO tick 6 at .5",
+    "[pod/clock-7c1e-bbbb/app] {{frac-120-123456789}} INFO tick 5 at .123456789",
+    "[pod/clock-7c1e-bbbb/app] {{frac-120-1}} INFO tick 3 at .1",
+    "[pod/clock-7c1e-bbbb/app] {{frac-120-05}} INFO tick 2 at .05"
+  ]
+}
