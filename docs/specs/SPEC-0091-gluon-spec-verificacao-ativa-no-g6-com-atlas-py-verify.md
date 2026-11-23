@@ -210,12 +210,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
-- [ ] Red: CH-01 (passa antes), UT-01 a UT-04 e CT-01 com a tag `SPEC-0091:<ID>`, falhando pelo motivo certo
-- [ ] Green: `delivery_check.verify`, `window_minutes`, `max_new_errors` e `max_new_restarts` no `sdd-config.template.yml`; verificação ativa no G6 do `references/gates.md` (foto depois do H2 e antes do merge, comparação depois dos passos 1–2 do roteiro e da janela, veredito para o gate, produção confirmada, foto apagada no fim); passo 7 da SKILL.md; `SDD_TOOL_VERSION` (e `tools/sdd` se mudar o script), CHANGELOG da gluon-spec e `version` do `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: CH-01 (passa antes), UT-01 a UT-04 e CT-01 com a tag `SPEC-0091:<ID>`, falhando pelo motivo certo
+- [x] Green: `delivery_check.verify`, `window_minutes`, `max_new_errors` e `max_new_restarts` no `sdd-config.template.yml`; verificação ativa no G6 do `references/gates.md` (foto depois do H2 e antes do merge, comparação depois dos passos 1–2 do roteiro e da janela, veredito para o gate, produção confirmada, foto apagada no fim); passo 7 da SKILL.md; `SDD_TOOL_VERSION` (e `tools/sdd` se mudar o script), CHANGELOG da gluon-spec e `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -246,37 +246,62 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
 
 ### O que foi entregue
-<!-- comportamento entregue do ponto de vista do usuário/sistema -->
+- A gluon-spec passa a fazer, no G6, uma verificação ativa da entrega quando `delivery_check.verify: true`:
+  1. tira a foto com `atlas.py verify snapshot` no H2, antes do merge;
+  2. depois dos passos 1–2 do roteiro da SPEC-0086 e da janela (`window_minutes`), compara com `atlas.py verify compare`;
+  3. transforma o veredito no resultado do gate: `passou` → PASS; `degradou` → FAIL, com o rollback só sugerido e a decisão com a pessoa; `inconclusivo` → a pessoa decide, e a decisão fica registrada.
+- Produção só com o "sim" da pessoa para aquela execução.
+- Quando a verificação não pode rodar, fica registrada como "não executada", com o motivo, sem bloquear o G6.
+- A foto é apagada no fim.
+- Novas chaves no template: `verify`, `window_minutes`, `max_new_errors` e `max_new_restarts`.
 
 ### Como foi feito
-<!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- `references/gates.md`: H2 e a subseção "Active verification (SPEC-0091)" do G6.
+- `SKILL.md`: uma frase no passo 6 e outra no passo 7, apontando para o `gates.md`.
+- `references/sdd-config.template.yml`: as quatro chaves.
+- `scripts/spec_graph.py`: só o `SDD_TOOL_VERSION`, agora 2026.11.10.
+- CHANGELOG da gluon-spec com a seção `[2026.11.10]`.
+- Emendas:
+  - v2: perguntas do G1;
+  - v3: rodada 1 do G4 (foto no H2, versão da ferramenta, rollout lento, imagem esperada, exits 2 e 3, rollback só sugerido; o plano ganhou o IT-01).
+- G4 aprovado na rodada 2.
+- Plugin 2026.11.31.
 
 ### Prova de Correção
-<!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — type feature.
 
 ### Verificação
-<!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | O roteiro da SPEC-0086 continua igual (passos, "último visto pelo atlas", fallback) | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-01 | Template com `verify`, `window_minutes`, `max_new_errors` e `max_new_restarts`; `SDD_TOOL_VERSION` 2026.11.10 e seção datada do CHANGELOG | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-02 | G6: foto no H2 antes do merge (também com `auto-on-green`), comparação depois dos passos 1–2 e da janela, veredito para o gate; sem foto tende a `inconclusivo` | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-03 | Produção confirmada por execução, "não executada" sem bloquear, foto apagada; rollout lento, origem do `--expect-image`, exits 2 e 3 | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| UT-04 | SKILL.md: passo 6 aponta a foto no H2; passo 7 cita `delivery_check.verify` e `atlas.py verify` e só sugere o rollback | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| IT-01 | `whats-new` de um projeto em 2026.11.9 mostra a seção 2026.11.10 com a verificação ativa e as quatro chaves | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
+| CT-01 | Toda opção e todo exit citados existem no `--help` do `atlas.py verify` e no `verify.md` | PASS | `test_delivery_verify.py` — suíte local no G2/G5 e CI do PR #68 (Python 3.9 e 3.15) |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
-<!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). A entrega chega pelo plugin `fermion` 2026.11.31. O `tools/sdd` deste repositório fica em 2026.11.9 até um `vendor --force` à parte.
 
 ### Pendências
-<!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+Nenhuma spec nova. Achados minor do G4 que ficaram no radar:
+- os exits da própria foto (2, 3 e 4) não estão mapeados à parte;
+- a confirmação de produção da foto está só na regra geral;
+- a frase do CHANGELOG sobre o comentário mostrado pelo `whats-new`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0091`. -->
