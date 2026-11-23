@@ -462,15 +462,17 @@ class DisabledVerifyTest(VerifyCase):
     def test_verify_without_probes_is_refused(self):
         """SPEC-0090:CH-01 — sem a chave probes, e com probes.enabled: false, `verify snapshot` e `verify compare` saem
         com 4, "probes desligadas", sem rodar o adaptador e sem gravar a foto."""
-        out = self.task / "foto.json"
+        # A linha de base do compare vai para outro nome: assim nada além do verify escreve no --out do snapshot.
+        baseline = self.write_baseline(baseline_data(), "baseline.json")
         for name, opts in (("sem a chave", {"present": False}), ("enabled: false", {"enabled": False})):
             with self.subTest(variant=name):
+                out = self.task / f"foto-{opts.get('enabled', 'ausente')}.json"
                 self.configure(**opts)
                 run = self.take(out)
                 self.assertExit(run, 4)
                 self.assertIn(DISABLED, output(run))
                 self.assertFalse(out.exists(), "a foto foi gravada com as probes desligadas")
-                run = self.compare()
+                run = self.compare(baseline=baseline)
                 self.assertExit(run, 4)
                 self.assertIn(DISABLED, output(run))
                 self.assertNoRun()
