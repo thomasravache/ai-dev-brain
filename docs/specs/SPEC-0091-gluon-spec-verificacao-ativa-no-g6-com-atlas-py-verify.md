@@ -205,7 +205,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=18, skipped=1)) — 7a0f1b2 | 2026-11-23 |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major: nenhuma instrução manda tirar a foto antes do merge (H2/passo 6); SDD_TOOL_VERSION e seção datada do CHANGELOG ausentes (touches sem o spec_graph.py); minors: rollout lento, origem do --expect-image, exits 2 e 3, passo 7 fala em reverter | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -214,6 +214,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ### Histórico de reprovações
 - G1 FAIL 2026-11-23 — verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0091:IT-01 — 9e82a23
 - G1 PASS 2026-11-23 — depois de 1 reprovação(ões)
+- G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: nenhuma instrução manda tirar a foto antes do merge (H2/passo 6); SDD_TOOL_VERSION e seção datada do CHANGELOG ausentes (touches sem o spec_graph.py); minors: rollout lento, origem do --expect-image, exits 2 e 3, passo 7 fala em reverter — 9e9bb6f
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
