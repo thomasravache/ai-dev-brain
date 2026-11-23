@@ -299,13 +299,13 @@ N/A — type feature.
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
-| UT-01 | `status`: réplicas, `rollout_complete` (também Rollout com `observedGeneration` em texto), imagens sem host com tag e digest, restarts e última terminação; `found: false` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR da SPEC-0089 |
-| UT-02 | `events`: só Warnings na janela, do workload, dos pods e das ReplicaSets dele (Deployment e Rollout), mensagem cortada | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR da SPEC-0089 |
-| UT-03 | `logs`: por pod (até 10), juntados por `ts` com fração de segundo, `--tail`, pods que não respondem pulados com `truncated` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR da SPEC-0089 |
-| UT-04 | Erros (kubectl ausente, Forbidden, contexto, timeout, resposta malformada, entrada inválida) como `status: error`, exit 0, sem contexto nem traceback | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR da SPEC-0089 |
-| UT-05 | Todo argv é `get … -o json` ou `logs pod/<nome> …`, com opções fechadas; nomes inválidos recusados sem chamar o kubectl | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR da SPEC-0089 |
-| IT-01 | Pelo núcleo: comando padrão, contexto e namespace do mapa de acesso, registro e máscara | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR da SPEC-0089 |
-| CT-01 | `--describe` e as saídas passam pelos validadores de `probe@1` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR da SPEC-0089 |
+| UT-01 | `status`: réplicas, `rollout_complete` (também Rollout com `observedGeneration` em texto), imagens sem host com tag e digest, restarts e última terminação; `found: false` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-02 | `events`: só Warnings na janela, do workload, dos pods e das ReplicaSets dele (Deployment e Rollout), mensagem cortada | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-03 | `logs`: por pod (até 10), juntados por `ts` com fração de segundo, `--tail`, pods que não respondem pulados com `truncated` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-04 | Erros (kubectl ausente, Forbidden, contexto, timeout, resposta malformada, entrada inválida) como `status: error`, exit 0, sem contexto nem traceback | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| UT-05 | Todo argv é `get … -o json` ou `logs pod/<nome> …`, com opções fechadas; nomes inválidos recusados sem chamar o kubectl | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| IT-01 | Pelo núcleo: comando padrão, contexto e namespace do mapa de acesso, registro e máscara | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
+| CT-01 | `--describe` e as saídas passam pelos validadores de `probe@1` | PASS | `test_probe_kubernetes.py` — suíte local no G2/G5 e CI do PR #65 (Python 3.9 e 3.15) |
 
 ### Definição de Pronto
 - [x] Todos os testes do plano passando e listados na Verificação
