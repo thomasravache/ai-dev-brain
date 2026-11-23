@@ -254,11 +254,14 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=38, skipped=1)) — b442bcd | 2026-11-23 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 5828e49 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — fa7a721 | 2026-11-23 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 1): APROVADO — sem blocker/major; 1 minor (nome com \n final passa no HOST_RE, já existente) e 2 nits registrados no Relatório de Entrega — fbf77b6 | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-23 — verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 1): APROVADO — sem blocker/major; 1 minor (nome com \n final passa no HOST_RE, já existente) e 2 nits registrados no Relatório de Entrega — fbf77b6
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
