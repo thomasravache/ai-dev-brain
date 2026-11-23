@@ -98,7 +98,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 2): APPROVED — os vazamentos da rodada 1 foram fechados (Emenda v2); o fuzz contra a main só mostra o resíduo documentado; o pior caso hostil leva 1,7 s/MB (minor, no radar); o commit seguinte só resolveu o conflito de versão do plugin.json — a2dd3ca | 2026-11-23 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 4817f76 | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
 | G7 Pronto & Docs | PENDING | | |
 
 ### Histórico de reprovações
