@@ -32,7 +32,7 @@ Exit 0 sempre que o pacote é montado (também quando nada é encontrado e quand
   - `config_repositories`: os demais `sourced_from`, só quando há repositório de código (senão `[]`);
   - `pipelines`: as que fazem `builds` do serviço ou de qualquer repositório `sourced_from` dele, com `id`, `name` e `repository` (o primeiro repositório do serviço que ela constrói, senão o primeiro em ordem alfabética; `""` quando ela só constrói o serviço);
   - `images`: as imagens do código, as mesmas da região "Do commit até o pod", resolvidas pela regra 4 com o mapa `image_repositories` do `atlas-config.yml` compartilhado, como no `build` (um mapa que aponta para um repositório fora do grafo não cai em outra regra). Um mapa editado depois do último `build` só muda as arestas no próximo `build`. Sem tag nem host de registry, que o grafo não guarda;
-  - `deployments`: `id`, `environments`, `clusters`, `sync_status` e `health_status` (cada um só quando o atlas tem) e `images` (o atributo do deployment, ou `[]`).
+  - `deployments`: `id`, `environments`, `clusters`, `sync_status` e `health_status` (cada um só quando o atlas tem) e `images` (o atributo do deployment, ou `[]`); e, do mapa de acesso (SPEC-0087), cada um só quando há valor: `tier` (`test` ou `production`, do `attrs.tier` dos ambientes do deployment: `production` se algum é de produção, `test` se todos são de teste; ausente quando um ambiente não tem marcação, o que conta como produção, ADR-0023), `namespace` (o `attrs.namespace` do deployment), `workloads` (o atributo do coletor, `["Deployment/api"]`) e `access` (`true` quando esta máquina tem `access.clusters.<cluster>` na configuração local para algum cluster do deployment, `false` quando não tem; ausente quando o deployment não tem cluster no grafo). O nome do contexto local nunca entra no pacote, só se ele existe.
   As listas saem em ordem alfabética (pipelines e deployments por `id`). O estado é o **último visto pelo atlas** no scan, nunca o atual. Serviço sem caminho de entrega não tem a chave, e nenhuma chave de antes muda.
 - **Aviso de envelhecimento** a partir de `snapshots/_scan.json` e do `stale_days` do `atlas-config.yml` (padrão 14), só dos coletores declarados em `collectors`:
   - coletor com o último scan `ok` há **mais** de `stale_days` dias (UTC): `Atlas com D dias desde o último scan de: A, B (stale_days: 14)` (uma linha por número de dias, a mais antiga primeiro);
@@ -65,7 +65,7 @@ Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas 
   - Pipelines: `Build` (`acme/backoffice`)
   - Imagens: `acme/backoffice`
   - Configuração (GitOps): `acme/iac`
-  - prod: `backoffice-prod` — cluster `cluster-prod`; sync `Synced`; health `Healthy`
+  - prod: `backoffice-prod` — cluster `cluster-prod`; sync `Synced`; health `Healthy`; tier `production`; namespace `backoffice`; workloads `Deployment/backoffice`
 - Donos: pay (acme/pay)
 - Visto em: 2026-11-02
 
@@ -86,7 +86,7 @@ Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas 
 - dependência `service:payments` → `datastore:payments-db` (depends_on)
 ```
 
-- `- Entrega:` só no serviço com `delivery`, logo depois de `- Deployments:`: as linhas `Código`, `Pipelines` (`` `nome` (`repositório`) ``, ou só `` `nome` `` quando a pipeline só constrói o serviço), `Imagens` e `Configuração (GitOps)`, cada uma só quando tem valor, e uma linha por deployment, `` <ambientes>: `<deployment>` `` seguida de `cluster`, `sync` e `health`, cada parte só quando o atlas tem o valor. Cada valor do atlas sai no seu próprio código inline (com a crase trocada por `'`), para um nome não imitar outra parte da linha. Nenhum nome de ferramenta é fixo: tudo vem dos dados. O bloco faz parte do item do serviço no corte de `--max-chars`.
+- `- Entrega:` só no serviço com `delivery`, logo depois de `- Deployments:`: as linhas `Código`, `Pipelines` (`` `nome` (`repositório`) ``, ou só `` `nome` `` quando a pipeline só constrói o serviço), `Imagens` e `Configuração (GitOps)`, cada uma só quando tem valor, e uma linha por deployment, `` <ambientes>: `<deployment>` `` seguida de `cluster`, `sync` e `health` e, depois, `tier`, `namespace`, `workloads` (vários juntos por `, ` num código inline só) e `sem acesso local` (quando `access` é `false`), cada parte só quando o atlas tem o valor (SPEC-0087). Cada valor do atlas sai no seu próprio código inline (com a crase trocada por `'`), para um nome não imitar outra parte da linha. Nenhum nome de ferramenta é fixo: tudo vem dos dados. O bloco faz parte do item do serviço no corte de `--max-chars`.
 - `## Aviso de envelhecimento` é sempre a primeira seção quando existe e **nunca** é omitida, nem com `--max-chars` mínimo.
 - `## Omitidos`: os itens que não couberam em `--max-chars`, uma linha `- ` por item, até 50; passando disso, uma última linha `… e mais N item(ns) — use termos mais específicos, --hops menor ou --max-chars maior`. O corte mantém o maior prefixo possível na ordem serviços → regras → dependências → dicas (as regras valem mais que as dependências; as dicas são as primeiras a sair), contando a própria seção Omitidos no tamanho.
 
@@ -104,7 +104,9 @@ Nesta ordem, cada seção só quando tem conteúdo. Todo valor que vem do atlas 
                             "images": ["acme/backoffice"],
                             "deployments": [{"id": "backoffice-prod", "environments": ["prod"], "clusters": ["cluster-prod"],
                                              "sync_status": "Synced", "health_status": "Healthy",
-                                             "images": ["acme/backoffice"]}]}}],
+                                             "images": ["acme/backoffice"], "tier": "production",
+                                             "namespace": "backoffice", "workloads": ["Deployment/backoffice"],
+                                             "access": true}]}}],
  "dependencies": [{"from": "service:backoffice", "to": "service:payments", "type": "depends_on", "inferred": true,
                    "evidence": "PAYMENTS_URL=payments"}],
  "rules": [{"id": "pr-title-conventional", "title": "...", "kind": "pr-title", "scope": "organization", "status": "confirmed",

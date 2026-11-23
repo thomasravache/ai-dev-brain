@@ -15,6 +15,8 @@ The service of an Application is its service label, else the root nameOverride o
 "service" of --service-pattern over its name, else its name (SPEC-0082). The images of a deployment (status.summary
 .images and the Helm image.repository) leave only as their path: never the registry host (it may hold an account id),
 the tag, the digest or a credential; an image that does not fit the name rule is dropped whole (SPEC-0082).
+The workloads of a deployment come from status.resources: only the kind (Deployment, StatefulSet, DaemonSet or
+Rollout) and the name of each, never a Secret or any other resource (SPEC-0087).
 The chosen CLI is the only external process, run by run_cli: argv as a list, never a shell, with a timeout.
 --input FILE reads a recorded list instead of calling a CLI (references/collectors/argocd.md).
 """
@@ -38,6 +40,8 @@ DEFAULT_SERVICE_LABEL = "app.kubernetes.io/part-of"
 # HOST and URL also cover _HOST and _URL; without "_" they match .NET keys (RouterEndpoint, ServiceUrl) (SPEC-0076)
 DEFAULT_REF_SUFFIXES = ("HOST", "URL", "URI", "ENDPOINT", "DSN", "ADDR", "_QUEUE", "_TOPIC", "_BUCKET")
 CLI_TIMEOUT = 120  # seconds for the one CLI call
+# the kinds of status.resources that are workloads of a deployment (SPEC-0087)
+WORKLOAD_KINDS = ("Deployment", "StatefulSet", "DaemonSet", "Rollout")
 GUIDE = "references/collectors/argocd.md"
 NO_ACCESS = "sem acesso às Applications"
 INVALID = "resposta inválida da CLI"
@@ -448,11 +452,26 @@ def images_of(app) -> list:
     return sorted({image for image in map(normalize_image, image_references(app)) if image})
 
 
+def workloads_of(app) -> list:
+    """Sorted list, without repetition, of "<Kind>/<name>" of the status.resources of an Application whose kind is a
+    workload (WORKLOAD_KINDS) and whose name is a simple name (_simple_name); [] when none is (SPEC-0087). Only the
+    kind and the name are read: never another field, and never a resource of another kind (a Secret)."""
+    found = set()
+    for item in _list(_dict(_dict(app).get("status")).get("resources")):
+        item = _dict(item)
+        kind = item.get("kind")
+        name = _simple_name(item.get("name"))
+        if kind in WORKLOAD_KINDS and name:
+            found.add(f"{kind}/{name}")
+    return sorted(found)
+
+
 def map_application(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERVICE_LABEL,
                     suffixes=DEFAULT_REF_SUFFIXES, service_pattern=None):
     """One Application -> (entities deployment, service, environment, cluster; relations deploys, runs_in and
-    sourced_from). Only the contract attrs of the deployment leave: annotations, status.resources and history
-    are never read. `images` is there only when the Application has a valid image (SPEC-0082, Emenda v2)."""
+    sourced_from). Only the contract attrs of the deployment leave: annotations and history are never read, and of
+    status.resources only the kind and name of the workloads. `images` is there only when the Application has a valid
+    image (SPEC-0082, Emenda v2); `workloads` only when it has a valid workload (SPEC-0087)."""
     app = _dict(app)
     name = _text(_dict(app.get("metadata")).get("name"))
     if not name:
@@ -472,6 +491,9 @@ def map_application(app, env_label=DEFAULT_ENV_LABEL, service_label=DEFAULT_SERV
     images = images_of(app)
     if images:
         attrs["images"] = images
+    workloads = workloads_of(app)
+    if workloads:
+        attrs["workloads"] = workloads
     entities = [entity("deployment", name, name, attrs)]
     relations = []
     service, environment = service_and_environment(app, env_label, service_label, service_pattern)

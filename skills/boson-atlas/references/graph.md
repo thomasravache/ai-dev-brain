@@ -63,6 +63,8 @@ Não edite o `graph.json` à mão: ele é refeito a cada `build`, a partir de `s
 - **Relações:** a mesma trinca (`from`, `type`, `to`) em vários coletores vira **uma** aresta com todas as fontes.
 - Entram os snapshots dos coletores declarados em `collectors` (habilitados ou não). Um coletor que nunca rodou (sem `snapshots/<id>.json`) é ignorado; um snapshot ilegível ou fora do contrato gera `aviso: snapshots/<id>.json ilegível ou fora do contrato — ignorado no build` e o `build` segue com os outros.
 
+- **Marcação dos ambientes** (SPEC-0087): cada `environment` cujo nome está no mapa `environments:` do `atlas-config.yml` (`references/config.md`) ganha `attrs.tier` (`test` ou `production`); um ambiente fora do mapa fica sem `tier` e conta como produção para quem consome (ADR-0023). Sem o mapa, o grafo é o de antes.
+
 ## Inferência
 
 Só **igualdade** de texto, nunca semelhança: um host desconhecido ou só parecido não gera aresta nem nó. Toda aresta inferida tem `inferred: true` e `evidence`.
