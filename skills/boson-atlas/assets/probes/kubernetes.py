@@ -10,7 +10,8 @@ from the fields of `target` and `limits` and from a closed list (Emenda v3):
         resource in deployments, statefulsets, daemonsets, rollouts, replicasets, pods, events
         (at most one get per resource in a run)
     kubectl logs pod/<name> --all-containers --timestamps --prefix --since=<s>s --tail=<lines> --context=... -n ...
-        --request-timeout=20s   (one per pod of the workload, up to 10 pods by name)
+        --request-timeout=20s   (one per running pod of the workload, up to 10 pods by name; a pod that has not
+        run yet or whose logs fail with another error than Forbidden, missing context or timeout is skipped)
 Nothing else is ever called: no Secret, no ConfigMap, no exec, describe or port-forward. A verb, a workload kind or a
 name outside the rules is refused ("chamada não permitida") before any call. Errors leave with exit 0 and
 status "error" with a fixed message; the context and the kubectl stderr are never printed. The core (atlas.py
@@ -82,7 +83,9 @@ def check_input(data):
     if not isinstance(target, dict) or not isinstance(limits, dict):
         raise ProbeError(INVALID_INPUT)
     context, namespace = target.get("context"), target.get("namespace")
-    if not isinstance(context, str) or not context.strip() or context.startswith("-") or "\n" in context:
+    if isinstance(context, str) and any(ord(c) < 32 or ord(c) == 127 for c in context):
+        raise ProbeError(INVALID_INPUT)  # a control character (a null, a newline) never reaches the argv (Emenda v5)
+    if not isinstance(context, str) or not context.strip() or context.startswith("-"):
         raise ProbeError(REFUSED)
     if not isinstance(namespace, str) or not DNS_LABEL_RE.match(namespace):
         raise ProbeError(REFUSED)
@@ -153,9 +156,9 @@ class Kubectl:
             except ValueError:
                 raise ProbeError(INVALID_ANSWER) from None
             items = data.get("items") if isinstance(data, dict) else None
-            if not isinstance(items, list):
+            if not isinstance(items, list) or not all(well_formed(resource, item) for item in items):
                 raise ProbeError(INVALID_ANSWER)
-            self.cache[resource] = [item for item in items if isinstance(item, dict)]
+            self.cache[resource] = items
         return self.cache[resource]
 
     def logs(self, pod, since, tail):
@@ -179,6 +182,51 @@ def classify(stderr):
     return KUBECTL_FAILED
 
 
+def _object(value):
+    return value is None or isinstance(value, dict)
+
+
+def _objects(value):
+    """None or a list of objects."""
+    return value is None or (isinstance(value, list) and all(isinstance(v, dict) for v in value))
+
+
+def well_formed(resource, item):
+    """Whether an item of `kubectl get <resource> -o json` has the shape the verbs read (Emenda v5): metadata, spec,
+    status, labels, selectors, container states and event references are objects (or absent) and the lists are
+    lists of objects. Anything else is "resposta inválida do kubectl", never a traceback."""
+    if not isinstance(item, dict):
+        return False
+    metadata, spec, status = item.get("metadata"), item.get("spec"), item.get("status")
+    if not (_object(metadata) and _object(spec) and _object(status)):
+        return False
+    metadata, spec, status = metadata or {}, spec or {}, status or {}
+    if not _object(metadata.get("labels")) or not _objects(metadata.get("ownerReferences")):
+        return False
+    if resource in WORKLOAD_RESOURCES.values() or resource == "replicasets":
+        selector = spec.get("selector")
+        if not _object(selector):
+            return False
+        selector = selector or {}
+        if not _object(selector.get("matchLabels")) or not _objects(selector.get("matchExpressions")):
+            return False
+        if any(not (v.get("values") is None or isinstance(v.get("values"), list))
+               for v in selector.get("matchExpressions") or []):
+            return False
+    if resource == "pods":
+        if not _objects(spec.get("containers")) or not _objects(status.get("conditions")):
+            return False
+        statuses = status.get("containerStatuses")
+        if not _objects(statuses):
+            return False
+        for container in statuses or []:
+            for key in ("state", "lastState"):
+                state = container.get(key)
+                if not _object(state) or not all(_object(v) for v in (state or {}).values()):
+                    return False
+    return resource != "events" or all(_object(item.get(key)) for key in ("involvedObject", "regarding", "series"))
+
+
 # ---------------------------------------------------------------- helpers
 
 
@@ -189,6 +237,14 @@ def meta(item, key):
 
 def number(value):
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def generation_number(value):
+    """A generation as a number: an int, or a text of digits (Argo Rollouts writes status.observedGeneration as
+    text, Emenda v5); anything else is 0."""
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return int(value)
+    return number(value)
 
 
 def selects(selector, labels):
@@ -284,6 +340,28 @@ def parse_ts(value):
     return moment.replace(tzinfo=timezone(sign * offset))
 
 
+def log_moment(value):
+    """The real time of a `kubectl logs --timestamps` stamp as (UTC datetime to the second, nanoseconds), with the
+    fraction of any length up to 9 digits or none (kubectl drops the trailing zeros, Emenda v5), or None."""
+    moment = parse_ts(value)
+    if moment is None:
+        return None
+    match = re.match(r"^[^.]*\.(\d+)", value.strip())
+    fraction = match.group(1)[:9] if match else ""
+    return moment.astimezone(timezone.utc), int(fraction.ljust(9, "0")) if fraction else 0
+
+
+def not_running(pod):
+    """Whether a pod has no logs to read yet (Emenda v5): Pending, or every container waiting without ever having
+    run (restartCount 0). A container in CrashLoopBackOff has the logs of its last run."""
+    status = pod.get("status") or {}
+    if status.get("phase") == "Pending":
+        return True
+    statuses = status.get("containerStatuses") or []
+    return bool(statuses) and all((s.get("state") or {}).get("waiting") is not None and not number(s.get("restartCount"))
+                                  for s in statuses)
+
+
 def keep_recent(items, lines):
     """The last `lines` items that fit the output budget, and whether any was dropped."""
     truncated = len(items) > lines
@@ -316,8 +394,8 @@ def workload_item(label, kind, workload):
         updated = number(status.get("updatedReplicas"))
         ready = number(status.get("readyReplicas"))
         available = number(status.get("availableReplicas"))
-    observed = number(status.get("observedGeneration"))
-    generation = number(meta(workload, "generation"))
+    observed = generation_number(status.get("observedGeneration"))
+    generation = generation_number(meta(workload, "generation"))
     complete = updated == desired == ready == available and observed >= generation
     return {"kind": "workload", "workload": label, "found": True, "desired": desired, "updated": updated,
             "ready": ready, "available": available, "rollout_complete": complete}
@@ -362,10 +440,10 @@ def run_events(kube, workloads, lines, since):
     for (kind, name), workload in found.items():
         objects.add((kind, name))
         objects.update(("Pod", meta(pod, "name")) for pod in pods_of(kube, workload))
-        if kind == "Deployment" and workload is not None:
-            for replicaset in kube.get("replicasets"):
+        if kind in ("Deployment", "Rollout") and workload is not None:
+            for replicaset in kube.get("replicasets"):  # the ReplicaSets this Deployment or Rollout owns
                 owners = meta(replicaset, "ownerReferences") or []
-                if any(isinstance(o, dict) and o.get("kind") == "Deployment" and o.get("name") == name
+                if any(isinstance(o, dict) and o.get("kind") == kind and o.get("name") == name
                        for o in owners):
                     objects.add(("ReplicaSet", meta(replicaset, "name")))
     limit = datetime.now(timezone.utc) - timedelta(seconds=since)
@@ -395,29 +473,37 @@ def run_logs(kube, workloads, lines, since):
     found = find_workloads(kube, workloads)
     rows, truncated, seen = [], False, set()
     for kind, name in workloads:
-        pods = [meta(pod, "name") for pod in pods_of(kube, found[(kind, name)])]
-        pods = [pod for pod in pods if pod not in seen]
-        if len(pods) > MAX_LOG_PODS:
+        pods = [pod for pod in pods_of(kube, found[(kind, name)]) if meta(pod, "name") not in seen]
+        seen.update(meta(pod, "name") for pod in pods)
+        running = [meta(pod, "name") for pod in pods if not not_running(pod)]
+        if len(running) < len(pods):
+            truncated = True  # a pod that has not run yet is skipped (Emenda v5)
+        if len(running) > MAX_LOG_PODS:
             truncated = True
-        for pod in pods[:MAX_LOG_PODS]:
-            seen.add(pod)
+        for pod in running[:MAX_LOG_PODS]:
+            try:
+                text = kube.logs(pod, since, lines)
+            except ProbeError as error:
+                if str(error) != KUBECTL_FAILED:
+                    raise  # Forbidden, a missing context or a timeout stay an error of the verb
+                truncated = True  # the pod did not answer (gone, waiting): the others still count (Emenda v5)
+                continue
             streams = {}
-            for raw in kube.logs(pod, since, lines).splitlines():
+            for raw in text.splitlines():
                 match = LOG_LINE_RE.match(raw)
                 if not match or match.group("pod") != pod:
                     continue
-                stamp = parse_ts(match.group("ts"))
-                if stamp is None:
+                moment = log_moment(match.group("ts"))
+                if moment is None:
                     continue
                 container = match.group("container")
                 streams[container] = streams.get(container, 0) + 1
-                rows.append((stamp, match.group("ts"), {"workload": f"{kind}/{name}", "pod": pod,
-                                                        "container": container, "ts": match.group("ts"),
-                                                        "line": match.group("line")}))
+                rows.append((moment, {"workload": f"{kind}/{name}", "pod": pod, "container": container,
+                                      "ts": match.group("ts"), "line": match.group("line")}))
             if any(count >= lines for count in streams.values()):
                 truncated = True  # --tail may have cut this container
-    rows.sort(key=lambda row: (row[0], row[1]))
-    items, cut = keep_recent([item for _, _, item in rows], lines)
+    rows.sort(key=lambda row: row[0])  # stable: the lines of one container keep the order kubectl gave
+    items, cut = keep_recent([item for _, item in rows], lines)
     return items, truncated or cut
 
 
@@ -446,6 +532,9 @@ def probe(data):
         items, truncated = VERB_RUNNERS[verb](kube, workloads, lines, since)
     except ProbeError as error:
         return answer(data, "error", [], False, str(error))
+    except (AttributeError, TypeError, ValueError, KeyError):
+        # a shape well_formed did not foresee: still a fixed message, never a traceback
+        return answer(data, "error", [], False, INVALID_ANSWER)
     return answer(data, "ok", items, truncated)
 
 

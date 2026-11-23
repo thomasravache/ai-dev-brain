@@ -81,18 +81,18 @@ kubectl logs pod/<nome> --all-containers --timestamps --prefix --since=<since_se
 {"kind": "pod", "workload": "Deployment/api", "pod": "api-7f9c-abcd", "phase": "Running", "ready": true, "restarts": 0, "images": ["acme/api:1.4.2@sha256:…"], "last_termination": ""}
 ```
 
-- `rollout_complete`: atualizadas = desejadas = prontas = disponíveis e `observedGeneration` ≥ `generation`. No `DaemonSet`, os números vêm de `desiredNumberScheduled`, `updatedNumberScheduled`, `numberReady` e `numberAvailable`.
+- `rollout_complete`: atualizadas = desejadas = prontas = disponíveis e `observedGeneration` ≥ `generation`. No `Rollout`, um `observedGeneration` em texto de dígitos (como o Argo Rollouts grava) vale como número. No `DaemonSet`, os números vêm de `desiredNumberScheduled`, `updatedNumberScheduled`, `numberReady` e `numberAvailable`.
 - Workload que não existe no cluster: `{"kind": "workload", "workload": "Deployment/x", "found": false, "rollout_complete": false}`, sem pods.
 - `images`: o caminho normalizado (regra da SPEC-0082), mais `:<tag>` e `@<digest>` quando existem, **sem o host do registry** (`ghcr.io/acme/api:1.4.2` → `acme/api:1.4.2`). Uma referência fora da regra (credencial, espaço, digest estranho) não sai.
 - `restarts` soma os containers; `last_termination` é o motivo do último término (`OOMKilled`, `Error`) ou `""`.
 
-**`events`** — lê `events`, `pods`, o recurso de cada kind pedido e, para `Deployment`, `replicasets`.
+**`events`** — lê `events`, `pods`, o recurso de cada kind pedido e, para `Deployment` e `Rollout`, `replicasets`.
 
 ```json
 {"reason": "Unhealthy", "object": "Pod/api-7f9c-abcd", "count": 3, "last_ts": "2026-11-23T10:00:00Z", "message": "Readiness probe failed: …"}
 ```
 
-- Só `type: Warning`, só dos workloads, dos pods deles e dos ReplicaSets de um `Deployment`, com o último horário dentro de `since_seconds`; `message` até 300 caracteres. Ordem: do mais antigo ao mais novo; acima de `lines`, ficam os mais recentes e `truncated: true`.
+- Só `type: Warning`, só dos workloads, dos pods deles e dos ReplicaSets de um `Deployment` ou de um `Rollout` (os que têm em `ownerReferences` o mesmo kind e nome; a ReplicaSet de um `Deployment` com o mesmo nome de um `Rollout` não entra nos eventos do `Rollout`), com o último horário dentro de `since_seconds`; `message` até 300 caracteres. Ordem: do mais antigo ao mais novo; acima de `lines`, ficam os mais recentes e `truncated: true`.
 
 **`logs`** — lê `pods` e o recurso de cada kind pedido, e roda um `logs pod/<nome>` por pod do workload, até 10, em ordem de nome.
 
@@ -101,7 +101,8 @@ kubectl logs pod/<nome> --all-containers --timestamps --prefix --since=<since_se
 ```
 
 - Todos os containers, com horário; a linha sai sem o prefixo `[pod/…/…]` e sem o horário do `kubectl`.
-- As linhas dos pods são juntadas, ordenadas por `ts`, e ficam as `lines` mais recentes. `truncated: true` quando sobrou linha, quando um container chegou ao `--tail` ou quando o workload tem mais de 10 pods.
+- As linhas dos pods são juntadas, ordenadas pelo tempo real do `ts` (com a fração de segundo, até nanossegundos, também quando o `kubectl` omite os zeros do fim ou a fração inteira), e ficam as `lines` mais recentes; o `ts` sai como o `kubectl` imprimiu. `truncated: true` quando sobrou linha, quando um container chegou ao `--tail`, quando o workload tem mais de 10 pods ou quando um pod foi pulado.
+- **Pod que não responde:** um pod em `Pending`, ou com todos os containers esperando sem nunca ter rodado, é pulado sem chamar o `logs`; um pod cujo `logs` falha com erro que não é Forbidden, contexto inexistente nem timeout (o pod sumiu, o container ainda não começou) também é pulado. Os outros pods seguem e `truncated` fica `true`. Forbidden, contexto inexistente ou timeout no `logs` de qualquer pod continuam dando `status: error`.
 - A redaction (e-mail, token, documento) é do núcleo, como em toda probe.
 
 ## Erros
@@ -115,7 +116,7 @@ Saem com exit 0, `status: error`, `items: []` e uma mensagem fixa, **sem** o tex
 | `contexto inexistente` | o contexto do `access.clusters` não existe no kubeconfig |
 | `timeout` | "deadline exceeded", "timeout" ou "i/o timeout" no stderr, ou o `kubectl` passou de 30 s |
 | `chamada não permitida` | verbo, kind ou nome fora da lista, recusado sem chamar o `kubectl` |
-| `falha do kubectl` / `resposta inválida do kubectl` | outro erro, ou uma resposta que não é a lista JSON esperada |
-| `entrada inválida` | a entrada no stdin não é um `probe@1` bem formado |
+| `falha do kubectl` / `resposta inválida do kubectl` | outro erro, ou uma resposta que não é a lista JSON esperada, inclusive um item com campo de forma errada (`metadata`, `spec`, `status`, `labels`, seletor, `state`/`lastState` de container ou referência de evento que não é objeto, como `spec: []`) |
+| `entrada inválida` | a entrada no stdin não é um `probe@1` bem formado, ou o contexto tem caractere de controle (nulo, quebra de linha), recusado sem chamar o `kubectl` |
 
 O nome do contexto nunca sai do adaptador; o núcleo ainda mascara o valor em tudo o que vem dele (SPEC-0088).
