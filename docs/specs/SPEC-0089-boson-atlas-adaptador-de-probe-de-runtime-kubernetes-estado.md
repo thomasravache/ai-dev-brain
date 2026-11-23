@@ -245,7 +245,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=69, skipped=1)) — 5de393e | 2026-11-23 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 494e071 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8295938 | 2026-11-23 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major: rollout_complete sempre falso em Rollout (observedGeneration em texto); logs falham inteiros com um pod Pending ou iniciando; minors: JSON malformado do kubectl, ordem abaixo do segundo, eventos das ReplicaSets do Rollout | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -254,6 +254,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ### Histórico de reprovações
 - G1 FAIL 2026-11-23 — verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0089:CH-01 — 77eeec5
 - G1 PASS 2026-11-23 — depois de 1 reprovação(ões)
+- G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: rollout_complete sempre falso em Rollout (observedGeneration em texto); logs falham inteiros com um pod Pending ou iniciando; minors: JSON malformado do kubectl, ordem abaixo do segundo, eventos das ReplicaSets do Rollout — 4b1dc22
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
