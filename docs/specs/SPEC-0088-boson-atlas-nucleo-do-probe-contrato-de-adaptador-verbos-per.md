@@ -339,7 +339,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=49, skipped=1)) — 677c563 | 2026-11-23 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 4f9feb8 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — df49b5d | 2026-11-23 |
-| G4 Review | FAIL | reviewer independente (subagente, rodada 1): REJECTED — major M1: o contexto do kubeconfig vaza quando o adaptador o ecoa (stderr, message, itens); minors: JSON muito aninhado dá traceback, --summary com zero itens, command relativo, campos do alvo sem restrição; nits: NaN, doc do ambiente | 2026-11-23 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 4): APPROVED — rodadas 2 e 3 também APPROVED, com minors corrigidos nas Emendas v5 e v6; ficam 2 minors que já existiam na main (tokens colados na alternância do SECRET_RE; regex url/jwt quadráticas em entrada hostil), na SPEC nova de robustez da máscara — 692c1a4 | 2026-11-23 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -347,6 +347,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major M1: o contexto do kubeconfig vaza quando o adaptador o ecoa (stderr, message, itens); minors: JSON muito aninhado dá traceback, --summary com zero itens, command relativo, campos do alvo sem restrição; nits: NaN, doc do ambiente — 8350967
+- G4 PASS 2026-11-23 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
