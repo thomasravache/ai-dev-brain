@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **6 erro(s), 24 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 4, approved 1, implemented 75
+- Specs: proposed 4, approved 1, implemented 76
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -190,6 +190,7 @@ flowchart LR
 | [SPEC-0091](SPEC-0091-gluon-spec-verificacao-ativa-no-g6-com-atlas-py-verify.md) | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | implemented | 2026-11-22 | SPEC-0075 | SPEC-0090 | — |
 | [SPEC-0092](SPEC-0092-boson-atlas-mascara-de-segredos-robusta-padroes-separados-e.md) | boson-atlas: máscara de segredos robusta (padrões separados e tempo limitado) | lite | fix | proposed | 2026-11-23 | — | — | — |
 | [SPEC-0093](SPEC-0093-photon-brain-uso-pelo-conector-e-em-sessao-na-nuvem-listas-a.md) | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | epic | feature | proposed | 2026-11-23 | — | — | — |
+| [SPEC-0094](SPEC-0094-boson-atlas-teste-da-ordem-fina-dos-logs-instavel-o-kubectl.md) | boson-atlas: teste da ordem fina dos logs instável (o kubectl falso recalcula o agora a cada chamada) | lite | fix | implemented | 2026-11-23 | — | — | — |
 
 ## ADRs
 
