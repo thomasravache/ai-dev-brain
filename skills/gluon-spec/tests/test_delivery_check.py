@@ -98,7 +98,7 @@ class TemplateTest(unittest.TestCase):
         self.assertIn("delivery_check", parsed, "references/sdd-config.template.yml sem a chave delivery_check")
         value = parsed["delivery_check"]
         self.assertIsInstance(value, dict, f"delivery_check não é um objeto: {value!r}")
-        self.assertEqual(set(value), {"enabled", "environments"})
+        self.assertLessEqual({"enabled", "environments"}, set(value))  # SPEC-0091 acrescenta as chaves do verify
         self.assertEqual(str(value["enabled"]).lower(), "true")
         self.assertIn(value["environments"], ([], "[]"))
         comments = dict(sg.missing_config_keys(template, {}))

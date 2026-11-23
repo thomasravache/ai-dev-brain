@@ -156,6 +156,12 @@ org_context: ""
 # lê o "delivery" dos serviços da spec (atlas.py context --json) e lista pipelines, repositório de configuração e
 # deployments a acompanhar, só de leitura. enabled: false desliga a consulta; environments: nomes de ambiente do atlas
 # que entram no roteiro ([] = todos os do serviço). Sem a chave: ligado, com todos os ambientes.
+# Verificação ativa (SPEC-0091): verify: true tira a foto (atlas.py verify snapshot) antes do merge e compara depois
+# (atlas.py verify compare), com a janela window_minutes e os limites max_new_errors e max_new_restarts.
 delivery_check:
   enabled: true
   environments: []
+  verify: false           # true liga a verificação ativa do G6 com atlas.py verify (foto antes, comparação depois)
+  window_minutes: 10      # janela, em minutos, de eventos e logs do verify compare (--window)
+  max_new_errors: 0       # assinaturas de erro novas toleradas (--max-new-errors)
+  max_new_restarts: 0     # restarts novos tolerados (--max-new-restarts)
