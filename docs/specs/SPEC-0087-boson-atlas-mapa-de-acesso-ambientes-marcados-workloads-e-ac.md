@@ -255,7 +255,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 5828e49 | 2026-11-23 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — fa7a721 | 2026-11-23 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente, rodada 1): APPROVED — sem blocker/major; 1 minor (nome com quebra de linha final passa no HOST_RE, já existente) e 2 nits no Relatório de Entrega; o FAIL anterior foi só o veredito escrito sem a palavra APPROVED — 0f4bd97 | 2026-11-23 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — e5bbfe9 | 2026-11-23 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
