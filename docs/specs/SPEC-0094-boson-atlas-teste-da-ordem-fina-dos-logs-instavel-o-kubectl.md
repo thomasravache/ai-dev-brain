@@ -64,12 +64,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: UT-01 e IT-01 com a tag `SPEC-0094:<ID>`, falhando pelo motivo certo (o horário desloca entre chamadas)
-- [ ] Green: `now` fixo no cenário gravado por `install_kubectl` e usado pelo `kubectl` falso
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: UT-01 e IT-01 com a tag `SPEC-0094:<ID>`, falhando pelo motivo certo (o horário desloca entre chamadas)
+- [x] Green: `now` fixo no cenário gravado por `install_kubectl` e usado pelo `kubectl` falso
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -94,28 +94,41 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+O teste da ordem fina dos logs da SPEC-0089 deixou de falhar por acaso. O `kubectl` falso agora usa um "agora" único por cenário, e as chamadas de cada pod passam a ver os mesmos horários.
 
 ### Como foi feito
+- `install_kubectl` (`tests/test_probe_kubernetes.py`) grava no `fake-kubectl.json` um `now` em UTC, tirado uma vez na instalação.
+- `tests/fixtures/kubernetes/fake_kubectl.py` usa esse `now` em todos os placeholders e no corte do `--since`. Sem a chave, segue com o relógio, como antes.
+- O adaptador não mudou.
+- Emenda v2: o `plugin.json` entrou no `touches`, e a versão subiu para 2026.11.32.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes da correção:** o commit red ec73d8b mostra os dois testes falhando.
+  - UT-01: os horários da segunda chamada saem um segundo depois.
+  - IT-01: os ticks saem como `[1, 4, 6, 7, 2, 3, 5]`.
+- **Depois da correção:** com o commit green d239248, os dois passam no G2 e no CI.
+- **Revisão:** o revisor confirmou a falha sem a correção em 3 de 3 execuções.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | Duas chamadas separadas por uma virada de segundo dão os mesmos horários | PASS | `test_fake_kubectl_clock.py` — CI do PR #71 (Python 3.9 e 3.15) e suíte local no G2/G5 |
+| IT-01 | A ordem dos ticks se mantém com o relógio virando entre os pods | PASS | `test_probe_kubernetes.py` — CI do PR #71 (Python 3.9 e 3.15) e suíte local no G2/G5 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6)
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). Só testes e a versão do plugin (2026.11.32).
 
 ### Pendências
+Nenhuma. Nit do G4, no radar: a cópia congelada `tests/fixtures/previous/atlas.py` usa a data do dia em cada processo e, em tese, pode oscilar à meia-noite UTC.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
