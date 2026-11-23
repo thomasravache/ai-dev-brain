@@ -98,7 +98,7 @@ flowchart LR
   S0070 --> S0073
   S0071 --> S0073
   S0072 --> S0073
-  S0087 -. contrato v1 .-> S0088
+  S0087 -. contrato v2 .-> S0088
   S0088 --> S0089
   S0088 --> S0090
   S0089 --> S0090
@@ -200,7 +200,7 @@ flowchart LR
 | [SPEC-0085](SPEC-0085-boson-atlas-guardar-o-que-o-agente-descobre-notas-propostas.md) | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full | feature | proposed | 2026-11-19 | — | — | — |
 | [SPEC-0086](SPEC-0086-boson-atlas-e-gluon-spec-caminho-de-entrega-no-context-e-rot.md) | boson-atlas e gluon-spec: caminho de entrega no context e roteiro de verificação depois do merge | full | feature | implemented | 2026-11-20 | — | — | — |
 | [SPEC-0087](SPEC-0087-boson-atlas-mapa-de-acesso-ambientes-marcados-workloads-e-ac.md) | boson-atlas: mapa de acesso — ambientes marcados, workloads e acesso local por cluster | full | feature | in-progress | 2026-11-22 | SPEC-0075 | — | — |
-| [SPEC-0088](SPEC-0088-boson-atlas-nucleo-do-probe-contrato-de-adaptador-verbos-per.md) | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full | feature | approved | 2026-11-22 | SPEC-0030 | — | SPEC-0087@1 |
+| [SPEC-0088](SPEC-0088-boson-atlas-nucleo-do-probe-contrato-de-adaptador-verbos-per.md) | boson-atlas: núcleo do probe — contrato de adaptador, verbos permitidos, ambientes e registro local | full | feature | approved | 2026-11-22 | SPEC-0030 | — | SPEC-0087@2 |
 | [SPEC-0089](SPEC-0089-boson-atlas-adaptador-de-probe-de-runtime-kubernetes-estado.md) | boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos e logs) | full | feature | approved | 2026-11-22 | SPEC-0030 | SPEC-0088 | — |
 | [SPEC-0090](SPEC-0090-boson-atlas-verify-foto-antes-do-merge-comparacao-depois-do.md) | boson-atlas: verify — foto antes do merge, comparação depois do deploy e veredito | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0088, SPEC-0089 | — |
 | [SPEC-0091](SPEC-0091-gluon-spec-verificacao-ativa-no-g6-com-atlas-py-verify.md) | gluon-spec: verificação ativa no G6 com atlas.py verify | full | feature | approved | 2026-11-22 | SPEC-0075 | SPEC-0090 | — |
