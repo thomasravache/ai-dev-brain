@@ -80,12 +80,12 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 7. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. -->
-- [ ] Red: CH-01 (passa antes), UT-01 e UT-02 com a tag `SPEC-0092:<ID>`, falhando pelo motivo certo
-- [ ] Green: cada padrão embutido casa sozinho no texto original, na união da Emenda v6 da SPEC-0088; `url` e `jwt` com repetições limitadas; `references/redaction.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
-- [ ] Validar: suíte completa + arquitetura (G2/G3)
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Relatório de Entrega (G7)
+- [x] Red: CH-01 (passa antes), UT-01 e UT-02 com a tag `SPEC-0092:<ID>`, falhando pelo motivo certo
+- [x] Green: cada padrão embutido casa sozinho no texto original, na união da Emenda v6 da SPEC-0088; `url` e `jwt` com repetições limitadas; `references/redaction.md`, `ATLAS_VERSION`, CHANGELOG da boson-atlas e `version` do `plugin.json`
+- [x] Validar: suíte completa + arquitetura (G2/G3)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Relatório de Entrega (G7)
 
 ## 8. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência. -->
@@ -114,28 +114,50 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). Para status implemented o validate exige tudo preenchido, todo teste do plano com PASS + evidência e a Definição de Pronto marcada. -->
 
 ### O que foi entregue
+A máscara de segredos da boson-atlas, usada pelo `scan`, pelo `lint` e pelas probes, ficou mais robusta em três pontos:
+- **Tokens colados:** quando um token vem colado em outro, nenhum pedaço do segundo sobra.
+- **Tempo linear:** entrada hostil de 1 MB leva menos de 2 s, quando antes passava de 24 s ou travava.
+- **Sem vazamento novo:** JWT e credencial de URL longos continuam mascarados como na `main`.
 
 ### Como foi feito
+- `scripts/atlas.py`:
+  - `SECRET_RE` virou uma regex por padrão, e cada uma casa no texto original, entrando na união da Emenda v6 da SPEC-0088;
+  - `url`: o usuário não atravessa `:` nem `/`, e a senha vai até o `@` sem atravessar outro `://`, com uma alternativa limitada a 256;
+  - `jwt`: uma alternativa sem limite que começa só no início de uma sequência base64, mais uma limitada para o token colado.
+- `references/redaction.md` explica como o tempo fica linear e lista o resíduo aceito: senha de URL acima de 256 com `://`, esquema acima de 32 e JWT colado e acima dos limites.
+- **G4:** a rodada 1 reprovou por vazamento de JWT e URL longos, corrigido na Emenda v2. A rodada 2 aprovou.
+- **Integração:** um conflito de versão do `plugin.json` foi resolvido num commit à parte.
+- **Versões:** ATLAS_VERSION 2026.11.18, plugin 2026.11.33.
 
 ### Prova de Correção
-<!-- type fix: teste de regressão falhou antes (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+- **Antes da correção:**
+  - commit red 2579a11: UT-01 sai `[REDACTED]_aaaa…` e mostra o payload do JWT; UT-02 passa de 10 s ou leva cerca de 25 s;
+  - commit red a96a354: os tokens longos saem sem máscara.
+- **Depois da correção:** com os commits green 6764f6f e 4e09a4b, os testes passam no G2 e no CI.
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | Saída e contagem da máscara iguais às de antes nos casos normais (38 casos) | PASS | `test_redaction_robust.py` — CI do PR #72 (Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-01 | Tokens colados e tokens longos (JWT de 9000 e 1100, senha de URL de 300 e 2000, usuário de 300) totalmente mascarados | PASS | `test_redaction_robust.py` — CI do PR #72 (Python 3.9 e 3.15) e suíte local no G2/G5 |
+| UT-02 | Entradas hostis de 1 MB mascaradas em menos de 2 s | PASS | `test_redaction_robust.py` — CI do PR #72 (Python 3.9 e 3.15) e suíte local no G2/G5 |
 
 ### Definição de Pronto
-- [ ] Teste de regressão falhou antes e passa depois da correção
-- [ ] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão existente mantido
-- [ ] Disponível no ambiente-alvo via pipeline (G6)
-- [ ] Documentação/CHANGELOG atualizados quando aplicável (G7)
-- [ ] Outras ocorrências registradas como novas specs (ou nenhuma)
+- [x] Teste de regressão falhou antes e passa depois da correção
+- [x] Suíte completa, arquitetura e CI verdes (G2, G3, G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão existente mantido
+- [x] Disponível no ambiente-alvo via pipeline (G6)
+- [x] Documentação/CHANGELOG atualizados quando aplicável (G7)
+- [x] Outras ocorrências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy (G6 N/A, mesmo critério da SPEC-0017). A entrega chega pelo plugin `fermion` 2026.11.33.
 
 ### Pendências
+- **Radar:**
+  - dois JWTs colados sem separador ainda vazam em parte (já era assim na `main`);
+  - o pior caso hostil da regex `url` leva cerca de 1,7 s/MB, uma margem apertada em máquina lenta.
 
 ## 11. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
