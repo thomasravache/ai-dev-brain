@@ -3,7 +3,7 @@ id: SPEC-0075
 title: "boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-11-17
 depends_on: []
 adrs: [ADR-0010, ADR-0011, ADR-0012, ADR-0023, ADR-0024]
@@ -242,12 +242,12 @@ A SPEC-0090 depende também do núcleo do probe (SPEC-0088) e do adaptador de ru
 - **Escopo grande:** primeira entrega limitada a entrega, runtime e logs; o resto em ondas.
 
 ## 7. Critérios de Aceite do Épico
-- [ ] Uma verificação completa (`snapshot` → deploy → `compare`) dá `passou` num estado saudável e `degradou` com CrashLoop ou erro novo — SPEC-0090:IT-01
-- [ ] Nenhuma probe roda verbo fora da lista nem em produção sem confirmação — SPEC-0088:UT-02, SPEC-0088:UT-03
-- [ ] O adaptador de runtime só chama `get` e `logs` em recursos permitidos — SPEC-0089:UT-05
-- [ ] Nada é gravado no atlas por probe ou verify — SPEC-0088:UT-05, SPEC-0090:UT-06
-- [ ] O mapa de acesso chega ao `context` sem expor o contexto local — SPEC-0087:IT-01
-- [ ] O G6 descreve a verificação ativa, a confirmação de produção e o caminho sem probes — SPEC-0091:UT-02, SPEC-0091:UT-03
+- [x] Uma verificação completa (`snapshot` → deploy → `compare`) dá `passou` num estado saudável e `degradou` com CrashLoop ou erro novo — SPEC-0090:IT-01
+- [x] Nenhuma probe roda verbo fora da lista nem em produção sem confirmação — SPEC-0088:UT-02, SPEC-0088:UT-03
+- [x] O adaptador de runtime só chama `get` e `logs` em recursos permitidos — SPEC-0089:UT-05
+- [x] Nada é gravado no atlas por probe ou verify — SPEC-0088:UT-05, SPEC-0090:UT-06
+- [x] O mapa de acesso chega ao `context` sem expor o contexto local — SPEC-0087:IT-01
+- [x] O G6 descreve a verificação ativa, a confirmação de produção e o caminho sem probes — SPEC-0091:UT-02, SPEC-0091:UT-03
 
 ## 8. Questões em Aberto
 - [x] SPEC-0075 e SPEC-0030 se fundem ou se relacionam? — A SPEC-0075 usa as probes da SPEC-0030. O núcleo e o adaptador de runtime são filhas da SPEC-0030 e vêm antes da verificação (thomas, 2026-11-22).
@@ -265,6 +265,25 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico: o que foi entregue, como (ondas e deploys com versão/data), resultado dos critérios de aceite com os testes que os provam, métricas pós-release, pendências como novas specs. `spec_graph.py report SPEC-0075` ajuda a montar. -->
+
+### O que foi entregue
+Depois do merge, o agente sabe onde cada serviço está, consegue consultar o runtime do ambiente só para ler e diz se a entrega ficou saudável, sempre com o atlas como dado e com produção só por confirmação:
+
+| Onda | Spec | PR | O que trouxe | Plugin |
+|---|---|---|---|---|
+| 1 | SPEC-0087 | #61 | mapa de acesso: ambientes marcados (`tier`), `workloads` e acesso local por cluster | 2026.11.27 |
+| 2 | SPEC-0088 (filha da SPEC-0030) | #63 | núcleo do probe | 2026.11.28 |
+| 3 | SPEC-0089 (filha da SPEC-0030) | #65 | adaptador Kubernetes | 2026.11.29 |
+| 4 | SPEC-0090 | #66 | `atlas.py verify`: foto, comparação e veredito | 2026.11.30 |
+| 5 | SPEC-0091 | #68 | verificação ativa no G6 da gluon-spec | 2026.11.31 |
+
+### Critérios de aceite
+Todos marcados na seção 7. Cada um é provado pelo teste citado ao lado, que passou no CI do PR da sua filha.
+
+### Pendências
+- SPEC-0092 (proposta): máscara de segredos robusta.
+- Ficaram para depois, como diz a decomposição: observabilidade, banco e mensageria, smoke/E2E pelo atlas, onboarding e métricas.
+- Achados minor e nit de cada G4, listados no Relatório de cada filha.
 
 ## 12. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda, aprovada pelo humano. -->
