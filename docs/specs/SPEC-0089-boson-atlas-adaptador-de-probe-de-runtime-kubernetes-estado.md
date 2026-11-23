@@ -166,7 +166,7 @@ erros → status: "error", items: [], message: "kubectl não encontrado" | "sem 
 
 ## 7. Artefato B — Plano de Testes (TDD)
 ### 7.1 Testes de Caracterização
-- N/A — adaptador novo, sem comportamento anterior. O CH-01 do núcleo (SPEC-0088) cobre o resto.
+- N/A — adaptador novo, sem comportamento anterior. A caracterização do núcleo fica na SPEC-0088.
 
 ### 7.2 Testes Unitários
 - **UT-01** — Com o dublê de kubectl devolvendo:
