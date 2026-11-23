@@ -9,7 +9,7 @@ created: 2026-11-22
 parent: SPEC-0030
 depends_on: []
 consumes_contract: [SPEC-0087@3]
-contract_version: 4
+contract_version: 5
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
@@ -221,6 +221,16 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
 - **Regras de nome:** a "regra de nome simples" é a do `ENVIRONMENT_NAME_RE` de `references/config.md`. No `Kind/nome`, o Kind só não pode começar com `-`.
 - **Documentação:** a lista do ambiente do adaptador em `references/config.md` e `references/probes.md` fica igual à do código.
 
+**Esclarecimentos (Emenda v5):**
+- **Ordem da máscara:**
+  1. os padrões de segredo (regras do atlas, `PROBE_PATTERNS` e `redaction.extra_patterns`) rodam primeiro, no texto original;
+  2. depois vêm os literais (o contexto e os valores das credenciais).
+
+  Um contexto curto, como `api`, não pode impedir que `api_key=<valor>` seja mascarado.
+- **Variantes do contexto e das credenciais:** a máscara literal pega também, sem diferença de maiúsculas, a forma escapada em JSON (inclusive `\/`) e a forma codificada em URL.
+- **Texto que não vira UTF-8:** uma string com surrogate solto na saída do adaptador conta como JSON inválido (exit 1, sem traceback).
+- **Clusters do alvo:** cada nome em `target.clusters` segue a regra de nome simples. Uma URL de servidor também vale, desde que sem espaço, sem caractere de controle e sem `-` no começo. Fora disso, é exit 2 antes de rodar qualquer coisa, como os outros campos do alvo (Emenda v4).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -376,3 +386,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | 2 | 2026-11-23 | Esclarecimentos (Emenda v2): CH-01 em guarda e recusa; nomes do validador e marcação dos exemplos; `ts`/`line` e ordem do `--summary`; credenciais por adaptador; `--describe` no fim; registro das recusas; mensagens | Perguntas do test-writer no G1 | — | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 3 | 2026-11-23 | Esclarecimentos (Emenda v3): linhas do `doctor`; redação a mais só nas probes; ambiente do adaptador por lista permitida; escolha do alvo e do adaptador; `assets/probes/<id>.py` por padrão; status do registro | Relatório do implementer no G2 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
 | 4 | 2026-11-23 | Esclarecimentos (Emenda v4): contexto mascarado na saída do adaptador; JSON aninhado e NaN inválidos; `--summary` vazio é exit 0; `command` relativo recusado; campos do alvo conferidos; doc do ambiente | Achados da rodada 1 do G4 | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
+| 5 | 2026-11-23 | Esclarecimentos (Emenda v5): padrões de segredo antes dos literais; variantes do contexto (JSON, URL, maiúsculas); surrogate solto é JSON inválido; clusters do alvo conferidos | Achados minor da rodada 2 do G4 (um deles reabria vazamento de segredo) | SPEC-0089 | thomas, 2026-11-23 (piloto automático com o recomendado) |
