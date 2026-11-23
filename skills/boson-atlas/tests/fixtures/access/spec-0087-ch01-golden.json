@@ -1,0 +1,1276 @@
+{
+  "acme": {
+    "context_json": {
+      "dependencies": [],
+      "hints": [
+        {
+          "confirmed_at": "",
+          "confirmed_by": "",
+          "confirmed_via": "",
+          "id": "pr-template-present",
+          "kind": "pr-template",
+          "path": "conventions/pr-template-present.md",
+          "proposed_at": "<TODAY>",
+          "scope": "organization",
+          "status": "inferred",
+          "title": "Repositórios com template de PR"
+        }
+      ],
+      "omitted": [],
+      "query": "api web",
+      "rules": [],
+      "services": [
+        {
+          "attrs": {},
+          "delivery": {
+            "code_repositories": [],
+            "config_repositories": [],
+            "deployments": [
+              {
+                "clusters": [
+                  "https://kubernetes.default.svc"
+                ],
+                "environments": [
+                  "prod"
+                ],
+                "health_status": "Healthy",
+                "id": "api-prod",
+                "images": [
+                  "acme/api"
+                ],
+                "sync_status": "Synced"
+              },
+              {
+                "clusters": [
+                  "https://10.20.0.1:6443"
+                ],
+                "environments": [
+                  "staging"
+                ],
+                "health_status": "Progressing",
+                "id": "api-staging",
+                "images": [
+                  "acme/api"
+                ],
+                "sync_status": "OutOfSync"
+              }
+            ],
+            "images": [],
+            "pipelines": [
+              {
+                "id": "acme/api/ci",
+                "name": "CI",
+                "repository": "acme/api"
+              },
+              {
+                "id": "acme/api/release",
+                "name": "Release",
+                "repository": "acme/api"
+              }
+            ]
+          },
+          "deployments": [
+            {
+              "environments": [
+                "prod"
+              ],
+              "id": "api-prod"
+            },
+            {
+              "environments": [
+                "staging"
+              ],
+              "id": "api-staging"
+            }
+          ],
+          "key": "service:api",
+          "name": "api",
+          "owners": [
+            {
+              "id": "acme/docs-team",
+              "name": "docs-team"
+            },
+            {
+              "id": "acme/payments",
+              "name": "payments"
+            }
+          ],
+          "page": "services/api.md",
+          "reason": "nome: api",
+          "repositories": [
+            "acme/api"
+          ],
+          "score": 10,
+          "seen_at": "<TODAY>"
+        },
+        {
+          "attrs": {},
+          "delivery": {
+            "code_repositories": [],
+            "config_repositories": [],
+            "deployments": [
+              {
+                "clusters": [
+                  "eks-prod-1"
+                ],
+                "environments": [
+                  "frontend"
+                ],
+                "health_status": "Healthy",
+                "id": "web",
+                "images": [
+                  "acme/web"
+                ],
+                "sync_status": "Synced"
+              }
+            ],
+            "images": [],
+            "pipelines": [
+              {
+                "id": "acme/web/ci",
+                "name": "ci",
+                "repository": "acme/web"
+              }
+            ]
+          },
+          "deployments": [
+            {
+              "environments": [
+                "frontend"
+              ],
+              "id": "web"
+            }
+          ],
+          "key": "service:web",
+          "name": "web",
+          "owners": [
+            {
+              "id": "acme/frontend",
+              "name": "frontend"
+            },
+            {
+              "id": "acme/payments",
+              "name": "payments"
+            }
+          ],
+          "page": "services/web.md",
+          "reason": "nome: web",
+          "repositories": [
+            "acme/web"
+          ],
+          "score": 10,
+          "seen_at": "<TODAY>"
+        }
+      ],
+      "version": "2026.11.13",
+      "warnings": []
+    },
+    "context_markdown": "## Serviços\n\n### `api` (`service:api`)\n\n- Página: services/api.md\n- Encontrado por: nome: api (pontuação 10)\n- Repositório: acme/api\n- Deployments: prod: api-prod; staging: api-staging\n- Entrega:\n  - Pipelines: `CI` (`acme/api`), `Release` (`acme/api`)\n  - prod: `api-prod` — cluster `https://kubernetes.default.svc`; sync `Synced`; health `Healthy`\n  - staging: `api-staging` — cluster `https://10.20.0.1:6443`; sync `OutOfSync`; health `Progressing`\n- Donos: docs-team (acme/docs-team), payments (acme/payments)\n- Visto em: <TODAY>\n\n### `web` (`service:web`)\n\n- Página: services/web.md\n- Encontrado por: nome: web (pontuação 10)\n- Repositório: acme/web\n- Deployments: frontend: web\n- Entrega:\n  - Pipelines: `ci` (`acme/web`)\n  - frontend: `web` — cluster `eks-prod-1`; sync `Synced`; health `Healthy`\n- Donos: frontend (acme/frontend), payments (acme/payments)\n- Visto em: <TODAY>\n\n## Convenções (dica)\n\n- `pr-template-present` — Repositórios com template de PR (organization; conventions/pr-template-present.md) — não confirmada\n\n",
+    "doctor": [
+      "OK configuração local — <ROOT>/config-home/config.yml",
+      "OK Atlas configurados — 1 (acme)",
+      "OK atlas escolhido — acme (escolhido por: único)",
+      "OK pasta do atlas — <ROOT>/work/acme-atlas",
+      "OK atlas-config.yml — versão 1, Acme, modo local",
+      "OK estrutura — ATLAS.md, glossary.md, services/, platform/, conventions/, process/, snapshots/",
+      "AVISO git — a pasta não é um repositório git — rode git init (modo local) ou clone o repositório do atlas (modo repo)",
+      "OK coletor github — executável python3 encontrado",
+      "OK coletor argocd — executável python3 encontrado"
+    ],
+    "doctor_exit": 0,
+    "graph": {
+      "built_at": "<TODAY>",
+      "edges": [
+        {
+          "from": "deployment:api-prod",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "service:api",
+          "type": "deploys"
+        },
+        {
+          "from": "deployment:api-prod",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "cluster:https://kubernetes.default.svc",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:api-prod",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "environment:prod",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:api-prod",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/api",
+          "type": "sourced_from"
+        },
+        {
+          "from": "deployment:api-staging",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "service:api",
+          "type": "deploys"
+        },
+        {
+          "from": "deployment:api-staging",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "cluster:https://10.20.0.1:6443",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:api-staging",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "environment:staging",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:api-staging",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/api",
+          "type": "sourced_from"
+        },
+        {
+          "from": "deployment:ingress-nginx",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "service:ingress-nginx",
+          "type": "deploys"
+        },
+        {
+          "from": "deployment:ingress-nginx",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "cluster:https://kubernetes.default.svc",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:ingress-nginx",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "environment:prod",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:web",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "service:web",
+          "type": "deploys"
+        },
+        {
+          "from": "deployment:web",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "cluster:eks-prod-1",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:web",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "environment:frontend",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:web",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/web",
+          "type": "sourced_from"
+        },
+        {
+          "from": "pipeline:acme/api/ci",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "builds"
+        },
+        {
+          "from": "pipeline:acme/api/release",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "builds"
+        },
+        {
+          "from": "pipeline:acme/infra/terraform",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/infra",
+          "type": "builds"
+        },
+        {
+          "from": "pipeline:acme/mobile/android",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/mobile",
+          "type": "builds"
+        },
+        {
+          "from": "pipeline:acme/web/ci",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/web",
+          "type": "builds"
+        },
+        {
+          "evidence": "deployment:api-prod",
+          "from": "service:api",
+          "inferred": true,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/api",
+          "type": "sourced_from"
+        },
+        {
+          "evidence": "deployment:web",
+          "from": "service:web",
+          "inferred": true,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/web",
+          "type": "sourced_from"
+        },
+        {
+          "from": "team:acme/docs-team",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "owns"
+        },
+        {
+          "from": "team:acme/frontend",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/web",
+          "type": "owns"
+        },
+        {
+          "from": "team:acme/payments",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "owns"
+        },
+        {
+          "from": "team:acme/payments",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/web",
+          "type": "owns"
+        }
+      ],
+      "nodes": [
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "cluster:eks-prod-1",
+          "kind": "cluster",
+          "name": "eks-prod-1",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "cluster:https://10.20.0.1:6443",
+          "kind": "cluster",
+          "name": "https://10.20.0.1:6443",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "cluster:https://kubernetes.default.svc",
+          "kind": "cluster",
+          "name": "https://kubernetes.default.svc",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "config_refs": [
+              "CACHE_HOST=redis-prod.interno",
+              "DB_URL=db-prod.interno",
+              "EVENTS_TOPIC=payments.events"
+            ],
+            "health_status": "Healthy",
+            "images": [
+              "acme/api"
+            ],
+            "namespace": "payments-prod",
+            "project": "payments",
+            "sync_status": "Synced"
+          },
+          "conflicts": [],
+          "key": "deployment:api-prod",
+          "kind": "deployment",
+          "name": "api-prod",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "config_refs": [
+              "DB_URL=db-staging.interno",
+              "ORDERS_QUEUE=orders-staging"
+            ],
+            "health_status": "Progressing",
+            "images": [
+              "acme/api"
+            ],
+            "namespace": "payments-staging",
+            "project": "payments",
+            "sync_status": "OutOfSync"
+          },
+          "conflicts": [],
+          "key": "deployment:api-staging",
+          "kind": "deployment",
+          "name": "api-staging",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "config_refs": [],
+            "health_status": "Healthy",
+            "images": [
+              "ingress-nginx/controller"
+            ],
+            "namespace": "ingress",
+            "project": "platform",
+            "sync_status": "Synced"
+          },
+          "conflicts": [],
+          "key": "deployment:ingress-nginx",
+          "kind": "deployment",
+          "name": "ingress-nginx",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "config_refs": [
+              "API_URL=api.acme.example",
+              "SENTRY_DSN=o0.ingest.example.io",
+              "UPLOADS_BUCKET=acme-uploads"
+            ],
+            "health_status": "Healthy",
+            "images": [
+              "acme/web"
+            ],
+            "namespace": "frontend",
+            "project": "frontend",
+            "sync_status": "Synced"
+          },
+          "conflicts": [],
+          "key": "deployment:web",
+          "kind": "deployment",
+          "name": "web",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "environment:frontend",
+          "kind": "environment",
+          "name": "frontend",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "environment:prod",
+          "kind": "environment",
+          "name": "prod",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "environment:staging",
+          "kind": "environment",
+          "name": "staging",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "file": ".github/workflows/ci.yml"
+          },
+          "conflicts": [],
+          "key": "pipeline:acme/api/ci",
+          "kind": "pipeline",
+          "name": "CI",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "file": ".github/workflows/release.yml"
+          },
+          "conflicts": [],
+          "key": "pipeline:acme/api/release",
+          "kind": "pipeline",
+          "name": "Release",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "file": ".github/workflows/terraform.yaml"
+          },
+          "conflicts": [],
+          "key": "pipeline:acme/infra/terraform",
+          "kind": "pipeline",
+          "name": "Terraform Plan",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "file": ".github/workflows/android.yml"
+          },
+          "conflicts": [],
+          "key": "pipeline:acme/mobile/android",
+          "kind": "pipeline",
+          "name": "Android CI",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "file": ".github/workflows/ci.yml"
+          },
+          "conflicts": [],
+          "key": "pipeline:acme/web/ci",
+          "kind": "pipeline",
+          "name": "ci",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "archived": false,
+            "default_branch": "main",
+            "language": "Go",
+            "topics": [
+              "payments",
+              "go"
+            ],
+            "visibility": "private"
+          },
+          "conflicts": [],
+          "key": "repository:acme/api",
+          "kind": "repository",
+          "name": "api",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "archived": false,
+            "default_branch": "trunk",
+            "language": "HCL",
+            "topics": [
+              "terraform",
+              "platform"
+            ],
+            "visibility": "internal"
+          },
+          "conflicts": [],
+          "key": "repository:acme/infra",
+          "kind": "repository",
+          "name": "infra",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "archived": true,
+            "default_branch": "master",
+            "language": null,
+            "topics": [],
+            "visibility": "private"
+          },
+          "conflicts": [],
+          "key": "repository:acme/legacy",
+          "kind": "repository",
+          "name": "legacy",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "archived": false,
+            "default_branch": "develop",
+            "language": "Kotlin",
+            "topics": [
+              "android"
+            ],
+            "visibility": "private"
+          },
+          "conflicts": [],
+          "key": "repository:acme/mobile",
+          "kind": "repository",
+          "name": "mobile",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "archived": false,
+            "default_branch": "main",
+            "language": "TypeScript",
+            "topics": [
+              "frontend"
+            ],
+            "visibility": "public"
+          },
+          "conflicts": [],
+          "key": "repository:acme/web",
+          "kind": "repository",
+          "name": "web",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "service:api",
+          "kind": "service",
+          "name": "api",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "service:ingress-nginx",
+          "kind": "service",
+          "name": "ingress-nginx",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "service:web",
+          "kind": "service",
+          "name": "web",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "team:acme/docs-team",
+          "kind": "team",
+          "name": "docs-team",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "team:acme/frontend",
+          "kind": "team",
+          "name": "frontend",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "team:acme/payments",
+          "kind": "team",
+          "name": "payments",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        }
+      ],
+      "organization": "Acme",
+      "version": 1
+    },
+    "lint": [
+      {
+        "detail": "convenção pr-template-present esperando decisão (inferred)",
+        "path": "conventions/pr-template-present.md",
+        "rule": "pending-convention",
+        "severity": "warn",
+        "suggestion": "mostre a evidência a uma pessoa e registre a decisão: `atlas.py curate confirm pr-template-present --by NOME --via \"PR #n\"|local` ou `curate reject pr-template-present ...`"
+      }
+    ],
+    "lint_errors": 0,
+    "lint_exit": 0,
+    "pages": {
+      "ATLAS.md": "# Atlas — Acme\n\nMapa de como a organização desenvolve e opera software, mantido pela skill `boson-atlas` junto com os agentes.\nO texto fora das regiões geradas é de quem mantém o atlas: o `atlas.py` nunca o reescreve.\n\n## Sobre\n\n<!-- atlas:begin about -->\nEstrutura: `services/` (um serviço por página), `platform/` (infraestrutura e entrega), `conventions/`\n(padrões de código e de repositório), `process/` (como o time trabalha), `glossary.md` (termos), `graph.json`\n(o grafo de entidades e relações) e `snapshots/` (saída dos coletores). Configuração compartilhada em\n`atlas-config.yml`.\n<!-- atlas:end about -->\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- 26 entidades, 26 relações (2 inferidas), 0 conflitos\n- repository: 5\n- service: 3\n- environment: 3\n- deployment: 4\n- cluster: 3\n- pipeline: 5\n- team: 3\n- Plataforma: [ci](platform/ci.md), [code](platform/code.md), [delivery](platform/delivery.md), [runtime](platform/runtime.md)\n<!-- atlas:end summary -->\n\n## Serviços\n\n<!-- atlas:begin services -->\n- [api](services/api.md) — repositório `acme/api`\n- [ingress-nginx](services/ingress-nginx.md)\n- [web](services/web.md) — repositório `acme/web`\n<!-- atlas:end services -->\n\n## Última coleta\n\n<!-- atlas:begin scans -->\n- argocd: <TODAY> (ok, 13 entidades, 15 relações)\n- github: <TODAY> (ok, 13 entidades, 9 relações)\n<!-- atlas:end scans -->\n",
+      "conventions/pr-template-present.md": "---\nid: pr-template-present\ntitle: Repositórios com template de PR\nkind: pr-template\nscope: organization\nstatus: inferred\nproposed_at: <TODAY>\nconfirmed_by:\nconfirmed_at:\nconfirmed_via:\nreason:\n---\n\n# Repositórios com template de PR\n\nConvenção proposta pelo `atlas.py curate` a partir dos sinais dos coletores do atlas de Acme. Enquanto\n`status` for `inferred` ela é só uma proposta: vale como regra só depois de `atlas.py curate confirm` (ou é\ndescartada por `curate reject`), sempre por uma pessoa. A região `evidence` é atualizada a cada `scan`; o resto do\narquivo é do time e nunca é reescrito.\n\n## Evidência\n\n<!-- atlas:begin evidence -->\n- Padrão: template de PR presente\n- Repositórios com o sinal: 5; seguem o padrão: 3 (60%)\n  - acme/api: segue\n  - acme/infra: segue\n  - acme/legacy: sem template\n  - acme/mobile: sem template\n  - acme/web: segue\n<!-- atlas:end evidence -->\n\n## Notas\n\n",
+      "glossary.md": "# Glossário — Acme\n\nTermos, siglas e nomes internos da organização. Escreva à vontade fora da região gerada.\n\n<!-- atlas:begin terms -->\n_(nenhum termo coletado ainda)_\n<!-- atlas:end terms -->\n",
+      "platform/ci.md": "# Plataforma — ci\n\nEntidades da categoria `ci` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### pipeline\n\n- **CI** (`pipeline:acme/api/ci`) — file: .github/workflows/ci.yml — visto em <TODAY>\n- **Release** (`pipeline:acme/api/release`) — file: .github/workflows/release.yml — visto em <TODAY>\n- **Terraform Plan** (`pipeline:acme/infra/terraform`) — file: .github/workflows/terraform.yaml — visto em <TODAY>\n- **Android CI** (`pipeline:acme/mobile/android`) — file: .github/workflows/android.yml — visto em <TODAY>\n- **ci** (`pipeline:acme/web/ci`) — file: .github/workflows/ci.yml — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "platform/code.md": "# Plataforma — code\n\nEntidades da categoria `code` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### repository\n\n- **api** (`repository:acme/api`) — archived: false; default_branch: main; language: Go; topics: payments, go; visibility: private — visto em <TODAY>\n- **infra** (`repository:acme/infra`) — archived: false; default_branch: trunk; language: HCL; topics: terraform, platform; visibility: internal — visto em <TODAY>\n- **legacy** (`repository:acme/legacy`) — archived: true; default_branch: master; language: —; topics: —; visibility: private — visto em <TODAY>\n- **mobile** (`repository:acme/mobile`) — archived: false; default_branch: develop; language: Kotlin; topics: android; visibility: private — visto em <TODAY>\n- **web** (`repository:acme/web`) — archived: false; default_branch: main; language: TypeScript; topics: frontend; visibility: public — visto em <TODAY>\n\n### team\n\n- **docs-team** (`team:acme/docs-team`) — visto em <TODAY>\n- **frontend** (`team:acme/frontend`) — visto em <TODAY>\n- **payments** (`team:acme/payments`) — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "platform/delivery.md": "# Plataforma — delivery\n\nEntidades da categoria `delivery` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### environment\n\n- **frontend** (`environment:frontend`) — visto em <TODAY>\n- **prod** (`environment:prod`) — visto em <TODAY>\n- **staging** (`environment:staging`) — visto em <TODAY>\n\n### deployment\n\n- **api-prod** (`deployment:api-prod`) — config_refs: CACHE_HOST=redis-prod.interno, DB_URL=db-prod.interno, EVENTS_TOPIC=payments.events; health_status: Healthy; images: acme/api; namespace: payments-prod; project: payments; sync_status: Synced — visto em <TODAY>\n- **api-staging** (`deployment:api-staging`) — config_refs: DB_URL=db-staging.interno, ORDERS_QUEUE=orders-staging; health_status: Progressing; images: acme/api; namespace: payments-staging; project: payments; sync_status: OutOfSync — visto em <TODAY>\n- **ingress-nginx** (`deployment:ingress-nginx`) — config_refs: —; health_status: Healthy; images: ingress-nginx/controller; namespace: ingress; project: platform; sync_status: Synced — visto em <TODAY>\n- **web** (`deployment:web`) — config_refs: API_URL=api.acme.example, SENTRY_DSN=o0.ingest.example.io, UPLOADS_BUCKET=acme-uploads; health_status: Healthy; images: acme/web; namespace: frontend; project: frontend; sync_status: Synced — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "platform/runtime.md": "# Plataforma — runtime\n\nEntidades da categoria `runtime` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### cluster\n\n- **eks-prod-1** (`cluster:eks-prod-1`) — visto em <TODAY>\n- **https://10.20.0.1:6443** (`cluster:https://10.20.0.1:6443`) — visto em <TODAY>\n- **https://kubernetes.default.svc** (`cluster:https://kubernetes.default.svc`) — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "services/api.md": "# api\n\nServiço `service:api` do atlas de Acme. As regiões `atlas:` são geradas pelo `atlas.py build` a partir do\n`graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- Chave: `service:api`\n- Visto em: <TODAY>\n- Fontes: argocd\n<!-- atlas:end summary -->\n\n## Repositório\n\n<!-- atlas:begin repository -->\n- [api](../platform/code.md) (`repository:acme/api`)\n<!-- atlas:end repository -->\n\n## Deployments\n\n<!-- atlas:begin deployments -->\n- **prod**: `api-prod` (Synced, Healthy; cluster `https://kubernetes.default.svc`)\n- **staging**: `api-staging` (OutOfSync, Progressing; cluster `https://10.20.0.1:6443`)\n<!-- atlas:end deployments -->\n\n## Depende de\n\n<!-- atlas:begin depends-on -->\n_(nenhum)_\n<!-- atlas:end depends-on -->\n\n## Usado por\n\n<!-- atlas:begin used-by -->\n_(nenhum)_\n<!-- atlas:end used-by -->\n\n## Donos\n\n<!-- atlas:begin owners -->\n- docs-team (`acme/docs-team`)\n- payments (`acme/payments`)\n<!-- atlas:end owners -->\n\n## Pipelines\n\n<!-- atlas:begin pipelines -->\n- CI (`acme/api/ci`)\n- Release (`acme/api/release`)\n<!-- atlas:end pipelines -->\n\n## Fontes\n\n<!-- atlas:begin sources -->\n- argocd (visto em <TODAY>)\n<!-- atlas:end sources -->\n\n## Notas\n\n",
+      "services/ingress-nginx.md": "# ingress-nginx\n\nServiço `service:ingress-nginx` do atlas de Acme. As regiões `atlas:` são geradas pelo `atlas.py build` a partir do\n`graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- Chave: `service:ingress-nginx`\n- Visto em: <TODAY>\n- Fontes: argocd\n<!-- atlas:end summary -->\n\n## Repositório\n\n<!-- atlas:begin repository -->\n_(nenhum)_\n<!-- atlas:end repository -->\n\n## Deployments\n\n<!-- atlas:begin deployments -->\n- **prod**: `ingress-nginx` (Synced, Healthy; cluster `https://kubernetes.default.svc`)\n<!-- atlas:end deployments -->\n\n## Depende de\n\n<!-- atlas:begin depends-on -->\n_(nenhum)_\n<!-- atlas:end depends-on -->\n\n## Usado por\n\n<!-- atlas:begin used-by -->\n_(nenhum)_\n<!-- atlas:end used-by -->\n\n## Donos\n\n<!-- atlas:begin owners -->\n_(nenhum)_\n<!-- atlas:end owners -->\n\n## Pipelines\n\n<!-- atlas:begin pipelines -->\n_(nenhum)_\n<!-- atlas:end pipelines -->\n\n## Fontes\n\n<!-- atlas:begin sources -->\n- argocd (visto em <TODAY>)\n<!-- atlas:end sources -->\n\n## Notas\n\n",
+      "services/web.md": "# web\n\nServiço `service:web` do atlas de Acme. As regiões `atlas:` são geradas pelo `atlas.py build` a partir do\n`graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- Chave: `service:web`\n- Visto em: <TODAY>\n- Fontes: argocd\n<!-- atlas:end summary -->\n\n## Repositório\n\n<!-- atlas:begin repository -->\n- [web](../platform/code.md) (`repository:acme/web`)\n<!-- atlas:end repository -->\n\n## Deployments\n\n<!-- atlas:begin deployments -->\n- **frontend**: `web` (Synced, Healthy; cluster `eks-prod-1`)\n<!-- atlas:end deployments -->\n\n## Depende de\n\n<!-- atlas:begin depends-on -->\n_(nenhum)_\n<!-- atlas:end depends-on -->\n\n## Usado por\n\n<!-- atlas:begin used-by -->\n_(nenhum)_\n<!-- atlas:end used-by -->\n\n## Donos\n\n<!-- atlas:begin owners -->\n- frontend (`acme/frontend`)\n- payments (`acme/payments`)\n<!-- atlas:end owners -->\n\n## Pipelines\n\n<!-- atlas:begin pipelines -->\n- ci (`acme/web/ci`)\n<!-- atlas:end pipelines -->\n\n## Fontes\n\n<!-- atlas:begin sources -->\n- argocd (visto em <TODAY>)\n<!-- atlas:end sources -->\n\n## Notas\n\n"
+    }
+  },
+  "image-link": {
+    "context_json": {
+      "dependencies": [],
+      "hints": [],
+      "omitted": [],
+      "query": "api",
+      "rules": [],
+      "services": [
+        {
+          "attrs": {},
+          "delivery": {
+            "code_repositories": [
+              "acme/api"
+            ],
+            "config_repositories": [
+              "acme/iac"
+            ],
+            "deployments": [
+              {
+                "clusters": [
+                  "cluster-dev"
+                ],
+                "environments": [
+                  "dev"
+                ],
+                "health_status": "Healthy",
+                "id": "dev-api",
+                "images": [
+                  "acme/api"
+                ],
+                "sync_status": "Synced"
+              },
+              {
+                "clusters": [
+                  "cluster-qa"
+                ],
+                "environments": [
+                  "qa"
+                ],
+                "health_status": "Degraded",
+                "id": "qa-api",
+                "images": [
+                  "acme/api"
+                ],
+                "sync_status": "OutOfSync"
+              }
+            ],
+            "images": [
+              "acme/api"
+            ],
+            "pipelines": [
+              {
+                "id": "acme/api/build",
+                "name": "Build",
+                "repository": "acme/api"
+              },
+              {
+                "id": "acme/api/publish",
+                "name": "Publish",
+                "repository": "acme/api"
+              }
+            ]
+          },
+          "deployments": [
+            {
+              "environments": [
+                "dev"
+              ],
+              "id": "dev-api"
+            },
+            {
+              "environments": [
+                "qa"
+              ],
+              "id": "qa-api"
+            }
+          ],
+          "key": "service:api",
+          "name": "api",
+          "owners": [
+            {
+              "id": "acme/team-x",
+              "name": "team-x"
+            },
+            {
+              "id": "acme/platform",
+              "name": "platform"
+            }
+          ],
+          "page": "services/api.md",
+          "reason": "nome: api",
+          "repositories": [
+            "acme/api",
+            "acme/iac"
+          ],
+          "score": 10,
+          "seen_at": "<TODAY>"
+        }
+      ],
+      "version": "2026.11.13",
+      "warnings": []
+    },
+    "context_markdown": "## Serviços\n\n### `api` (`service:api`)\n\n- Página: services/api.md\n- Encontrado por: nome: api (pontuação 10)\n- Repositório: acme/api, acme/iac\n- Deployments: dev: dev-api; qa: qa-api\n- Entrega:\n  - Código: `acme/api`\n  - Pipelines: `Build` (`acme/api`), `Publish` (`acme/api`)\n  - Imagens: `acme/api`\n  - Configuração (GitOps): `acme/iac`\n  - dev: `dev-api` — cluster `cluster-dev`; sync `Synced`; health `Healthy`\n  - qa: `qa-api` — cluster `cluster-qa`; sync `OutOfSync`; health `Degraded`\n- Donos: team-x (acme/team-x), platform (acme/platform)\n- Visto em: <TODAY>\n\n",
+    "doctor": [
+      "OK configuração local — <ROOT>/config-home/config.yml",
+      "OK Atlas configurados — 1 (acme)",
+      "OK atlas escolhido — acme (escolhido por: único)",
+      "OK pasta do atlas — <ROOT>/work/acme-atlas",
+      "OK atlas-config.yml — versão 1, Acme, modo local",
+      "OK estrutura — ATLAS.md, glossary.md, services/, platform/, conventions/, process/, snapshots/",
+      "AVISO git — a pasta não é um repositório git — rode git init (modo local) ou clone o repositório do atlas (modo repo)",
+      "OK coletor github — executável python3 encontrado",
+      "OK coletor argocd — executável python3 encontrado"
+    ],
+    "doctor_exit": 0,
+    "graph": {
+      "built_at": "<TODAY>",
+      "edges": [
+        {
+          "from": "deployment:dev-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "service:api",
+          "type": "deploys"
+        },
+        {
+          "from": "deployment:dev-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "cluster:cluster-dev",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:dev-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "environment:dev",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:dev-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/iac",
+          "type": "sourced_from"
+        },
+        {
+          "from": "deployment:qa-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "service:api",
+          "type": "deploys"
+        },
+        {
+          "from": "deployment:qa-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "cluster:cluster-qa",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:qa-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "environment:qa",
+          "type": "runs_in"
+        },
+        {
+          "from": "deployment:qa-api",
+          "inferred": false,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/iac",
+          "type": "sourced_from"
+        },
+        {
+          "from": "pipeline:acme/api/build",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "builds"
+        },
+        {
+          "from": "pipeline:acme/api/publish",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "builds"
+        },
+        {
+          "evidence": "image:acme/api",
+          "from": "service:api",
+          "inferred": true,
+          "sources": [
+            "argocd",
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "sourced_from"
+        },
+        {
+          "evidence": "deployment:dev-api",
+          "from": "service:api",
+          "inferred": true,
+          "sources": [
+            "argocd"
+          ],
+          "to": "repository:acme/iac",
+          "type": "sourced_from"
+        },
+        {
+          "from": "team:acme/platform",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/iac",
+          "type": "owns"
+        },
+        {
+          "from": "team:acme/team-x",
+          "inferred": false,
+          "sources": [
+            "github"
+          ],
+          "to": "repository:acme/api",
+          "type": "owns"
+        }
+      ],
+      "nodes": [
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "cluster:cluster-dev",
+          "kind": "cluster",
+          "name": "cluster-dev",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "cluster:cluster-qa",
+          "kind": "cluster",
+          "name": "cluster-qa",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "config_refs": [],
+            "health_status": "Healthy",
+            "images": [
+              "acme/api"
+            ],
+            "namespace": "api-dev",
+            "project": "team-x",
+            "sync_status": "Synced"
+          },
+          "conflicts": [],
+          "key": "deployment:dev-api",
+          "kind": "deployment",
+          "name": "dev-api",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "config_refs": [],
+            "health_status": "Degraded",
+            "images": [
+              "acme/api"
+            ],
+            "namespace": "api-qa",
+            "project": "team-x",
+            "sync_status": "OutOfSync"
+          },
+          "conflicts": [],
+          "key": "deployment:qa-api",
+          "kind": "deployment",
+          "name": "qa-api",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "environment:dev",
+          "kind": "environment",
+          "name": "dev",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "environment:qa",
+          "kind": "environment",
+          "name": "qa",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {
+            "file": ".github/workflows/build.yml"
+          },
+          "conflicts": [],
+          "key": "pipeline:acme/api/build",
+          "kind": "pipeline",
+          "name": "Build",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "file": ".github/workflows/publish.yml"
+          },
+          "conflicts": [],
+          "key": "pipeline:acme/api/publish",
+          "kind": "pipeline",
+          "name": "Publish",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "archived": false,
+            "default_branch": "main",
+            "language": "Go",
+            "topics": [],
+            "visibility": "private"
+          },
+          "conflicts": [],
+          "key": "repository:acme/api",
+          "kind": "repository",
+          "name": "api",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {
+            "archived": false,
+            "default_branch": "main",
+            "language": "HCL",
+            "topics": [],
+            "visibility": "private"
+          },
+          "conflicts": [],
+          "key": "repository:acme/iac",
+          "kind": "repository",
+          "name": "iac",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "service:api",
+          "kind": "service",
+          "name": "api",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "argocd"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "team:acme/platform",
+          "kind": "team",
+          "name": "platform",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        },
+        {
+          "attrs": {},
+          "conflicts": [],
+          "key": "team:acme/team-x",
+          "kind": "team",
+          "name": "team-x",
+          "seen_at": "<TODAY>",
+          "sources": [
+            "github"
+          ]
+        }
+      ],
+      "organization": "Acme",
+      "version": 1
+    },
+    "lint": [],
+    "lint_errors": 0,
+    "lint_exit": 0,
+    "pages": {
+      "ATLAS.md": "# Atlas — Acme\n\nMapa de como a organização desenvolve e opera software, mantido pela skill `boson-atlas` junto com os agentes.\nO texto fora das regiões geradas é de quem mantém o atlas: o `atlas.py` nunca o reescreve.\n\n## Sobre\n\n<!-- atlas:begin about -->\nEstrutura: `services/` (um serviço por página), `platform/` (infraestrutura e entrega), `conventions/`\n(padrões de código e de repositório), `process/` (como o time trabalha), `glossary.md` (termos), `graph.json`\n(o grafo de entidades e relações) e `snapshots/` (saída dos coletores). Configuração compartilhada em\n`atlas-config.yml`.\n<!-- atlas:end about -->\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- 13 entidades, 14 relações (2 inferidas), 0 conflitos\n- repository: 2\n- service: 1\n- environment: 2\n- deployment: 2\n- cluster: 2\n- pipeline: 2\n- team: 2\n- Plataforma: [ci](platform/ci.md), [code](platform/code.md), [delivery](platform/delivery.md), [runtime](platform/runtime.md)\n<!-- atlas:end summary -->\n\n## Serviços\n\n<!-- atlas:begin services -->\n- [api](services/api.md) — repositório `acme/api`, `acme/iac`\n<!-- atlas:end services -->\n\n## Última coleta\n\n<!-- atlas:begin scans -->\n- argocd: <TODAY> (ok, 7 entidades, 8 relações)\n- github: <TODAY> (ok, 6 entidades, 4 relações)\n<!-- atlas:end scans -->\n",
+      "glossary.md": "# Glossário — Acme\n\nTermos, siglas e nomes internos da organização. Escreva à vontade fora da região gerada.\n\n<!-- atlas:begin terms -->\n_(nenhum termo coletado ainda)_\n<!-- atlas:end terms -->\n",
+      "platform/ci.md": "# Plataforma — ci\n\nEntidades da categoria `ci` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### pipeline\n\n- **Build** (`pipeline:acme/api/build`) — file: .github/workflows/build.yml — visto em <TODAY>\n- **Publish** (`pipeline:acme/api/publish`) — file: .github/workflows/publish.yml — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "platform/code.md": "# Plataforma — code\n\nEntidades da categoria `code` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### repository\n\n- **api** (`repository:acme/api`) — archived: false; default_branch: main; language: Go; topics: —; visibility: private — visto em <TODAY>\n- **iac** (`repository:acme/iac`) — archived: false; default_branch: main; language: HCL; topics: —; visibility: private — visto em <TODAY>\n\n### team\n\n- **platform** (`team:acme/platform`) — visto em <TODAY>\n- **team-x** (`team:acme/team-x`) — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "platform/delivery.md": "# Plataforma — delivery\n\nEntidades da categoria `delivery` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### environment\n\n- **dev** (`environment:dev`) — visto em <TODAY>\n- **qa** (`environment:qa`) — visto em <TODAY>\n\n### deployment\n\n- **dev-api** (`deployment:dev-api`) — config_refs: —; health_status: Healthy; images: acme/api; namespace: api-dev; project: team-x; sync_status: Synced — visto em <TODAY>\n- **qa-api** (`deployment:qa-api`) — config_refs: —; health_status: Degraded; images: acme/api; namespace: api-qa; project: team-x; sync_status: OutOfSync — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "platform/runtime.md": "# Plataforma — runtime\n\nEntidades da categoria `runtime` no atlas de Acme. A região `atlas:` é gerada pelo `atlas.py build`\na partir do `graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Entidades\n\n<!-- atlas:begin entities -->\n### cluster\n\n- **cluster-dev** (`cluster:cluster-dev`) — visto em <TODAY>\n- **cluster-qa** (`cluster:cluster-qa`) — visto em <TODAY>\n<!-- atlas:end entities -->\n\n## Notas\n\n",
+      "services/api.md": "# api\n\nServiço `service:api` do atlas de Acme. As regiões `atlas:` são geradas pelo `atlas.py build` a partir do\n`graph.json`; o resto da página é do time e nunca é reescrito.\n\n## Resumo\n\n<!-- atlas:begin summary -->\n- Chave: `service:api`\n- Visto em: <TODAY>\n- Fontes: argocd\n<!-- atlas:end summary -->\n\n## Repositório\n\n<!-- atlas:begin repository -->\n- Código:\n  - [api](../platform/code.md) (`repository:acme/api`)\n- Configuração (GitOps):\n  - [iac](../platform/code.md) (`repository:acme/iac`)\n<!-- atlas:end repository -->\n\n## Deployments\n\n<!-- atlas:begin deployments -->\n- **dev**: `dev-api` (Synced, Healthy; cluster `cluster-dev`)\n- **qa**: `qa-api` (OutOfSync, Degraded; cluster `cluster-qa`)\n<!-- atlas:end deployments -->\n\n## Depende de\n\n<!-- atlas:begin depends-on -->\n_(nenhum)_\n<!-- atlas:end depends-on -->\n\n## Usado por\n\n<!-- atlas:begin used-by -->\n_(nenhum)_\n<!-- atlas:end used-by -->\n\n## Donos\n\n<!-- atlas:begin owners -->\n- team-x (`acme/team-x`)\n- platform (`acme/platform`)\n<!-- atlas:end owners -->\n\n## Pipelines\n\n<!-- atlas:begin pipelines -->\n- Build (`acme/api/build`)\n- Publish (`acme/api/publish`)\n<!-- atlas:end pipelines -->\n\n## Do commit até o pod\n\n<!-- atlas:begin commit-to-pod -->\n1. Código: [api](../platform/code.md) (`repository:acme/api`)\n2. Pipelines: Build (`acme/api/build`), Publish (`acme/api/publish`)\n3. Imagem: `acme/api`\n4. Configuração: [iac](../platform/code.md) (`repository:acme/iac`)\n5. Deployments:\n   - **dev**: `dev-api` — cluster `cluster-dev`; Synced, Healthy\n   - **qa**: `qa-api` — cluster `cluster-qa`; OutOfSync, Degraded\n<!-- atlas:end commit-to-pod -->\n\n## Fontes\n\n<!-- atlas:begin sources -->\n- argocd (visto em <TODAY>)\n<!-- atlas:end sources -->\n\n## Notas\n\n"
+    }
+  }
+}
