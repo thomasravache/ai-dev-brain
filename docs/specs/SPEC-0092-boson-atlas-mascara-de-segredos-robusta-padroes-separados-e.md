@@ -4,7 +4,7 @@ title: "boson-atlas: máscara de segredos robusta (padrões separados e tempo li
 tier: lite
 type: fix
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-23
 parent:
 depends_on: []
@@ -99,7 +99,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 4817f76 | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — a6d4ed7 | 2026-11-23 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-23 — reviewer independente (subagente, rodada 1): REJECTED — major: JWT com payload acima de 8192 ou header acima de 1024 deixa de ser mascarado; credencial de URL com usuário ou senha acima de 256 deixa de ser mascarada (vazamentos novos em relação à main) — 6764f6f
