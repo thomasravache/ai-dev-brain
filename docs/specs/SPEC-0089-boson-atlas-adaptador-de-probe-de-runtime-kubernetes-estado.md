@@ -4,7 +4,7 @@ title: "boson-atlas: adaptador de probe de runtime (Kubernetes: estado, eventos 
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-22
 parent: SPEC-0030
 depends_on: [SPEC-0088]
@@ -256,7 +256,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 9e5382f | 2026-11-23 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-23 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-23 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 11b7c3a | 2026-11-23 |
 
 ### Histórico de reprovações
 - G1 FAIL 2026-11-23 — verify G1: FAIL — testes do plano sem tag no código versionado: SPEC-0089:CH-01 — 77eeec5
