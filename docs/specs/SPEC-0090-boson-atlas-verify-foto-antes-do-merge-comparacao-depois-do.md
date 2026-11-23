@@ -347,15 +347,15 @@ N/A — type feature.
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
-| CH-01 | Sem o `verify` ligado, nada muda; probes desligadas recusam com exit 4 | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| UT-01 | `snapshot`: foto `verify@1` só com contagens e assinaturas, fora do atlas (identidade, links, caixa), temporário exclusivo, limite máximo de linhas | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| UT-02 | `delivery`: imagem esperada normalizada (digest antes da tag), rollout, pods prontos; status cortado vira `not_verified` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| UT-03 | `runtime`: restarts e avisos novos contra a foto; eventos cortados viram `not_verified` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| UT-04 | `logs`: assinaturas `error` novas; sem foto ou probe cortada vira `not_verified` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| UT-05 | Veredito e exits 0, 1 e 5; probe recusada ou com erro nunca vira `ok`; sugestão sem comando | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| UT-06 | Atlas intocado, só verbos de leitura, produção só com confirmação, registro das probes | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| IT-01 | Adaptador Kubernetes com o kubectl falso: entrega saudável dá `passou`, CrashLoop dá `degradou` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
-| CT-01 | Foto e saída validadas por `verify@1`; baseline inválida ou de outro serviço dá exit 2; exemplos do `verify.md` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR da SPEC-0090 |
+| CH-01 | Sem o `verify` ligado, nada muda; probes desligadas recusam com exit 4 | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| UT-01 | `snapshot`: foto `verify@1` só com contagens e assinaturas, fora do atlas (identidade, links, caixa), temporário exclusivo, limite máximo de linhas | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| UT-02 | `delivery`: imagem esperada normalizada (digest antes da tag), rollout, pods prontos; status cortado vira `not_verified` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| UT-03 | `runtime`: restarts e avisos novos contra a foto; eventos cortados viram `not_verified` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| UT-04 | `logs`: assinaturas `error` novas; sem foto ou probe cortada vira `not_verified` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| UT-05 | Veredito e exits 0, 1 e 5; probe recusada ou com erro nunca vira `ok`; sugestão sem comando | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| UT-06 | Atlas intocado, só verbos de leitura, produção só com confirmação, registro das probes | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| IT-01 | Adaptador Kubernetes com o kubectl falso: entrega saudável dá `passou`, CrashLoop dá `degradou` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
+| CT-01 | Foto e saída validadas por `verify@1`; baseline inválida ou de outro serviço dá exit 2; exemplos do `verify.md` | PASS | `test_verify.py` — suíte local no G2/G5 e CI do PR #66 (Python 3.9 e 3.15) |
 
 ### Definição de Pronto
 - [x] Todos os testes do plano passando e listados na Verificação
