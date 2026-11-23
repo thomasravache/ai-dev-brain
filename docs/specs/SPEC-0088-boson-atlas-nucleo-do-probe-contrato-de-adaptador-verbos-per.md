@@ -11,7 +11,7 @@ depends_on: []
 consumes_contract: [SPEC-0087@3]
 contract_version: 6
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/references/redaction.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/tests/**, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0023]
 external: []
 size: M
@@ -238,6 +238,8 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
   3. cada trecho resultante é trocado uma vez por `[REDACTED]`.
 
   Assim nenhuma máscara impede a outra, em qualquer ordem: uma senha com cara de e-mail sai inteira mascarada, e `api_key=<valor>` também, com contexto `api`. Esta regra substitui a ordem da Emenda v5.
+
+- **Alcance:** a mesma função passa a servir também a máscara do `scan` e do `lint`, que ficam mais seguros e com os goldens iguais. Por isso o `touches` ganha `skills/boson-atlas/references/redaction.md`.
 
 **Design:** N/A — sem interface gráfica.
 
