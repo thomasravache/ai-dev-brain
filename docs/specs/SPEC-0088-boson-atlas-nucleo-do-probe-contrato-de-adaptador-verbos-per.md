@@ -203,7 +203,7 @@ registro local: <pasta da configuração>/probes.log, uma linha JSON por probe:
   - a configuração inválida não entra.
 
 **Esclarecimentos (Emenda v4):**
-- **Contexto mascarado (M1 do G4):** depois de escolher o contexto, o núcleo mascara o valor dele em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato. Vale o mesmo para os nomes das credenciais declaradas com valor.
+- **Contexto mascarado (M1 do G4):** depois de escolher o contexto, o núcleo mascara o valor dele em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato. Vale o mesmo para os valores das credenciais declaradas do adaptador.
 - **JSON do adaptador:**
   - aninhamento profundo (`RecursionError`) e as constantes `NaN`/`Infinity` contam como JSON inválido (exit 1, sem traceback);
   - nenhum número fora do JSON padrão sai em `--json`.
