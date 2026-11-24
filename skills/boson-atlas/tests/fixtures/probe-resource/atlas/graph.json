@@ -1,0 +1,451 @@
+{
+  "built_at": "2026-11-24",
+  "edges": [
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "service:api",
+      "type": "deploys"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "cluster:cluster-dev",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "environment:dev",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "repository:acme/gitops",
+      "type": "sourced_from"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "queue:orders",
+      "type": "writes"
+    },
+    {
+      "from": "deployment:dev-worker",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "service:worker",
+      "type": "deploys"
+    },
+    {
+      "from": "deployment:dev-worker",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "cluster:cluster-dev",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:dev-worker",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "environment:dev",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:dev-worker",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "repository:acme/gitops",
+      "type": "sourced_from"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "service:api",
+      "type": "deploys"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "datastore:billing-db",
+      "type": "reads"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "cluster:cluster-prod",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "environment:prod",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "repository:acme/gitops",
+      "type": "sourced_from"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "queue:orders",
+      "type": "writes"
+    },
+    {
+      "evidence": "DB_URL=orders-db.interno",
+      "from": "service:api",
+      "inferred": true,
+      "sources": [
+        "facts"
+      ],
+      "to": "datastore:orders-db",
+      "type": "depends_on"
+    },
+    {
+      "from": "service:api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "datastore:payments-db",
+      "type": "depends_on"
+    },
+    {
+      "from": "service:api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "topic:events",
+      "type": "depends_on"
+    },
+    {
+      "evidence": "image:acme/api",
+      "from": "service:api",
+      "inferred": true,
+      "sources": [
+        "facts"
+      ],
+      "to": "repository:acme/api",
+      "type": "sourced_from"
+    },
+    {
+      "evidence": "deployment:dev-api",
+      "from": "service:api",
+      "inferred": true,
+      "sources": [
+        "facts"
+      ],
+      "to": "repository:acme/gitops",
+      "type": "sourced_from"
+    },
+    {
+      "evidence": "deployment:dev-worker",
+      "from": "service:worker",
+      "inferred": true,
+      "sources": [
+        "facts"
+      ],
+      "to": "repository:acme/gitops",
+      "type": "sourced_from"
+    }
+  ],
+  "nodes": [
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "cluster:cluster-dev",
+      "kind": "cluster",
+      "name": "cluster-dev",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "cluster:cluster-prod",
+      "kind": "cluster",
+      "name": "cluster-prod",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "engine": "postgres",
+        "host": "billing-db.interno"
+      },
+      "conflicts": [],
+      "key": "datastore:billing-db",
+      "kind": "datastore",
+      "name": "billing-db",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "engine": "postgres",
+        "host": "orders-db.interno",
+        "region": "us-east-1"
+      },
+      "conflicts": [],
+      "key": "datastore:orders-db",
+      "kind": "datastore",
+      "name": "orders-db",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "engine": "postgres",
+        "host": "payments-db.interno"
+      },
+      "conflicts": [],
+      "key": "datastore:payments-db",
+      "kind": "datastore",
+      "name": "payments-db",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "config_refs": [
+          "DB_URL=orders-db.interno"
+        ],
+        "images": [
+          "acme/api"
+        ],
+        "namespace": "api-dev",
+        "workloads": [
+          "Deployment/api"
+        ]
+      },
+      "conflicts": [],
+      "key": "deployment:dev-api",
+      "kind": "deployment",
+      "name": "dev-api",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "config_refs": [],
+        "namespace": "worker-dev",
+        "workloads": [
+          "Deployment/worker"
+        ]
+      },
+      "conflicts": [],
+      "key": "deployment:dev-worker",
+      "kind": "deployment",
+      "name": "dev-worker",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "config_refs": [],
+        "images": [
+          "acme/api"
+        ],
+        "namespace": "api-prod",
+        "workloads": [
+          "Deployment/api"
+        ]
+      },
+      "conflicts": [],
+      "key": "deployment:prod-api",
+      "kind": "deployment",
+      "name": "prod-api",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "environment:dev",
+      "kind": "environment",
+      "name": "dev",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "environment:prod",
+      "kind": "environment",
+      "name": "prod",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "dlq": "orders-dlq",
+        "fifo": false,
+        "owner_note": null,
+        "policy": {
+          "visible": true
+        },
+        "region": "us-east-1",
+        "retention_days": 4,
+        "tags": [
+          "team-x"
+        ]
+      },
+      "conflicts": [],
+      "key": "queue:orders",
+      "kind": "queue",
+      "name": "orders",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "conflicts": [],
+      "key": "queue:orders-dlq",
+      "kind": "queue",
+      "name": "orders-dlq",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "default_branch": "main"
+      },
+      "conflicts": [],
+      "key": "repository:acme/api",
+      "kind": "repository",
+      "name": "api",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "default_branch": "main"
+      },
+      "conflicts": [],
+      "key": "repository:acme/gitops",
+      "kind": "repository",
+      "name": "gitops",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "journeys": [
+          "checkout",
+          "login",
+          "checkout"
+        ]
+      },
+      "conflicts": [],
+      "key": "service:api",
+      "kind": "service",
+      "name": "api",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "service:worker",
+      "kind": "service",
+      "name": "worker",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "conflicts": [],
+      "key": "topic:events",
+      "kind": "topic",
+      "name": "events",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    }
+  ],
+  "organization": "Acme",
+  "version": 1
+}

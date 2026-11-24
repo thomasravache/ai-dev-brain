@@ -12,7 +12,9 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 - os coletores de assets/collectors/*.py, quando a pasta existe, importam só a biblioteca padrão e nada de
   outra skill;
 - nenhum caminho pessoal absoluto em arquivos de skills/boson-atlas/ fora de tests/ (placeholders como
-  /Users/<nome> são permitidos).
+  /Users/<nome> são permitidos);
+- a entrada de uma probe só ganha "resource" numa função que passa por linked_resources, e write_probe_log só grava as
+  chaves da constante PROBE_LOG_KEYS (SPEC-0096, ADR-0025).
 """
 import unittest
 
@@ -25,7 +27,7 @@ from architecture_rules import (
     shell_findings,
     subprocess_findings,
 )
-from helpers import SCRIPT, SKILL
+from helpers import SCRIPT, SKILL, load_atlas
 
 ALLOWED_PROCESS_FUNCTIONS = ("run_collector",)
 REPO = SKILL.parent.parent
@@ -306,6 +308,93 @@ class PersonalPathRulesTest(unittest.TestCase):
                 continue
             findings += personal_path_findings(text, rel.as_posix())
         self.assertEqual(findings, [], report(findings))
+
+
+def probe_rule(name):
+    """architecture_rules.<name> (SPEC-0096)."""
+    rule = getattr(architecture_rules, name, None)
+    if rule is None:
+        raise AssertionError(f"architecture_rules.{name} não existe (SPEC-0096)")
+    return rule
+
+
+# chaves do probes.log de hoje (SPEC-0088) e as desta spec; a SPEC-0104 acrescenta reason e access
+PROBE_LOG_TODAY = {"at", "atlas", "service", "environment", "capability", "verb", "adapter", "status", "exit",
+                   "confirmed_production"}
+PROBE_LOG_LATER = {"reason", "access"}
+
+
+class ProbeRulesTest(unittest.TestCase):
+    def test_a_resource_written_outside_the_resolution_is_reported(self):
+        """SPEC-0096:G3 — "resource" no alvo (dict com service, target["resource"] = e target.update(resource=)) numa
+        função que não chega a linked_resources é violação; dentro de quem passa por ela (direta ou indiretamente),
+        não; sem a função de resolução, uma violação."""
+        # SPEC-0096:G3
+        source = (
+            "def linked_resources(graph, service, env):\n"
+            "    return [{'resource': 'queue:a', 'relation': 'writes', 'deployment': 'd'}]\n"
+            "def resolve(graph, args):\n"
+            "    return linked_resources(graph, args.service, args.env)\n"
+            "def good(graph, args):\n"
+            "    found = resolve(graph, args)\n"
+            "    target = {'service': 's'}\n"
+            "    target['resource'] = found[0]\n"
+            "    return {'service': 's', 'resource': found[0]}\n"
+            "def bad_literal(args):\n"
+            "    return {'service': 's', 'deployment': 'd', 'resource': args.resource}\n"
+            "def bad_store(request, args):\n"
+            "    request['target']['resource'] = args.resource\n"
+            "def bad_update(target, args):\n"
+            "    target.update(resource=args.resource)\n"
+        )
+        findings = probe_rule("probe_resource_findings")(source, "scripts/atlas.py")
+        self.assertEqual(len(findings), 3, report(findings))
+        self.assertIn("scripts/atlas.py:11", findings[0])
+        self.assertIn("bad_literal()", findings[0])
+        self.assertIn("scripts/atlas.py:13", findings[1])
+        self.assertIn("scripts/atlas.py:15", findings[2])
+        missing = probe_rule("probe_resource_findings")("def f():\n    return 1\n", "scripts/atlas.py")
+        self.assertEqual(len(missing), 1, report(missing))
+        self.assertIn("linked_resources", missing[0])
+
+    def test_a_log_line_with_fixed_keys_or_without_the_constant_is_reported(self):
+        """SPEC-0096:G3 — write_probe_log com as chaves escritas à mão (como hoje) ou com chave fixa extra, ou sem a
+        constante PROBE_LOG_KEYS, é violação; a linha montada só a partir de PROBE_LOG_KEYS, não."""
+        # SPEC-0096:G3
+        good = ("PROBE_LOG_KEYS = ('at', 'atlas') + ('resource', 'commit')\n"
+                "def write_probe_log(record, extras):\n"
+                "    line = {key: record[key] for key in PROBE_LOG_KEYS if key in record}\n"
+                "    return json.dumps(line, sort_keys=True)\n")
+        self.assertEqual(probe_rule("probe_log_findings")(good, "scripts/atlas.py"), [])
+        today = ("def write_probe_log(record, extras):\n"
+                 "    line = {key: record[key] for key in ('at', 'atlas')}\n"
+                 "    return line\n")
+        findings = probe_rule("probe_log_findings")(today, "scripts/atlas.py")
+        self.assertEqual(len(findings), 2, report(findings))
+        self.assertTrue(any("PROBE_LOG_KEYS não é uma constante" in f for f in findings), report(findings))
+        self.assertTrue(any("não usa PROBE_LOG_KEYS" in f for f in findings), report(findings))
+        extra = good.replace("    return json", "    line['profile'] = record['profile']\n    return json")
+        findings = probe_rule("probe_log_findings")(extra, "scripts/atlas.py")
+        self.assertEqual(len(findings), 1, report(findings))
+        self.assertIn("chave fixa", findings[0])
+        literal = good.replace("    return json", "    line = dict(line, context=record['context'])\n    return json")
+        self.assertEqual(len(probe_rule("probe_log_findings")(literal, "scripts/atlas.py")), 1)
+
+    def test_atlas_follows_both_probe_rules(self):
+        """SPEC-0096:G3 — o atlas.py real: o recurso da entrada só passa por linked_resources, write_probe_log só usa
+        PROBE_LOG_KEYS, e a constante tem as chaves de hoje mais resource e commit (e, no máximo, reason e access da
+        SPEC-0104), nunca um campo de acesso nem de resultado."""
+        # SPEC-0096:G3
+        source = script_source()
+        findings = (probe_rule("probe_resource_findings")(source, "scripts/atlas.py")
+                    + probe_rule("probe_log_findings")(source, "scripts/atlas.py"))
+        self.assertEqual(findings, [], report(findings))
+        module = load_atlas()
+        keys = set(getattr(module, "PROBE_LOG_KEYS", ()) or ())
+        self.assertTrue(PROBE_LOG_TODAY | {"resource", "commit"} <= keys, keys)
+        self.assertEqual(keys - PROBE_LOG_TODAY - {"resource", "commit"} - PROBE_LOG_LATER, set(), keys)
+        for forbidden in ("items", "message", "context", "profile", "user", "database", "passfile", "base_url"):
+            self.assertNotIn(forbidden, keys)
 
 
 if __name__ == "__main__":

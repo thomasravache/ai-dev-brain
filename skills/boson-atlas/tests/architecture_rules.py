@@ -235,3 +235,138 @@ def personal_path_findings(text, filename):
         for match in PERSONAL_PATH.finditer(line):
             findings.append(f"{filename}:{number} — {RULE_PERSONAL_PATH} — '{match.group(0)}'")
     return findings
+
+
+# ---------------------------------------------------------------- probes (SPEC-0096, ADR-0025)
+
+RULE_PROBE_RESOURCE = "recurso da entrada de probe só pela resolução do recurso"
+RULE_PROBE_LOG = "probes.log só com as chaves de PROBE_LOG_KEYS"
+
+
+def _functions(tree):
+    """{nome: nó} de cada função do arquivo (inclusive aninhadas; o último nome vence)."""
+    return {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _called_names(function):
+    """Nomes chamados diretamente (f(...)) dentro da função."""
+    return {node.func.id for node in ast.walk(function)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+
+
+def _reaching(functions, target):
+    """Funções do arquivo que chamam `target`, direta ou indiretamente (pelos nomes; sem escopo)."""
+    reach = {target}
+    changed = True
+    while changed:
+        changed = False
+        for name, node in functions.items():
+            if name not in reach and _called_names(node) & reach:
+                reach.add(name)
+                changed = True
+    return reach
+
+
+def _const(node, value):
+    return isinstance(node, ast.Constant) and node.value == value
+
+
+def _is_target_expr(node):
+    """`target` ou `<algo>["target"]`: o alvo da entrada de uma probe."""
+    if isinstance(node, ast.Name):
+        return node.id == "target"
+    return isinstance(node, ast.Subscript) and _const(node.slice, "target")
+
+
+def _resource_writes(node):
+    """True quando o nó põe a chave "resource" no alvo de uma probe: dict literal com "resource" e "service",
+    target["resource"] = ..., ou dict(..., resource=...) / target.update(resource=...)."""
+    if isinstance(node, ast.Dict):
+        keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
+        return "resource" in keys and "service" in keys
+    if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        return any(isinstance(t, ast.Subscript) and _const(t.slice, "resource") and _is_target_expr(t.value)
+                   for t in targets)
+    if isinstance(node, ast.Call) and any(k.arg == "resource" for k in node.keywords):
+        func = node.func
+        return ((isinstance(func, ast.Name) and func.id == "dict")
+                or (isinstance(func, ast.Attribute) and func.attr == "update" and _is_target_expr(func.value)))
+    return False
+
+
+def probe_resource_findings(source, filename, resolver="linked_resources"):
+    """ADR-0025 (SPEC-0096, G3): a entrada de uma probe só ganha "resource" numa função que chega à função de
+    resolução do recurso (`resolver`, direta ou indiretamente); sem a função, uma violação. Regra por nome, como as
+    demais: um dict montado por ** ou por acesso dinâmico não é pego."""
+    tree = ast.parse(source)
+    functions = _functions(tree)
+    if resolver not in functions:
+        return [f"{filename}:1 — {RULE_PROBE_RESOURCE} — a função {resolver} não existe"]
+    reach = _reaching(functions, resolver)
+    findings = []
+
+    def visit(node, function):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function = node.name
+        if _resource_writes(node) and function not in reach:
+            where = f"{function}()" if function else "nível de módulo"
+            findings.append((node.lineno, (f"{filename}:{node.lineno} — {RULE_PROBE_RESOURCE} — \"resource\" no alvo "
+                                          f"em {where}, que não passa por {resolver}")))
+        for child in ast.iter_child_nodes(node):
+            visit(child, function)
+
+    visit(tree, None)
+    return [message for _, message in sorted(findings)]
+
+
+def _string_items(node):
+    """Textos de uma coleção literal (tupla, lista, conjunto), também dentro de tuple()/frozenset()/soma; None
+    quando o nó não é uma coleção de textos."""
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        items = [e.value for e in node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+        return items if len(items) == len(node.elts) else None
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("tuple", "frozenset",
+                                                                                         "list") and node.args:
+        return _string_items(node.args[0])
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _string_items(node.left), _string_items(node.right)
+        return None if left is None or right is None else left + right
+    return None
+
+
+def probe_log_findings(source, filename, function="write_probe_log", constant="PROBE_LOG_KEYS"):
+    """SPEC-0096 (G3): as chaves do probes.log ficam numa constante única do módulo (`constant`, coleção literal de
+    textos) e `function` monta a linha só a partir dela: usa o nome da constante e não escreve chave fixa (dict
+    literal com chave de texto, linha["x"] = ..., dict(x=...))."""
+    tree = ast.parse(source)
+    findings = []
+    keys = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == constant for t in node.targets):
+            keys = _string_items(node.value)
+    if not keys:
+        findings.append((1, (f"{filename}:1 — {RULE_PROBE_LOG} — {constant} não é uma constante do módulo com os "
+                            "nomes das chaves")))
+    writer = next((n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                   and n.name == function), None)
+    if writer is None:
+        findings.append((1, f"{filename}:1 — {RULE_PROBE_LOG} — a função {function} não existe"))
+        return [message for _, message in sorted(findings)]
+    if not any(isinstance(n, ast.Name) and n.id == constant for n in ast.walk(writer)):
+        findings.append((writer.lineno, (f"{filename}:{writer.lineno} — {RULE_PROBE_LOG} — {function}() não usa "
+                                        f"{constant}")))
+    for node in ast.walk(writer):
+        fixed = False
+        if isinstance(node, ast.Dict):
+            fixed = any(isinstance(k, ast.Constant) and isinstance(k.value, str) for k in node.keys)
+        elif isinstance(node, (ast.Assign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            fixed = any(isinstance(t, ast.Subscript) and isinstance(t.slice, ast.Constant)
+                        and isinstance(t.slice.value, str) for t in targets)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "dict":
+            fixed = any(k.arg for k in node.keywords)
+        if fixed:
+            findings.append((node.lineno, (f"{filename}:{node.lineno} — {RULE_PROBE_LOG} — chave fixa em "
+                                          f"{function}(), fora de {constant}")))
+    return [message for _, message in sorted(findings)]
