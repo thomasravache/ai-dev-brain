@@ -1,7 +1,7 @@
 ---
 id: ADR-0025
 title: "Probes de dependências: alvo do grafo, acesso local à nuvem e ao banco e contrato probe@2"
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-24
 pillars: []

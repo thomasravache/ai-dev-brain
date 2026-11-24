@@ -3,13 +3,13 @@ id: SPEC-0095
 title: "boson-atlas: verificação completa depois do deploy — dependências, sinais e funcional"
 tier: epic
 type: feature
-status: proposed
+status: approved
 created: 2026-11-24
 depends_on: [SPEC-0075]
 adrs: [ADR-0010, ADR-0011, ADR-0012, ADR-0023, ADR-0024, ADR-0025, ADR-0026]
 external: []
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-24
 ---
 
 # SPEC-0095 — boson-atlas: verificação completa depois do deploy — dependências, sinais e funcional (Épico)

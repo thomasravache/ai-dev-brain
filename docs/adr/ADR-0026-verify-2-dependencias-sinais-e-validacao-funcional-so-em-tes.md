@@ -1,7 +1,7 @@
 ---
 id: ADR-0026
 title: "verify@2: dependências, sinais e validação funcional só em teste"
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-24
 pillars: []

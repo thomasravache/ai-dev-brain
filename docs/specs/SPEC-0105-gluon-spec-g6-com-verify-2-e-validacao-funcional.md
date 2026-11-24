@@ -4,7 +4,7 @@ title: "gluon-spec: G6 com verify@2, acompanhamento da entrega e validação fun
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0103, SPEC-0106]
@@ -15,8 +15,8 @@ touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, ski
 adrs: [ADR-0023, ADR-0024, ADR-0025, ADR-0026]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-24
 ---
 
 # SPEC-0105 — gluon-spec: G6 com verify@2, acompanhamento da entrega e validação funcional
@@ -275,6 +275,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 0: Caracterização**
+- [ ] CH-01 escrito(s) com a tag `SPEC-0105:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+
+**Fase 1: Contrato e implementação**
+- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-01 com a tag `SPEC-0105:<ID>`, falhando pelo motivo certo
+- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->

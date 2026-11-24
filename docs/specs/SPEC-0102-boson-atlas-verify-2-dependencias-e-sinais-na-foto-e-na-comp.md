@@ -4,7 +4,7 @@ title: "boson-atlas: verify@2 — dependências e sinais na foto e na comparaç�
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
@@ -15,8 +15,8 @@ touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/ver
 adrs: [ADR-0010, ADR-0023, ADR-0024, ADR-0025, ADR-0026]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-24
 ---
 
 # SPEC-0102 — boson-atlas: verify@2 — dependências e sinais na foto e na comparação
@@ -401,6 +401,20 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 0: Caracterização**
+- [ ] CH-01 escrito(s) com a tag `SPEC-0102:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+
+**Fase 1: Contrato e implementação**
+- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, UT-09, UT-10, UT-11, IT-01, CT-01, CT-02 com a tag `SPEC-0102:<ID>`, falhando pelo motivo certo
+- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
