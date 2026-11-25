@@ -33,7 +33,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.19"
+ATLAS_VERSION = "2026.11.20"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -1998,6 +1998,31 @@ def collector_environment(choice=None) -> dict:
     return {k: v for k, v in os.environ.items() if k not in hidden}
 
 
+PROFILE_ENV = "ATLAS_COLLECTOR_PROFILE"
+
+
+def collector_profiles(choice=None) -> dict:
+    """{collector id: profile name} from credentials.<id>.profile of the chosen atlas's local entry (SPEC-0097):
+    only the name, never read nor printed here."""
+    config, name, _ = chosen_atlas(choice=choice)
+    credentials = config["entries"][name].get("credentials")
+    profiles = {}
+    for cid, entry in (credentials.items() if isinstance(credentials, dict) else ()):
+        profile = entry.get("profile") if isinstance(entry, dict) else None
+        if isinstance(profile, str) and profile:
+            profiles[cid] = profile
+    return profiles
+
+
+def environment_for(env: dict, profile) -> dict:
+    """Environment of one collector (SPEC-0097): ATLAS_COLLECTOR_PROFILE inherited from the shell never reaches a
+    collector; the collector with credentials.<id>.profile gets it with that name."""
+    result = {k: v for k, v in env.items() if k != PROFILE_ENV}
+    if profile:
+        result[PROFILE_ENV] = profile
+    return result
+
+
 def selected_collectors(collectors: list, only) -> list:
     if not only:
         return [c for c in collectors if c["enabled"]]
@@ -2039,8 +2064,9 @@ def cmd_scan(only=None, as_json=False, choice=None):
     today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     reports = []
     env = collector_environment(choice)
+    profiles = collector_profiles(choice)
     for collector in selected:
-        report = scan_one(collector, atlas, extras, today, env)
+        report = scan_one(collector, atlas, extras, today, environment_for(env, profiles.get(collector["id"])))
         previous = state.get(collector["id"]) if isinstance(state.get(collector["id"]), dict) else {}
         if report["status"] == "ok":
             state[collector["id"]] = {"seen_at": today, "status": "ok", "entities": report["entities"],

@@ -1,0 +1,11 @@
+{
+  "DBInstances": [
+    {
+      "DBInstanceIdentifier": "ledger-db",
+      "Engine": "postgres",
+      "DBInstanceStatus": "creating",
+      "DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:ledger-db",
+      "MasterUsername": "acme_admin"
+    }
+  ]
+}

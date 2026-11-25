@@ -1,0 +1,39 @@
+{
+  "Subscriptions": [
+    {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000001",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:us-east-1:123456789012:orders",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:order-events"
+    },
+    {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:payments.fifo:0b1c2d3e-0000-4000-8000-000000000002",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:us-east-1:123456789012:payments.fifo",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:payments.fifo"
+    },
+    {
+      "SubscriptionArn": "PendingConfirmation",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:us-east-1:123456789012:refunds",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:order-events"
+    },
+    {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000003",
+      "Owner": "123456789012",
+      "Protocol": "https",
+      "Endpoint": "https://hooks.acme.example/order-events",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:order-events"
+    },
+    {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000004",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:sa-east-1:123456789012:audit",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:order-events"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "DBClusters": [
+    {
+      "DBClusterIdentifier": "orders-db",
+      "DBClusterArn": "arn:aws:rds:us-east-1:123456789012:cluster:orders-db",
+      "Engine": "aurora-postgresql",
+      "EngineVersion": "16.4",
+      "EngineMode": "provisioned",
+      "ServerlessV2ScalingConfiguration": {
+        "MinCapacity": 0.5,
+        "MaxCapacity": 8
+      },
+      "Endpoint": "orders-db.cluster-abc123.us-east-1.rds.amazonaws.com",
+      "ReaderEndpoint": "orders-db.cluster-ro-abc123.us-east-1.rds.amazonaws.com",
+      "Port": 5432,
+      "MasterUsername": "acme_admin",
+      "Status": "available",
+      "DBClusterMembers": [
+        {
+          "DBInstanceIdentifier": "orders-db-1",
+          "IsClusterWriter": true
+        },
+        {
+          "DBInstanceIdentifier": "orders-db-2",
+          "IsClusterWriter": false
+        }
+      ],
+      "TagList": [
+        {
+          "Key": "team",
+          "Value": "payments"
+        }
+      ]
+    }
+  ]
+}

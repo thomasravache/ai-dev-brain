@@ -1,0 +1,11 @@
+{
+  "Subscriptions": [
+    {
+      "SubscriptionArn": "arn:aws:sns:sa-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-0000000000a1",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:sa-east-1:123456789012:orders",
+      "TopicArn": "arn:aws:sns:sa-east-1:123456789012:order-events"
+    }
+  ]
+}

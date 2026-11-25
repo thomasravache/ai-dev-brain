@@ -1,0 +1,6 @@
+{
+  "QueueUrls": [
+    "https://sqs.us-east-1.amazonaws.com/123456789012/orders",
+    "https://sqs.us-east-1.amazonaws.com/123456789012/report-202411241200"
+  ]
+}

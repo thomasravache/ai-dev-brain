@@ -9,6 +9,13 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.20] - 2026-11-25
+
+### Added
+- Coletor `aws` da skill (`assets/collectors/aws.py`), só leitura pela AWS CLI da máquina: `--services rds,elasticache` (category `data`) dá um `datastore` por cluster ou instância avulsa RDS/Aurora (inclusive Aurora Serverless), grupo de replicação, cluster avulso e cache serverless do ElastiCache, com `type`, `engine`, `host`, `port` inteiro, `reader_host` (quando há), `region` e `serverless`; `--services sqs,sns` (category `messaging`) dá `queue` (`fifo`, `region`, `dlq` com o nome de outra fila da mesma saída, `filtered_topics`), `topic` e a relação `topic → queue` `publishes` por assinatura SQS confirmada. Ids = nomes dos recursos, para o `build` ligar pelo `config_refs` do `argocd` sem regra nova. Lista fechada de operações (`build_call`), `--max-items` em toda lista (`NextToken` = falha, nunca snapshot parcial), `--region` com até 10 regiões (a primeira vence um nome repetido), erros da CLI como mensagem fixa sem o stderr dela; nenhum ARN, URL, id de conta, `Owner` ou conteúdo de filtro sai, e um recurso com 12 dígitos seguidos é descartado (SPEC-0097, ADR-0025).
+- `scan`: o coletor `<id>` recebe `ATLAS_COLLECTOR_PROFILE` com o nome em `credentials.<id>.profile` da configuração local; uma variável com esse nome herdada do shell nunca chega a coletor nenhum. O coletor `aws` a repassa à AWS CLI como `AWS_PROFILE`, sem as chaves estáticas (SPEC-0097).
+- `references/collectors/aws.md` (setup, política IAM mínima, opções, chamadas, saída, casamento no `build`, falhas e limites); `references/collector-contract.md` documenta `publishes` de tópico para fila, `ATLAS_COLLECTOR_PROFILE` e os exemplos `data-aws` e `messaging-aws`; `references/config.md` e `SKILL.md` atualizados (SPEC-0097).
+
 ## [2026.11.19] - 2026-11-25
 
 ### Added

@@ -53,7 +53,7 @@ O coletor imprime na **saída padrão um único objeto JSON** e sai com 0. O que
 **Relação** — `{from, to, type, source}` e, opcional, `inferred` (`true` só nas relações inferidas pelo cruzamento, SPEC-0036):
 
 - `from` e `to` no formato `kind:id`, com um `kind` da lista acima. A relação pode apontar para uma entidade de **outro** coletor (por exemplo um deployment do Argo CD → `repository:acme/api` do GitHub): isso é válido; referência que não existe em nenhum snapshot é aviso do `lint` (SPEC-0039), não erro do `scan`.
-- `type`: `builds` (pipeline → repository), `sourced_from` (deployment → repository), `deploys` (deployment → service), `runs_in` (deployment → environment ou cluster), `reads`/`writes` (service → datastore ou bucket), `publishes`/`consumes` (service → queue ou topic), `depends_on` (service → qualquer entidade, quando a direção não é conhecida) e `owns` (team → repository ou service).
+- `type`: `builds` (pipeline → repository), `sourced_from` (deployment → repository), `deploys` (deployment → service), `runs_in` (deployment → environment ou cluster), `reads`/`writes` (service → datastore ou bucket), `publishes`/`consumes` (service → queue ou topic; `publishes` também de topic → queue, uma por assinatura do tópico para a fila, como o coletor `aws` emite: `references/collectors/aws.md`), `depends_on` (service → qualquer entidade, quando a direção não é conhecida) e `owns` (team → repository ou service).
 
 **Sinal** — objeto com `type` e só os campos `repository`, `total`, `pattern_counts`, `sample`, `counts` e `present` (por exemplo `{type: "pr-titles", repository, total, pattern_counts, sample}`): só contagens e uma amostra limitada, **nunca** o texto inteiro de PRs ou commits.
 
@@ -112,6 +112,7 @@ Para cada coletor habilitado (ou só os de `--only`): executa, valida, mascara, 
 - `seen_at` é a data (UTC) do último scan **bem-sucedido** do coletor: é o `seen_at` de todos os fatos dele. Coletor com falha fica com `status: "failed"`, o `seen_at` e as contagens anteriores e o snapshot anterior intacto; os outros coletores seguem.
 - O snapshot é normalizado: entidades ordenadas por `kind:id`, relações por `from`/`type`/`to`, chaves ordenadas, indentação de 2 espaços. O mesmo estado gera o mesmo arquivo; se só `collected_at` mudou, o arquivo não é regravado (o histórico do atlas não ganha ruído).
 - Saída por coletor: `OK <id> — +A entidades, -R, ~C; +a relações, -r` (adicionadas, removidas e alteradas desde o scan anterior), `OK <id> — sem mudanças`, `N valor(es) mascarado(s)` e as chaves descartadas, ou `FALHA <id> — <motivo>`. `--json` imprime `{"version", "ok", "collectors": [...]}` com o diff completo de cada coletor.
+- **Profile por coletor:** quando a configuração local declara `credentials.<id>.profile`, o coletor `<id>` recebe o nome em `ATLAS_COLLECTOR_PROFILE` (só o nome, nunca uma credencial; qualquer coletor pode usar). Uma `ATLAS_COLLECTOR_PROFILE` herdada do shell é sempre tirada do ambiente antes, então um coletor sem profile declarado nunca a recebe. Sem profile declarado, o ambiente do coletor é o mesmo de antes (SPEC-0097). O coletor `aws` a repassa à AWS CLI como `AWS_PROFILE`.
 - Exit 0 sem falha, 1 com alguma falha, 2 com configuração inválida, `--only` com id não declarado ou com coletor `enabled: false` (nada roda).
 - Sem nenhum coletor habilitado, o `scan` só avisa e sai com 0, sem gravar nada (nem cria `snapshots/`).
 
@@ -282,6 +283,41 @@ Os exemplos abaixo são os mesmos de `tests/fixtures/contract/` e passam (ou fal
       "type": "depends_on",
       "source": "argocd"
     }
+  ]
+}
+```
+
+**Coletor de dados (AWS), com banco Aurora e cache Valkey** (`valid/data-aws.json`) — `port` inteiro, `reader_host` informativo, sem `migrations_table`:
+
+```json
+{
+  "contract": "boson-atlas/collector@1",
+  "collector": "aws",
+  "category": "data",
+  "collected_at": "2026-11-24T12:00:00Z",
+  "entities": [
+    {"kind": "datastore", "id": "orders-cache", "name": "orders-cache", "attrs": {"engine": "valkey", "host": "orders-cache.abc123.ng.0001.use1.cache.amazonaws.com", "port": 6379, "reader_host": "orders-cache-ro.abc123.ng.0001.use1.cache.amazonaws.com", "region": "us-east-1", "serverless": false, "type": "elasticache"}, "source": "aws"},
+    {"kind": "datastore", "id": "orders-db", "name": "orders-db", "attrs": {"engine": "aurora-postgresql", "host": "orders-db.cluster-abc123.us-east-1.rds.amazonaws.com", "port": 5432, "reader_host": "orders-db.cluster-ro-abc123.us-east-1.rds.amazonaws.com", "region": "us-east-1", "serverless": true, "type": "rds"}, "source": "aws"}
+  ],
+  "relations": []
+}
+```
+
+**Coletor de mensageria (AWS), com DLQ e assinatura tópico → fila** (`valid/messaging-aws.json`) — `dlq` é o id de outra `queue` da mesma saída e `filtered_topics` só diz que há filtro, nunca o conteúdo:
+
+```json
+{
+  "contract": "boson-atlas/collector@1",
+  "collector": "aws",
+  "category": "messaging",
+  "collected_at": "2026-11-24T12:00:00Z",
+  "entities": [
+    {"kind": "queue", "id": "orders", "name": "orders", "attrs": {"dlq": "orders-dlq", "fifo": false, "filtered_topics": ["order-events"], "region": "us-east-1", "type": "sqs"}, "source": "aws"},
+    {"kind": "queue", "id": "orders-dlq", "name": "orders-dlq", "attrs": {"fifo": false, "region": "us-east-1", "type": "sqs"}, "source": "aws"},
+    {"kind": "topic", "id": "order-events", "name": "order-events", "attrs": {"fifo": false, "region": "us-east-1", "type": "sns"}, "source": "aws"}
+  ],
+  "relations": [
+    {"from": "topic:order-events", "to": "queue:orders", "type": "publishes", "source": "aws"}
   ]
 }
 ```

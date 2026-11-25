@@ -1,0 +1,18 @@
+{
+  "ServerlessCaches": [
+    {
+      "ServerlessCacheName": "rates-cache",
+      "Engine": "valkey",
+      "Status": "available",
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:serverlesscache:rates-cache",
+      "Endpoint": {
+        "Address": "rates-cache-abc123.serverless.use1.cache.amazonaws.com",
+        "Port": 6379
+      },
+      "ReaderEndpoint": {
+        "Address": "rates-cache-abc123.serverless.use1.cache.amazonaws.com",
+        "Port": 6380
+      }
+    }
+  ]
+}

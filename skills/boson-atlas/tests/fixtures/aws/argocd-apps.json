@@ -1,0 +1,54 @@
+[
+  {
+    "metadata": {
+      "name": "api-dev",
+      "namespace": "argocd",
+      "labels": {
+        "app.kubernetes.io/part-of": "api",
+        "env": "dev"
+      }
+    },
+    "spec": {
+      "project": "payments",
+      "source": {
+        "repoURL": "https://github.com/acme/api.git",
+        "path": "deploy/helm",
+        "targetRevision": "main",
+        "helm": {
+          "releaseName": "api",
+          "parameters": [
+            {
+              "name": "env.ORDERS_QUEUE_URL",
+              "value": "https://sqs.us-east-1.amazonaws.com/123456789012/orders"
+            },
+            {
+              "name": "env.ORDER_EVENTS_TOPIC",
+              "value": "arn:aws:sns:us-east-1:123456789012:order-events"
+            },
+            {
+              "name": "env.DB_HOST",
+              "value": "orders-db.cluster-abc123.us-east-1.rds.amazonaws.com"
+            },
+            {
+              "name": "replicaCount",
+              "value": "2"
+            }
+          ]
+        }
+      },
+      "destination": {
+        "server": "https://kubernetes.default.svc",
+        "namespace": "dev"
+      }
+    },
+    "status": {
+      "sync": {
+        "status": "Synced",
+        "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4"
+      },
+      "health": {
+        "status": "Healthy"
+      }
+    }
+  }
+]

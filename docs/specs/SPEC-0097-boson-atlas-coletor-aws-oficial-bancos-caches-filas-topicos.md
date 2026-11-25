@@ -4,14 +4,14 @@ title: "boson-atlas: coletor aws oficial — bancos, caches, filas, tópicos e a
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/assets/collectors/aws.py, skills/boson-atlas/references/collectors/aws.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/config.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_collector_aws.py, skills/boson-atlas/tests/fixtures/aws/**, skills/boson-atlas/tests/fixtures/contract/valid/*-aws.json, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/test_contract_rename.py, skills/boson-atlas/assets/collectors/aws.py, skills/boson-atlas/references/collectors/aws.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/config.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_collector_aws.py, skills/boson-atlas/tests/fixtures/aws/**, skills/boson-atlas/tests/fixtures/contract/valid/*-aws.json, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0025]
 external: []
 size: M
@@ -256,6 +256,13 @@ A DLQ de uma fila ligada ao deployment também é alvo de probe pelo atributo `d
 }
 ```
 
+**Esclarecimentos (Emenda v2):**
+- **Fixtures de contrato novas:** os exemplos `data-aws.json` e `messaging-aws.json` em `tests/fixtures/contract/valid/` mudam a lista fixa de arquivos de contrato que `tests/test_contract_rename.py` caracteriza. Por isso `tests/test_contract_rename.py` entra nos `touches`, só para acrescentar os dois arquivos válidos à lista.
+- **Função de montagem da chamada:** a lista fechada de operações da AWS CLI fica numa função `build_call(service, operation, region, max_items=1000, extra=())`. Ela devolve o argv a partir de `aws` e recusa com "chamada não permitida" qualquer operação fora da lista.
+
+**Esclarecimentos (Emenda v3):**
+- **Regra de arquitetura dos coletores:** a regra que diz quais coletores podem abrir processo (`COLLECTOR_PROCESS_FUNCTIONS` em `tests/test_architecture.py`) passa a incluir `aws.py`, com `run_cli` como a única função que roda a AWS CLI. Por isso o arquivo entra nos `touches`.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -350,33 +357,33 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01 escrito(s) com a tag `SPEC-0097:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+- [x] CH-01 escrito(s) com a tag `SPEC-0097:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
 
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, IT-01, IT-02, CT-01 com a tag `SPEC-0097:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, IT-01, IT-02, CT-01 com a tag `SPEC-0097:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=30, skipped=1)) — fce5d0f | 2026-11-25 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 1d70675 | 2026-11-25 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 0dd5baa | 2026-11-25 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente): APPROVED — 0 major, 4 minor (isdigit com dígitos Unicode, regex com $ aceita quebra de linha final, Attributes de tipo errado tratado como vazio, erro do argparse repete o argumento) — 0ead9a0 | 2026-11-25 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 5ac3c40 | 2026-11-25 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-25 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-25 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 4a8ea1a | 2026-11-25 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -388,38 +395,63 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Coletor `aws` oficial da boson-atlas, só de leitura pela AWS CLI. Ele traz bancos (RDS e Aurora), caches (ElastiCache, inclusive serverless), filas SQS com a DLQ, tópicos SNS e as assinaturas tópico → fila, no contrato `@1` dos coletores, sem nenhum ARN, URL ou id de conta no atlas. O profile da nuvem vai por nome em `credentials.<id>.profile`, só para esse coletor. Versões: boson-atlas 2026.11.20 e plugin 2026.11.35.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`assets/collectors/aws.py`:** `build_call` fecha a lista de operações de leitura e `run_cli` é o único processo, sem shell e com timeout; recurso com 12 dígitos seguidos é descartado.
+- **`scripts/atlas.py`:** o `scan` passa `ATLAS_COLLECTOR_PROFILE` só ao coletor com profile e o tira do ambiente dos outros.
+- **Documentação:** `references/collectors/aws.md`, `collector-contract.md` (`publishes` de tópico para fila e os exemplos) e `config.md`.
+- **Emendas:** v2 (fixtures de contrato e `build_call`) e v3 (regra de arquitetura dos coletores).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 2dbee36 e fce5d0f (G1) e green em faaae4e e 3a8d0c9 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | ambiente dos coletores sem profile segue igual | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| UT-01 | bancos e caches com type, engine, serverless, host e port | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| UT-02 | filas com dlq, tópicos e assinaturas tópico → fila | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| UT-03 | só operações de leitura da lista fechada | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| UT-04 | erros da CLI com mensagens fixas, sem valores | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| UT-05 | limite de itens falha sem snapshot parcial | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| UT-06 | nenhum ARN, URL, conta, Owner nem filtro no snapshot | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| UT-07 | profile só por nome e só para esse coletor | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| IT-01 | scan real gera snapshot @1 válido | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| IT-02 | SSO expirado num serviço vira falha do coletor | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
+| CT-01 | exemplos de contrato data-aws e messaging-aws | PASS | `test_collector_aws.py`, `test_contract_rename.py` e `test_architecture.py`; G2 PASS em 1d70675; G4 `verify` 11/11 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.35 depois do merge. O coletor só roda quando declarado em `collectors` do atlas.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - `isdigit` aceita dígitos Unicode em `--max-items` e na porta;
+  - regexes com `$` aceitam quebra de linha no fim;
+  - `Attributes` de tipo errado tratado como vazio;
+  - o erro do argparse repete o argumento.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0097`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-25 | Esclarecimentos (Emenda v3): `aws.py` na regra de arquitetura dos coletores (`run_cli`); `tests/test_architecture.py` nos `touches` | TEST_DEFECT relatado no G2 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
+| 2 | 2026-11-25 | Esclarecimentos (Emenda v2): `tests/test_contract_rename.py` nos `touches`; nome da função `build_call` | SPEC_DEFECT relatado no G1 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |

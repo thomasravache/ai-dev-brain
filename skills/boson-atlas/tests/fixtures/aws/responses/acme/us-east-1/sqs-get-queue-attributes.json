@@ -1,0 +1,14 @@
+{
+  "https://sqs.us-east-1.amazonaws.com/123456789012/orders": {
+    "Attributes": {
+      "RedrivePolicy": "{\"deadLetterTargetArn\": \"arn:aws:sqs:us-east-1:123456789012:orders-dlq\", \"maxReceiveCount\": 5}"
+    }
+  },
+  "https://sqs.us-east-1.amazonaws.com/123456789012/orders-dlq": {},
+  "https://sqs.us-east-1.amazonaws.com/123456789012/refunds": {
+    "Attributes": {
+      "RedrivePolicy": "{\"deadLetterTargetArn\": \"arn:aws:sqs:us-east-1:111122223333:refunds-dlq\", \"maxReceiveCount\": 5}"
+    }
+  },
+  "https://sqs.us-east-1.amazonaws.com/123456789012/payments.fifo": {}
+}
