@@ -9,7 +9,7 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/postgres.py, skills/boson-atlas/references/probes/postgres.md, skills/boson-atlas/tests/test_probe_postgres.py, skills/boson-atlas/tests/fixtures/postgres/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025]
@@ -78,7 +78,7 @@ Ele só roda as consultas fixas dele, nos catálogos e na tabela de histórico d
 
 ## 5. Requisitos Não-Funcionais
 - **Desempenho e escala:**
-  - `migrations`: no máximo 2 chamadas ao `psql` (detecção e leitura); `tables`: 1;
+  - `migrations`: 1 chamada de detecção mais 1 de leitura por tabela de histórico encontrada (no máximo 1 + 5; com uma tabela, 2), cada leitura uma entrada própria de `QUERIES` (Emenda v2); `tables`: 1;
   - `PGCONNECT_TIMEOUT=10`, `statement_timeout=15s`, `lock_timeout=2s` e timeout de 30 s no processo;
   - no máximo 5 tabelas de histórico lidas numa execução e `limits.lines` itens na saída.
 - **Segurança:**
@@ -171,6 +171,9 @@ erros → status: "error", items: [], exit 0, message:
     psql: exit diferente de 0 sem casar nenhum → "falha do psql"; stdout que não é o JSON esperado → "resposta inválida do psql"
   o arquivo de senhas é checado antes da chamada (existe, é arquivo comum; no POSIX, sem permissão de grupo nem de outros)
 ```
+
+**Esclarecimentos (Emenda v2):**
+- O limite de chamadas de `migrations` é 1 + n, com n ≤ 5 tabelas de histórico; o texto anterior ("no máximo 2") só valia para uma tabela e contradizia a regra de uma entrada de `QUERIES` por leitura.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -334,3 +337,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0099`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | Limite de chamadas de `migrations` passa a 1 + n (n ≤ 5) | Achado do Test-writer: "no máximo 2" contradiz uma entrada de `QUERIES` por leitura | nenhuma | thomas, 2026-11-25 (piloto automático com o recomendado) |
