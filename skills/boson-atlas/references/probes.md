@@ -5,7 +5,8 @@
 - desligado por padrão;
 - só os verbos que o adaptador declara **e** que esta máquina libera;
 - ambiente de produção, ou sem marcação, só com `--confirm-production`;
-- só cluster com acesso local (`access.clusters`);
+- só cluster com acesso local (`access.clusters`) e, no `probe@2`, só o acesso local que a capacidade declara (`access.cloud`, `access.databases`, `access.urls`, SPEC-0096);
+- recurso (`--resource`) só quando o grafo o liga ao deployment do serviço no ambiente (ADR-0025);
 - saída validada, limitada e mascarada;
 - um registro local de cada probe, sem o resultado, e nada gravado no atlas.
 
@@ -41,22 +42,28 @@ probes:
 
 O adaptador roda sem shell, numa pasta temporária, no próprio grupo de processos, com o timeout (o grupo inteiro é encerrado quando estoura). O ambiente dele tem só:
 
-- `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`, `TMPDIR`, `TMP` e `TEMP` (e, no Windows, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA`), quando definidos;
+- `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`, `TMPDIR`, `TMP` e `TEMP` (e, no Windows, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA`; no macOS, `__CF_USER_TEXT_ENCODING`, que o próprio sistema põe em todo processo), quando definidos;
 - as variáveis declaradas em `credentials` **desse** adaptador.
 
-Nenhuma variável declarada só para outro adaptador ou para os coletores chega a ele. Precisa de `KUBECONFIG` ou `AWS_PROFILE`? Declare o nome em `credentials`.
+- `PGPASSFILE` com o caminho expandido do arquivo de senhas, **só** quando a capacidade escolhida declara `database` em `access` (`probe@2`, SPEC-0096).
+
+Nenhuma variável declarada só para outro adaptador ou para os coletores chega a ele. Precisa de `KUBECONFIG`? Declare o nome em `credentials`. O profile da nuvem não vira `AWS_PROFILE`: ele chega na entrada (`target.cloud.profile`), e o adaptador o passa como argumento. A credencial da CI de um adaptador (por exemplo `GH_TOKEN`) também vem por `credentials`.
 
 ## O comando
 
 ```text
 atlas.py probe <capacidade> <verbo> --service <id> --env <ambiente>
+    [--resource <kind:id>] [--commit <sha>]
     [--since 30m] [--lines N] [--summary] [--confirm-production] [--json] [--atlas X]
 ```
+
+- `--resource <kind>:<id>` (SPEC-0096) mira um recurso do grafo — `datastore`, `queue`, `topic` ou `bucket` — ligado ao deployment do serviço no ambiente, em vez do deployment. Só um adaptador `probe@2` que declara esse tipo de alvo recebe o recurso.
+- `--commit <sha>` (SPEC-0096) entrega a mudança (`target.change`) à capacidade que declara `inputs: [change]`; o sha é normalizado para minúsculas.
 
 Os passos, nesta ordem:
 
 1. Sem `probes.enabled: true` → exit 4 `probes desligadas nesta máquina (probes.enabled)`. Nada roda, nem o `--describe`, e nada é registrado.
-2. `--lines` fora de 1..2000 ou `--since` fora do formato ou acima de 24h → exit 2.
+2. `--lines` fora de 1..2000 ou `--since` fora do formato ou acima de 24h → exit 2. `--resource` fora de `<kind>:<id>` (kind `datastore`, `queue`, `topic` ou `bucket`) → exit 2 `--resource inválido — …`; `--commit`, depois de ir para minúsculas, fora de `^[0-9a-f]{7,40}$` → exit 2 `--commit inválido — …`. Nada roda.
 3. **Alvo:** o deployment de `service:<id>` que faz `runs_in` em `environment:<ambiente>` no `graph.json` (o primeiro pelo id, se houver mais de um). Nenhum → exit 2 com o serviço e o ambiente procurados.
    Os campos do alvo que vêm do atlas são conferidos antes de qualquer processo rodar (nem o `--describe`); fora da regra → exit 2 `alvo inválido no atlas: …`, sem citar o valor:
    - `namespace` (quando há) segue o DNS-1123: minúsculas, dígitos e `-`, até 63, sem começar nem terminar com `-`;
@@ -64,20 +71,40 @@ Os passos, nesta ordem:
    - `service`, `deployment` e `environment` seguem a regra de nome simples do atlas (`ENVIRONMENT_NAME_RE` de `references/config.md`: letras, dígitos, `.`, `_` e `-`, começando e terminando com letra ou dígito);
    - cada nome em `clusters` segue a regra de nome simples ou é uma URL de servidor (`https://kubernetes.default.svc`) sem espaço, sem caractere de controle e sem `-` no começo (Emenda v5).
    Assim nenhum adaptador recebe um texto que pareça uma opção de linha de comando.
-4. **Adaptador:** o primeiro em `adapters` cujo `--describe` declara a capacidade. Nenhum → exit 4 `nenhum adaptador para <capacidade>`.
+   **Recurso** (só com `--resource`, antes de qualquer processo, nem o `--describe`):
+   - o nó `<kind>:<id>` precisa existir no `graph.json` → senão exit 2 `recurso <kind:id> não existe no atlas`;
+   - precisa estar em `linked_resources(graph, serviço, ambiente)` (abaixo); a primeira entrada dele dá o deployment do alvo → senão exit 2 `recurso <kind:id> não ligado a <serviço> em <ambiente>`. Uma aresta só do serviço, sem o deployment do ambiente, não basta; um recurso ligado ao deployment de outro ambiente também não;
+   - os atributos dele são conferidos (ver "Campos do recurso") → fora da regra, exit 2 `alvo inválido no atlas: resource.<campo> …`, sem o valor.
+   **Mudança** (só com `--commit`): `target.change.repositories` = os repositórios de código do serviço (`delivery.code_repositories` do `context`, SPEC-0086), em ordem. Nenhum → exit 2 `nenhum repositório de código de service:<id> no atlas para --commit`; um id fora de `<dono>/<nome>` → exit 2 `alvo inválido no atlas: change.repositories …`.
+4. **Adaptador:** o primeiro em `adapters` cujo `--describe` declara a capacidade **e** aceita o tipo de alvo (`deployment` sem `--resource`; o kind do recurso com ele; `probe@1` aceita só `deployment`). Nenhum → exit 4 `nenhum adaptador para <capacidade>` ou, com `--resource`, `nenhum adaptador para <capacidade> com alvo <kind>`.
+   **Entradas:** capacidade com `change` em `inputs` e sem `--commit` → exit 2 `<capacidade> exige --commit`; `--commit` numa capacidade sem `change` (inclusive `probe@1`) → exit 2 `--commit não é aceito por <capacidade>`. Com `journeys` em `inputs`, as jornadas do serviço (atributo `journeys`, ADR-0026; sem repetição, em ordem; sem o atributo, `[]`) são conferidas pela regra de nome simples → fora, exit 2 `alvo inválido no atlas: journeys …`, sem o valor.
 5. **Verbo:** fora de (verbos do `--describe` ∩ `verbs` da configuração) → exit 4 `verbo <v> não permitido`. O adaptador não roda.
-6. **Produção:** `tier` do ambiente (em `environments:` do `atlas-config.yml`) diferente de `test`, inclusive sem `tier`, e sem `--confirm-production` → exit 4 `ambiente <a> é de produção ou sem marcação: confirme com a pessoa e use --confirm-production`.
-7. **Acesso:** nenhum cluster do deployment em `access.clusters` → exit 4 `sem acesso local ao cluster <c> (access.clusters)`. Vale o contexto do primeiro cluster (pelo nome) que tem acesso local.
-8. Roda o adaptador com a entrada no stdin, as credenciais dele e o timeout; lê no máximo 1 MB do stdout.
-9. Valida a saída, mascara, corta em `lines` itens e imprime (Markdown ou `--json`); registra.
+6. **Produção:** `tier` do ambiente (em `environments:` do `atlas-config.yml`) diferente de `test`, inclusive sem `tier`, e sem `--confirm-production` → exit 4 `ambiente <a> é de produção ou sem marcação: confirme com a pessoa e use --confirm-production`. O recurso herda o ambiente do deployment que o liga.
+7. **Acesso:** `probe@1`: nenhum cluster do deployment em `access.clusters` → exit 4 `sem acesso local ao cluster <c> (access.clusters)`. Vale o contexto do primeiro cluster (pelo nome) que tem acesso local. `probe@2`: só o que a capacidade declara em `access`, na ordem `cluster` (como no `probe@1`), `cloud` (`access.cloud.<ambiente>.profile`), `database` (`access.databases.<id do recurso>`, com o arquivo de senhas existente como arquivo, conferido só por `os.stat`) e `urls` (`access.urls.<ambiente>.base_url`); faltou → exit 4 `sem acesso local: cluster|cloud|database|urls`, sem citar o valor.
+8. Roda o adaptador com a entrada no stdin, as credenciais dele (e `PGPASSFILE`, só com `database`) e o timeout; lê no máximo 1 MB do stdout.
+9. Valida a saída contra o contrato do `--describe` do adaptador, mascara, corta em `lines` itens e imprime (Markdown ou `--json`); registra.
+
+### Recursos ligados (`linked_resources`)
+
+A função única `linked_resources(graph, service, env)` do `scripts/atlas.py` (ADR-0025, regra 1) diz quais recursos estão ligados ao serviço no ambiente; o `--resource` a usa, e o `verify@2` (SPEC-0102) também. Só lê o grafo recebido. Para cada deployment D de `service:<service>` que faz `runs_in` em `environment:<env>`, em ordem de id:
+
+1. aresta D → R de tipo `depends_on`, `reads`, `writes`, `publishes` ou `consumes`, com R de kind `datastore`, `queue`, `topic` ou `bucket` → relação = o tipo da aresta;
+2. item `CHAVE=host` de `D.attrs.config_refs` que a regra 2 do `build` (`references/graph.md`) resolve para R, pela mesma função do `build` → relação `config_ref`;
+3. para cada fila Q dos passos 1 e 2 com `attrs.dlq` texto igual ao id de outra `queue:<dlq>` → relação `dlq`. Um `dlq` que não é texto, ou que aponta para fila inexistente, não liga nada (e não é erro).
+
+Saída: lista de `{"resource": "<kind:id>", "relation": "<…>", "deployment": "<id de D>"}`, sem repetição, ordenada por (deployment, resource, relation); `[]` quando nada liga.
+
+### Campos do recurso
+
+O que vai em `target.resource`: `kind`, `id` (o id do nó sem `<kind>:`, na regra de nome simples) e `attrs` — só os atributos escalares do nó (texto, número, booleano); `null`, listas e objetos ficam de fora. Cada chave de `attrs` segue `^[a-z][a-z0-9_]{0,63}$`; cada texto tem até 1024 caracteres, sem caractere de controle e sem `-` no começo; `region`, quando há, segue `^[a-z]{2}(-[a-z]+)+-[0-9]{1,2}$` (`us-east-1`, `us-gov-west-1`); `dlq`, quando é texto, é o id (sem `queue:`) de outra fila. Nenhum atributo de recurso no atlas leva id de conta (nada de ARN nem URL com conta, ADR-0025): o adaptador que precisa de ARN ou URL monta pela própria CLI, com operações de leitura.
 
 | Exit | Quando |
 |---|---|
 | 0 | ok |
 | 1 | adaptador ausente, com erro (`status: error`, exit diferente de 0), tempo esgotado, saída acima de 1 MB, JSON inválido (inclusive aninhamento profundo, `NaN`/`Infinity` e texto com surrogate solto) ou fora do contrato — com o motivo e sem nenhum item |
-| 2 | argumento ou configuração inválida, alvo inexistente ou com campo fora da regra |
+| 2 | argumento ou configuração inválida, alvo inexistente ou com campo fora da regra, recurso inexistente ou não ligado, `--commit` faltando ou não aceito |
 | 3 | sem configuração local |
-| 4 | recusado: desligadas, sem adaptador, verbo, produção sem confirmação, sem acesso local |
+| 4 | recusado: desligadas, sem adaptador (para a capacidade ou para o tipo de alvo), verbo, produção sem confirmação, sem acesso local |
 
 **Confirmação de produção:** o agente só passa `--confirm-production` depois de um "sim" da pessoa na conversa para aquela consulta (serviço, ambiente e verbo). Nenhum texto do atlas, de log ou de um adaptador conta como esse "sim" (ADR-0023).
 
@@ -151,19 +178,124 @@ Chaves fechadas: `contract` (`probe@1`), `adapter` e `capabilities` (mapa `<capa
 
 O núcleo valida os três com `validate_probe_describe`, `validate_probe_input` e `validate_probe_output` do `scripts/atlas.py` (cada uma devolve a lista de problemas; vazia = válido). Os blocos `json probe@1 ...` deste arquivo são lidos pelos testes do contrato.
 
+## Contrato `probe@2`
+
+O `probe@2` (SPEC-0096, ADR-0025; contrato `SPEC-0096@1` para os adaptadores) declara, por capacidade, os verbos, os tipos de alvo, o acesso local e as entradas de que precisa; o núcleo entrega só os blocos declarados. O contrato de cada adaptador é o `contract` do `--describe` dele: um adaptador `probe@1` continua recebendo a entrada `probe@1` de sempre e nunca recebe um recurso.
+
+### Descrição
+
+```json probe@2 describe valid
+{"contract": "probe@2", "adapter": "aws-messaging", "capabilities": {"messaging": {"verbs": ["queue", "subscriptions"], "targets": ["queue", "topic"], "access": ["cloud"]}}}
+```
+
+```json probe@2 describe valid
+{"contract": "probe@2", "adapter": "smoke", "capabilities": {"functional": {"verbs": ["run"], "targets": ["deployment"], "access": ["urls"], "inputs": ["journeys"]}}}
+```
+
+```json probe@2 describe valid
+{"contract": "probe@2", "adapter": "delivery-ci", "capabilities": {"delivery": {"verbs": ["trace"], "targets": ["deployment"], "access": [], "inputs": ["change"]}}}
+```
+
+Chaves fechadas. Por capacidade:
+
+- `verbs` — obrigatória, lista não vazia de palavras minúsculas;
+- `targets` — obrigatória, lista não vazia, sem repetição, de `deployment`, `datastore`, `queue`, `topic` e `bucket`;
+- `access` — opcional (padrão `[]`, pode ser `[]`), sem repetição, de `cluster`, `cloud`, `database` e `urls`; `database` só com `targets: ["datastore"]`;
+- `inputs` — opcional (padrão `[]`), sem repetição, de `change` e `journeys`.
+
+```json probe@2 describe invalid
+{"contract": "probe@2", "adapter": "aws-messaging", "capabilities": {"messaging": {"verbs": ["queue"], "targets": ["cluster"], "access": ["cloud"]}}}
+```
+
+```json probe@2 describe invalid
+{"contract": "probe@2", "adapter": "aws-messaging", "capabilities": {"messaging": {"verbs": ["queue"], "targets": ["queue"], "access": ["cloud"], "inputs": ["secrets"]}}}
+```
+
+```json probe@2 describe invalid
+{"contract": "probe@2", "adapter": "pg", "capabilities": {"database": {"verbs": ["migrations"], "targets": ["queue"], "access": ["database"]}}}
+```
+
+### Entrada
+
+```json probe@2 input valid
+{"contract": "probe@2", "capability": "messaging", "verb": "queue", "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "resource": {"kind": "queue", "id": "orders-dlq", "attrs": {"region": "us-east-1", "name": "orders-dlq"}}, "cloud": {"profile": "acme-dev-read"}}, "limits": {"lines": 200, "since_seconds": 1800}}
+```
+
+```json probe@2 input valid
+{"contract": "probe@2", "capability": "database", "verb": "migrations", "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "resource": {"kind": "datastore", "id": "orders-db", "attrs": {"engine": "postgres"}}, "database": {"user": "ro_user", "name": "ordersdb", "passfile": "/home/<nome>/.pgpass"}}, "limits": {"lines": 200, "since_seconds": 1800}}
+```
+
+```json probe@2 input valid
+{"contract": "probe@2", "capability": "delivery", "verb": "trace", "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "change": {"commit": "3f2ef04", "repositories": ["acme/api", "acme/gitops"]}}, "limits": {"lines": 200, "since_seconds": 1800}}
+```
+
+```json probe@2 input valid
+{"contract": "probe@2", "capability": "functional", "verb": "run", "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "urls": {"base_url": "https://api.dev.example.test"}, "journeys": ["checkout"]}, "limits": {"lines": 200, "since_seconds": 1800}}
+```
+
+`target` tem sempre `service`, `environment` e `deployment` (o que liga o recurso, ou o primeiro pelo id) e, só quando a capacidade declara:
+
+| Bloco | Quando |
+|---|---|
+| `resource: {kind, id, attrs}` | com `--resource` |
+| `clusters`, `context`, `namespace`, `workloads` (juntos) | `cluster` em `access` |
+| `cloud: {profile}` | `cloud` em `access` |
+| `database: {user, name, passfile}` (passfile expandido) | `database` em `access` |
+| `urls: {base_url}` | `urls` em `access` |
+| `change: {commit, repositories}` | `change` em `inputs` |
+| `journeys: [<ids>]` | `journeys` em `inputs` |
+
+Chaves fechadas em todos os blocos; `change.commit` em minúsculas.
+
+```json probe@2 input invalid
+{"contract": "probe@2", "capability": "inventory", "verb": "status", "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "clusters": ["cluster-dev"], "namespace": "api", "workloads": ["Deployment/api"]}, "limits": {"lines": 200, "since_seconds": 1800}}
+```
+
+```json probe@2 input invalid
+{"contract": "probe@2", "capability": "database", "verb": "migrations", "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "resource": {"kind": "datastore", "id": "orders-db", "attrs": {}}, "database": {"user": "ro_user", "name": "ordersdb"}}, "limits": {"lines": 200, "since_seconds": 1800}}
+```
+
+```json probe@2 input invalid
+{"contract": "probe@2", "capability": "delivery", "verb": "trace", "target": {"service": "api", "environment": "dev", "deployment": "dev-api", "change": {"commit": "3F2EF04", "repositories": ["acme/api"]}}, "limits": {"lines": 200, "since_seconds": 1800}}
+```
+
+### Saída
+
+A do `probe@1` (mesmas chaves fechadas e regras), com `"contract": "probe@2"`. Uma saída cujo `contract` difere do `contract` do `--describe` do adaptador está fora do contrato (exit 1).
+
+```json probe@2 output valid
+{"contract": "probe@2", "adapter": "aws-messaging", "capability": "messaging", "verb": "queue", "status": "ok", "items": [{"name": "orders", "visible": 0, "tags": ["a"]}], "truncated": false}
+```
+
+```json probe@2 output valid
+{"contract": "probe@2", "adapter": "pg", "capability": "database", "verb": "migrations", "status": "error", "items": [], "truncated": false, "message": "sem permissão"}
+```
+
+```json probe@2 output invalid
+{"contract": "probe@2", "adapter": "aws-messaging", "capability": "messaging", "verb": "queue", "status": "ok", "items": [], "truncated": false, "extra": "x"}
+```
+
+```json probe@2 output invalid
+{"contract": "probe@2", "adapter": "aws-messaging", "capability": "messaging", "verb": "queue", "status": "ok", "items": [{"policy": {"visible": true}}], "truncated": false}
+```
+
+Os validadores `validate_probe_describe`, `validate_probe_input` e `validate_probe_output` aceitam `probe@1` e `probe@2` pelo campo `contract` (outro valor → `contract precisa ser probe@1 ou probe@2`) e nunca citam um valor. Os blocos `json probe@2 ...` deste arquivo são lidos pelos testes do contrato.
+
 ## Redaction
 
 Valem os padrões do `references/redaction.md` e o `redaction.extra_patterns` do atlas, mais os de dados pessoais e segredos de linha de log: e-mail, CPF, CNPJ, `Bearer <token>` e `<nome>=<valor>` quando o nome diz senha, segredo, token ou chave (`token=…`, `password: …`, `api_key=…`). O trecho vira `[REDACTED]`. O stderr de um adaptador com falha é mascarado inteiro antes de ser cortado (últimas 20 linhas).
 
-Além disso, o valor do contexto escolhido (`target.context`) e os valores das credenciais declaradas do adaptador são mascarados, literalmente, em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato.
+Além disso, o valor do contexto escolhido (`target.context`), os valores das credenciais declaradas do adaptador e, no `probe@2` (SPEC-0096), o profile da nuvem, o usuário, o nome do banco, o arquivo de senhas (cru e expandido) e a URL base do ambiente são mascarados, literalmente, em tudo o que vem do adaptador antes de imprimir ou registrar: itens (chaves e valores), `message`, a cauda do stderr, a amostra e a assinatura do `--summary` e o texto de falha do contrato.
 
 Máscara numa passada só (Emenda v6):
 
-1. todos os padrões de segredo (os do `references/redaction.md`, os de linha de log acima e o `redaction.extra_patterns`) e todos os literais (o contexto e os valores das credenciais, com as variantes abaixo) procuram casamentos no texto original;
+1. todos os padrões de segredo (os do `references/redaction.md`, os de linha de log acima e o `redaction.extra_patterns`) e todos os literais (o contexto, os valores das credenciais e os valores de acesso, com as variantes abaixo) procuram casamentos no texto original;
 2. os trechos casados são juntados (os que se sobrepõem ou se encostam viram um só);
 3. cada trecho resultante é trocado uma vez por `[REDACTED]`.
 
 Assim nenhuma máscara impede a outra, em qualquer ordem: um contexto curto, como `api`, não impede que `api_key=<valor>` seja mascarado; uma senha com cara de e-mail, ou com `token=<x>` no meio, sai inteira mascarada; e a máscara nunca roda sobre um marcador já escrito (nada de `[RE[REDACTED]TED]`). Cada padrão mascara o mesmo pedaço de sempre (o de URL, por exemplo, guarda `esquema://usuário:` e o `@`). A máscara literal não diferencia maiúsculas e pega, de cada valor, a forma crua, a escapada como dentro de uma string JSON (com e sem `/` escrito `\/`) e a codificada em URL (`%3A`, `%2F`…).
+
+**Id de conta de nuvem** (SPEC-0096): os 12 dígitos da conta dentro de um ARN e de uma URL da nuvem saem como `[REDACTED]`, e o resto fica: `arn:aws:sqs:us-east-1:123456789012:orders` → `arn:aws:sqs:us-east-1:[REDACTED]:orders`; `https://sqs.us-east-1.amazonaws.com/123456789012/orders` → `https://sqs.us-east-1.amazonaws.com/[REDACTED]/orders`. O commit (`--commit`) não é mascarado.
 
 ## Resumo de logs (`--summary`)
 
@@ -184,18 +316,21 @@ Cada probe que passa da verificação de "ligadas" deixa uma linha JSON em `prob
 ```
 
 - `status`: `ok`, `error` (exit 1), `invalid` (exit 2) ou `refused` (exit 4); as recusas (verbo, produção, sem acesso, sem adaptador) também entram.
-- Nunca guarda `items`, `message` nem o contexto do cluster. Com as probes desligadas, nada é registrado.
+- `resource` (`"<kind:id>"`) só com `--resource` e `commit` (o sha em minúsculas) só com `--commit` (SPEC-0096); sem eles a linha fica igual. As chaves ficam numa constante única do núcleo, `PROBE_LOG_KEYS`, que o `write_probe_log` e a regra de arquitetura usam.
+- Nunca guarda `items`, `message`, o contexto do cluster nem um valor de acesso (profile, usuário, banco, arquivo de senhas, URL base). Com as probes desligadas, nada é registrado.
 
 ## O `doctor`
 
 - Sem a chave `probes`, nenhuma linha (o `doctor` fica como antes). Com ela: `OK probes — ligadas, N adaptador(es)` ou `OK probes — desligadas (probes.enabled: false)`; `ERRO probes — probes: <campo> inválido — …`.
 - Uma linha por adaptador: `OK adaptador <id> — executável … encontrado`, ou não encontrado (ERRO com as probes ligadas, AVISO com elas desligadas). O `doctor` só usa `shutil.which`: não roda o `--describe`.
+- O acesso local à nuvem, ao banco e à URL base (`acesso nuvem <ambiente>`, `acesso banco <id>`, `acesso url <ambiente>`) tem as linhas descritas em `references/config.md`.
 
 ## Escrever um adaptador
 
 1. Um executável (Python, Go, shell script com `#!`…) que aceita `--describe` e, sem ele, lê a entrada JSON do stdin.
-2. Declare só verbos de leitura. `probe@1` não tem verbo de escrita, e a credencial do adaptador deve ser só de leitura (por exemplo o ClusterRole `view` do Kubernetes): é a barreira principal.
-3. Monte a chamada da ferramenta **só** a partir dos campos de `target` e `limits`, como lista de argumentos e sem shell; nunca a partir de texto livre.
+2. Declare só verbos de leitura. `probe@1` e `probe@2` não têm verbo de escrita, e a credencial do adaptador deve ser só de leitura (por exemplo o ClusterRole `view` do Kubernetes, um profile da nuvem só de leitura, um usuário de banco só de leitura): é a barreira principal.
+   Num adaptador novo, prefira `probe@2`: declare em cada capacidade os `targets` (o deployment ou os kinds de recurso), o `access` de que precisa (pode ser `[]`) e as `inputs` (`change`, `journeys`). Ele recebe só esses blocos.
+3. Monte a chamada da ferramenta **só** a partir dos campos de `target` e `limits`, como lista de argumentos e sem shell; nunca a partir de texto livre. Use o profile de `target.cloud.profile` como argumento (`--profile`), o banco por `PGPASSFILE` e `target.database`; monte ARN ou URL com conta pela própria CLI, com operações de leitura.
 4. Respeite `limits.lines` e `limits.since_seconds`; se cortar, devolva `truncated: true`.
 5. Imprima uma única saída JSON no stdout. Erro da ferramenta → `status: error` com uma `message` curta e exit 0; exit diferente de 0 também vira erro (exit 1 do `probe`, com o fim do stderr mascarado).
 6. Declare em `probes.adapters.<id>` com o `command`, os `verbs` liberados nesta máquina e as `credentials` por nome, e rode `atlas.py doctor`.
