@@ -9,7 +9,7 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/cloudwatch.py, skills/boson-atlas/references/probes/cloudwatch.md, skills/boson-atlas/tests/test_probe_cloudwatch.py, skills/boson-atlas/tests/fixtures/cloudwatch/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025, ADR-0026]
@@ -213,6 +213,9 @@ erros → exit 0, status: "error", items: [], message fixa (sem stderr, profile,
 
 **Registro:** o adaptador não grava nada; o `probes.log` é do núcleo, com `resource` e sem resultado.
 
+**Esclarecimentos (Emenda v2):**
+- `PartialData` só conta na última página lida (a resposta sem `NextToken`, ou a 5ª página): nas páginas intermediárias a AWS usa esse status para dizer que há mais páginas, e isso não marca `truncated`.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -362,3 +365,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0100`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | `PartialData` só marca `truncated` na última página lida | Achado do Test-writer: nas páginas intermediárias o status só indica que há mais páginas | nenhuma | thomas, 2026-11-25 (piloto automático com o recomendado) |
