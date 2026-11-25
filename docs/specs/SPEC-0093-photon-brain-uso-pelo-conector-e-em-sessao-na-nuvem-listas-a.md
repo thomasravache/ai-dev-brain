@@ -14,7 +14,7 @@ approved_at:
 
 # SPEC-0093 — photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) (Épico)
 
-> **Radar (thomas, 2026-11-23):** primeiro feedback de uso real da photon-brain por conector, numa sessão na nuvem. Está registrado na inbox do vault, na nota `inbox/2026-11-23-020743-feedback-da-skill-second-brain-melhorias.md`; novos feedbacks entram na inbox do mesmo jeito. Um segundo feedback, do modo só conector no Google Drive (thomas, 2026-11-23), acrescentou os pontos 6 e 7 e detalhes nos pontos 3 e 5. Fica a detalhar antes do G0, sempre agnóstico e configurável. Os pontos:
+> **Radar (thomas, 2026-11-23):** primeiro feedback de uso real da photon-brain por conector, numa sessão na nuvem. Está registrado na inbox do vault, na nota `inbox/2026-11-23-020743-feedback-da-skill-second-brain-melhorias.md`; novos feedbacks entram na inbox do mesmo jeito. Um segundo feedback, do modo só conector no Google Drive (thomas, 2026-11-23), acrescentou os pontos 6 e 7 e detalhes nos pontos 3 e 5. Um terceiro, de uso real em 2026-11-25 (thomas), confirmou os pontos 1 a 6, trouxe detalhes nos pontos 3, 4 e 5 e acrescentou os pontos 8 a 11. Fica a detalhar antes do G0, sempre agnóstico e configurável. Os pontos:
 > 1. **Lista que cresce:**
 >    - pelo conector só dá para criar arquivo novo;
 >    - uma lista que vai ganhando itens vira várias capturas soltas na inbox;
@@ -27,15 +27,19 @@ approved_at:
 >    - há várias pastas `inbox` antigas que confundem a busca;
 >    - falta um jeito claro de identificar o vault e a inbox certos pelo conector;
 >    - no segundo feedback, o caminho que funcionou foi buscar `title = 'brain-config.yml'` e depois a pasta `inbox` com o mesmo `parentId`;
->    - sugestões: documentar esse passo no `references/connectors.md`, ou guardar o ID da pasta inbox do Drive na config local.
+>    - sugestões: documentar esse passo no `references/connectors.md`, ou guardar o ID da pasta inbox do Drive na config local;
+>    - no terceiro feedback, a sugestão é guardar os IDs da pasta do vault e da inbox **por provedor**.
 > 4. **Horário das capturas:**
 >    - numa sessão na nuvem, a captura sai em UTC quando ninguém ajusta o fuso;
 >    - o campo `created` vem sem o fuso;
->    - a ideia é gravar a data com o fuso e usar o fuso configurado do usuário.
+>    - a ideia é gravar a data com o fuso e usar o fuso configurado do usuário;
+>    - sugestão do terceiro feedback: um campo `timezone` no `brain-config.yml` e o `created` em ISO 8601 com o fuso.
 > 5. **Sessão sem a pasta do vault:**
 >    - sem a pasta conectada, nenhum fluxo completo de escrita funciona;
 >    - o modo só conector resolve a captura, mas não dá para rodar `index`, `relate` nem processar a inbox;
->    - a skill deveria orientar a pedir só a pasta do vault.
+>    - a skill deveria orientar a pedir só a pasta do vault;
+>    - no terceiro feedback, pedir acesso a toda a pasta de nuvem do usuário e à config local foi negado, e só funcionou depois de conectar a pasta do vault;
+>    - o SKILL.md deve explicar como conectar a pasta do vault ("Add folder") e deixar claro que, na nuvem, o `init --join` roda na máquina virtual da sessão, sem a config local do computador do usuário.
 > 6. **Config ilegível pelo conector do Drive:**
 >    - o `brain-config.yml` vem com o tipo `application/octet-stream`, e o `read_file_content` recusa esse tipo;
 >    - sem ler a config, o `capture --print` não confere o `layout.inbox` nem se o contexto existe;
@@ -43,6 +47,21 @@ approved_at:
 > 7. **Nome antigo na conta:**
 >    - a sessão na nuvem do segundo feedback ainda carregou a skill com o nome `second-brain`, não a `photon-brain`;
 >    - conferir se a conta tem uma versão antiga da skill ou o plugin antigo instalado, e se a SPEC-0067 cobre esse caso.
+>
+> 8. **Cópia da skill no vault sem os `assets/`:**
+>    - uma cópia do `brain.py` guardada dentro do vault, para uso na nuvem, falhou porque procura `assets/brain-config.yml`;
+>    - o remendo foi copiar `scripts` e `assets` juntos;
+>    - a correção é o `brain.py` não depender de `assets/` quando o vault já tem `brain-config.yml`, ou um comando oficial que copia a skill inteira para o vault.
+> 9. **Segredo na inbox sem alerta:**
+>    - uma captura antiga da inbox tem senhas em texto, e o `lint --only secret-in-note` não acusou nada;
+>    - aparentemente o `lint` não olha a `inbox/`;
+>    - o `lint` e o `inbox list` devem olhar a inbox e avisar quando um item parece ter senha ou token, sem mostrar o valor.
+> 10. **Acrescentar a uma nota que já existe:**
+>    - para completar notas já existentes, as seções foram inseridas antes de `## Relations` com um script à mão, fora do `log.md`;
+>    - sugestão: `append NOTA --section "Título" --text-file ARQ`, que insere antes de `## Relations` e registra no log.
+> 11. **Corpo da nota criada pelo `new-note`:**
+>    - o `new-note` cria só o esqueleto, e o corpo também foi escrito à mão, fora do log;
+>    - sugestão: aceitar `--body-file ARQ` no `new-note`.
 >
 > Antes de detalhar, conferir as specs entregues de captura e inbox (SPEC-0021) e de configuração (SPEC-0017), para não repetir o que já existe.
 
