@@ -9,9 +9,9 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/references/context.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_resource.py, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/fixtures/fake-probes/probe2.py, skills/boson-atlas/tests/fixtures/probe-resource/**, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/config.md, skills/boson-atlas/references/context.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_resource.py, skills/boson-atlas/tests/test_probe.py, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/fixtures/fake-probes/probe2.py, skills/boson-atlas/tests/fixtures/probe-resource/**, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025]
 external: []
 size: M
@@ -307,6 +307,10 @@ probes.log: + "resource": "<kind:id>" (só com --resource) e + "commit": "<sha>"
 
 Inválidos de exemplo: describe com `targets: ["cluster"]`; describe com `inputs: ["secrets"]`; entrada com `target.clusters` sem `context`; describe com `access: ["database"]` e `targets: ["queue"]`; entrada `probe@2` com `target.database` sem `passfile`; entrada com `target.change.commit` em maiúsculas; saída `probe@2` com `extra`.
 
+**Esclarecimentos (Emenda v2):**
+- **Teste antigo do `probe@1`:** o CT-01 da SPEC-0088 (`tests/test_probe.py`) usava uma entrada `probe@1` relabelada como `contract: probe@2` como exemplo inválido. Com esta spec, os validadores aceitam `probe@2`, e essa entrada passa a ser válida. O exemplo inválido passa a usar um contrato que não existe (`probe@3`). Por isso `tests/test_probe.py` entra nos `touches`.
+- **Ambiente base no macOS:** o `__CF_USER_TEXT_ENCODING` entra no ambiente base do adaptador. O macOS põe essa variável em todo processo filho, e ela não é credencial. Fica documentado em `references/probes.md` e `references/config.md`.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -444,6 +448,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
+| 2 | 2026-11-25 | Esclarecimentos (Emenda v2): `tests/test_probe.py` nos `touches` para corrigir o exemplo inválido do CT-01 da SPEC-0088; `__CF_USER_TEXT_ENCODING` no ambiente base | TEST_DEFECT relatado no G2 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
