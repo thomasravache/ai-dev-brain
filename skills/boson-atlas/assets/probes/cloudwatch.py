@@ -343,7 +343,7 @@ def read_pages(aws, queries, start, end):
             if not isinstance(values, list):
                 raise ProbeError(INVALID_ANSWER)
             for value in values:
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not finite(value):
                     raise ProbeError(INVALID_ANSWER)
             points[qid].extend(values)
             code = result.get("StatusCode")
@@ -359,14 +359,29 @@ def read_pages(aws, queries, start, end):
     return points, failed, True  # the 5th page still had a NextToken, or said PartialData
 
 
+def finite(value):
+    """True only for a number that is finite as a float; a huge integer (OverflowError) is not."""
+    try:
+        return math.isfinite(float(value))
+    except (OverflowError, ArithmeticError):
+        return False
+
+
 def aggregate(stat, values):
     if not values:
         return None
-    if stat == "sum":
-        return sum(values)
-    if stat == "avg":
-        return sum(values) / len(values)
-    return max(values) if stat == "max" else min(values)
+    try:
+        if stat == "sum":
+            result = sum(values)
+        elif stat == "avg":
+            result = sum(values) / len(values)
+        else:
+            result = max(values) if stat == "max" else min(values)
+    except (OverflowError, ArithmeticError):
+        raise ProbeError(INVALID_ANSWER) from None
+    if not finite(result):
+        raise ProbeError(INVALID_ANSWER)  # e.g. 1e308 + 1e308 is inf: never "value": Infinity
+    return result
 
 
 def run_metrics(aws, chosen, name, serverless, lines, since):
@@ -437,7 +452,7 @@ def probe(data):
         items, truncated, message = run_metrics(Aws(region, profile), chosen, name, serverless, lines, since)
     except ProbeError as error:
         return answer(data, "error", [], False, str(error))
-    except (AttributeError, TypeError, ValueError, KeyError):
+    except (AttributeError, TypeError, ValueError, KeyError, OverflowError):
         # a shape not foreseen: still a fixed message, never a traceback
         return answer(data, "error", [], False, INVALID_ANSWER)
     return answer(data, "ok", items, truncated, message)
