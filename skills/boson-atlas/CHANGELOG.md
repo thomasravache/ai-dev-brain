@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.21] - 2026-11-25
+
+### Added
+- Adaptador de probe `aws-messaging` da skill (`assets/probes/aws-messaging.py`, contrato `probe@2`, capacidade `messaging`, alvos `queue` e `topic`, acesso `cloud`), só leitura pela AWS CLI da máquina com o profile de `access.cloud.<ambiente>.profile` e a região do recurso: `queue` dá exatamente um item com `visible`, `in_flight`, `delayed`, `oldest_age_seconds` (métrica `ApproximateAgeOfOldestMessage` do CloudWatch; `null` com `oldest_age_source` `"sem dados"` ou `"sem permissão"`), `fifo`, a DLQ do atributo `dlq` (`dlq_visible`, `dlq_in_flight`) e se a `RedrivePolicy` aponta para ela; `subscriptions` dá um item por assinatura com `destination` (`queue:`, `function:`, `stream:` ou `<protocolo>:[REDACTED]`), `destination_fingerprint`, `filter_fingerprint` (hash do JSON canônico do filtro), `filter_keys` (só as chaves, nunca os valores), escopo, confirmação pendente, entrega crua e DLQ, com o resumo em `message` e corte em 100 ou `limits.lines`. Lista fechada de operações e opções (`get-queue-url`, `get-queue-attributes` com os quatro atributos, `get-metric-data`, `get-caller-identity`, `list-subscriptions-by-topic`, `get-subscription-attributes`), recusada antes de executar; nomes, região e profile conferidos por regex; URL da fila e ARN do tópico montados pela própria CLI, nunca lidos do atlas; erros como mensagem fixa sem o stderr da CLI ("renove o login da nuvem" no SSO expirado); ids de conta mascarados no adaptador (SPEC-0098, ADR-0025, ADR-0026).
+- `references/probes/aws-messaging.md` (configuração, política IAM mínima, o que é lido, saída, erros e os blocos de contrato) e o link no `SKILL.md` (SPEC-0098).
+
 ## [2026.11.20] - 2026-11-25
 
 ### Added
