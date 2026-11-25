@@ -215,6 +215,7 @@ erros → exit 0, status: "error", items: [], message fixa (sem stderr, profile,
 
 **Esclarecimentos (Emenda v2):**
 - `PartialData` só conta na última página lida (a resposta sem `NextToken`, ou a 5ª página): nas páginas intermediárias a AWS usa esse status para dizer que há mais páginas, e isso não marca `truncated`.
+- O UT-03 cobre isso com 3 páginas: `PartialData` só nas intermediárias → `truncated: false`; `PartialData` na última → `truncated: true`. O UT-04 cobre valores `NaN`, `Infinity` e estouro na agregação (sum/avg não finitos) → "resposta inválida da aws".
 
 **Design:** N/A — sem interface gráfica.
 
