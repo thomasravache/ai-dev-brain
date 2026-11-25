@@ -9,9 +9,9 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: []
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/tests/test_contract_rename.py, skills/boson-atlas/assets/collectors/aws.py, skills/boson-atlas/references/collectors/aws.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/config.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_collector_aws.py, skills/boson-atlas/tests/fixtures/aws/**, skills/boson-atlas/tests/fixtures/contract/valid/*-aws.json, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/tests/test_architecture.py, skills/boson-atlas/tests/test_contract_rename.py, skills/boson-atlas/assets/collectors/aws.py, skills/boson-atlas/references/collectors/aws.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/config.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_collector_aws.py, skills/boson-atlas/tests/fixtures/aws/**, skills/boson-atlas/tests/fixtures/contract/valid/*-aws.json, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0025]
 external: []
 size: M
@@ -260,6 +260,9 @@ A DLQ de uma fila ligada ao deployment também é alvo de probe pelo atributo `d
 - **Fixtures de contrato novas:** os exemplos `data-aws.json` e `messaging-aws.json` em `tests/fixtures/contract/valid/` mudam a lista fixa de arquivos de contrato que `tests/test_contract_rename.py` caracteriza. Por isso `tests/test_contract_rename.py` entra nos `touches`, só para acrescentar os dois arquivos válidos à lista.
 - **Função de montagem da chamada:** a lista fechada de operações da AWS CLI fica numa função `build_call(service, operation, region, max_items=1000, extra=())`. Ela devolve o argv a partir de `aws` e recusa com "chamada não permitida" qualquer operação fora da lista.
 
+**Esclarecimentos (Emenda v3):**
+- **Regra de arquitetura dos coletores:** a regra que diz quais coletores podem abrir processo (`COLLECTOR_PROCESS_FUNCTIONS` em `tests/test_architecture.py`) passa a incluir `aws.py`, com `run_cli` como a única função que roda a AWS CLI. Por isso o arquivo entra nos `touches`.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -427,4 +430,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0097`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-25 | Esclarecimentos (Emenda v3): `aws.py` na regra de arquitetura dos coletores (`run_cli`); `tests/test_architecture.py` nos `touches` | TEST_DEFECT relatado no G2 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
 | 2 | 2026-11-25 | Esclarecimentos (Emenda v2): `tests/test_contract_rename.py` nos `touches`; nome da função `build_call` | SPEC_DEFECT relatado no G1 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
