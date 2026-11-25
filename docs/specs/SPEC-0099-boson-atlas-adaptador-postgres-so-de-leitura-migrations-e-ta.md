@@ -287,7 +287,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 9699414 | 2026-11-25 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 0198673 | 2026-11-25 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 5 minor (fração de segundos no 3.9, PGSSLCERT/KEY vs texto, tabela de formato desconhecido derruba o verbo, ordem entre tabelas, desempate do Flyway) — a0978e1 | 2026-11-25 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ac1039d | 2026-11-25 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
