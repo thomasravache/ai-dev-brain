@@ -9,9 +9,9 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/assets/collectors/aws.py, skills/boson-atlas/references/collectors/aws.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/config.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_collector_aws.py, skills/boson-atlas/tests/fixtures/aws/**, skills/boson-atlas/tests/fixtures/contract/valid/*-aws.json, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/tests/test_contract_rename.py, skills/boson-atlas/assets/collectors/aws.py, skills/boson-atlas/references/collectors/aws.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/config.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_collector_aws.py, skills/boson-atlas/tests/fixtures/aws/**, skills/boson-atlas/tests/fixtures/contract/valid/*-aws.json, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0025]
 external: []
 size: M
@@ -256,6 +256,10 @@ A DLQ de uma fila ligada ao deployment também é alvo de probe pelo atributo `d
 }
 ```
 
+**Esclarecimentos (Emenda v2):**
+- **Fixtures de contrato novas:** os exemplos `data-aws.json` e `messaging-aws.json` em `tests/fixtures/contract/valid/` mudam a lista fixa de arquivos de contrato que `tests/test_contract_rename.py` caracteriza. Por isso `tests/test_contract_rename.py` entra nos `touches`, só para acrescentar os dois arquivos válidos à lista.
+- **Função de montagem da chamada:** a lista fechada de operações da AWS CLI fica numa função `build_call(service, operation, region, max_items=1000, extra=())`. Ela devolve o argv a partir de `aws` e recusa com "chamada não permitida" qualquer operação fora da lista.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -423,3 +427,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0097`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | Esclarecimentos (Emenda v2): `tests/test_contract_rename.py` nos `touches`; nome da função `build_call` | SPEC_DEFECT relatado no G1 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
