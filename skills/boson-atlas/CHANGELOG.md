@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.23] - 2026-11-25
+
+### Added
+- Adaptador de probe `cloudwatch` da skill (`assets/probes/cloudwatch.py`, contrato `probe@2`, capacidade `signals`, verbo `metrics`, alvos `datastore`, `queue` e `topic`, acesso `cloud`), só leitura pela AWS CLI da máquina com o profile de `access.cloud.<ambiente>.profile` e a região do recurso: o conjunto de métricas sai de uma tabela fixa no adaptador pelo `kind` e pelos atributos `type`, `engine` e `serverless` (`rds`, `rds-aurora` por `DBClusterIdentifier` com `ACUUtilization` só no serverless, `elasticache` por nós, `elasticache-serverless`, `sqs`, `sns`), separadas em erro, latência, saturação e tráfego; um item por métrica, na ordem da tabela, com `name`, `stat` em minúsculas, `value` agregado na janela (soma, média, máximo ou mínimo dos pontos; `null` sem ponto), `kind`, `unit`, `period` (≥ 60 s, até 60 pontos) e `datapoints`, e `nodes` no cache por nós (até 6 nós do grupo de replicação, agregados juntos; sem grupo, o próprio id). Uma `get-metric-data` em lote (até 60 consultas `MetricStat`, até 5 páginas com `--next-token`) e no máximo uma `describe-replication-groups`; lista fechada de operações e opções, recusada antes de executar; nenhum nome de métrica, namespace, dimensão ou expressão vem da entrada; "sem dados na janela", "dados parciais" (consulta `Forbidden`/`InternalError`) e `truncated` (`PartialData` só na última página lida, mais de 5 páginas, mais de 6 nós, `limits.lines`); erros como mensagem fixa sem o stderr da CLI ("renove o login da nuvem" no SSO expirado, "tipo de recurso sem sinais" para tipo sem conjunto); ids de conta mascarados no adaptador (SPEC-0100, ADR-0025, ADR-0026).
+- `references/probes/cloudwatch.md` (configuração, tipo do recurso, política IAM mínima, o que é lido, tabela das métricas, agregação, saída, erros e os blocos de contrato) e o link no `SKILL.md` (SPEC-0100).
+
 ## [2026.11.22] - 2026-11-25
 
 ### Added
