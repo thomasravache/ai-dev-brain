@@ -4,12 +4,12 @@ title: "boson-atlas: adaptador postgres só de leitura — migrations e tabelas"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/postgres.py, skills/boson-atlas/references/probes/postgres.md, skills/boson-atlas/tests/test_probe_postgres.py, skills/boson-atlas/tests/fixtures/postgres/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025]
@@ -78,7 +78,7 @@ Ele só roda as consultas fixas dele, nos catálogos e na tabela de histórico d
 
 ## 5. Requisitos Não-Funcionais
 - **Desempenho e escala:**
-  - `migrations`: no máximo 2 chamadas ao `psql` (detecção e leitura); `tables`: 1;
+  - `migrations`: 1 chamada de detecção mais 1 de leitura por tabela de histórico encontrada (no máximo 1 + 5; com uma tabela, 2), cada leitura uma entrada própria de `QUERIES` (Emenda v2); `tables`: 1;
   - `PGCONNECT_TIMEOUT=10`, `statement_timeout=15s`, `lock_timeout=2s` e timeout de 30 s no processo;
   - no máximo 5 tabelas de histórico lidas numa execução e `limits.lines` itens na saída.
 - **Segurança:**
@@ -172,6 +172,9 @@ erros → status: "error", items: [], exit 0, message:
   o arquivo de senhas é checado antes da chamada (existe, é arquivo comum; no POSIX, sem permissão de grupo nem de outros)
 ```
 
+**Esclarecimentos (Emenda v2):**
+- O limite de chamadas de `migrations` é 1 + n, com n ≤ 5 tabelas de histórico; o texto anterior ("no máximo 2") só valia para uma tabela e contradizia a regra de uma entrada de `QUERIES` por leitura.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -264,30 +267,30 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-01, CT-02 com a tag `SPEC-0099:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-01, CT-02 com a tag `SPEC-0099:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=93, skipped=1)) — f049d26 | 2026-11-25 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 9699414 | 2026-11-25 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 0198673 | 2026-11-25 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 5 minor (fração de segundos no 3.9, PGSSLCERT/KEY vs texto, tabela de formato desconhecido derruba o verbo, ordem entre tabelas, desempate do Flyway) — a0978e1 | 2026-11-25 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ac1039d | 2026-11-25 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-25 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-25 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 4189649 | 2026-11-25 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -299,38 +302,61 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Adaptador `postgres` (`probe@2`, capacidade `database`), só de leitura pelo `psql`. O verbo `migrations` detecta e lê as tabelas de histórico de Flyway, Rails, golang-migrate, EF, Alembic, Knex e Prisma (no máximo 5) e traz cada migration com id e sucesso; `tables` lista as tabelas de usuário no formato `schema.tabela`. Versões: boson-atlas 2026.11.22 e plugin 2026.11.37.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`assets/probes/postgres.py`:** dicionário fechado `QUERIES` com 9 SELECTs; identificadores validados e citados, nunca fragmentos de SQL; `PGOPTIONS` força transação só de leitura e toda resposta traz `transaction_read_only`, recusada se não for `on`; `PG*` herdadas removidas (menos as de SSL); argv em lista, sem shell; mensagens de erro fixas, sem host, usuário nem banco.
+- **Documentação:** `references/probes/postgres.md`, com o papel só de leitura sugerido.
+- **Emenda v2:** `migrations` faz 1 + n chamadas (n ≤ 5 tabelas de histórico).
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 1e5383b (G1) e green em c578f3f (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | argv fixo, ambiente PG* limpo, PGOPTIONS só leitura e passfile | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| UT-02 | histórico dos 7 formatos de migration normalizado | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| UT-03 | tabela de histórico declarada em migrations_table | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| UT-04 | tables sem catálogo, partições filhas nem contagem desconhecida | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| UT-05 | toda consulta pertence a QUERIES e é um SELECT único | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| UT-06 | erros do psql e respostas fora do formato viram mensagens fixas | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| IT-01 | probe migrations de ponta a ponta com o atlas.py real | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| IT-02 | probe tables de ponta a ponta com o atlas.py real | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| CT-01 | describe e blocos válidos e inválidos do contrato probe@2 | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
+| CT-02 | itens conferidos contra a regra 4a do ADR-0026 | PASS | `test_probe_postgres.py`; G2 PASS em 9699414; G4 `verify` 10/10 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.37 depois do merge. O adaptador só roda declarado em `probes.adapters`, com as probes ligadas e a credencial por referência.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - fração de segundos com 1, 2, 4 ou 5 dígitos não é normalizada no Python 3.9;
+  - `PGSSLCERT`/`PGSSLKEY` herdadas sempre, e o texto diz "quando declaradas";
+  - uma tabela de histórico de formato desconhecido derruba o verbo inteiro;
+  - com várias tabelas, a ordem é por tabela, não global;
+  - Flyway ordenado por `installed_on` em vez de `installed_rank`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0099`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | Limite de chamadas de `migrations` passa a 1 + n (n ≤ 5) | Achado do Test-writer: "no máximo 2" contradiz uma entrada de `QUERIES` por leitura | nenhuma | thomas, 2026-11-25 (piloto automático com o recomendado) |

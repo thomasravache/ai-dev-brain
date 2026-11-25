@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.22] - 2026-11-25
+
+### Added
+- Adaptador de probe `postgres` da skill (`assets/probes/postgres.py`, contrato `probe@2`, capacidade `database`, alvo `datastore`, acesso `database`), só leitura pelo `psql` da máquina: `migrations` acha a tabela de histórico no catálogo (Flyway, Rails, golang-migrate, Entity Framework, Alembic, Knex, Prisma, ou a do atributo `migrations_table`, reconhecida pelas colunas) e dá um item por migration com `id`, `success` (`false` em falha, `dirty` ou pendente), `schema`, `table`, `tool` e `applied_at`, do mais recente ao mais antigo, até 5 tabelas de histórico; `tables` dá `name` (`<schema>.<tabela>`), `schema`, `table` e `estimated_rows` (`pg_class.reltuples`, `null` se nunca analisada), sem schemas do sistema nem partições filhas. Uma forma só de chamada (`psql -X -w -q -A -t -v ON_ERROR_STOP=1 ... -c <consulta>`), sem `PG*` herdado (menos os de SSL), senha só por `PGPASSFILE`, sessão `default_transaction_read_only=on` com `statement_timeout` e `lock_timeout`, conferida em cada resposta; lista fechada `QUERIES` de `SELECT`s sobre o catálogo e a tabela de histórico, com identificadores validados; arquivo de senhas conferido por `os.stat` (existe, `chmod 600`); erros como mensagem fixa sem o stderr do `psql`, o host, o usuário nem o banco (SPEC-0099, ADR-0023, ADR-0025, ADR-0026).
+- `references/probes/postgres.md` (configuração, papel só de leitura sugerido, o que é lido, formatos de histórico, saída, erros e os blocos de contrato) e o link no `SKILL.md` (SPEC-0099).
+
 ## [2026.11.21] - 2026-11-25
 
 ### Added
