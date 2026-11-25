@@ -9,6 +9,18 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.19] - 2026-11-25
+
+### Added
+- `probe` mira um recurso do grafo: `--resource <kind:id>` (`datastore`, `queue`, `topic` ou `bucket`) ligado ao deployment do serviço no ambiente por uma aresta do deployment (`depends_on`, `reads`, `writes`, `publishes`, `consumes`), por um `config_refs` que a regra 2 do `build` resolve, ou como DLQ (atributo `dlq`) de uma fila ligada. A lista sai da função única `linked_resources(graph, service, env)`, que o `verify@2` também usará; o casamento do `config_refs` é a mesma função do `build` (`config_ref_targets`). Recurso inexistente, não ligado (só do serviço ou de outro ambiente) ou com atributo fora da regra (chave, texto acima de 1024, controle, `-` no começo, `region`) sai com 2 antes de qualquer processo, nem o `--describe`; o adaptador recebe só os atributos escalares. O recurso herda a regra de produção do ambiente (SPEC-0096, ADR-0025).
+- `probe --commit <sha>` (normalizado para minúsculas, 7 a 40 hexadecimais) entrega `target.change` com os repositórios de código do serviço (`delivery.code_repositories`) à capacidade que declara `inputs: [change]`; sem `--commit` nela → exit 2 `<capacidade> exige --commit`; `--commit` em outra → exit 2 `--commit não é aceito por <capacidade>`. Com `inputs: [journeys]`, a capacidade recebe `target.journeys` (atributo `journeys` do serviço, sem repetição) (SPEC-0096).
+- Contrato `probe@2` dos adaptadores: o `--describe` declara por capacidade `verbs`, `targets`, `access` (`cluster`, `cloud`, `database`, `urls`; pode ser `[]`) e `inputs` (`change`, `journeys`), e o núcleo entrega só os blocos declarados (`resource`, campos do cluster, `cloud`, `database`, `urls`, `change`, `journeys`); `PGPASSFILE` só para quem declara `database`. Os adaptadores `probe@1` seguem iguais e nunca recebem recurso. `validate_probe_describe`, `validate_probe_input` e `validate_probe_output` aceitam os dois contratos ("contract precisa ser probe@1 ou probe@2"); uma saída com `contract` diferente do `--describe` sai com 1. Exemplos marcados em `references/probes.md` (SPEC-0096).
+- Camada local: `access.cloud.<ambiente>.profile`, `access.databases.<datastore>.{user, database, passfile}` e `access.urls.<ambiente>.base_url`, validados (posição e motivo, nunca o valor) e mostrados só como `definido`; sem o acesso declarado, exit 4 `sem acesso local: cluster|cloud|database|urls`. O `doctor` ganha `acesso nuvem`, `acesso url` e `acesso banco` (o arquivo de senhas conferido só por `os.stat`: ausente ou acessível por outros usuários = ERRO) e o `context` ganha `cloud_access` por deployment e `database_access` por serviço, só com as chaves (SPEC-0096).
+- Máscara: o profile, o usuário, o nome do banco, o arquivo de senhas (cru e expandido) e a URL base entram nos literais da máscara numa passada só, e o id de conta de nuvem (12 dígitos dentro de ARN e de URL da nuvem) sai como `[REDACTED]`, mantendo o resto. `probes.log` ganha `resource` e `commit`, só quando usados, a partir da constante única `PROBE_LOG_KEYS` (SPEC-0096).
+
+### Changed
+- O ambiente do adaptador passa a incluir, no macOS, `__CF_USER_TEXT_ENCODING` (o próprio sistema o põe em todo processo; não é credencial) na lista base `PROBE_BASE_ENV` (SPEC-0096).
+
 ## [2026.11.18] - 2026-11-23
 
 ### Fixed

@@ -17,7 +17,7 @@ credentials:                          # só NOMES; nunca valores
 - `atlas` — pasta do atlas. Cada máquina grava o seu caminho **absoluto** (o `init` e o `init --join` gravam assim); um caminho relativo editado à mão vira ERRO no `doctor`.
 - `credentials` — por id de coletor: `env` (lista de nomes de variável de ambiente) e `profile` (nome de um profile da ferramenta, por exemplo da AWS CLI ou do `gh`). Cada nome de variável precisa seguir `^[A-Z_][A-Z0-9_]*$`; qualquer outra coisa (por exemplo um token colado no lugar do nome) faz `config` sair com 2 e `doctor` mostrar ERRO com "credentials aceita só nomes de variável: <coletor>", sem repetir o valor e sem gravar nada. Um `profile` com espaços sai do mesmo jeito, com "credentials aceita só um nome de profile, sem espaços: <coletor>".
 - O `atlas.py` nunca lê o valor de uma variável: o `doctor` só confere se o nome existe no ambiente (`definida` ou `não definida`) e mostra o nome do profile sem verificá-lo.
-- `access` — opcional: como esta máquina chega a cada cluster do grafo, só pelo **nome** do contexto do kubeconfig (SPEC-0087, abaixo).
+- `access` — opcional: como esta máquina chega a cada cluster do grafo, só pelo **nome** do contexto do kubeconfig (SPEC-0087), e à nuvem, aos bancos e à URL base de cada ambiente, só por referência (SPEC-0096, abaixo).
 - `probes` — opcional e desligada por padrão: as consultas só de leitura na infraestrutura por adaptadores declarados (SPEC-0088, abaixo e em `references/probes.md`).
 
 ### Acesso local por cluster (`access:`)
@@ -35,6 +35,27 @@ access:
 - O valor do contexto nunca sai: `config` e `config --json` mostram `context: definido`, o `doctor` mostra `OK acesso <cluster> — contexto definido` (ou `AVISO acesso <cluster> — sem contexto local` para um cluster do grafo sem contexto) e o `context` diz só se há acesso (`access: true | false`).
 - Um item inválido faz `config`, `context` e `lint` do atlas escolhido saírem com 2, e o `doctor` mostra um ERRO `acesso local` (exit 1). A mensagem diz só a posição, a partir de 1, e o motivo, nunca o cluster nem o contexto: `access.clusters: item 2 inválido — o contexto com quebra de linha ou caractere de controle; …`. Os motivos dizem se é `o nome do cluster` ou `o contexto` e são `não é texto`, `vazio`, `com mais de 256 caracteres` e `com quebra de linha ou caractere de controle`; ou `o valor precisa ser um mapa {context: <nome do contexto>}` e `o mapa aceita só a chave context`.
 - `init` e `init --join` mantêm o `access` da entrada que atualizam. O `atlas.py` nunca usa o contexto para chamar o cluster: só o passa ao adaptador de uma probe (SPEC-0088, abaixo).
+
+### Acesso local à nuvem, aos bancos e à URL base (`access.cloud`, `access.databases`, `access.urls`)
+
+Para as probes de dependências (`probe@2`, SPEC-0096, ADR-0025), a mesma chave `access` aceita mais três blocos, também só na camada local e só por referência — nunca uma senha:
+
+```yaml
+access:
+  clusters:  {cluster-dev: {context: <nome do contexto>}}
+  cloud:     {dev: {profile: <nome do profile da CLI da nuvem>}}
+  databases: {orders-db: {user: <usuário só leitura>, database: <nome do banco>, passfile: ~/.pgpass}}
+  urls:      {dev: {base_url: https://api.dev.example.test}}
+```
+
+- `access` aceita só `clusters`, `cloud`, `databases` e `urls`. `cloud.<ambiente>` aceita só `profile`; `databases.<id do datastore>` só `user`, `database` e `passfile`, os três obrigatórios; `urls.<ambiente>` só `base_url`.
+- O `<ambiente>` e o `<id do datastore>` seguem a regra de nome simples (letras, dígitos, `.`, `_` e `-`).
+- `profile`, `user` e `database`: texto de 1 a 256 caracteres, sem quebra de linha nem caractere de controle e sem `-` no começo. `passfile`: as mesmas regras e um caminho absoluto ou começando com `~/` (expandido para a pasta da pessoa); é o arquivo de senhas no formato da ferramenta (`.pgpass`), que o adaptador recebe por `PGPASSFILE`.
+- `base_url`: texto de 1 a 2048 caracteres, `https://` ou `http://`, absoluta e com host, sem usuário nem senha (nada de `usuário:senha@`), sem espaço nem caractere de controle.
+- Nenhum valor sai: `config` e `config --json` mostram `profile: definido`, `user: definido`, `database: definido`, `passfile: definido` e `base_url: definido`; o `context` diz só se há acesso (`cloud_access`, `database_access`, `references/context.md`); `probe`, `verify` e o `probes.log` nunca os mostram, e o que vem do adaptador é mascarado (`references/probes.md`).
+- Um item inválido faz `config`, `context` e `lint` saírem com 2 e o `doctor` mostrar ERRO `acesso local` (exit 1), com a posição (a partir de 1) e o motivo, nunca a chave nem o valor: `access.cloud: item 1 inválido — o profile com quebra de linha ou caractere de controle; …`, `access.databases: item 2 inválido — falta passfile; …`, `access.urls: item 1 inválido — a URL base com usuário ou senha; …`. Os motivos dizem qual campo (`o nome do ambiente`, `o id do datastore`, `o profile`, `o usuário`, `o banco`, `o arquivo de senhas`, `a URL base`) e são `não é texto`, `vazio`, `com mais de 256 caracteres`, `com quebra de linha ou caractere de controle`, `começa com -`, `fora da regra de nome`, `precisa ser absoluto ou começar com ~/`, `precisa ser http ou https absoluta`, `com usuário ou senha`, `com espaço`; ou `falta <campo>`, `o mapa aceita só <chaves>` e `o valor precisa ser um mapa`.
+- O `atlas.py` não faz login na nuvem, não lê o arquivo de senhas e não confere se o profile e o usuário são só de leitura: isso é do papel e do usuário de banco (o adaptador de banco força a sessão só de leitura).
+- Voltar para uma versão anterior do `atlas.py`: ela aceita só `access.clusters`, então tire os blocos novos.
 
 ### Probes (`probes:`)
 
@@ -56,7 +77,7 @@ probes:
 - Um campo inválido faz `config` e `probe` saírem com 2 e o `doctor` mostrar ERRO `probes`, com `probes: <campo> inválido — <motivo>` e nunca o valor: `timeout` fora de 1..300, `limits.lines` fora de 1..2000, `limits.since` acima de 24h ou fora do formato `30m`/`2h`, verbo com espaço ou maiúscula, credencial que não é nome de variável (`NOME=valor`), chave desconhecida.
 - `config --json` mostra `probes` com os ids, os comandos, os verbos, o timeout e os **nomes** das credenciais; nunca um valor.
 - `init` e `init --join` mantêm o `probes` da entrada que atualizam.
-- O adaptador recebe só `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`, `TMPDIR`, `TMP` e `TEMP` (e, no Windows, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA`), quando definidos, mais as variáveis declaradas em `credentials` **dele**; nenhuma variável declarada para outro adaptador ou para os coletores chega a ele.
+- O adaptador recebe só `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`, `TMPDIR`, `TMP` e `TEMP` (e, no Windows, `SYSTEMROOT`, `SYSTEMDRIVE`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA`; no macOS, `__CF_USER_TEXT_ENCODING`, que o próprio sistema põe em todo processo), quando definidos, mais as variáveis declaradas em `credentials` **dele**; nenhuma variável declarada para outro adaptador ou para os coletores chega a ele.
 - O registro de cada probe fica em `probes.log`, na mesma pasta deste `config.yml` (nunca no atlas). Contrato, exits e como escrever um adaptador: `references/probes.md`.
 
 É escrita pelo `atlas.py init` (e pelo `init --join` numa máquina nova, que não aceita `--org`, `--mode` nem `--force`), que mantém as `credentials` já declaradas para o mesmo atlas. `ATLAS_CONFIG_HOME` troca a pasta, útil para testes; para mais de um atlas, use a forma de vários atlas abaixo.
@@ -226,6 +247,9 @@ environments:                  # opcional
 | `acesso local` | — | — | `access:` inválido (posição e motivo, nunca o valor) |
 | `ambientes sem marcação` | — | os ambientes do `graph.json` sem `tier` em `environments:` (contam como produção) | — |
 | `acesso <cluster>` | `contexto definido` (nunca o valor) | `sem contexto local` | — |
+| `acesso nuvem <ambiente>` | `profile definido` (nunca o valor) | `ambiente não está no grafo` | — |
+| `acesso url <ambiente>` | `URL base definida` (nunca a URL) | `ambiente não está no grafo` | — |
+| `acesso banco <id>` | `usuário, banco e arquivo de senhas definidos; arquivo com permissão 0600` (a permissão real; no Windows, `permissão não conferida no Windows`) | `datastore não está no grafo` | `arquivo de senhas não encontrado` (não existe ou não é arquivo) ou `arquivo de senhas acessível por outros usuários (use chmod 600)` (algum bit de grupo ou outros). Conferido só por `os.stat`: o `doctor` nunca abre o arquivo |
 | `probes` (só com a chave) | `ligadas, N adaptador(es)` ou `desligadas` | — | `probes:` inválido (campo e motivo, nunca o valor) |
 | `adaptador <id>` | executável encontrado | executável não encontrado, com as probes desligadas | executável não encontrado (ou sem `command` e sem adaptador na skill), com as probes ligadas |
 

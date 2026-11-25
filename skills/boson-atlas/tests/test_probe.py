@@ -1255,13 +1255,13 @@ def _with(data, **changes):
 INVALID = {
     "describe": [
         _without(VALID["describe"][0], "contract"),
-        _with(VALID["describe"][0], contract="probe@2"),
+        _with(VALID["describe"][0], contract="probe@3"),
         _with(VALID["describe"][0], capabilities="runtime"),
         _with(VALID["describe"][0], capabilities={"runtime": ["status", "get pods"]}),
     ],
     "input": [
         _without(VALID["input"][0], "target"),
-        _with(VALID["input"][0], contract="probe@2"),
+        _with(VALID["input"][0], contract="probe@3"),
         _with(VALID["input"][0], limits={"lines": 5000, "since_seconds": 1800}),
     ],
     "output": [
