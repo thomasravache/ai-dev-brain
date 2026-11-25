@@ -448,7 +448,6 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
 | ID | Aberto em | Fase/Gate | Tipo | Descrição | Tentativas | Responsável | Resolução | Fechado em |
 |---|---|---|---|---|---|---|---|---|
-| 2 | 2026-11-25 | Esclarecimentos (Emenda v2): `tests/test_probe.py` nos `touches` para corrigir o exemplo inválido do CT-01 da SPEC-0088; `__CF_USER_TEXT_ENCODING` no ambiente base | TEST_DEFECT relatado no G2 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
 
 ## 14. Relatório de Entrega
 <!-- Preenchido no CLOSE (G7). Diz o que foi feito, como, e prova que foi resolvido. Para status implemented o validate exige todas as subseções preenchidas, todo teste do plano com PASS + evidência e a Definição de Pronto toda marcada. -->
@@ -490,3 +489,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0096`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | Esclarecimentos (Emenda v2): `tests/test_probe.py` nos `touches` para corrigir o exemplo inválido do CT-01 da SPEC-0088; `__CF_USER_TEXT_ENCODING` no ambiente base | TEST_DEFECT relatado no G2 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
