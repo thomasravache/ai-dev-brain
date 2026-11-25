@@ -318,7 +318,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=76, skipped=1)) — 44735ab | 2026-11-25 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 77595ce | 2026-11-25 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 05b06ef | 2026-11-25 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente): APPROVED — 0 major, 6 minor (doctor não confere a aws, ARN de assinatura fora da regex, NotFound de assinatura, hash sem sal, operador $or, tópico grande) — e0656cd | 2026-11-25 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
