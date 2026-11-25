@@ -739,6 +739,34 @@ class TargetsAndWindowTest(CloudwatchCase):
         out = self.metrics(probe_input("queue", QUEUE))
         self.assertTrue(out["truncated"], out)
 
+    def test_partial_data_only_on_intermediate_pages_is_not_truncated(self):
+        """SPEC-0100:UT-03 (Emenda v2) — 3 páginas, PartialData só nas páginas 1 e 2 e Complete na última: os pontos
+        das 3 páginas são juntados e truncated false (PartialData só conta na última página lida)."""
+        # SPEC-0100:UT-03
+        sent = key("QueueName", QUEUE, "NumberOfMessagesSent")
+        scenario = queue_scenario()
+        scenario["pages"] = 3
+        scenario["page_status"] = [{sent: "PartialData"}, {sent: "PartialData"}, {sent: "Complete"}]
+        self.install(scenario)
+        out = self.metrics(probe_input("queue", QUEUE))
+        self.assertEqual(len(self.metric_calls()), 3)
+        item = self.by_name(out)["NumberOfMessagesSent"]
+        self.assertEqual((item["value"], item["datapoints"]), (21, 6))
+        self.assertFalse(out["truncated"], out)
+
+    def test_partial_data_on_the_last_page_is_truncated(self):
+        """SPEC-0100:UT-03 (Emenda v2) — 3 páginas, Complete nas páginas 1 e 2 e PartialData na última (a resposta
+        sem NextToken): truncated true, status ok."""
+        # SPEC-0100:UT-03
+        sent = key("QueueName", QUEUE, "NumberOfMessagesSent")
+        scenario = queue_scenario()
+        scenario["pages"] = 3
+        scenario["page_status"] = [{sent: "Complete"}, {sent: "Complete"}, {sent: "PartialData"}]
+        self.install(scenario)
+        out = self.metrics(probe_input("queue", QUEUE))
+        self.assertEqual(len(self.metric_calls()), 3)
+        self.assertTrue(out["truncated"], out)
+
     def test_forbidden_or_internal_error_query_is_null_with_partial_data(self):
         """SPEC-0100:UT-03 — uma consulta Forbidden (ou InternalError): aquela métrica sai null, as outras com valor,
         status ok e a mensagem "dados parciais"."""
@@ -793,6 +821,47 @@ class ErrorTest(CloudwatchCase):
                 out = self.run_probe(probe_input(rid=CACHE, attrs=CACHE_ATTRS))
                 self.assertError(out, ERRORS[mode])
                 self.assertEqual(self.metric_calls(), [])
+
+    def assertInvalidAnswer(self, scenario, data):
+        """Exit 0, sem traceback (conferido em adapter), nenhum Infinity/NaN no stdout e a saída probe@2 com status
+        error e "resposta inválida da aws"."""
+        self.install(scenario)
+        raw = self.adapter(stdin=json.dumps(data))
+        self.assertEqual(raw.returncode, 0, output(raw))
+        for constant in ("Infinity", "NaN"):
+            self.assertNotIn(constant, raw.stdout, f"{constant} na saída do adaptador")
+        self.install(scenario)
+        self.assertError(self.run_probe(data), ERRORS["invalid-json"])
+
+    def test_non_finite_values_are_an_invalid_answer(self):
+        """SPEC-0100:UT-04 (Emenda v2) — Values com NaN, Infinity, -Infinity ou 1e999 no JSON da aws: "resposta
+        inválida da aws", exit 0, nada não finito na saída."""
+        # SPEC-0100:UT-04
+        sent = key("QueueName", QUEUE, "NumberOfMessagesSent")
+        for raw in ("[1.0, NaN]", "[Infinity]", "[-Infinity, 2.0]", "[1e999]"):
+            with self.subTest(values=raw):
+                scenario = queue_scenario()
+                scenario["raw"] = {sent: raw}
+                self.assertInvalidAnswer(scenario, probe_input("queue", QUEUE))
+
+    def test_aggregation_overflow_is_an_invalid_answer(self):
+        """SPEC-0100:UT-04 (Emenda v2) — valores finitos cuja agregação estoura (sum de [1e308, 1e308] e avg de
+        [1e308, 1e308]): "resposta inválida da aws", nunca Infinity na saída."""
+        # SPEC-0100:UT-04
+        cases = [("sum", queue_scenario(), key("QueueName", QUEUE, "NumberOfMessagesSent"), probe_input("queue", QUEUE)),
+                 ("avg", rds_scenario(), key("DBInstanceIdentifier", DB, "ReadLatency"), probe_input())]
+        for stat_, scenario, series, data in cases:
+            with self.subTest(stat=stat_):
+                scenario["series"][series] = [1e308, 1e308]
+                self.assertInvalidAnswer(scenario, data)
+
+    def test_huge_integer_value_is_an_invalid_answer(self):
+        """SPEC-0100:UT-04 (Emenda v2) — um inteiro JSON de ~400 dígitos em Values: "resposta inválida da aws", exit 0,
+        sem traceback."""
+        # SPEC-0100:UT-04
+        scenario = queue_scenario()
+        scenario["raw"] = {key("QueueName", QUEUE, "NumberOfMessagesSent"): "[1, " + "9" * 400 + "]"}
+        self.assertInvalidAnswer(scenario, probe_input("queue", QUEUE))
 
     def test_without_aws_on_the_path(self):
         """SPEC-0100:UT-04 — sem aws no PATH: "aws não encontrado", sem chamada."""

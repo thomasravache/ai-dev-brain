@@ -9,6 +9,8 @@ testes. O cenário fica ao lado da cópia, em `fake-aws.json`:
      "series": {"<Dimensão>=<valor>/<Métrica>": [<ponto>, ...]},     pontos de qualquer estatística, do mais antigo
      "status": {"<Dimensão>=<valor>/<Métrica>": "Forbidden" | "InternalError" | "PartialData"},
      "pages": <n>,                                                     páginas do get-metric-data (padrão 1)
+     "page_status": [{"<Dimensão>=<valor>/<Métrica>": "<StatusCode>"}, ...],  status por página (1ª, 2ª, ...)
+     "raw": {"<Dimensão>=<valor>/<Métrica>": "<texto JSON da lista Values>"},  Values crus (NaN, 1e999, ...)
      "groups": {"<id do grupo de replicação>": ["<CacheClusterId>", ...]},
      "fail": [{"mode": "<modo>", "service": "<serviço>"?, "operation": "<operação>"?}]}
 
@@ -20,6 +22,10 @@ testes. O cenário fica ao lado da cópia, em `fake-aws.json`:
   `NextToken` ("page-2", "page-3", ...) que a próxima chamada manda em `--next-token`. Uma consulta sem `MetricStat`
   (ex.: `Expression`) faz o dublê falhar (exit 254).
 - Com `status` Forbidden ou InternalError, a série sai sem pontos e com uma mensagem que cita a conta.
+- `page_status` (SPEC-0100, Emenda v2): o item i vale para a página i+1 e, para as séries que cita, troca o `status`
+  só naquela página (ex.: `PartialData` nas intermediárias e `Complete` na última).
+- `raw`: a lista `Values` daquela série sai com o texto JSON dado, sem passar por float (para `NaN`, `Infinity`,
+  `1e999` ou um inteiro de 400 dígitos); `Timestamps` sai vazio.
 - describe-replication-groups: o grupo de `groups` com `MemberClusters` e `NodeGroups[].NodeGroupMembers[]` (e um
   ARN com a conta); grupo ausente = ReplicationGroupNotFoundFault (exit 254).
 - Modos de `fail` (texto parecido com o da CLI real, com o profile, a conta e o ARN, para provar que o adaptador não
@@ -36,6 +42,7 @@ HERE = Path(__file__).resolve().parent
 SCENARIO = json.loads((HERE / "fake-aws.json").read_text(encoding="utf-8"))
 ACCOUNT = SCENARIO.get("account", "123456789012")
 ALLOWED = {("cloudwatch", "get-metric-data"), ("elasticache", "describe-replication-groups")}
+RAW_MARK = "@@raw-values@@"
 FLAGS = {"--no-cli-pager", "--debug", "--no-paginate", "--no-verify-ssl", "--no-sign-request"}
 
 
@@ -163,12 +170,17 @@ def metric_data(options, region):
         key = series_key(stat)
         period = int(stat.get("Period") or 60)
         status = statuses.get(key, "Complete")
+        page_status = SCENARIO.get("page_status") or []
+        if page < len(page_status) and key in (page_status[page] or {}):
+            status = page_status[page][key]
         values = [] if status in ("Forbidden", "InternalError") else [float(v) for v in series.get(key) or []]
         stamps = [(end - timedelta(seconds=period * (len(values) - i))).strftime("%Y-%m-%dT%H:%M:%S+00:00")
                   for i in range(len(values))]
         values, stamps = chunk(values, page, pages), chunk(stamps, page, pages)
         if options.get("--scan-by") == "TimestampDescending":
             values, stamps = values[::-1], stamps[::-1]
+        if key in (SCENARIO.get("raw") or {}):
+            values, stamps = RAW_MARK + key, []
         result = {"Id": query.get("Id"), "Label": (stat.get("Metric") or {}).get("MetricName"),
                   "Timestamps": stamps, "Values": values, "StatusCode": status}
         if status in ("Forbidden", "InternalError"):
@@ -211,7 +223,10 @@ def main(argv):
     if mode:
         simulate(mode, service, operation, region, profile)
     if operation == "get-metric-data":
-        print(json.dumps(metric_data(options, region), indent=4))
+        text = json.dumps(metric_data(options, region), indent=4)
+        for key, raw in (SCENARIO.get("raw") or {}).items():
+            text = text.replace(json.dumps(RAW_MARK + key), raw)
+        print(text)
     else:
         print(json.dumps(replication_groups(options, region), indent=4))
     return 0
