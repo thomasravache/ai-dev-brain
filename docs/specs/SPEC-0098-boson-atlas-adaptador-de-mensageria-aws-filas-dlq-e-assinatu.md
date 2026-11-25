@@ -4,12 +4,12 @@ title: "boson-atlas: adaptador de mensageria aws — filas, DLQ e assinaturas"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/aws-messaging.py, skills/boson-atlas/references/probes/aws-messaging.md, skills/boson-atlas/tests/test_probe_aws_messaging.py, skills/boson-atlas/tests/fixtures/aws-messaging/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025, ADR-0026]
@@ -210,6 +210,9 @@ erros → exit 0, status: "error", items: [], message fixa (sem stderr, profile,
 
 **Registro:** o adaptador não grava nada. O `probes.log` é do núcleo, com `resource` (`kind:id`) e sem resultado nem acesso (ADR-0025 regra 6).
 
+**Esclarecimentos (Emenda v2):**
+- **Doctor:** como no adaptador `kubernetes`, o `doctor` confere só o executável do adaptador declarado em `probes.adapters`, não a `aws`. A falta da `aws` aparece na própria probe, com a mensagem fixa de CLI ausente. Uma checagem da ferramenta pelo `doctor` fica para o radar do épico.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -279,7 +282,7 @@ erros → exit 0, status: "error", items: [], message fixa (sem stderr, profile,
 - **Estratégia:** deploy direto, pela versão do plugin. Só roda com `probes.enabled: true`, o adaptador declarado em `probes.adapters.aws-messaging` com os verbos liberados e `access.cloud.<ambiente>.profile` definido.
 - **Dados/schema:** N/A — nada persistido.
 - **Compatibilidade:** aditivo; o adaptador `kubernetes` e o `probe@1` não mudam. Depende dos atributos `region`, `type` e `dlq` do coletor `aws` (SPEC-0097), que não levam id de conta (ADR-0025 regra 4); um atlas escrito à mão com esses atributos também serve. Os itens seguem a tabela 4a do ADR-0026; mudar um campo dela é emenda com `contract_version` novo.
-- **Observabilidade:** o `probes.log` do núcleo, com `resource` e `status`; o `doctor` mostra o adaptador e se a `aws` foi encontrada.
+- **Observabilidade:** o `probes.log` do núcleo, com `resource` e `status`; o `doctor` mostra o adaptador e se o executável dele foi encontrado (Emenda v2); a falta da `aws` aparece na probe, com a mensagem fixa de CLI ausente.
 - **Rollback:** tirar o adaptador de `probes.adapters` (a verificação volta a "não verificado") ou voltar a versão do plugin.
 - **Etapas de migração/coexistência:** N/A.
 
@@ -296,30 +299,30 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-02, CT-01 com a tag `SPEC-0098:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-02, CT-01 com a tag `SPEC-0098:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=76, skipped=1)) — 44735ab | 2026-11-25 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 77595ce | 2026-11-25 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 05b06ef | 2026-11-25 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente): APPROVED — 0 major, 6 minor (doctor não confere a aws, ARN de assinatura fora da regex, NotFound de assinatura, hash sem sal, operador $or, tópico grande) — e0656cd | 2026-11-25 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 831cac6 | 2026-11-25 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-25 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-25 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — a785c38 | 2026-11-25 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. -->
@@ -330,33 +333,57 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+Adaptador `aws-messaging` (`probe@2`, capacidade `messaging`), só de leitura pela AWS CLI. O verbo `queue` traz de uma fila as mensagens visíveis, em voo e atrasadas, a idade da mais antiga e a profundidade da DLQ; `subscriptions` traz as assinaturas de um tópico, com o destino e a impressão digital do filtro, sem o texto. Os itens seguem a regra 4a do ADR-0026. Versões: boson-atlas 2026.11.21 e plugin 2026.11.36.
 
 ### Como foi feito
+- **`assets/probes/aws-messaging.py`:** lista fechada de seis operações de leitura, conferidas antes de qualquer processo; a URL da fila vem de `get-queue-url` e o ARN do tópico de `sts get-caller-identity`, nunca do atlas; o id de conta sai mascarado; as mensagens de erro são fixas.
+- **Documentação:** `references/probes/aws-messaging.md`, com a política IAM mínima.
+- **Emenda v2:** o `doctor` confere o executável do adaptador, não a `aws`.
 
 ### Prova de Correção
+N/A — `type: feature`. Red em 44735ab (G1) e green em 79f5cb6 (G2).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | fila: visíveis, em voo, idade da mais antiga e DLQ | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-02 | idade sem pontos ou sem permissão vira null com motivo | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-03 | assinaturas com destino e impressão digital do filtro, sem o texto | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-04 | erros da CLI com mensagens fixas | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-05 | só operações de leitura da lista fechada | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-06 | entrada inválida recusada antes de qualquer chamada | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| IT-01 | probe de ponta a ponta com o atlas.py real | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| IT-02 | SSO expirado vira erro com a mensagem fixa | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| CT-02 | itens conferidos contra a regra 4a do ADR-0026 | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| CT-01 | describe e saídas válidas e inválidas do contrato probe@2 | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.36 depois do merge. O adaptador só roda declarado em `probes.adapters`, com as probes ligadas.
 
 ### Pendências
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - o `doctor` conferir a `aws`;
+  - ARN de assinatura fora da regex vira item com atributos nulos;
+  - `NotFound` de assinatura apagada aparece como tópico não encontrado;
+  - impressões digitais sem sal;
+  - o operador `$or` esconde as chaves de dentro;
+  - tópico com muitas assinaturas pode passar do timeout.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0098`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | Esclarecimentos (Emenda v2): o `doctor` confere o executável do adaptador, não a `aws` | Achado minor do G4 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
