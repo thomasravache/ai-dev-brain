@@ -1,0 +1,60 @@
+{
+  "_comment": "SPEC-0099: históricos gravados por formato (linhas da mais antiga para a mais recente, só as colunas lidas da seção 6) e os itens esperados, do mais recente para o mais antigo: [id, success, prefixo de applied_at ou null].",
+  "flyway": {
+    "nspname": "public", "relname": "flyway_schema_history",
+    "columns": ["installed_rank", "version", "description", "type", "script", "checksum", "installed_by",
+                "installed_on", "execution_time", "success"],
+    "rows": [
+      {"version": "1", "description": "init", "installed_on": "2026-11-01T10:00:00", "success": true},
+      {"version": "2", "description": "orders", "installed_on": "2026-11-10T10:00:00", "success": true},
+      {"version": null, "description": "views", "installed_on": "2026-11-15T09:00:00", "success": true},
+      {"version": "20261120.1", "description": "add index", "installed_on": "2026-11-20T10:00:00", "success": false}
+    ],
+    "expected": [["20261120.1", false, "2026-11-20T10:00:00"], ["views", true, "2026-11-15T09:00:00"],
+                 ["2", true, "2026-11-10T10:00:00"], ["1", true, "2026-11-01T10:00:00"]]
+  },
+  "rails": {
+    "nspname": "public", "relname": "schema_migrations",
+    "columns": ["version"],
+    "rows": [{"version": "20261101000000"}, {"version": "20261110000000"}, {"version": "20261120000000"}],
+    "expected": [["20261120000000", true, null], ["20261110000000", true, null], ["20261101000000", true, null]]
+  },
+  "golang-migrate": {
+    "nspname": "public", "relname": "schema_migrations",
+    "columns": ["version", "dirty"],
+    "rows": [{"version": 20261120, "dirty": true}],
+    "expected": [["20261120", false, null]]
+  },
+  "ef": {
+    "nspname": "public", "relname": "__EFMigrationsHistory",
+    "columns": ["MigrationId", "ProductVersion"],
+    "rows": [{"MigrationId": "20261101000000_Init"}, {"MigrationId": "20261120000000_AddOrders"}],
+    "expected": [["20261120000000_AddOrders", true, null], ["20261101000000_Init", true, null]]
+  },
+  "alembic": {
+    "nspname": "public", "relname": "alembic_version",
+    "columns": ["version_num"],
+    "rows": [{"version_num": "a1b2c3d4e5f6"}],
+    "expected": [["a1b2c3d4e5f6", true, null]]
+  },
+  "knex": {
+    "nspname": "public", "relname": "knex_migrations",
+    "columns": ["id", "name", "batch", "migration_time"],
+    "rows": [{"name": "20261101_init.js", "migration_time": "2026-11-01T10:00:00+00:00"},
+             {"name": "20261120_orders.js", "migration_time": "2026-11-20T10:00:00+00:00"}],
+    "expected": [["20261120_orders.js", true, "2026-11-20T10:00:00"], ["20261101_init.js", true, "2026-11-01T10:00:00"]]
+  },
+  "prisma": {
+    "nspname": "public", "relname": "_prisma_migrations",
+    "columns": ["id", "checksum", "finished_at", "migration_name", "logs", "rolled_back_at", "started_at",
+                "applied_steps_count"],
+    "rows": [
+      {"migration_name": "20261101000000_init", "finished_at": "2026-11-01T10:00:00+00:00", "rolled_back_at": null},
+      {"migration_name": "20261110000000_orders", "finished_at": "2026-11-10T10:00:00+00:00",
+       "rolled_back_at": "2026-11-10T11:00:00+00:00"},
+      {"migration_name": "20261120000000_index", "finished_at": null, "rolled_back_at": null}
+    ],
+    "expected": [["20261120000000_index", false, null], ["20261110000000_orders", false, "2026-11-10T10:00:00"],
+                 ["20261101000000_init", true, "2026-11-01T10:00:00"]]
+  }
+}
