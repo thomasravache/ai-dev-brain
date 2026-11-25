@@ -299,16 +299,16 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-02, CT-01 com a tag `SPEC-0098:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-02, CT-01 com a tag `SPEC-0098:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -333,31 +333,54 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+Adaptador `aws-messaging` (`probe@2`, capacidade `messaging`), só de leitura pela AWS CLI. O verbo `queue` traz de uma fila as mensagens visíveis, em voo e atrasadas, a idade da mais antiga e a profundidade da DLQ; `subscriptions` traz as assinaturas de um tópico, com o destino e a impressão digital do filtro, sem o texto. Os itens seguem a regra 4a do ADR-0026. Versões: boson-atlas 2026.11.21 e plugin 2026.11.36.
 
 ### Como foi feito
+- **`assets/probes/aws-messaging.py`:** lista fechada de seis operações de leitura, conferidas antes de qualquer processo; a URL da fila vem de `get-queue-url` e o ARN do tópico de `sts get-caller-identity`, nunca do atlas; o id de conta sai mascarado; as mensagens de erro são fixas.
+- **Documentação:** `references/probes/aws-messaging.md`, com a política IAM mínima.
+- **Emenda v2:** o `doctor` confere o executável do adaptador, não a `aws`.
 
 ### Prova de Correção
+N/A — `type: feature`. Red em 44735ab (G1) e green em 79f5cb6 (G2).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | fila: visíveis, em voo, idade da mais antiga e DLQ | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-02 | idade sem pontos ou sem permissão vira null com motivo | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-03 | assinaturas com destino e impressão digital do filtro, sem o texto | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-04 | erros da CLI com mensagens fixas | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-05 | só operações de leitura da lista fechada | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| UT-06 | entrada inválida recusada antes de qualquer chamada | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| IT-01 | probe de ponta a ponta com o atlas.py real | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| IT-02 | SSO expirado vira erro com a mensagem fixa | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| CT-02 | itens conferidos contra a regra 4a do ADR-0026 | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
+| CT-01 | describe e saídas válidas e inválidas do contrato probe@2 | PASS | `test_probe_aws_messaging.py`; G2 PASS em 77595ce; G4 `verify` 10/10 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.36 depois do merge. O adaptador só roda declarado em `probes.adapters`, com as probes ligadas.
 
 ### Pendências
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - o `doctor` conferir a `aws`;
+  - ARN de assinatura fora da regex vira item com atributos nulos;
+  - `NotFound` de assinatura apagada aparece como tópico não encontrado;
+  - impressões digitais sem sal;
+  - o operador `$or` esconde as chaves de dentro;
+  - tópico com muitas assinaturas pode passar do timeout.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0098`. -->
