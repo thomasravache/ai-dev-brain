@@ -9,7 +9,7 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/aws-messaging.py, skills/boson-atlas/references/probes/aws-messaging.md, skills/boson-atlas/tests/test_probe_aws_messaging.py, skills/boson-atlas/tests/fixtures/aws-messaging/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025, ADR-0026]
@@ -210,6 +210,9 @@ erros → exit 0, status: "error", items: [], message fixa (sem stderr, profile,
 
 **Registro:** o adaptador não grava nada. O `probes.log` é do núcleo, com `resource` (`kind:id`) e sem resultado nem acesso (ADR-0025 regra 6).
 
+**Esclarecimentos (Emenda v2):**
+- **Doctor:** como no adaptador `kubernetes`, o `doctor` confere só o executável do adaptador declarado em `probes.adapters`, não a `aws`. A falta da `aws` aparece na própria probe, com a mensagem fixa de CLI ausente. Uma checagem da ferramenta pelo `doctor` fica para o radar do épico.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -279,7 +282,7 @@ erros → exit 0, status: "error", items: [], message fixa (sem stderr, profile,
 - **Estratégia:** deploy direto, pela versão do plugin. Só roda com `probes.enabled: true`, o adaptador declarado em `probes.adapters.aws-messaging` com os verbos liberados e `access.cloud.<ambiente>.profile` definido.
 - **Dados/schema:** N/A — nada persistido.
 - **Compatibilidade:** aditivo; o adaptador `kubernetes` e o `probe@1` não mudam. Depende dos atributos `region`, `type` e `dlq` do coletor `aws` (SPEC-0097), que não levam id de conta (ADR-0025 regra 4); um atlas escrito à mão com esses atributos também serve. Os itens seguem a tabela 4a do ADR-0026; mudar um campo dela é emenda com `contract_version` novo.
-- **Observabilidade:** o `probes.log` do núcleo, com `resource` e `status`; o `doctor` mostra o adaptador e se a `aws` foi encontrada.
+- **Observabilidade:** o `probes.log` do núcleo, com `resource` e `status`; o `doctor` mostra o adaptador e se o executável dele foi encontrado (Emenda v2); a falta da `aws` aparece na probe, com a mensagem fixa de CLI ausente.
 - **Rollback:** tirar o adaptador de `probes.adapters` (a verificação volta a "não verificado") ou voltar a versão do plugin.
 - **Etapas de migração/coexistência:** N/A.
 
@@ -360,3 +363,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0098`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | Esclarecimentos (Emenda v2): o `doctor` confere o executável do adaptador, não a `aws` | Achado minor do G4 | — | thomas, 2026-11-25 (piloto automático com o recomendado) |
