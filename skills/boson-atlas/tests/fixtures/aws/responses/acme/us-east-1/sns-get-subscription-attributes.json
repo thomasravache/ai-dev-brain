@@ -1,0 +1,54 @@
+{
+  "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000001": {
+    "Attributes": {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000001",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:us-east-1:123456789012:orders",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:order-events",
+      "PendingConfirmation": "false",
+      "ConfirmationWasAuthenticated": "true",
+      "RawMessageDelivery": "true",
+      "FilterPolicy": "{\"event_type\": [\"order_created\", \"order_paid\"]}",
+      "FilterPolicyScope": "MessageAttributes"
+    }
+  },
+  "arn:aws:sns:us-east-1:123456789012:payments.fifo:0b1c2d3e-0000-4000-8000-000000000002": {
+    "Attributes": {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:payments.fifo:0b1c2d3e-0000-4000-8000-000000000002",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:us-east-1:123456789012:payments.fifo",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:payments.fifo",
+      "PendingConfirmation": "false",
+      "ConfirmationWasAuthenticated": "true",
+      "RawMessageDelivery": "true"
+    }
+  },
+  "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000003": {
+    "Attributes": {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000003",
+      "Owner": "123456789012",
+      "Protocol": "https",
+      "Endpoint": "https://hooks.acme.example/order-events",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:order-events",
+      "PendingConfirmation": "false",
+      "ConfirmationWasAuthenticated": "true",
+      "RawMessageDelivery": "true"
+    }
+  },
+  "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000004": {
+    "Attributes": {
+      "SubscriptionArn": "arn:aws:sns:us-east-1:123456789012:order-events:0b1c2d3e-0000-4000-8000-000000000004",
+      "Owner": "123456789012",
+      "Protocol": "sqs",
+      "Endpoint": "arn:aws:sqs:sa-east-1:123456789012:audit",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:order-events",
+      "PendingConfirmation": "false",
+      "ConfirmationWasAuthenticated": "true",
+      "RawMessageDelivery": "true",
+      "FilterPolicy": "",
+      "FilterPolicyScope": "MessageAttributes"
+    }
+  }
+}

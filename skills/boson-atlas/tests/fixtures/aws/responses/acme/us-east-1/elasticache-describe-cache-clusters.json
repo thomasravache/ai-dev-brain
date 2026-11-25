@@ -1,0 +1,87 @@
+{
+  "CacheClusters": [
+    {
+      "CacheClusterId": "orders-cache-001",
+      "ReplicationGroupId": "orders-cache",
+      "Engine": "valkey",
+      "CacheClusterStatus": "available",
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:cluster:orders-cache-001",
+      "CacheNodes": [
+        {
+          "CacheNodeId": "0001",
+          "Endpoint": {
+            "Address": "orders-cache-001.abc123.0001.use1.cache.amazonaws.com",
+            "Port": 6379
+          }
+        }
+      ]
+    },
+    {
+      "CacheClusterId": "orders-cache-002",
+      "ReplicationGroupId": "orders-cache",
+      "Engine": "valkey",
+      "CacheClusterStatus": "available",
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:cluster:orders-cache-002",
+      "CacheNodes": [
+        {
+          "CacheNodeId": "0001",
+          "Endpoint": {
+            "Address": "orders-cache-002.abc123.0001.use1.cache.amazonaws.com",
+            "Port": 6379
+          }
+        }
+      ]
+    },
+    {
+      "CacheClusterId": "sessions-0001-001",
+      "ReplicationGroupId": "sessions",
+      "Engine": "redis",
+      "CacheClusterStatus": "available",
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:cluster:sessions-0001-001",
+      "CacheNodes": [
+        {
+          "CacheNodeId": "0001",
+          "Endpoint": {
+            "Address": "sessions-0001-001.abc123.0001.use1.cache.amazonaws.com",
+            "Port": 6379
+          }
+        }
+      ]
+    },
+    {
+      "CacheClusterId": "sessions-0002-001",
+      "ReplicationGroupId": "sessions",
+      "Engine": "redis",
+      "CacheClusterStatus": "available",
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:cluster:sessions-0002-001",
+      "CacheNodes": [
+        {
+          "CacheNodeId": "0001",
+          "Endpoint": {
+            "Address": "sessions-0002-001.abc123.0001.use1.cache.amazonaws.com",
+            "Port": 6379
+          }
+        }
+      ]
+    },
+    {
+      "CacheClusterId": "catalog-mc",
+      "Engine": "memcached",
+      "CacheClusterStatus": "available",
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:cluster:catalog-mc",
+      "ConfigurationEndpoint": {
+        "Address": "catalog-mc.abc123.cfg.use1.cache.amazonaws.com",
+        "Port": 11211
+      },
+      "CacheNodes": [
+        {
+          "CacheNodeId": "0001",
+          "Endpoint": {
+            "Address": "catalog-mc.abc123.0001.use1.cache.amazonaws.com",
+            "Port": 11211
+          }
+        }
+      ]
+    }
+  ]
+}

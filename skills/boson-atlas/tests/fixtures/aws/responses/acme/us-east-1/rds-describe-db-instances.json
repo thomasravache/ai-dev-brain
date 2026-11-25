@@ -1,0 +1,49 @@
+{
+  "DBInstances": [
+    {
+      "DBInstanceIdentifier": "orders-db-1",
+      "DBClusterIdentifier": "orders-db",
+      "Engine": "aurora-postgresql",
+      "DBInstanceClass": "db.serverless",
+      "DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:orders-db-1",
+      "Endpoint": {
+        "Address": "orders-db-1.abc123.us-east-1.rds.amazonaws.com",
+        "Port": 5432,
+        "HostedZoneId": "Z2R2ITUGPM61AM"
+      },
+      "MasterUsername": "acme_admin"
+    },
+    {
+      "DBInstanceIdentifier": "orders-db-2",
+      "DBClusterIdentifier": "orders-db",
+      "Engine": "aurora-postgresql",
+      "DBInstanceClass": "db.serverless",
+      "DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:orders-db-2",
+      "Endpoint": {
+        "Address": "orders-db-2.abc123.us-east-1.rds.amazonaws.com",
+        "Port": 5432,
+        "HostedZoneId": "Z2R2ITUGPM61AM"
+      },
+      "MasterUsername": "acme_admin"
+    },
+    {
+      "DBInstanceIdentifier": "billing-db",
+      "Engine": "postgres",
+      "EngineVersion": "16.3",
+      "DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:billing-db",
+      "DBInstanceStatus": "available",
+      "Endpoint": {
+        "Address": "billing-db.abc123.us-east-1.rds.amazonaws.com",
+        "Port": "5432",
+        "HostedZoneId": "Z2R2ITUGPM61AM"
+      },
+      "MasterUsername": "acme_admin",
+      "TagList": [
+        {
+          "Key": "owner",
+          "Value": "billing"
+        }
+      ]
+    }
+  ]
+}

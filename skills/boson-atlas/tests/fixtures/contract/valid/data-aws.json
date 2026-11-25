@@ -1,0 +1,11 @@
+{
+  "contract": "boson-atlas/collector@1",
+  "collector": "aws",
+  "category": "data",
+  "collected_at": "2026-11-24T12:00:00Z",
+  "entities": [
+    {"kind": "datastore", "id": "orders-cache", "name": "orders-cache", "attrs": {"engine": "valkey", "host": "orders-cache.abc123.ng.0001.use1.cache.amazonaws.com", "port": 6379, "reader_host": "orders-cache-ro.abc123.ng.0001.use1.cache.amazonaws.com", "region": "us-east-1", "serverless": false, "type": "elasticache"}, "source": "aws"},
+    {"kind": "datastore", "id": "orders-db", "name": "orders-db", "attrs": {"engine": "aurora-postgresql", "host": "orders-db.cluster-abc123.us-east-1.rds.amazonaws.com", "port": 5432, "reader_host": "orders-db.cluster-ro-abc123.us-east-1.rds.amazonaws.com", "region": "us-east-1", "serverless": true, "type": "rds"}, "source": "aws"}
+  ],
+  "relations": []
+}

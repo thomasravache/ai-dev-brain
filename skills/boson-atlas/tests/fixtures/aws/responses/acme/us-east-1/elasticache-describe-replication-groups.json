@@ -1,0 +1,53 @@
+{
+  "ReplicationGroups": [
+    {
+      "ReplicationGroupId": "orders-cache",
+      "Status": "available",
+      "ClusterEnabled": false,
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:replicationgroup:orders-cache",
+      "MemberClusters": [
+        "orders-cache-001",
+        "orders-cache-002"
+      ],
+      "NodeGroups": [
+        {
+          "NodeGroupId": "0001",
+          "Status": "available",
+          "PrimaryEndpoint": {
+            "Address": "orders-cache.abc123.ng.0001.use1.cache.amazonaws.com",
+            "Port": 6379
+          },
+          "ReaderEndpoint": {
+            "Address": "orders-cache-ro.abc123.ng.0001.use1.cache.amazonaws.com",
+            "Port": 6379
+          }
+        }
+      ]
+    },
+    {
+      "ReplicationGroupId": "sessions",
+      "Engine": "redis",
+      "Status": "available",
+      "ClusterEnabled": true,
+      "ARN": "arn:aws:elasticache:us-east-1:123456789012:replicationgroup:sessions",
+      "MemberClusters": [
+        "sessions-0001-001",
+        "sessions-0002-001"
+      ],
+      "ConfigurationEndpoint": {
+        "Address": "sessions.abc123.clustercfg.use1.cache.amazonaws.com",
+        "Port": 6379
+      },
+      "NodeGroups": [
+        {
+          "NodeGroupId": "0001",
+          "Status": "available"
+        },
+        {
+          "NodeGroupId": "0002",
+          "Status": "available"
+        }
+      ]
+    }
+  ]
+}

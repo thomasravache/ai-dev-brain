@@ -1,0 +1,14 @@
+{
+  "contract": "boson-atlas/collector@1",
+  "collector": "aws",
+  "category": "messaging",
+  "collected_at": "2026-11-24T12:00:00Z",
+  "entities": [
+    {"kind": "queue", "id": "orders", "name": "orders", "attrs": {"dlq": "orders-dlq", "fifo": false, "filtered_topics": ["order-events"], "region": "us-east-1", "type": "sqs"}, "source": "aws"},
+    {"kind": "queue", "id": "orders-dlq", "name": "orders-dlq", "attrs": {"fifo": false, "region": "us-east-1", "type": "sqs"}, "source": "aws"},
+    {"kind": "topic", "id": "order-events", "name": "order-events", "attrs": {"fifo": false, "region": "us-east-1", "type": "sns"}, "source": "aws"}
+  ],
+  "relations": [
+    {"from": "topic:order-events", "to": "queue:orders", "type": "publishes", "source": "aws"}
+  ]
+}
