@@ -439,7 +439,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — b3743c0 | 2026-11-25 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — f1708a4 | 2026-11-25 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (subagente): APPROVED — 0 major, 5 minor (máscara de conta no host ECR e ARN em maiúsculas, literais de outros ambientes, regra G3 pelo nome, resource gravado antes da conferência, base_url com barra final) — 89e63fe | 2026-11-25 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — c5ec590 | 2026-11-25 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
