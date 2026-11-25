@@ -35,7 +35,7 @@ COLLECTORS = SKILL / "assets" / "collectors"
 
 
 # função do coletor que chama o executável do provedor (SPEC-0046:UT-04); coletor fora do mapa não roda processo
-COLLECTOR_PROCESS_FUNCTIONS = {"github.py": ("run_gh",), "argocd.py": ("run_cli",)}
+COLLECTOR_PROCESS_FUNCTIONS = {"github.py": ("run_gh",), "argocd.py": ("run_cli",), "aws.py": ("run_cli",)}
 
 
 def collector_process_findings(*args, **kwargs):

@@ -461,7 +461,7 @@ class LimitsAndArgumentsTest(AwsCase):
         """SPEC-0097:UT-05 — --max-items N chega a toda chamada de lista."""
         # SPEC-0097:UT-05
         self.collect("--services", "rds,elasticache", "--region", US, "--max-items", "50")
-        lists = [opts for (pair, _, opts) in map(lambda c: parse_call(c["argv"]), self.calls())
+        lists = [opts for (pair, _, opts) in (parse_call(c["argv"]) for c in self.calls())
                  if pair in LIST_OPERATIONS]
         self.assertEqual(len(lists), 5)
         self.assertTrue(all(opts.get("--max-items") == "50" for opts in lists))
@@ -718,7 +718,7 @@ class ContractTest(AwsCase):
     def assertValidAwsOutput(self, data):
         atlas_module_validate = fn("validate_collector_output", SPEC)
         kinds, types = fn("KINDS", SPEC), fn("RELATION_TYPES", SPEC)
-        clean, violations, dropped = atlas_module_validate(data)
+        _, violations, dropped = atlas_module_validate(data)
         self.assertEqual(violations, [])
         self.assertEqual(dropped, [], "nenhum campo nem chave descartada")
         queues = {e["id"] for e in data["entities"] if e["kind"] == "queue"}
