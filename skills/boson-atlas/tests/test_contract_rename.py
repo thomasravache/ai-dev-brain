@@ -72,7 +72,9 @@ CURRENT_VIOLATIONS = {
     "invalid/to-format.json": ["relations[0]: to fora do formato kind:id: acme/api"],
     "invalid/type-unknown.json": ["relations[0]: type desconhecido: calls"],
     "valid/code-github.json": [],
+    "valid/data-aws.json": [],  # SPEC-0097:CT-01 — exemplos do coletor aws
     "valid/delivery-argocd.json": [],
+    "valid/messaging-aws.json": [],  # SPEC-0097:CT-01
     "valid/old-contract-name.json": [],
 }
 OLD_NAME_FIXTURE = "valid/old-contract-name.json"
