@@ -416,19 +416,19 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01 escrito(s) com a tag `SPEC-0096:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+- [x] CH-01 escrito(s) com a tag `SPEC-0096:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
 
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, UT-09, UT-10, IT-01, IT-02, CT-01 com a tag `SPEC-0096:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, UT-09, UT-10, IT-01, IT-02, CT-01 com a tag `SPEC-0096:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -454,36 +454,70 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`atlas.py probe` passa a mirar um banco, cache, fila ou tópico ligado ao deployment do serviço no ambiente (`--resource <kind:id>`), e a receber um commit (`--commit`). O acesso fica na configuração local: `access.cloud`, `access.databases` e `access.urls`. O contrato `probe@2` declara `targets`, `access` e `inputs`, e o `probe@1` continua funcionando. Nenhum valor de acesso aparece em saída, erro, `context`, `doctor` ou `probes.log`; o id de conta de nuvem sai mascarado. Versões: boson-atlas 2026.11.19 e plugin 2026.11.34.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/atlas.py`:**
+  - `linked_resources` é a função única que liga recurso e deployment, com o mesmo casamento de `config_refs` do `build`, extraído para `config_ref_targets` sem mudar o comportamento;
+  - `probe_resource` confere o recurso antes de qualquer processo;
+  - os validadores aceitam `probe@1` e `probe@2`;
+  - a máscara literal cobre os valores de acesso;
+  - o `probes.log` é montado pela constante `PROBE_LOG_KEYS`.
+- **Referências:** `references/probes.md`, `config.md` e `context.md`.
+- **Emenda v2:**
+  - o exemplo inválido do CT-01 da SPEC-0088 passou a usar um contrato inexistente;
+  - o `__CF_USER_TEXT_ENCODING` do macOS entrou no ambiente base do adaptador.
+- **Execução:** a sessão caiu no meio da implementação; um segundo implementador retomou o trabalho não commitado, sem descartar nada.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 4b627eb (91 falhas pelo motivo certo, G1) e green em 70b0958 e b3743c0 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | adaptador probe@1 de hoje segue igual | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-01 | acesso cloud e databases validado, só "definido" no config | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-02 | doctor confere o passfile só por stat | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-03 | context mostra só se há acesso | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-04 | recurso ligado ao deployment do ambiente; não ligado sai com 2 | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-05 | attrs do recurso conferidos antes de qualquer processo | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-06 | probe@1 nunca recebe recurso; sem acesso sai com 4 | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-07 | só os blocos de acesso declarados chegam ao adaptador | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-08 | máscara literal dos valores de acesso e do id de conta | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-09 | --commit vira target.change com os repositórios de código | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| UT-10 | linked_resources devolve recurso, relação e deployment | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| IT-01 | probe de recurso de ponta a ponta com o atlas.py real | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| IT-02 | capacidade de mudança com credencial por nome | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
+| CT-01 | blocos probe@1 e probe@2 da referência válidos e inválidos | PASS | `test_probe_resource.py` e `test_architecture.py`; G2 PASS (suíte completa e lint) em b3743c0; G4 `verify` 14/14 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.34 depois do merge (`claude plugin update fermion@fermion-lab`). As probes continuam desligadas por padrão (`probes.enabled`).
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Máscara do id de conta no host do ECR** (`123456789012.dkr.ecr…`) e em ARN em maiúsculas: entra como Emenda da SPEC-0106, cujo adaptador ecoa imagens, antes de ela começar.
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - literais de acesso de outros ambientes fora da máscara;
+  - a regra G3 que reconhece o alvo pelo nome da variável;
+  - o `resource` gravado no `probes.log` antes da conferência;
+  - o `base_url` com barra final.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0096`. -->
