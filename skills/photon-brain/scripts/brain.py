@@ -54,7 +54,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.9"
+BRAIN_VERSION = "2026.11.10"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -67,7 +67,7 @@ LAYOUT_FILES = ("index", "log")
 LAYOUT_KEYS = LAYOUT_DIRS + LAYOUT_FILES
 PARA_KEYS = ("projects", "areas", "resources", "archive")
 SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors", "inbox_stale_days",
-               "conflict_patterns", "lint", "backup")
+               "conflict_patterns", "lint", "backup", "timezone")
 SHARED_VERSION = "1"
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
@@ -583,6 +583,10 @@ def read_config(config_home=None) -> dict:
             origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
             warnings += [{"key": name, "message": (f"brain-config.yml: {name} inválido: {given} — {rule}; usando "
                                                    f"{fmt_scalar(default)}")} for name, given, rule, default in invalid]
+        elif key == "timezone":  # IANA name of the vault zone (SPEC-0109); missing = "" (the machine zone)
+            found = key in shared and shared[key] not in (None, "")
+            values[key] = shared[key] if found else ""
+            origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
         elif key == "conflict_patterns":  # missing = the patterns of the local provider (references/providers.md)
             found = key in shared
             values[key] = shared[key] if found else list(CONFLICT_PATTERNS.get(values["provider"],
@@ -699,10 +703,75 @@ def write_local_config(path: Path, text: str):
     os.replace(tmp, path)
 
 
+# ---------------------------------------------------------------- vault clock (SPEC-0109)
+
+TIMEZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$")
+TIMEZONE_INVALID = "timezone inválido: use um nome como America/Sao_Paulo"
+_VAULT_CLOCK = None  # the clock of the configured vault in this run (use_vault_clock); None = the machine zone
+
+
+def timezone_name(shared, override=None) -> str:
+    """The zone name in use: the timezone key of the shared configuration, else `override` (--timezone), else ""."""
+    given = shared.get("timezone") if isinstance(shared, dict) else None
+    if given not in (None, ""):
+        return given if isinstance(given, str) else str(given)
+    return override or ""
+
+
+def zone_info(name: str):
+    """tzinfo of an IANA name, checked against TIMEZONE_RE before zoneinfo (it never becomes a file path):
+    BrainError(code 2) for a name out of the rule or not found on this machine."""
+    if not TIMEZONE_RE.match(name):
+        raise BrainError(TIMEZONE_INVALID, 2)
+    try:
+        import zoneinfo  # Python 3.9+
+
+        return zoneinfo.ZoneInfo(name)
+    except (ImportError, ValueError, OSError, LookupError) as e:  # ZoneInfoNotFoundError is a KeyError
+        raise BrainError(f"fuso {name} não encontrado nesta máquina (instale a base de fusos)", 2) from e
+
+
+def vault_clock(shared, override=None, clock=None):
+    """Clock of the vault: a callable returning an aware datetime in the zone of the timezone key of `shared` (it
+    wins over `override`, the --timezone of capture --print), else in the machine zone. `clock` is the base instant
+    (callable -> datetime; None = now; a naive one is taken as local). Invalid or unknown name = BrainError(code 2)."""
+    name = timezone_name(shared, override)
+    tz = zone_info(name) if name else None
+    base = clock or (lambda: dt.datetime.now(dt.timezone.utc))
+
+    def moment():
+        instant = base()
+        return instant.astimezone(tz) if tz is not None else instant.astimezone()
+    return moment
+
+
+def use_vault_clock(values, override=None):
+    """Set (and return) the clock of this run from the configuration values; BrainError(code 2) when the timezone
+    is invalid, before anything is written."""
+    global _VAULT_CLOCK
+    _VAULT_CLOCK = vault_clock(values, override)
+    return _VAULT_CLOCK
+
+
+def current_clock():
+    return _VAULT_CLOCK or vault_clock(None)
+
+
+def timezone_item(values: dict) -> tuple:
+    """The doctor line of the vault zone: OK "fuso: <name>" or "fuso: o da máquina (±HH:MM)"; ERRO when invalid."""
+    try:
+        offset = vault_clock(values)().strftime("%z")
+    except BrainError as e:
+        return ("ERRO", "timezone", str(e))
+    name = timezone_name(values)
+    return ("OK", "timezone", f"fuso: {name}" if name else f"fuso: o da máquina ({offset[:3]}:{offset[3:]})")
+
+
 # ---------------------------------------------------------------- vault writes (create or append only)
 
-def now() -> str:
-    return dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+def now(clock=None) -> str:
+    """"AAAA-MM-DD HH:MM" in the vault zone (clock: the vault clock; None = the clock of this run)."""
+    return (clock or current_clock())().strftime("%Y-%m-%d %H:%M")
 
 
 def create_file(path: Path, text: str) -> bool:
@@ -764,7 +833,7 @@ def moc_text(vault: Path, layout: dict, name: str, title: str) -> str:
     if not template.is_file():
         template = TEMPLATES_DIR / "moc.md"
     return render_note(template.read_text(encoding="utf-8"), title=title, context=name,
-                       date=dt.date.today().isoformat(), source="")
+                       date=today(), source="")
 
 
 def backup_path(path: Path) -> Path:
@@ -2272,6 +2341,7 @@ def cmd_context_add(args, config_home=None) -> int:
     config = load_config(config_home)
     values = config["values"]
     vault, shared_path = Path(values["vault"]), shared_config_path(values["vault"])
+    use_vault_clock(values)
     if not vault.is_dir():
         raise BrainError(f"vault não encontrado: {vault}", 1)
     if not shared_path.is_file():
@@ -2336,6 +2406,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
         rows.append(("OK", "brain-config.yml", f"versão {version}"
                      + (f"; padrão para: {', '.join(missing)}" if missing else "")))
     rows += [("AVISO", warning["key"], warning["message"]) for warning in config.get("warnings", [])]
+    rows.append(timezone_item(values))
 
     root = Path(vault)
     for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
@@ -3271,13 +3342,17 @@ def backup_items(values: dict) -> list:
 
 # ---------------------------------------------------------------- store commands (create, append, regions)
 
-def today() -> str:
-    return dt.date.today().isoformat()
+def today(clock=None) -> str:
+    """"AAAA-MM-DD" in the vault zone (clock: the vault clock; None = the clock of this run)."""
+    return (clock or current_clock())().date().isoformat()
 
 
-def store_config(config_home=None):
-    """(values, vault, layout) of the configured vault for the store commands."""
+def store_config(config_home=None, writes=True):
+    """(values, vault, layout) of the configured vault for the store commands; a command that writes dates
+    (writes=True) first sets the vault clock, failing with code 2 on an invalid timezone (SPEC-0109)."""
     values = load_config(config_home)["values"]
+    if writes:
+        use_vault_clock(values)
     return values, vault_dir(values), values["layout"]
 
 
@@ -3319,7 +3394,7 @@ def files_folder(values: dict, context):
         raise BrainError(f"pasta files não encontrada: {files or '(sem files na configuração local)'}", 1)
     if context:
         check_context_name(context)
-    folder = f"{context or INBOX_FILES}/{dt.date.today().year}"
+    folder = f"{context or INBOX_FILES}/{today()[:4]}"
     if posixpath.normpath(folder) != folder or folder.startswith(("/", "..")):
         raise BrainError(f"contexto fora da pasta files: {context}")
     return Path(files), folder
@@ -3685,8 +3760,8 @@ MOVE_ONLY_INBOX = "--move só vale para itens da inbox"
 
 def capture_name(text: str, existing=(), clock=None) -> str:
     """Name of a capture, "AAAA-MM-DD-HHMMSS-<slug of the first CAPTURE_WORDS words>.md", with the time of clock()
-    (None = datetime.now); a name in `existing` gets "-1", "-2"... Pure (no I/O)."""
-    stamp = (clock or dt.datetime.now)().strftime("%Y-%m-%d-%H%M%S")
+    (None = the clock of this run); a name in `existing` gets "-1", "-2"... Pure (no I/O)."""
+    stamp = (clock or current_clock())().strftime("%Y-%m-%d-%H%M%S")
     base = f"{stamp}-{slugify(' '.join(text.split()[:CAPTURE_WORDS]), fallback='captura')}"
     taken, name, n = set(existing), f"{base}.md", 0
     while name in taken:
@@ -3704,9 +3779,9 @@ def render_capture(text: str, created: str, context) -> str:
 
 def capture_note(text: str, context=None, clock=None) -> str:
     """Content of the capture note that `capture` writes and `capture --print` shows: frontmatter type: capture,
-    created = clock().isoformat(timespec="seconds") (None = datetime.now), context when given, then the text.
-    Pure (no I/O)."""
-    return render_capture(text, (clock or dt.datetime.now)().isoformat(timespec="seconds"), context)
+    created = clock().isoformat(timespec="seconds") (None = the clock of this run: "AAAA-MM-DDTHH:MM:SS±HH:MM" with
+    the vault clock), context when given, then the text. Pure (no I/O)."""
+    return render_capture(text, (clock or current_clock())().isoformat(timespec="seconds"), context)
 
 
 def inbox_dir(vault: Path, layout: dict) -> Path:
@@ -3879,6 +3954,8 @@ def capture_config(args, config_home=None):
     inbox = getattr(args, "inbox", None)
     if inbox is not None and not args.print:
         raise BrainError("--inbox só vale com --print")
+    if getattr(args, "timezone", None) is not None and not args.print:
+        raise BrainError("--timezone só vale com --print")
     if not args.print:
         values, vault, layout = store_config(config_home)
         return values, vault, inside_vault(layout["inbox"], "layout.inbox")
@@ -3944,7 +4021,12 @@ def cmd_capture(args, config_home=None) -> int:
     values, vault, inbox = capture_config(args, config_home)
     if args.context and values is not None:
         check_context(args.context, values)
-    moment = dt.datetime.now()
+    override = getattr(args, "timezone", None)
+    configured = timezone_name(values)
+    if override and configured and override != configured:
+        print(f"aviso: --timezone {override} ignorado; vale o timezone do brain-config.yml: {configured}",
+              file=sys.stderr)
+    moment = use_vault_clock(values, override)()
     existing = inbox_names(vault / inbox if vault is not None else None)
     rel = posixpath.join(inbox, capture_name(text, existing, lambda: moment))
     content = capture_note(text, args.context, lambda: moment)
@@ -3964,7 +4046,7 @@ def cmd_capture(args, config_home=None) -> int:
 
 
 def cmd_inbox_list(args, config_home=None) -> int:
-    values, vault, layout = store_config(config_home)
+    values, vault, layout = store_config(config_home, writes=False)
     items = inbox_entries(vault, layout, values["inbox_stale_days"])
     if args.json:
         print_json({"items": items})
@@ -3996,7 +4078,7 @@ def cmd_inbox_done(args, config_home=None) -> int:
         found = LinkIndex(rel for _, rel in walk_notes(values)).resolve(ref)
         note = found or " ".join(ref.split())
     raw = inside_vault(layout["raw"], "layout.raw")
-    dest = vault / raw / PROCESSED_DIR / dt.date.today().strftime("%Y-%m") / item.name
+    dest = vault / raw / PROCESSED_DIR / today()[:7] / item.name
     origin = shown_path(item, vault)
     final = move_out_of_inbox(item, dest, vault, layout, command="inbox-done", note=note)
     print(one_line(f"{origin} → {shown_path(final, vault)}" + (f" (nota: {note})" if note else "")))
@@ -4700,6 +4782,7 @@ def main(argv=None) -> int:
     p.add_argument("--print", action="store_true",
                    help="só mostra o caminho e o conteúdo, sem escrever nada (para o conector do provedor)")
     p.add_argument("--inbox", metavar="PASTA", help="só com --print, quando o vault ou o brain-config.yml não pode ser lido: pasta da inbox (padrão: inbox)")
+    p.add_argument("--timezone", metavar="NOME", help="só com --print, quando o brain-config.yml não pode ser lido: fuso IANA do created (ex.: America/Sao_Paulo; padrão: o da máquina)")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("inbox", help="itens da inbox (list) e saída de um item já guardado (done)")
     inbox = p.add_subparsers(dest="inbox_command", required=True)
