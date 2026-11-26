@@ -178,7 +178,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — 08e07c7 (árvore suja) | 2026-11-26 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=18)) — bb8a880 | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a217e1d | 2026-11-26 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 4a951be | 2026-11-26 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — b7e30eb | 2026-11-26 |
 | G4 Review | FAIL | CHANGES_REQUESTED: cmd_backup não usa o relógio do vault — linha do log.md no fuso da máquina e, com timezone inválido, grava e sai com 0 em vez de 2 (contrato: comandos que gravam datas) | 2026-11-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
