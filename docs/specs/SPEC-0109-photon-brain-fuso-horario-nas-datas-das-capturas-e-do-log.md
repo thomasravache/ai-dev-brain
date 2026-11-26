@@ -9,9 +9,9 @@ created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/references/config.md, skills/photon-brain/references/connectors.md, skills/photon-brain/references/inbox.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_timezone.py, skills/photon-brain/tests/test_timezone_cli.py, .claude-plugin/plugin.json]
+touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/references/config.md, skills/photon-brain/references/connectors.md, skills/photon-brain/references/inbox.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_timezone.py, skills/photon-brain/tests/test_timezone_cli.py, skills/photon-brain/tests/test_connector.py, .claude-plugin/plugin.json]
 adrs: [ADR-0007, ADR-0027]
 external: []
 size: M
@@ -91,6 +91,9 @@ doctor
 comandos que gravam datas (capture, new-note, relate, append, index, inbox done, ...)
   com timezone inválido ou não encontrado: exit 2 com a mesma mensagem do doctor, nada gravado
 ```
+
+**Esclarecimentos (Emenda v2):**
+- Os testes da SPEC-0044 em `tests/test_connector.py` (`PrintMatchesCaptureTest`, `PrintWithoutConfigTest`) fixam o `created` da captura sem deslocamento; com este contrato eles passam a aceitar o `created` com `±HH:MM`, sem mudar o resto do que conferem. O arquivo entra em `touches` só para esse ajuste.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -227,3 +230,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0109`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | `tests/test_connector.py` em `touches` para os testes da SPEC-0044 aceitarem o `created` com deslocamento | G2 da SPEC-0109: testes antigos fixavam o formato sem fuso (TEST_DEFECT) | nenhuma | thomas, 2026-11-26 (piloto automático com o recomendado) |
