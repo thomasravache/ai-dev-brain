@@ -49,6 +49,12 @@ test-writer para o Architect):
     - A sugestão (só em degradou) cita o repositório de configuração do deployment (acme/iac) e não traz comando
       (kubectl, argocd, helm, git, linha começando com $).
 
+SPEC-0102 (verify@2): os validadores desta suíte aceitam também a foto e a saída verify@2, pelas mesmas regras — a
+foto verify@2 traz dependencies (aqui sempre {}: o serviço api não tem recurso ligado nem adaptador de recurso) e cada
+verificação traz resource (null em delivery, runtime e logs); o que cada teste verifica não muda. A "outra versão"
+recusada como --baseline passa a ser verify@3 (verify@2 virou contrato aceito) e entra uma foto verify@2 sem
+dependencies, também recusada.
+
 Isolamento: HOME, XDG_CONFIG_HOME e ATLAS_CONFIG_HOME temporários (helpers.Sandbox); fotos só em pastas temporárias;
 sem rede; nenhum kubectl de verdade (o adaptador falso fixtures/fake-probes/scripted.py nos testes unitários e o
 kubectl falso da SPEC-0089 no IT-01, com o PATH começando pela pasta dele); nomes genéricos (acme, api).
@@ -186,14 +192,18 @@ def _is_int(value):
 
 
 def snapshot_problems(data) -> list:
-    """Problemas de uma foto frente ao contrato verify@1 (seção 6); [] = válida."""
+    """Problemas de uma foto frente ao contrato verify@1 (seção 6) ou verify@2 (SPEC-0102: mais dependencies, que
+    neste atlas é sempre {}); [] = válida."""
     if not isinstance(data, dict):
         return ["a foto não é um objeto"]
     problems = []
-    if set(data) != SNAPSHOT_KEYS:
-        problems.append(f"chaves {sorted(data)} != {sorted(SNAPSHOT_KEYS)}")
-    if data.get("contract") != "verify@1":
+    keys = SNAPSHOT_KEYS | ({"dependencies"} if data.get("contract") == "verify@2" else set())
+    if set(data) != keys:
+        problems.append(f"chaves {sorted(data)} != {sorted(keys)}")
+    if data.get("contract") not in ("verify@1", "verify@2"):
         problems.append(f"contract {data.get('contract')!r}")
+    if data.get("contract") == "verify@2" and data.get("dependencies") != {}:
+        problems.append(f"dependencies {data.get('dependencies')!r} (o serviço api não tem recurso ligado)")
     for key in ("service", "environment"):
         if not isinstance(data.get(key), str) or not data.get(key):
             problems.append(f"{key} não é texto")
@@ -231,20 +241,26 @@ def snapshot_problems(data) -> list:
 
 
 def result_problems(data) -> list:
-    """Problemas de uma saída `verify compare --json` frente ao contrato verify@1; [] = válida."""
+    """Problemas de uma saída `verify compare --json` frente ao contrato verify@1 ou verify@2 (SPEC-0102: cada
+    verificação com resource, null em delivery, runtime e logs); [] = válida."""
     if not isinstance(data, dict):
         return ["a saída não é um objeto"]
     problems = []
     if not {"contract", "verdict", "checks"} <= set(data) <= RESULT_KEYS:
         problems.append(f"chaves {sorted(data)}")
-    if data.get("contract") != "verify@1":
+    if data.get("contract") not in ("verify@1", "verify@2"):
         problems.append(f"contract {data.get('contract')!r}")
+    v2 = data.get("contract") == "verify@2"
     if data.get("verdict") not in VERDICT_EXIT:
         problems.append(f"verdict {data.get('verdict')!r}")
     checks = data.get("checks")
     if not isinstance(checks, list) or not checks:
         return problems + ["checks não é uma lista com itens"]
     for item in checks:
+        if isinstance(item, dict) and v2:
+            if "resource" not in item or item["resource"] is not None:
+                problems.append(f"verify@2 sem resource null numa verificação de deployment: {item!r}")
+            item = {k: v for k, v in item.items() if k != "resource"}
         if not isinstance(item, dict) or not {"deployment", "check", "status", "evidence"} <= set(item) <= CHECK_KEYS:
             problems.append(f"check com chaves erradas: {item!r}")
             continue
@@ -885,12 +901,15 @@ class ContractTest(VerifyCase):
         self.result(self.compare(baseline=out), "passou")
 
     def test_compare_refuses_a_baseline_outside_the_contract(self):
-        """SPEC-0090:CT-01 — --baseline com chave desconhecida, com contract verify@2, que não é JSON ou que não existe:
-        compare sai com 2, sem veredito."""
+        """SPEC-0090:CT-01 — --baseline com chave desconhecida, com contract verify@3 (SPEC-0102: verify@2 virou
+        contrato aceito), verify@2 sem dependencies, que não é JSON ou que não existe: compare sai com 2, sem
+        veredito."""
         unknown = dict(baseline_data(), extra="x")
-        other = dict(baseline_data(), contract="verify@2")
+        other = dict(baseline_data(), contract="verify@3")
+        v2_without_dependencies = dict(baseline_data(), contract="verify@2")
         cases = (("chave desconhecida", self.write_baseline(unknown, "unknown.json")),
-                 ("outra versão", self.write_baseline(other, "v2.json")))
+                 ("outra versão", self.write_baseline(other, "v3.json")),
+                 ("verify@2 sem dependencies", self.write_baseline(v2_without_dependencies, "v2.json")))
         bad = self.task / "nao-json.json"
         bad.write_text("{isto não é json", encoding="utf-8")
         cases += (("não é JSON", bad), ("ausente", self.task / "nao-existe.json"))
