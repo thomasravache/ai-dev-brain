@@ -139,6 +139,17 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
+**Fase 1: Contrato e implementação**
+- [ ] Red: CH-01, UT-01, UT-02, UT-03, UT-04, IT-01 com a tag `SPEC-0111:<ID>`, falhando pelo motivo certo (CH passando)
+- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [ ] Refactor mantendo tudo verde
+- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+
+**Fase final: Integração, entrega e documentação**
+- [ ] Review independente (G4)
+- [ ] Integração + CI verde (G5) e H2
+- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
