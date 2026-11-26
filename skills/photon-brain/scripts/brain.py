@@ -2298,7 +2298,9 @@ def cmd_init(args, config_home=None) -> int:
         created.append("brain-config.yml")
     mode = "--adopt" if args.adopt else "--force" if backup else "vault novo" if new_vault else "vault vazio"
     detail = f"{len(created)} item(ns) criado(s)" + (f", anterior em {backup.name}" if backup else "")
-    append_log(vault, parse_yaml(rendered)["layout"], "init", f"{mode} — {detail}")
+    shared = parse_yaml(rendered)
+    use_vault_clock(shared)  # the brain-config.yml just written (from the template: no timezone = the machine zone)
+    append_log(vault, shared["layout"], "init", f"{mode} — {detail}")
     write_local_config(local_path, local_text)
 
     print(f"{'Vault adotado' if args.adopt else 'Vault criado'} em {vault_s}")
@@ -3089,6 +3091,7 @@ def backup_to(folder: Path, name: str, manifest: dict, vault: Path, files, keep:
 
 def cmd_backup(args, config_home=None) -> int:
     values = load_config(config_home)["values"]
+    use_vault_clock(values)  # the log line in the vault zone; invalid timezone = code 2 before any write (SPEC-0109)
     vault, settings = vault_dir(values), values["backup"]
     targets = args.dest or values["backup_targets"]
     if not targets:
