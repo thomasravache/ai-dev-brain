@@ -400,7 +400,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 497247b | 2026-11-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8836c6f | 2026-11-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 2 minor + 1 nit (pipeline not_verified permanente conta como em andamento sem --expect-image; mesma imagem com e sem digest vira ambígua; DNS_SUBDOMAIN_RE aceita '..') — 3a937fd | 2026-11-26 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — b093db6 | 2026-11-26 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
