@@ -63,6 +63,19 @@ approved_at:
 >    - o `new-note` cria só o esqueleto, e o corpo também foi escrito à mão, fora do log;
 >    - sugestão: aceitar `--body-file ARQ` no `new-note`.
 >
+> Quarto bloco, do plano do ecossistema de vida (thomas, 2026-11-25; vault, contexto `ecossistema`, nota "Ecossistema de vida — arquitetura e decisões"):
+>
+> 12. **Inbox que separa ação de conhecimento:**
+>    - ao processar a inbox, o que é ação ("comprar o gás até sexta") deve virar task no Google Tasks, na lista da área, e não nota;
+>    - depende do MCP `google-tasks-mcp` (repositório próprio, SPEC-0001 de lá); a skill só orienta o agente a usar a ferramenta de tasks quando ela existir, sem chamar API nenhuma (a skill continua sem rede);
+>    - o que tem hora marcada com outras pessoas vira sugestão de evento no Calendar.
+> 13. **Contexto da área ligado às listas do Tasks:**
+>    - cada contexto do `brain-config.yml` poderia declarar as listas do Tasks da área (ex.: `moradia` → Home Care, Home Maintenance, Groceries), para o agente saber onde criar a task;
+>    - a tabela de áreas hoje vive só numa nota do vault.
+> 14. **Nota de lista com check, e não task:**
+>    - a lista de compras ficou duplicada entre o vault e o Tasks; a regra decidida é "o que se marca como feito vai para o Tasks, o que se consulta fica no vault";
+>    - o tipo `list` do ponto 2 deve deixar isso claro, para não virar uma segunda lista de tarefas.
+>
 > Antes de detalhar, conferir as specs entregues de captura e inbox (SPEC-0021) e de configuração (SPEC-0017), para não repetir o que já existe.
 
 <!-- type: feature | migration | foundation (produto novo: ver references/greenfield.md). O épico não é executado: define visão, decisões, decomposição e entrega. Quem executa são as specs filhas (tier full ou lite, tamanho S/M, `parent: SPEC-0093`). A ordem de execução é calculada a partir do frontmatter das filhas (`spec_graph.py waves`). -->
