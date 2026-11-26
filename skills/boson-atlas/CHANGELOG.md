@@ -9,6 +9,17 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.27] - 2026-11-26
+
+### Added
+- `atlas.py verify track --service <id> --env <ambiente> --commit <sha> [--expect-image <imagem>] [--confirm-production] [--json]`: onde está a entrega de um commit, só lendo pelas probes (mesmo caminho, proteções e registro do `probe`): `pipeline runs` uma vez (com `target.change`), `gitops application` e `runtime status` (2000 linhas) por deployment. Etapas `pipeline`, `image`, `gitops` e `rollout` com `pending`, `running`, `ok`, `failed` ou `not_verified`, evidência e motivo; estado geral com exit 0 `ok`, 1 `failed`, 5 `not_verified` e 6 `running`/`pending` (ainda não chegou); `current_stage`; e a imagem esperada (`--expect-image` ou a da Application cuja tag carrega o commit), que serve de `--expect-image` ao `verify compare`. Probe recusada, com erro ou cortada deixa a etapa `not_verified`; produção sem `--confirm-production` sai com 4 antes de qualquer probe; nada é gravado além do `probes.log`. Saída `track@1` em `--json` com o validador `validate_track_result` (SPEC-0106, ADR-0024).
+- Adaptador de probe `github-actions` da skill (`assets/probes/github-actions.py`, `probe@2`, capacidade `pipeline`, verbo `runs`, `access: []`, `inputs: [change]`): uma chamada `gh api -X GET repos/<dono>/<repo>/actions/runs -f head_sha=<sha> -f per_page=100` por repositório de código (até 10), lista fechada recusada antes de executar, um item por execução (workflow, arquivo, evento, status, conclusão, tentativa, início, duração e a URL sem usuário, query nem fragmento), sem título, autor, branch nem pull requests; 404 vira `found: false`; erros com mensagem fixa (SPEC-0106).
+- Adaptador de probe `argocd` da skill (`assets/probes/argocd.py`, `probe@2`, capacidade `gitops`, verbo `application`, `access: [cluster]`): uma chamada `kubectl get applications.argoproj.io <deployment> -n <app-namespace> -o json --context=<ctx> --request-timeout=20s` (`--app-namespace` no `command` local, padrão `argocd`; `ATLAS_GITOPS_CONTEXT` declarado em `credentials` vale no lugar do contexto), um item com sync, health, revisão, fase e fim da operação, reconciliação e imagens sem o host do registro; nunca `spec.source`, anotações nem `status.resources`; NotFound vira `found: false`; erros com mensagem fixa (SPEC-0106).
+- `references/probes/github-actions.md`, `references/probes/argocd.md` e a seção `verify track` em `references/verify.md` (passos, imagem esperada, etapas, estado e exits, blocos `track@1` válidos e inválidos, uso com o `compare`); `SKILL.md` com o `track` e os links (SPEC-0106).
+
+### Changed
+- A máscara das probes passa a cobrir também o id de conta de 12 dígitos no host de registro ECR (`<conta>.dkr.ecr.<região>.amazonaws.com`, também `.amazonaws.com.cn` e em maiúsculas) e em ARN em maiúsculas ou misto (`ARN:AWS:...`) (SPEC-0106, Emenda v2).
+
 ## [2026.11.25] - 2026-11-25
 
 ### Added

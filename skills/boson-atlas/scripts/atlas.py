@@ -33,7 +33,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.25"
+ATLAS_VERSION = "2026.11.27"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -4820,9 +4820,11 @@ PROBE_PATTERNS = (
     re.compile(r"(?<!\d)\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}(?!\d)"),  # CNPJ
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]+=*"),
     re.compile(r"(?i)\b[\w-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[=:]\s*[^\s,;&\"']+"),
-    # cloud account ids (SPEC-0096): only the 12 digits (group "mask") of an ARN and of a URL of the cloud
-    re.compile(r"\barn:[A-Za-z0-9-]+:[A-Za-z0-9-]+:[A-Za-z0-9-]*:(?P<mask>\d{12})(?![0-9])"),
+    # cloud account ids (SPEC-0096): only the 12 digits (group "mask") of an ARN (in any case: ARN:AWS:..., Emenda v2
+    # of SPEC-0106), of a URL of the cloud and of an ECR registry host (<account>.dkr.ecr.<region>.amazonaws.com[.cn])
+    re.compile(r"(?i)\barn:[A-Za-z0-9-]+:[A-Za-z0-9-]+:[A-Za-z0-9-]*:(?P<mask>\d{12})(?![0-9])"),
     re.compile(r"(?i)\bhttps?://[a-z0-9.-]+\.amazonaws\.com(?:\.cn)?/(?P<mask>\d{12})(?![0-9])"),
+    re.compile(r"(?i)(?<![0-9])(?P<mask>\d{12})\.dkr\.ecr(?:-fips)?\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?\b"),
 )
 LOG_LEVELS = (("error", re.compile(r"(?i)\b(?:error|err|fatal|critical|crit|panic|exception)\b")),
               ("warn", re.compile(r"(?i)\b(?:warn|warning)\b")),
@@ -7097,11 +7099,426 @@ def cmd_verify_compare(args) -> int:
     return VERDICT_EXITS[verdict]
 
 
+# ---- verify track: where the delivery of a commit is (SPEC-0106, ADR-0024)
+
+TRACK_CONTRACT = "track@1"
+TRACK_STAGES = ("pipeline", "image", "gitops", "rollout")
+TRACK_STATUSES = ("pending", "running", "ok", "failed", "not_verified")
+TRACK_STATE_ORDER = ("failed", "running", "pending", "not_verified")  # the first one present is the state; else ok
+TRACK_EXITS = {"failed": 1, "running": 6, "pending": 6, "not_verified": 5, "ok": 0}
+TRACK_RESULT_KEYS = ("contract", "service", "environment", "commit", "state", "current_stage", "expected_image",
+                     "expected_image_source", "stages")
+TRACK_STAGE_KEYS = ("stage", "deployment", "status", "evidence", "reason")
+TRACK_SOURCES = ("expect-image", "commit-tag")
+TRACK_COMMIT_RE = re.compile(r"^[0-9a-f]{40}\Z")
+TRACK_FAILED_CONCLUSIONS = ("failure", "timed_out", "cancelled", "startup_failure", "action_required")
+TRACK_OK_CONCLUSIONS = ("success", "neutral", "skipped")
+TRACK_TAG_PIECE_RE = re.compile(r"[-_.]")
+TRACK_MIN_PIECE = 7  # a piece of the tag that is a prefix of the commit with at least this many characters
+BAD_COMMIT = "commit precisa ser o sha completo (40 hexadecimais)"
+NO_RUN = "nenhuma execução da CI para o commit ainda"
+NO_CODE = "serviço sem repositório de código no atlas"
+AMBIGUOUS_IMAGE = "mais de uma imagem com o commit: passe --expect-image"
+UNKNOWN_IMAGE = "imagem do commit não identificada: passe --expect-image"
+WAITING_IMAGE = "aguardando a imagem no GitOps"
+CUT_STATUS = "probe de status cortada"
+NO_EXPECTED = "sem imagem esperada"
+
+
+def _track_flat(value) -> bool:
+    """A flat object: every value a scalar or a list of scalars (an item of the adapter)."""
+    return isinstance(value, dict) and all(
+        _probe_scalar(v) or (isinstance(v, list) and all(_probe_scalar(x) for x in v)) for v in value.values())
+
+
+def track_state(statuses) -> str:
+    """failed > running > pending > not_verified > ok (SPEC-0106, section 6)."""
+    statuses = set(statuses)
+    return next((state for state in TRACK_STATE_ORDER if state in statuses), "ok")
+
+
+def track_current_stage(stages) -> str:
+    """The first stage whose status is not ok, in the order pipeline -> image -> gitops -> rollout and, inside a stage,
+    the deployments by id; "" when every stage is ok."""
+    open_stages = sorted((TRACK_STAGES.index(s["stage"]), s["deployment"]) for s in stages
+                         if isinstance(s, dict) and s.get("stage") in TRACK_STAGES and s.get("status") != "ok"
+                         and isinstance(s.get("deployment"), str))
+    return TRACK_STAGES[open_stages[0][0]] if open_stages else ""
+
+
+def _track_stage_problems(position, item) -> list:
+    where = f"stages[{position}]"
+    if not isinstance(item, dict):
+        return [f"{where} precisa ser um objeto"]
+    problems = _closed_keys(item, TRACK_STAGE_KEYS, TRACK_STAGE_KEYS[:-1], where)
+    if "stage" in item and item["stage"] not in TRACK_STAGES:
+        problems.append(f"{where}.stage precisa ser um de: {', '.join(TRACK_STAGES)}")
+    if "status" in item and item["status"] not in TRACK_STATUSES:
+        problems.append(f"{where}.status precisa ser um de: {', '.join(TRACK_STATUSES)}")
+    deployment = item.get("deployment")
+    if "deployment" in item:
+        if not isinstance(deployment, str):
+            problems.append(f"{where}.deployment precisa ser um texto")
+        elif item.get("stage") == "pipeline" and deployment:
+            problems.append(f"{where}.deployment precisa ser \"\" no pipeline")
+        elif item.get("stage") in TRACK_STAGES[1:] and not deployment:
+            problems.append(f"{where}.deployment precisa ser o id do deployment")
+    reason = item.get("reason", "")
+    if not isinstance(reason, str):
+        problems.append(f"{where}.reason precisa ser um texto")
+    elif item.get("status") != "ok" and not reason.strip():
+        problems.append(f"{where}: reason obrigatório fora de ok")
+    evidence = item.get("evidence")
+    if "evidence" in item:
+        if not isinstance(evidence, dict):
+            problems.append(f"{where}.evidence precisa ser um objeto")
+        else:
+            for key, value in evidence.items():
+                if key == "runs" and item.get("stage") == "pipeline":
+                    if not (isinstance(value, list) and all(_track_flat(v) for v in value)):
+                        problems.append(f"{where}.evidence.runs precisa ser uma lista de objetos planos")
+                elif not (_probe_scalar(value) or (isinstance(value, list) and all(_probe_scalar(v) for v in value))):
+                    problems.append(f"{where}.evidence.{_show(key)} precisa ser escalar ou lista de escalares")
+    return problems
+
+
+def validate_track_result(data) -> list:
+    """Problems of the output of `verify track --json` (track@1, SPEC-0106); [] = valid: closed keys, the commit as a
+    full sha, stage and status in their lists, exactly one pipeline stage (deployment ""), reason in every stage out
+    of ok, evidence with scalars (and, in the pipeline, the list runs of flat objects), and state and current_stage
+    by the rule. Never quotes a value."""
+    if not isinstance(data, dict):
+        return ["a saída precisa ser um objeto JSON"]
+    problems = _closed_keys(data, TRACK_RESULT_KEYS, TRACK_RESULT_KEYS)
+    if data.get("contract") != TRACK_CONTRACT:
+        problems.append(f"contract precisa ser {TRACK_CONTRACT}")
+    for key in ("service", "environment"):
+        if key in data and not _verify_text(data[key]):
+            problems.append(f"{key} precisa ser um texto não vazio")
+    if "commit" in data and not (isinstance(data["commit"], str) and TRACK_COMMIT_RE.match(data["commit"])):
+        problems.append("commit precisa ser o sha completo (40 hexadecimais minúsculos)")
+    if "state" in data and data["state"] not in TRACK_EXITS:
+        problems.append(f"state precisa ser um de: {', '.join(TRACK_EXITS)}")
+    image, source = data.get("expected_image"), data.get("expected_image_source")
+    if not isinstance(image, str) or source not in TRACK_SOURCES + ("",):
+        problems.append(f"expected_image precisa ser um texto e expected_image_source um de: "
+                        f"{', '.join(TRACK_SOURCES)} ou \"\"")
+    elif (image == "") != (source == ""):
+        problems.append("expected_image e expected_image_source ficam vazios juntos")
+    stages = data.get("stages")
+    if not isinstance(stages, list) or not stages:
+        return problems + ["stages precisa ser uma lista não vazia"]
+    for position, item in enumerate(stages, 1):
+        problems += _track_stage_problems(position, item)
+    if [s.get("stage") for s in stages if isinstance(s, dict)].count("pipeline") != 1:
+        problems.append("stages precisa ter exatamente uma etapa pipeline")
+    statuses = [s.get("status") for s in stages if isinstance(s, dict)]
+    if data.get("state") in TRACK_EXITS and data["state"] != track_state(statuses):
+        problems.append(f"state fora da regra (failed > running > pending > not_verified > ok: "
+                        f"{track_state(statuses)})")
+    if "current_stage" in data and data["current_stage"] != track_current_stage(stages):
+        problems.append("current_stage precisa ser a primeira etapa não ok (pipeline, image, gitops, rollout)")
+    return problems
+
+
+def _track_stage(stage, deployment, status, evidence, reason) -> dict:
+    return {"stage": stage, "deployment": deployment, "status": status, "evidence": evidence, "reason": reason}
+
+
+def _track_probe(setup, args, capability, verb, deployment, commit=None, lines=None) -> dict:
+    """One probe of the track by run_probe (the path, protections, mask and log of `probe`): {"result"} or
+    {"reason"}. A refusal, failure or answer with error becomes the reason (the stage is not verified)."""
+    query = argparse.Namespace(capability=capability, verb=verb, service=args.service, env=args.env, since=None,
+                               lines=lines, summary=False, confirm_production=args.confirm_production,
+                               atlas=args.atlas, json=True, resource=None, commit=commit)
+    try:
+        outcome = run_probe(query, setup["name"], setup["probes"], setup["entry"], deployment)
+    except AtlasError as e:
+        return {"reason": f"probe {capability} {verb} {'recusada' if e.code == 4 else 'falhou'} — {e}"}
+    if outcome["result"]["status"] != "ok":
+        return {"reason": f"probe {capability} {verb} respondeu com erro: {outcome['message'] or '(sem mensagem)'}"}
+    return {"result": outcome["result"]}
+
+
+def _pipeline_stage(seen, repositories) -> dict:
+    """The pipeline stage from the items of pipeline runs (section 6 of SPEC-0106): a failure seen wins (also in a cut
+    probe); a cut probe or a repository without access is not verified; then running, pending (no run) and ok."""
+    evidence = {"repositories": repositories, "runs": []}
+    if not repositories:
+        return _track_stage("pipeline", "", "not_verified", evidence, NO_CODE)
+    if "reason" in seen:
+        return _track_stage("pipeline", "", "not_verified", evidence, seen["reason"])
+    result = seen["result"]
+    items = [item for item in result["items"] if isinstance(item, dict)]
+    runs = [item for item in items if item.get("found") is not False]
+    missing = sorted(str(item.get("repository")) for item in items if item.get("found") is False)
+    evidence.update(runs=items, missing_repositories=missing)
+    failed = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") in TRACK_FAILED_CONCLUSIONS]
+    if failed:
+        conclusions = ", ".join(sorted({str(r.get("conclusion")) for r in failed}))
+        return _track_stage("pipeline", "", "failed", evidence,
+                            f"{len(failed)} execução(ões) da CI terminou(aram) com {conclusions}")
+    if result["truncated"]:
+        return _track_stage("pipeline", "", "not_verified", evidence,
+                            "probe de runs cortada: alguma execução pode ter ficado de fora")
+    if missing:
+        return _track_stage("pipeline", "", "not_verified", evidence,
+                            f"repositório sem acesso ou inexistente: {', '.join(missing)}")
+    running = [r for r in runs if r.get("status") != "completed"]
+    if running:
+        return _track_stage("pipeline", "", "running", evidence, f"{len(running)} execução(ões) da CI em andamento")
+    if not runs:
+        return _track_stage("pipeline", "", "pending", evidence, NO_RUN)
+    odd = sorted({str(r.get("conclusion")) for r in runs if r.get("conclusion") not in TRACK_OK_CONCLUSIONS})
+    if odd:
+        return _track_stage("pipeline", "", "not_verified", evidence,
+                            f"conclusão da CI não reconhecida: {', '.join(odd)}")
+    return _track_stage("pipeline", "", "ok", evidence, f"{len(runs)} execução(ões) da CI concluída(s) com sucesso")
+
+
+def _track_application(seen) -> tuple:
+    """(the Application item, None) of a gitops application answer, or (None, the reason)."""
+    if "reason" in seen:
+        return None, seen["reason"]
+    items = [item for item in seen["result"]["items"] if isinstance(item, dict)]
+    if not items:
+        return None, "a probe de gitops não trouxe a Application"
+    if items[0].get("found") is False:
+        return None, f"Application {items[0].get('application')} não encontrada no GitOps"
+    return items[0], None
+
+
+def _app_images(app) -> list:
+    return [str(i) for i in (app.get("images") or []) if isinstance(i, str) and i] if app else []
+
+
+def _tag_has_commit(tag: str, commit: str) -> bool:
+    """True when the tag is the commit, or has a piece (split by "-", "_" or ".") of 7 or more characters that is a
+    prefix of the commit."""
+    if tag.lower() == commit:
+        return True
+    return any(len(piece) >= TRACK_MIN_PIECE and commit.startswith(piece.lower())
+               for piece in TRACK_TAG_PIECE_RE.split(tag))
+
+
+def track_commit_image(apps, delivery_images, commit) -> tuple:
+    """(image, problem) of the image of the commit among the images of the Applications: the one whose path is in
+    delivery.images (all, when the list is empty) and whose tag carries the commit; two different ones = the
+    ambiguity problem; none = ("", "")."""
+    paths = {parse_image_ref(normalize_expected_image(image))[0] for image in delivery_images}
+    found = []
+    for app in apps:
+        for image in _app_images(app):
+            path, tag, _ = parse_image_ref(image)
+            if (not paths or path in paths) and tag and _tag_has_commit(tag, commit) and image not in found:
+                found.append(image)
+    if len(found) > 1:
+        return "", AMBIGUOUS_IMAGE
+    return (found[0], "") if found else ("", "")
+
+
+def _synced_healthy(app) -> bool:
+    return bool(app) and app.get("sync_status") == "Synced" and app.get("health_status") == "Healthy"
+
+
+def _image_stage(target, seen, expected, image_problem, pipeline_status) -> dict:
+    """The image stage of one deployment: ok when the expected image is in the Application; pending while it is not
+    (or, with no expected image, while the delivery still moves); not_verified without the Application, with an
+    ambiguous image or with no image of the commit once the delivery stopped."""
+    deployment = target["deployment"]
+    evidence = {"expected": expected[0] if expected else ""}
+    app, reason = _track_application(seen)
+    if reason:
+        return _track_stage("image", deployment, "not_verified", evidence, reason)
+    images = _app_images(app)
+    evidence.update(application=str(app.get("application") or ""), images=images,
+                    sync_status=str(app.get("sync_status") or ""), health_status=str(app.get("health_status") or ""))
+    if expected:
+        wanted = parse_image_ref(expected[0])
+        if any(image_matches(image, wanted) for image in images):
+            return _track_stage("image", deployment, "ok", evidence, "imagem esperada na Application")
+        return _track_stage("image", deployment, "pending", evidence, "a imagem esperada ainda não está na Application")
+    if image_problem:
+        return _track_stage("image", deployment, "not_verified", evidence, image_problem)
+    if pipeline_status != "ok" or not _synced_healthy(app):
+        return _track_stage("image", deployment, "pending", evidence,
+                            "a imagem do commit ainda não apareceu na Application")
+    return _track_stage("image", deployment, "not_verified", evidence, UNKNOWN_IMAGE)
+
+
+def _gitops_stage(target, seen, image) -> dict:
+    """The gitops stage of one deployment, after its image stage (section 6 of SPEC-0106)."""
+    deployment = target["deployment"]
+    app, _ = _track_application(seen)
+    evidence = {}
+    if app:
+        evidence = {key: str(app.get(key) or "") for key in ("application", "sync_status", "health_status",
+                                                              "revision", "operation_phase", "operation_finished_at",
+                                                              "reconciled_at")}
+    if image["status"] == "not_verified":
+        return _track_stage("gitops", deployment, "not_verified", evidence,
+                            f"etapa image não verificada: {image['reason']}")
+    if image["status"] == "pending":
+        return _track_stage("gitops", deployment, "pending", evidence, WAITING_IMAGE)
+    sync, health, phase = evidence["sync_status"], evidence["health_status"], evidence["operation_phase"]
+    shown = f"sync {sync or '?'}, health {health or '?'}, fase {phase or '?'}"
+    if health in ("Degraded", "Missing") or phase in ("Failed", "Error"):
+        return _track_stage("gitops", deployment, "failed", evidence, f"Application com problema ({shown})")
+    if health in ("Suspended", "Unknown"):
+        return _track_stage("gitops", deployment, "not_verified", evidence, f"Application sem saúde conclusiva "
+                            f"({shown})")
+    if phase == "Running" or health == "Progressing" or sync == "OutOfSync":
+        return _track_stage("gitops", deployment, "running", evidence, f"Application aplicando a mudança ({shown})")
+    if sync == "Synced" and health == "Healthy":
+        return _track_stage("gitops", deployment, "ok", evidence, "Application sincronizada e saudável")
+    return _track_stage("gitops", deployment, "not_verified", evidence, f"estado da Application não reconhecido "
+                        f"({shown})")
+
+
+def _rollout_stage(target, seen, expected) -> dict:
+    """The rollout stage of one deployment from runtime status (section 6 of SPEC-0106): matched with the expected
+    image by the digest, when it has one, else by the tag (the rule of compare)."""
+    deployment = target["deployment"]
+    evidence = {"expected": expected[0] if expected else ""}
+    if not expected:
+        return _track_stage("rollout", deployment, "not_verified", evidence, NO_EXPECTED)
+    if "reason" in seen:
+        return _track_stage("rollout", deployment, "not_verified", evidence, seen["reason"])
+    result = seen["result"]
+    if result["truncated"]:
+        return _track_stage("rollout", deployment, "not_verified", evidence, CUT_STATUS)
+    items = [item for item in result["items"] if isinstance(item, dict)]
+    workloads = [item for item in items if item.get("kind") == "workload"]
+    pods = [item for item in items if item.get("kind") == "pod"]
+    wanted = parse_image_ref(expected[0])
+
+    def matches(pod):
+        return any(isinstance(i, str) and image_matches(i, wanted) for i in (pod.get("images") or []))
+
+    new = [pod for pod in pods if matches(pod)]
+    missing = sorted(str(w.get("workload")) for w in workloads if w.get("found") is False)
+    crashing = sorted(str(p.get("pod")) for p in new if p.get("ready") is not True
+                      and _verify_int(p.get("restarts")) and p["restarts"] > 0)
+    complete = bool(workloads) and all(w.get("rollout_complete") is True for w in workloads)
+    evidence.update(rollout_complete=complete, pods=len(pods), pods_with_expected_image=len(new),
+                    ready_pods_with_expected_image=len([p for p in new if p.get("ready") is True]),
+                    crashing_pods=crashing, workloads_not_found=missing)
+    if not workloads:
+        return _track_stage("rollout", deployment, "not_verified", evidence, "a probe de status não trouxe o workload")
+    if missing:
+        return _track_stage("rollout", deployment, "failed", evidence, f"workload não encontrado: {', '.join(missing)}")
+    if crashing:
+        return _track_stage("rollout", deployment, "failed", evidence,
+                            f"pod(s) com a imagem esperada reiniciando sem ficar pronto(s): {', '.join(crashing)}")
+    if not new:
+        return _track_stage("rollout", deployment, "pending", evidence, "nenhum pod com a imagem esperada ainda")
+    if complete and all(p.get("ready") is True and matches(p) for p in pods):
+        return _track_stage("rollout", deployment, "ok", evidence, f"{len(new)} pod(s) pronto(s) com a imagem esperada")
+    return _track_stage("rollout", deployment, "running", evidence,
+                        f"rollout em andamento: {len(new)} de {len(pods)} pod(s) com a imagem esperada")
+
+
+def _track_masks(setup) -> list:
+    """The patterns of the probe redaction plus every local access value and every declared credential value of this
+    machine, masked literally in the evidence and reasons (on top of the mask of each probe)."""
+    access = local_access(setup["entry"].get("access"))
+    literals = [v for block in ("clusters", "cloud", "urls") for v in (access.get(block) or {}).values()
+                if isinstance(v, str)]
+    literals += [v for adapter in setup["probes"]["adapters"].values() for v in adapter_values(adapter)]
+    return probe_extras(setup["shared"]) + literal_masks(literals)
+
+
+def print_track(result: dict) -> None:
+    print(f"# verify track — {result['service']} em {result['environment']}: {result['state']}")
+    print()
+    print(f"Commit: `{result['commit']}`.")
+    print(f"Etapa atual: {result['current_stage'] or '(nenhuma: a entrega chegou)'}.")
+    if result["expected_image"]:
+        print(f"Imagem esperada: `{result['expected_image']}` ({result['expected_image_source']}).")
+    else:
+        print("Imagem esperada: (não identificada).")
+    print()
+    print("| Etapa | Deployment | Status | Motivo |")
+    print("|---|---|---|---|")
+    for item in result["stages"]:
+        reason = str(item.get("reason") or "").replace("|", "\\|").replace("\n", " ")
+        print(f"| {item['stage']} | {item['deployment'] or '-'} | {item['status']} | {reason} |")
+    print()
+    if result["state"] == "ok":
+        print("A entrega chegou: use a imagem esperada no --expect-image do verify compare.")
+    elif TRACK_EXITS[result["state"]] == 6:
+        print("Ainda não chegou: repita o verify track depois da janela.")
+
+
+def cmd_verify_track(args) -> int:
+    """verify track (SPEC-0106, ADR-0024): where the delivery of a commit is — pipeline, image, gitops and rollout —
+    by the probes pipeline runs (once), gitops application and runtime status (per deployment). Exits 0 ok, 1 failed,
+    5 not_verified, 6 running or pending; 2 argument, 3 no configuration, 4 probes off or production without
+    --confirm-production. Read only: nothing is written but the lines of probes.log."""
+    setup = _verify_setup(args)
+    commit = str(args.commit).lower()
+    if not TRACK_COMMIT_RE.match(commit):
+        raise AtlasError(BAD_COMMIT, 2)
+    expected = None
+    if args.expect_image is not None:
+        text = normalize_expected_image(args.expect_image)
+        match = EXPECT_IMAGE_RE.match(text)
+        if not match or not (match.group("tag") or match.group("digest")):
+            raise AtlasError("--expect-image inválido — use o caminho da imagem com :<tag> e/ou @<digest> (ex.: "
+                             "acme/api:1.4.2)", 2)
+        expected = (text, "expect-image")
+    graph = read_probe_graph(setup["atlas"])
+    targets = _verify_targets(setup, args, graph)
+    _verify_production(setup, args, targets)
+    index = _Index(graph)
+    key = _service_key(index, args.service)
+    code_edges = _code_edges(key, index)
+    repositories = sorted({edge["to"].split(":", 1)[1] for edge in code_edges})
+    delivery_images = _code_images(code_edges, index.sources(key, "deploys", "deployment"), index)
+    pipeline_seen = (_track_probe(setup, args, "pipeline", "runs", targets[0]["deployment"], commit=commit)
+                     if repositories else {})
+    gitops_seen = {t["deployment"]: _track_probe(setup, args, "gitops", "application", t["deployment"])
+                   for t in targets}
+    status_seen = {t["deployment"]: _track_probe(setup, args, "runtime", "status", t["deployment"],
+                                                 lines=PROBE_LINES_MAX) for t in targets}
+    pipeline = _pipeline_stage(pipeline_seen, repositories)
+    image_problem = ""
+    if expected is None:
+        apps = [_track_application(seen)[0] for seen in gitops_seen.values()]
+        found, image_problem = track_commit_image([a for a in apps if a], delivery_images, commit)
+        expected = (found, "commit-tag") if found else None
+    images = [_image_stage(t, gitops_seen[t["deployment"]], expected, image_problem, pipeline["status"])
+              for t in targets]
+    gitops = [_gitops_stage(t, gitops_seen[t["deployment"]], image) for t, image in zip(targets, images)]
+    rollout = [_rollout_stage(t, status_seen[t["deployment"]], expected) for t in targets]
+    masks = _track_masks(setup)
+    stages = []
+    for item in [pipeline] + images + gitops + rollout:
+        item["evidence"], item["reason"] = probe_mask(item["evidence"], masks), probe_mask(item["reason"], masks)
+        stages.append(item)
+    state = track_state(s["status"] for s in stages)
+    result = {"contract": TRACK_CONTRACT, "service": args.service, "environment": args.env, "commit": commit,
+              "state": state, "current_stage": track_current_stage(stages),
+              "expected_image": expected[0] if expected else "", "expected_image_source": expected[1] if expected
+              else "", "stages": stages}
+    problems = validate_track_result(result)
+    if problems:
+        raise AtlasError(f"resultado fora do contrato {TRACK_CONTRACT} — {'; '.join(problems[:10])}", 1)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+    else:
+        print_track(result)
+    return TRACK_EXITS[state]
+
+
 def cmd_verify(args) -> int:
-    """verify snapshot | compare (SPEC-0090): read-only, through the probes; exits 0/1/5 (verdict), 2 argument, 3 no
-    configuration, 4 probes off or production without --confirm-production."""
+    """verify snapshot | compare | track (SPEC-0090, SPEC-0106): read-only, through the probes; exits 0/1/5
+    (verdict), 6 (track: not there yet), 2 argument, 3 no configuration, 4 probes off or production without
+    --confirm-production."""
     if args.phase == "snapshot":
         return cmd_verify_snapshot(args)
+    if args.phase == "track":
+        return cmd_verify_track(args)
     return cmd_verify_compare(args)
 
 
@@ -7578,6 +7995,16 @@ def main(argv=None):
                                                                "[<datastore>=]<migration> (repetível)")
     q.add_argument("--max-signal-increase", help="piora tolerada nas métricas de erro e latência (0 a 100; padrão "
                                                  f"{VERIFY_MAX_SIGNAL_INCREASE} = 50%%)")
+    q.add_argument("--confirm-production", action="store_true",
+                   help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
+    q.add_argument("--json", action="store_true")
+    add_atlas_option(q)
+    q = phases.add_parser("track", help="onde está a entrega de um commit: pipeline, imagem, GitOps e rollout "
+                                        "(exit 6 = ainda não chegou)")
+    q.add_argument("--service", required=True, help="id do serviço no atlas")
+    q.add_argument("--env", required=True, help="ambiente dos deployments")
+    q.add_argument("--commit", required=True, help="sha completo do commit (40 hexadecimais)")
+    q.add_argument("--expect-image", help="imagem esperada (senão, a da Application cuja tag carrega o commit)")
     q.add_argument("--confirm-production", action="store_true",
                    help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
     q.add_argument("--json", action="store_true")
