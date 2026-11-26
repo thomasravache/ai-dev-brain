@@ -276,7 +276,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=127, skipped=1)) — 98468ad | 2026-11-25 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 68d2e7f | 2026-11-25 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 51f418b | 2026-11-25 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 4 minor (regex de conta não separa _, ensure_ascii na política, RecursionError, AWS_ENDPOINT_URL herdada) — 1e286d0 | 2026-11-25 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
