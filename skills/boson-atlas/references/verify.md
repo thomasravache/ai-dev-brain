@@ -1,9 +1,10 @@
 # Verify — foto antes do merge, comparação depois do deploy e veredito
 
-`atlas.py verify` responde, com evidência, se uma entrega chegou e está saudável num ambiente (ADR-0024, SPEC-0090), inclusive nas dependências que o grafo liga ao serviço (contrato `verify@2`, ADR-0026, SPEC-0102). Tem duas fases, as duas **só de leitura** e feitas pelas probes (`references/probes.md`):
+`atlas.py verify` responde, com evidência, se uma entrega chegou e está saudável num ambiente (ADR-0024, SPEC-0090), inclusive nas dependências que o grafo liga ao serviço (contrato `verify@2`, ADR-0026, SPEC-0102). Tem três fases, todas **só de leitura** e feitas pelas probes (`references/probes.md`):
 
 - **`snapshot`**, antes do merge: grava uma foto do serviço no ambiente num **arquivo da tarefa**, fora do atlas;
 - **`compare`**, depois do deploy: compara o estado de agora com a foto e com a imagem esperada e dá um veredito: `passou`, `degradou` ou `inconclusivo`.
+- **`track`**, entre o merge e o `compare`: diz onde está a entrega de um commit (pipeline, imagem no GitOps, sincronização e rollout) e se ela já chegou (contrato `track@1`, SPEC-0106; veja [`verify track`](#verify-track)).
 
 Por deployment, o `verify` olha a entrega, o runtime e os logs (`delivery`, `runtime`, `logs`). Por recurso ligado (fila, tópico, banco), olha as dependências e os sinais (`dependencies`, `signals`; veja [Dependências e sinais](#dependências-e-sinais-verify2)).
 
@@ -373,13 +374,115 @@ Uma verificação `verify@2` sem `resource` é recusada pelo validador:
 - Os adaptadores `probe@1` continuam valendo para o `runtime`; um adaptador `probe@1` nunca recebe um recurso.
 - Rollback da skill: uma foto `verify@2` é recusada pelo `compare` antigo (exit 2); basta tirar a foto de novo.
 
+## `verify track`
+
+```text
+atlas.py verify track --service <id> --env <ambiente> --commit <sha>
+    [--expect-image <imagem>] [--confirm-production] [--json] [--atlas X]
+```
+
+Dado um commit, diz **onde a entrega está** no caminho que o atlas conhece (o `delivery` do `context`, SPEC-0086) e se ela já chegou ao ambiente (SPEC-0106). Uma leitura por chamada: o `track` não espera nem repete; quem chama repete depois da janela enquanto o exit for 6. Nunca aprova, faz merge, re-roda pipeline nem sincroniza, e nada é gravado no atlas nem em arquivo (só as linhas do `probes.log`).
+
+### Passos
+
+Nesta ordem (os mesmos do `verify`, ADR-0024):
+
+1. Probes desligadas → exit 4, nada roda nem é registrado.
+2. `--commit` em minúsculas e conferido com `^[0-9a-f]{40}$` (maiúsculas são aceitas e viram minúsculas); fora da regra → exit 2 "commit precisa ser o sha completo (40 hexadecimais)". `--expect-image` sem tag nem digest ou fora da regra → exit 2 (a mesma normalização do `compare`).
+3. Serviço sem deployment no ambiente → exit 2 (a mesma mensagem do `probe`).
+4. Ambiente sem `tier: test` e sem `--confirm-production` → exit 4 antes de qualquer probe.
+5. As probes, cada uma pelo caminho do `probe` (verbos, acesso, saída validada e mascarada, uma linha no `probes.log`):
+   - `pipeline runs --commit <sha>`, uma vez, com o alvo do primeiro deployment do serviço no ambiente e `target.change.repositories` = os `delivery.code_repositories` (a linha do `probes.log` leva o `commit`); serviço sem repositório de código: nenhuma probe, a etapa fica `not_verified`;
+   - `gitops application`, uma por deployment do serviço no ambiente;
+   - `runtime status`, uma por deployment, com `limits.lines` 2000 (como no `verify`).
+
+   Probe recusada (sem adaptador, sem verbo liberado, sem acesso), com erro, que falhou ou cortada deixa a etapa `not_verified` com o motivo; não muda o exit para 4 nem 1.
+
+Adaptadores da skill para as etapas: `github-actions` (`references/probes/github-actions.md`), `argocd` (`references/probes/argocd.md`) e `kubernetes` (`references/probes/kubernetes.md`).
+
+### Imagem esperada
+
+- `--expect-image` dado: ele, normalizado (`expected_image_source: "expect-image"`).
+- Senão, entre as imagens das Applications cujo caminho está em `delivery.images` do serviço (todas, se a lista é vazia), a que tem na tag um pedaço (separado por `-`, `_` ou `.`) que é prefixo do commit com 7 ou mais caracteres, ou a tag igual ao commit (`"commit-tag"`). Duas imagens diferentes casando → nenhuma ("mais de uma imagem com o commit: passe --expect-image"). Nada é lido do registry nem da CI: time com tag semver passa `--expect-image`.
+- O casamento com a Application e com os pods é pelo digest, se a imagem esperada tem um; senão pela tag (a regra do `compare`).
+
+### Etapas
+
+| Etapa | Status | Quando |
+|---|---|---|
+| `pipeline` (uma, `deployment: ""`) | `failed` | alguma execução `completed` com `failure`, `timed_out`, `cancelled`, `startup_failure` ou `action_required` (também numa probe cortada) |
+| | `not_verified` | serviço sem repositório de código no atlas; repositório `found: false`; probe recusada, com erro ou cortada |
+| | `running` | alguma execução com status diferente de `completed` |
+| | `pending` | nenhuma execução para o commit ("nenhuma execução da CI para o commit ainda") |
+| | `ok` | todas `completed` com `success`, `neutral` ou `skipped` |
+| `image` (por deployment) | `ok` | a imagem esperada está nas `images` da Application |
+| | `pending` | ainda não está; ou, sem imagem esperada, a entrega ainda se move (pipeline não `ok`, ou Application não Synced/Healthy) |
+| | `not_verified` | sem Application (`found: false`), probe recusada ou com erro; imagem ambígua; sem imagem esperada com a pipeline `ok` e a Application Synced/Healthy ("imagem do commit não identificada: passe --expect-image") |
+| `gitops` (por deployment) | `failed` | health `Degraded` ou `Missing`, ou `operation_phase` `Failed` ou `Error`, com a etapa image `ok` |
+| | `running` | image `ok` e (`operation_phase` `Running`, health `Progressing` ou sync `OutOfSync`) |
+| | `ok` | image `ok`, sync `Synced` e health `Healthy` |
+| | `pending` | image `pending` ("aguardando a imagem no GitOps") |
+| | `not_verified` | image `not_verified`; health `Suspended` ou `Unknown`; Application ausente; probe recusada ou com erro |
+| `rollout` (por deployment) | `failed` | workload `found: false`; ou um pod com a imagem esperada não pronto e com `restarts` > 0 (o pod na evidência) |
+| | `ok` | todos os workloads com `rollout_complete` e todo pod pronto com a imagem esperada |
+| | `running` | algum pod com a imagem esperada, rollout não concluído |
+| | `pending` | nenhum pod com a imagem esperada |
+| | `not_verified` | sem imagem esperada; probe de status recusada, com erro ou cortada ("probe de status cortada") |
+
+### Estado e exits
+
+| `state` | Exit | Quando |
+|---|---|---|
+| `failed` | 1 | alguma etapa `failed` |
+| `running` | 6 | senão, alguma `running` |
+| `pending` | 6 | senão, alguma `pending` |
+| `not_verified` | 5 | senão, alguma `not_verified` |
+| `ok` | 0 | todas `ok` |
+
+`current_stage` é a primeira etapa não `ok` na ordem pipeline → image → gitops → rollout (e, dentro de cada etapa, os deployments por id); `""` quando `state` é `ok`. Outros exits: 2 argumento inválido, 3 sem configuração, 4 probes desligadas ou produção sem confirmação. O exit 6 só existe no `track`: "ainda não chegou, repita depois da janela", distinto do 5 (sem prova).
+
+### Saída `track@1`
+
+Com `--json`, chaves fechadas: `contract`, `service`, `environment`, `commit`, `state`, `current_stage`, `expected_image`, `expected_image_source` e `stages`. Cada etapa tem `stage` (`pipeline`, `image`, `gitops`, `rollout`), `deployment` (`""` só no pipeline), `status` (`pending`, `running`, `ok`, `failed`, `not_verified`), `evidence` (só escalares e listas de escalares e, no pipeline, a lista `runs` com os itens planos do adaptador) e `reason` (obrigatório fora de `ok`). `expected_image` e `expected_image_source` ficam `""` juntos quando não há imagem. Sem `--json`: o estado, a etapa atual, a imagem esperada e uma tabela etapa | deployment | status | motivo, sem nenhum comando.
+
+```json track@1 valid
+{"contract": "track@1", "service": "api", "environment": "dev", "commit": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567", "state": "running", "current_stage": "gitops", "expected_image": "acme/api:sha-0a1b2c3", "expected_image_source": "commit-tag", "stages": [{"stage": "pipeline", "deployment": "", "status": "ok", "evidence": {"repositories": ["acme/api"], "runs": [{"repository": "acme/api", "found": true, "workflow": "Build", "path": ".github/workflows/build.yml", "event": "push", "status": "completed", "conclusion": "success", "attempt": 1, "started_at": "2026-11-24T10:00:00Z", "duration_seconds": 312, "url": "https://github.com/acme/api/actions/runs/1001"}], "missing_repositories": []}, "reason": "1 execução(ões) da CI concluída(s) com sucesso"}, {"stage": "image", "deployment": "dev-api", "status": "ok", "evidence": {"expected": "acme/api:sha-0a1b2c3", "images": ["acme/api:sha-0a1b2c3"]}, "reason": "imagem esperada na Application"}, {"stage": "gitops", "deployment": "dev-api", "status": "running", "evidence": {"sync_status": "OutOfSync", "health_status": "Healthy"}, "reason": "Application aplicando a mudança (sync OutOfSync, health Healthy, fase Succeeded)"}, {"stage": "rollout", "deployment": "dev-api", "status": "pending", "evidence": {"expected": "acme/api:sha-0a1b2c3", "pods_with_expected_image": 0}, "reason": "nenhum pod com a imagem esperada ainda"}]}
+```
+
+```json track@1 valid
+{"contract": "track@1", "service": "api", "environment": "dev", "commit": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567", "state": "not_verified", "current_stage": "pipeline", "expected_image": "", "expected_image_source": "", "stages": [{"stage": "pipeline", "deployment": "", "status": "not_verified", "evidence": {"repositories": [], "runs": []}, "reason": "serviço sem repositório de código no atlas"}, {"stage": "image", "deployment": "dev-api", "status": "not_verified", "evidence": {"expected": ""}, "reason": "imagem do commit não identificada: passe --expect-image"}, {"stage": "gitops", "deployment": "dev-api", "status": "not_verified", "evidence": {}, "reason": "etapa image não verificada: imagem do commit não identificada: passe --expect-image"}, {"stage": "rollout", "deployment": "dev-api", "status": "not_verified", "evidence": {"expected": ""}, "reason": "sem imagem esperada"}]}
+```
+
+Inválida (`reason` vazio fora de `ok`):
+
+```json track@1 invalid
+{"contract": "track@1", "service": "api", "environment": "dev", "commit": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567", "state": "pending", "current_stage": "pipeline", "expected_image": "", "expected_image_source": "", "stages": [{"stage": "pipeline", "deployment": "", "status": "pending", "evidence": {"runs": []}, "reason": ""}]}
+```
+
+Inválida (`stage` fora da lista e chave a mais):
+
+```json track@1 invalid
+{"contract": "track@1", "service": "api", "environment": "dev", "commit": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567", "state": "ok", "current_stage": "", "expected_image": "acme/api:1.4.2", "expected_image_source": "expect-image", "stages": [{"stage": "pipeline", "deployment": "", "status": "ok", "evidence": {}, "reason": ""}, {"stage": "deploy", "deployment": "dev-api", "status": "ok", "evidence": {}, "reason": "", "command": "x"}]}
+```
+
+Inválida (commit curto e `state` fora da regra):
+
+```json track@1 invalid
+{"contract": "track@1", "service": "api", "environment": "dev", "commit": "0a1b2c3", "state": "ok", "current_stage": "", "expected_image": "", "expected_image_source": "", "stages": [{"stage": "pipeline", "deployment": "", "status": "failed", "evidence": {}, "reason": "1 execução(ões) da CI terminou(aram) com failure"}]}
+```
+
+### Uso com o `compare`
+
+Em `state: ok`, o `expected_image` é o `--expect-image` do `verify compare` (sem mudança no `compare`). A gluon-spec (SPEC-0105) chama o `track` depois do merge, repete enquanto o exit for 6 e leva o `expected_image` ao `compare`.
+
 ## Validadores
 
-`atlas.py` tem `validate_verify_snapshot(data)` e `validate_verify_result(data)`, que devolvem a lista de problemas (`[]` = válido). Os dois aceitam `verify@1` e `verify@2` e recusam qualquer outro `contract`. O `snapshot` só grava uma foto `verify@2` válida, o `compare` só aceita uma `--baseline` válida (`verify@1` ou `verify@2`) e só imprime um resultado `verify@2` válido. O conjunto fechado de `check` vem do registro `VERIFY_CHECKS` do `atlas.py` (o ponto de extensão: a SPEC-0103 acrescenta `functional`, no nível do deployment, com `resource: null`).
+`atlas.py` tem `validate_verify_snapshot(data)`, `validate_verify_result(data)` e `validate_track_result(data)` (`track@1`, o `verify track`), que devolvem a lista de problemas (`[]` = válido); o `track` só imprime um resultado `track@1` válido. Os dois aceitam `verify@1` e `verify@2` e recusam qualquer outro `contract`. O `snapshot` só grava uma foto `verify@2` válida, o `compare` só aceita uma `--baseline` válida (`verify@1` ou `verify@2`) e só imprime um resultado `verify@2` válido. O conjunto fechado de `check` vem do registro `VERIFY_CHECKS` do `atlas.py` (o ponto de extensão: a SPEC-0103 acrescenta `functional`, no nível do deployment, com `resource: null`).
 
 ## Uso típico (G6 da gluon-spec)
 
 1. Antes do merge: `verify snapshot --service api --env dev --out <pasta da tarefa>/foto.json`.
-2. Depois que o roteiro de verificação (SPEC-0086) mostra a imagem nova no repositório de configuração: `verify compare --service api --env dev --baseline <pasta da tarefa>/foto.json --expect-image acme/api:1.4.2 --json` (com `--expect-migration <datastore>=<migration>` quando o PR traz uma migration, e `--resource` para restringir às dependências que o PR toca).
-3. Leve o veredito e as evidências ao Relatório de Entrega; em `degradou`, mostre a sugestão e deixe a pessoa decidir. Se o rollout ainda não terminou, repita depois da janela.
-4. Apague a foto no fim da tarefa.
+2. Depois do merge: `verify track --service api --env dev --commit <sha completo> --json`; enquanto o exit for 6 (`running` ou `pending`), repita depois da janela; em 1 (`failed`), leve a etapa e a evidência à pessoa; em 0 (`ok`), siga com o `expected_image`.
+3. Com a entrega chegada: `verify compare --service api --env dev --baseline <pasta da tarefa>/foto.json --expect-image <expected_image do track> --json` (com `--expect-migration <datastore>=<migration>` quando o PR traz uma migration, e `--resource` para restringir às dependências que o PR toca).
+4. Leve o veredito e as evidências ao Relatório de Entrega; em `degradou`, mostre a sugestão e deixe a pessoa decidir. Se o rollout ainda não terminou, repita depois da janela.
+5. Apague a foto no fim da tarefa.

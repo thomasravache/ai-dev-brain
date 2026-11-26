@@ -1,0 +1,65 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "dev-api",
+        "namespace": "argocd",
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"spec\":{\"source\":{\"helm\":{\"values\":\"password: s3cr3t\"}}}}"
+        }
+      },
+      "spec": {
+        "project": "default",
+        "source": {
+          "repoURL": "https://github.com/acme/iac",
+          "path": "apps/api",
+          "targetRevision": "main",
+          "helm": {
+            "values": "image:\n  repository: ghcr.io/acme/api\npassword: s3cr3t\n"
+          }
+        },
+        "destination": {
+          "name": "cluster-dev",
+          "namespace": "api-dev"
+        }
+      },
+      "status": {
+        "sync": {
+          "status": "Synced",
+          "revision": "5a2d3e4f6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e"
+        },
+        "health": {
+          "status": "Healthy"
+        },
+        "operationState": {
+          "phase": "Succeeded",
+          "finishedAt": "2026-11-24T10:09:00Z"
+        },
+        "reconciledAt": "2026-11-24T10:10:00Z",
+        "summary": {
+          "images": [
+            "ghcr.io/acme/api:sha-0a1b2c3"
+          ]
+        },
+        "resources": [
+          {
+            "group": "apps",
+            "version": "v1",
+            "kind": "Deployment",
+            "namespace": "api-dev",
+            "name": "api",
+            "status": "Synced",
+            "health": {
+              "status": "Healthy"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": {}
+}
