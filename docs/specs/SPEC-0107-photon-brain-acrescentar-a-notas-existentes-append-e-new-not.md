@@ -181,7 +181,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — f2669b5 (árvore suja) | 2026-11-26 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=40)) — 1bef1d1 | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — b5483bc | 2026-11-26 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8b0d2c4 | 2026-11-26 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 35be308 | 2026-11-26 |
 | G4 Review | FAIL | CHANGES_REQUESTED: append_section toma linha '#'/'##' dentro de bloco de código cercado como título e grava o texto dentro do bloco (M1); minors: append aceita linha '## Relations' no texto, recusa do new-note só na grafia exata | 2026-11-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
