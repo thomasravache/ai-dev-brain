@@ -3,7 +3,7 @@ id: SPEC-0095
 title: "boson-atlas: verificação completa depois do deploy — dependências, sinais e funcional"
 tier: epic
 type: feature
-status: approved
+status: implemented
 created: 2026-11-24
 depends_on: [SPEC-0075]
 adrs: [ADR-0010, ADR-0011, ADR-0012, ADR-0023, ADR-0024, ADR-0025, ADR-0026]
@@ -178,17 +178,17 @@ Os adaptadores dependem do núcleo implementado, porque o IT deles roda o `atlas
 - **Login expirado (SSO):** o adaptador devolve erro com o texto fixo "renove o login da nuvem", e a verificação fica "não verificado". A skill nunca faz o login.
 
 ## 7. Critérios de Aceite do Épico
-- [ ] Uma probe de recurso só roda para um recurso ligado ao serviço no ambiente, usando o acesso local, e nunca imprime o profile, o usuário nem o caminho do arquivo de senhas — SPEC-0096:IT-01
-- [ ] O coletor `aws` gera, a partir de respostas gravadas da AWS CLI, um snapshot `@1` válido com bancos, caches, filas com DLQ, tópicos e assinaturas tópico → fila — SPEC-0097:IT-01
-- [ ] O adaptador de mensageria responde o contrato `probe@2` só com verbos de leitura, contra uma AWS CLI falsa que registra as chamadas — SPEC-0098:IT-01
-- [ ] O adaptador PostgreSQL lê migrations e tabelas numa sessão só de leitura — SPEC-0099:IT-01
-- [ ] O adaptador CloudWatch traz os sinais de um recurso na janela pedida — SPEC-0100:IT-01
-- [ ] O adaptador de IAM simula a permissão do workload levando a política do recurso — SPEC-0101:IT-01
-- [ ] O `verify compare` dá `degradou` quando a DLQ de uma fila ligada ao serviço ganha mensagens depois do deploy, e `passou` quando as dependências seguem a foto — SPEC-0102:IT-01
-- [ ] A validação funcional roda a jornada curada só em `tier: test` e recusa produção — SPEC-0103:IT-01
-- [ ] O onboarding grava o acesso local a partir das respostas, e o `doctor` sugere o que falta mapear a partir das recusas do `probes.log` — SPEC-0104:IT-01
-- [ ] O `verify track` segue um commit da pipeline até o rollout e diz em que etapa a entrega está, só lendo — SPEC-0106:IT-01
-- [ ] O G6 da gluon-spec descreve o `verify@2` e a validação funcional, com a confirmação de produção e a validação funcional só em teste — SPEC-0105:IT-01
+- [x] Uma probe de recurso só roda para um recurso ligado ao serviço no ambiente, usando o acesso local, e nunca imprime o profile, o usuário nem o caminho do arquivo de senhas — SPEC-0096:IT-01
+- [x] O coletor `aws` gera, a partir de respostas gravadas da AWS CLI, um snapshot `@1` válido com bancos, caches, filas com DLQ, tópicos e assinaturas tópico → fila — SPEC-0097:IT-01
+- [x] O adaptador de mensageria responde o contrato `probe@2` só com verbos de leitura, contra uma AWS CLI falsa que registra as chamadas — SPEC-0098:IT-01
+- [x] O adaptador PostgreSQL lê migrations e tabelas numa sessão só de leitura — SPEC-0099:IT-01
+- [x] O adaptador CloudWatch traz os sinais de um recurso na janela pedida — SPEC-0100:IT-01
+- [x] O adaptador de IAM simula a permissão do workload levando a política do recurso — SPEC-0101:IT-01
+- [x] O `verify compare` dá `degradou` quando a DLQ de uma fila ligada ao serviço ganha mensagens depois do deploy, e `passou` quando as dependências seguem a foto — SPEC-0102:IT-01
+- [x] A validação funcional roda a jornada curada só em `tier: test` e recusa produção — SPEC-0103:IT-01
+- [x] O onboarding grava o acesso local a partir das respostas, e o `doctor` sugere o que falta mapear a partir das recusas do `probes.log` — SPEC-0104:IT-01
+- [x] O `verify track` segue um commit da pipeline até o rollout e diz em que etapa a entrega está, só lendo — SPEC-0106:IT-01
+- [x] O G6 da gluon-spec descreve o `verify@2` e a validação funcional, com a confirmação de produção e a validação funcional só em teste — SPEC-0105:IT-01
 
 ## 8. Questões em Aberto
 - [x] Quais fontes a verificação deve ler? — "de tudo que o atlas mapeou": bancos PostgreSQL, caches Valkey, filas e tópicos com assinaturas, além do cluster que já existe (thomas, 2026-11-24)
@@ -204,6 +204,51 @@ Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com e
 
 ## 11. Relatório de Entrega
 <!-- Preenchido ao fechar o épico. -->
+
+### O que foi entregue
+- **SPEC-0096 (PR #75, boson-atlas 2026.11.19, plugin 2026.11.34):** contrato `probe@2` com alvo de recurso, `linked_resources`, acesso local por capacidade (cluster, nuvem, banco, URLs) e as chaves novas do `probes.log` (ADR-0025).
+- **SPEC-0097 (PR #76, boson-atlas 2026.11.20, plugin 2026.11.35):** coletor `aws` só de leitura (RDS/Aurora, ElastiCache, SQS com DLQ, SNS e assinaturas), sem id de conta no atlas.
+- **SPEC-0098 (PR #77, 2026.11.21 / 2026.11.36):** adaptador `aws-messaging` — fila, DLQ e assinaturas.
+- **SPEC-0099 (PR #78, 2026.11.22 / 2026.11.37):** adaptador `postgres` — migrations e tabelas numa sessão só de leitura.
+- **SPEC-0100 (PR #80, 2026.11.23 / 2026.11.38):** adaptador `cloudwatch` — sinais de erro, latência, saturação e tráfego.
+- **SPEC-0101 (PR #81, 2026.11.24 / 2026.11.39):** adaptador `iam` — simulação da permissão do workload com a política do recurso.
+- **SPEC-0102 (PR #82, 2026.11.25 / 2026.11.40):** `verify@2` — dependências e sinais na foto e na comparação (ADR-0026).
+- **SPEC-0104 (PR #83, 2026.11.26 / 2026.11.41):** `access setup` (onboarding do acesso local), `reason` no `probes.log`, `probes stats` e as sugestões no `doctor`.
+- **SPEC-0106 (PR #84, 2026.11.27 / 2026.11.42):** `verify track` e os adaptadores `github-actions` e `argocd`; máscara do id de conta no host ECR e em ARN maiúsculo.
+- **SPEC-0103 (PR #85, 2026.11.28 / 2026.11.43):** validação funcional só em `tier: test`, com jornadas curadas e o adaptador `suite`.
+- **SPEC-0105 (PR #86, gluon-spec 2026.11.11, plugin 2026.11.44):** o G6 da gluon-spec com `verify track`, `verify@2`, validação funcional e seis chaves novas no `delivery_check`.
+- **ADR-0025** (probes de dependências) e **ADR-0026** (`verify@2`).
+
+### Como
+- Ondas: a SPEC-0096 e a SPEC-0097 primeiro; depois os adaptadores (0098 a 0101) e o `verify@2` (0102); o onboarding (0104) e o `track` (0106); a validação funcional (0103), que dependia da 0102 e da 0104; e o G6 (0105) por último. Test-writer e implementer de specs diferentes rodaram em paralelo; os merges seguiram a ordem das versões do plugin.
+- Cada filha passou por test-writer, implementer e reviewer independentes, com red antes de green no G1.
+- **Emendas:** v2 na 0099 (limite de chamadas de `migrations`), 0100 (`PartialData` só na última página), 0103 e 0104 (testes antigos nos `touches`), 0105 (testes da SPEC-0091) e 0106 (máscara do ECR); v3 na 0105 (migration esperada só no escopo da foto).
+- **G4 reprovado uma vez** na SPEC-0100 (a regra da Emenda v2 sem teste que a provasse) e na SPEC-0105 (`--expect-migration` quebrava o fallback `verify@1`); a segunda rodada aprovou as duas.
+- **G5 da SPEC-0101** falhou uma vez por um teste instável sob carga; a nova rodada passou. O fechamento dela (G5 a G7) ficou fora do merge do PR #81 e foi recuperado neste fechamento.
+- Distribuição pelo plugin, sem deploy (G6 N/A em todas as filhas).
+
+### Critérios de aceite
+| Critério | Prova | Resultado |
+|---|---|---|
+| Probe de recurso só para recurso ligado, com acesso local, sem imprimir profile, usuário ou passfile | SPEC-0096:IT-01 (CI do PR #75) | PASS |
+| Coletor `aws` gera snapshot `@1` válido de respostas gravadas | SPEC-0097:IT-01 (CI do PR #76) | PASS |
+| Mensageria responde `probe@2` só com verbos de leitura | SPEC-0098:IT-01 (CI do PR #77) | PASS |
+| PostgreSQL lê migrations e tabelas numa sessão só de leitura | SPEC-0099:IT-01 (CI do PR #78) | PASS |
+| CloudWatch traz os sinais do recurso na janela | SPEC-0100:IT-01 (CI do PR #80) | PASS |
+| IAM simula a permissão do workload com a política do recurso | SPEC-0101:IT-01 (CI do PR #81) | PASS |
+| `verify compare` dá `degradou` com DLQ nova e `passou` com as dependências como na foto | SPEC-0102:IT-01 (CI do PR #82) | PASS |
+| Validação funcional só em `tier: test`, recusando produção | SPEC-0103:IT-01 (CI do PR #85) | PASS |
+| Onboarding grava o acesso local e o `doctor` sugere o que falta | SPEC-0104:IT-01 (CI do PR #83) | PASS |
+| `verify track` segue o commit até o rollout, só lendo | SPEC-0106:IT-01 (CI do PR #84) | PASS |
+| G6 da gluon-spec descreve `verify@2`, `track` e a validação funcional, com produção protegida | SPEC-0105:IT-01 (CI do PR #86) | PASS |
+
+### Métricas pós-release
+A acompanhar no uso real: quantas entregas passam pelo `verify track` até `ok`, quantos `compare` saem com dependências verificadas em vez de não verificadas, e as recusas por falta de acesso no `probes stats`. Nenhuma medida existe ainda, porque a versão acabou de sair.
+
+### Pendências
+- Os minors de G4 de cada filha estão nas Pendências dos relatórios delas (radar do épico); nenhum bloqueia. Os que mais pesam no uso: o `track` sem `--expect-image` fica em exit 6 quando a pipeline não é verificável (o `track_max_minutes` da SPEC-0105 limita), o datastore de migration não ligado ao serviço e a regex de conta do `iam`.
+- A cópia em `tools/sdd/` deste repositório foi atualizada para 2026.11.11 neste fechamento.
+- As ações de escrita continuam no radar da SPEC-0075.
 
 ## 12. Emendas
 | Versão | Data | Mudança | Motivo | Specs impactadas | Aprovado por |

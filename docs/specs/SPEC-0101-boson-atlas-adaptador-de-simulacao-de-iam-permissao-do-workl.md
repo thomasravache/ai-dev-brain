@@ -4,7 +4,7 @@ title: "boson-atlas: adaptador de simulação de IAM — permissão do workload 
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
@@ -277,13 +277,14 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 68d2e7f | 2026-11-25 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 51f418b | 2026-11-25 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 4 minor (regex de conta não separa _, ensure_ascii na política, RecursionError, AWS_ENDPOINT_URL herdada) — 1e286d0 | 2026-11-25 |
-| G5 Integração & CI | FAIL | test exit 1 (FAILED (failures=1)); arch_test exit 0 (OK) — 27a4a07 | 2026-11-25 |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — a787cad | 2026-11-25 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-25 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-25 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 035306c | 2026-11-25 |
 
 ### Histórico de reprovações
 - G5 FAIL 2026-11-25 — test exit 1 (FAILED (failures=1)); arch_test exit 0 (OK) — 27a4a07
+- G5 PASS 2026-11-25 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
