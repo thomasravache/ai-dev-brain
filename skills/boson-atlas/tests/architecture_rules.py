@@ -391,8 +391,8 @@ def probe_log_key_set_findings(source, filename, expected=PROBE_LOG_CONTRACT_KEY
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == constant for t in node.targets):
             keys, line = _string_items(node.value), node.lineno
     if keys is None:
-        return [f"{filename}:1 — {RULE_PROBE_LOG_SET} — {constant} não é uma constante do módulo com os nomes das "
-                "chaves"]
+        return [(f"{filename}:1 — {RULE_PROBE_LOG_SET} — {constant} não é uma constante do módulo com os nomes das "
+                 "chaves")]
     findings = [f"{filename}:{line} — {RULE_PROBE_LOG_SET} — chave a mais em {constant}: {key}"
                 for key in sorted(set(keys) - set(expected))]
     findings += [f"{filename}:{line} — {RULE_PROBE_LOG_SET} — falta em {constant}: {key}"

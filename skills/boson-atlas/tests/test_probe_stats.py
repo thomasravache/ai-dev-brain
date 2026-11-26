@@ -35,14 +35,13 @@ rede (os adaptadores são os scripts falsos de fixtures/fake-probes/); nomes gen
 import datetime
 import hashlib
 import json
-import os
 import re
 import shutil
 import sys
 import unittest
 
 from helpers import SKILL, TESTS, Sandbox, doctor_lines, fn, output
-from test_probe import adapter_yaml, probes_yaml
+from test_probe import adapter_yaml
 from test_probe_resource import LOG_KEYS, ResourceCase
 
 SPEC = "SPEC-0104"

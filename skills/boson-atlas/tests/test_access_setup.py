@@ -285,8 +285,8 @@ class InteractiveTest(SetupCase):
                    str(self.passfile), "s"]
         code, out, err = self.run_tty(answers)
         self.assertEqual(code, 0, out + err)
-        texts = ["Qual o contexto do kubectl do cluster cluster-dev", "Qual o contexto do kubectl do cluster "
-                 "cluster-prod", "Qual profile da AWS você usa no ambiente dev", "Qual a URL base do ambiente dev",
+        texts = ["Qual o contexto do kubectl do cluster cluster-dev", "Qual o contexto do kubectl do cluster cluster-prod",
+                 "Qual profile da AWS você usa no ambiente dev", "Qual a URL base do ambiente dev",
                  "Qual usuário só de leitura do banco orders-db", "Qual o nome do banco",
                  "Qual o arquivo de senhas (.pgpass)", "Gravar? [s/N]"]
         positions = [out.find(text) for text in texts]
