@@ -30,7 +30,7 @@ Depois, no computador com a pasta, "processa minha inbox" segue o fluxo de `refe
 Com shell (o `brain.py` roda, mesmo sem enxergar o vault e mesmo sem configuração):
 
 ```text
-brain.py capture "<texto>" --print --json [--context C] [--inbox PASTA]
+brain.py capture "<texto>" --print --json [--context C] [--inbox PASTA] [--timezone NOME]
 {"path": "inbox/2026-11-02-091500-ideia-sobre-grafos.md", "content": "---\ntype: capture\n..."}
 ```
 
@@ -38,28 +38,29 @@ brain.py capture "<texto>" --print --json [--context C] [--inbox PASTA]
 - com o `brain-config.yml` do vault legível, o caminho usa `layout.inbox` e o contexto é validado (inválido sai com 2);
 - sem configuração, ou com o vault, o `brain-config.yml` ou a inbox ausente ou ilegível (o caso da pasta bloqueada pelo macOS), não falha: o caminho usa o `layout.inbox` se ele pôde ser lido, senão `inbox`, ou a pasta do `--inbox` (o nome da pasta da inbox do vault, relativo a ele), e sai com 0;
 - `--inbox` com o `brain-config.yml` legível sai com 2: a pasta já é a do `layout.inbox` (`brain.py config` mostra qual é); `--inbox` na raiz do vault (`""`, `.`, `a/..`) ou fora dele (`..`, `a/../../x`, caminho absoluto) sai com 2, conferido sem ler o disco; `--inbox` só vale com `--print`;
+- `--timezone NOME` (nome IANA, como `America/Sao_Paulo`) dá o fuso do `created` quando a configuração não pode ser lida, o caso da sessão na nuvem em UTC; sem ele, vale o fuso da máquina. Com o `brain-config.yml` legível, vale a chave `timezone` dele (ou o fuso da máquina, sem a chave): um `--timezone` diferente da chave é ignorado, com um aviso no stderr. Nome inválido ou fora da base de fusos sai com 2 (`references/config.md`), inclusive quando o `brain-config.yml` está legível e a chave `timezone` dele é inválida: nesse caso o `--timezone` não substitui a chave, e é preciso corrigir (ou apagar) a `timezone` do `brain-config.yml` no computador; `--timezone` só vale com `--print`;
 - texto vazio sai com 2; sem `--json`, a saída é `<caminho>`, uma linha em branco e o conteúdo.
 
 Crie pelo conector o arquivo `<vault>/<path>` com exatamente o `content`.
 
-Sem shell, monte à mão no mesmo formato.
+Sem shell, monte à mão no mesmo formato, com a hora e o deslocamento do fuso da pessoa (a chave `timezone` do `brain-config.yml`, se você a leu).
 
 ## Formato da nota de captura
 
-- **Nome:** `AAAA-MM-DD-HHMMSS-<slug>.md` — data e hora locais da captura e o slug das primeiras 6 palavras do texto (minúsculas, sem acento, cada sequência fora de `[a-z0-9]` vira `-`, sem `-` nas pontas, até 60 caracteres; texto sem letras nem dígitos vira `captura`). Ex.: `2026-11-02-091500-ideia-sobre-grafos.md`.
+- **Nome:** `AAAA-MM-DD-HHMMSS-<slug>.md` — data e hora da captura no fuso do vault (a chave `timezone`, ou o fuso da máquina) e o slug das primeiras 6 palavras do texto (minúsculas, sem acento, cada sequência fora de `[a-z0-9]` vira `-`, sem `-` nas pontas, até 60 caracteres; texto sem letras nem dígitos vira `captura`). Ex.: `2026-11-02-091500-ideia-sobre-grafos.md`.
 - **Conteúdo:**
 
 ```markdown
 ---
 type: capture
-created: 2026-11-02T09:15:00
+created: 2026-11-02T09:15:00-03:00
 context: college
 ---
 
 Ideia sobre grafos
 ```
 
-`type: capture` e `created` (data e hora locais, `AAAA-MM-DDTHH:MM:SS`, o mesmo instante do nome) são obrigatórios; `context` só quando a pessoa disser o contexto. Depois do frontmatter, uma linha em branco e o texto, terminando com uma quebra de linha.
+`type: capture` e `created` (data e hora no fuso do vault com o deslocamento, `AAAA-MM-DDTHH:MM:SS±HH:MM`, o mesmo instante do nome; UTC sai `+00:00`) são obrigatórios; `context` só quando a pessoa disser o contexto. Depois do frontmatter, uma linha em branco e o texto, terminando com uma quebra de linha.
 
 ## Como achar o conector de cada provedor
 

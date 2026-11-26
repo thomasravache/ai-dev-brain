@@ -12,6 +12,15 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Fixed
 - Regra de arquitetura de processo (`tests/brain_architecture_rules.py`, `subprocess_findings`): fora de `run_processor` passa a reportar também `from subprocess import ...`, `import subprocess as x`, `from os import system`/`popen`/`exec*`/`spawn*` e as chamadas feitas pelo apelido ou pelo nome importado, como a regra da `boson-atlas`. A regra é por nome e não pega acesso dinâmico (`__import__`, `importlib`, `getattr`). Só teste: o `brain.py` e a `BRAIN_VERSION` não mudam (ADR-0007) (SPEC-0062).
 
+## [2026.11.10] - 2026-11-26
+
+### Added
+- Chave opcional `timezone` no `brain-config.yml` (nome IANA, como `America/Sao_Paulo`): as datas que o `brain.py` grava saem no fuso do vault, mesmo numa sessão na nuvem em UTC; sem a chave, vale o fuso da máquina. O nome é conferido por regex antes do `zoneinfo` da biblioteca padrão. O `doctor` mostra `OK timezone — fuso: <nome>` (ou `fuso: o da máquina (±HH:MM)`) e dá ERRO para nome inválido ou fora da base de fusos; nesse caso os comandos que gravam datas saem com 2 sem gravar nada e os que só leem seguem (ADR-0007, ADR-0027) (SPEC-0109).
+- `capture --print --timezone NOME`: o fuso do `created` quando o `brain-config.yml` não pode ser lido; com ele legível vale a chave, e um `--timezone` diferente gera aviso no stderr (SPEC-0109).
+
+### Changed
+- O `created` das capturas leva o deslocamento (`2026-11-26T09:15:02-03:00`; UTC sai `+00:00`), e o nome da captura usa a mesma hora. O `created` das notas (`AAAA-MM-DD`) e a linha do `log.md` mantêm o formato, agora no fuso do vault. Capturas antigas, sem deslocamento, continuam lidas (SPEC-0109).
+
 ## [2026.11.9] - 2026-11-26
 
 ### Added

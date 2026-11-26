@@ -20,9 +20,10 @@ brain.py inbox done inbox/2026-10-30-140509-ideia-sobre-grafos.md --note "projec
 ## `capture TEXTO [--context C] [--json]`
 
 - Cria `inbox/AAAA-MM-DD-HHMMSS-<slug>.md`, com o slug das seis primeiras palavras (minúsculas, sem acentos). Duas capturas com o mesmo nome no mesmo segundo: a segunda ganha `-1`, a terceira `-2`.
-- Frontmatter `type: capture`, `created` (data e hora) e `context` (quando dado; precisa existir no `brain-config.yml`), e o texto como corpo.
+- Frontmatter `type: capture`, `created` (data e hora no fuso do vault, com o deslocamento: `created: 2026-11-26T09:15:02-03:00`; a chave `timezone` do `brain-config.yml`, ou o fuso da máquina sem ela) e `context` (quando dado; precisa existir no `brain-config.yml`), e o texto como corpo.
 - Imprime o caminho relativo ao vault (`--json`: `{"path": ...}`); o log ganha `- … capture inbox/<nome>`.
-- Texto vazio (ou só espaços) sai com 2 e nada é escrito.
+- Texto vazio (ou só espaços) sai com 2 e nada é escrito; `timezone` inválido ou não encontrado também (`references/config.md`).
+- `capture --print` só monta o arquivo, para o conector (`references/connectors.md`); `--timezone NOME` dá o fuso quando o `brain-config.yml` não pode ser lido. Capturas antigas, com `created` sem deslocamento (`2026-11-02T09:15:00`), continuam valendo: quem lê a inbox aceita os dois formatos.
 
 ## `inbox list [--json]`
 

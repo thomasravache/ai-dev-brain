@@ -4,14 +4,14 @@ title: "photon-brain: fuso horário nas datas das capturas e do log"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/references/config.md, skills/photon-brain/references/connectors.md, skills/photon-brain/references/inbox.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_timezone.py, skills/photon-brain/tests/test_timezone_cli.py, .claude-plugin/plugin.json]
+touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/references/config.md, skills/photon-brain/references/connectors.md, skills/photon-brain/references/inbox.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_timezone.py, skills/photon-brain/tests/test_timezone_cli.py, skills/photon-brain/tests/test_connector.py, .claude-plugin/plugin.json]
 adrs: [ADR-0007, ADR-0027]
 external: []
 size: M
@@ -92,6 +92,9 @@ comandos que gravam datas (capture, new-note, relate, append, index, inbox done,
   com timezone inválido ou não encontrado: exit 2 com a mesma mensagem do doctor, nada gravado
 ```
 
+**Esclarecimentos (Emenda v2):**
+- Os testes da SPEC-0044 em `tests/test_connector.py` (`PrintMatchesCaptureTest`, `PrintWithoutConfigTest`) fixam o `created` da captura sem deslocamento; com este contrato eles passam a aceitar o `created` com `±HH:MM`, sem mudar o resto do que conferem. O arquivo entra em `touches` só para esse ajuste.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:** `scripts/brain.py` (`SHARED_KEYS`, `check_shared`, `vault_clock`, `now`, `today`, `cmd_capture`, `capture_config`, `doctor`); `assets/brain-config.yml` (a chave comentada); referências e `SKILL.md`.
@@ -157,30 +160,34 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, IT-01 com a tag `SPEC-0109:<ID>`, falhando pelo motivo certo (CH passando)
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, IT-01 com a tag `SPEC-0109:<ID>`, falhando pelo motivo certo (CH passando)
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PASS | validate: 0 erro(s) — 266f556 (árvore suja) | 2026-11-26 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G0 Spec | PASS | validate: 0 erro(s) — 08e07c7 (árvore suja) | 2026-11-26 |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=18)) — bb8a880 | 2026-11-26 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a217e1d | 2026-11-26 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — b7e30eb | 2026-11-26 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na segunda rodada (backup no fuso do vault resolvido, minors resolvidos) — 530cb37 | 2026-11-26 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — d69df22 | 2026-11-26 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — c7704f2 | 2026-11-26 |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-26 — CHANGES_REQUESTED: cmd_backup não usa o relógio do vault — linha do log.md no fuso da máquina e, com timezone inválido, grava e sai com 0 em vez de 2 (contrato: comandos que gravam datas) — 4392048
+- G4 PASS 2026-11-26 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -192,38 +199,57 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Fuso do vault na photon-brain: chave opcional `timezone` (nome IANA) no `brain-config.yml`. As datas que o `brain.py` grava (capturas, notas, linhas do `log.md`, inclusive `backup`) saem no fuso do vault mesmo numa sessão em UTC; o `created` da captura leva o deslocamento (`2026-11-26T09:15:02-03:00`); `capture --print --timezone` cobre a sessão sem configuração legível; o `doctor` mostra o fuso e acusa nome inválido ou ausente na máquina. Versões: photon-brain 2026.11.10 e plugin 2026.11.46.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/brain.py`:** `TIMEZONE_RE` antes do `zoneinfo` (nunca vira caminho), `zone_info`, `vault_clock(shared, override, clock)` e `use_vault_clock`; `now`/`today` com `clock=`; comandos que gravam fixam o relógio antes de escrever e saem com 2 com fuso inválido; `doctor` com a linha do fuso.
+- **Documentação:** `assets/brain-config.yml`, `references/config.md`, `connectors.md`, `inbox.md` e `SKILL.md`.
+- **Emenda v2:** os testes da SPEC-0044 aceitam o `created` com deslocamento.
+- **G4 reprovado e corrigido:** o `backup` passou a usar o relógio do vault.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em bb8a880 e 03e7d68 (G1) e green em d74fcd1 e a217e1d (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | captura sem timezone igual à de hoje, só com o deslocamento | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| UT-01 | created e nome da captura no fuso configurado | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| UT-02 | sem a chave, o fuso da máquina com deslocamento | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| UT-03 | fuso inválido: ERRO no doctor, comandos que gravam (inclusive backup) saem com 2, leitura segue | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| UT-04 | capture --print --timezone sem config e com config divergente | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| UT-05 | data das notas e hora do log (inclusive backup) no fuso do vault | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| UT-06 | timezone em SHARED_KEYS, sem AVISO | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| UT-07 | documentação da chave e do formato | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
+| IT-01 | capture, inbox list e ingest --move num vault com fuso | PASS | `test_timezone.py`, `test_timezone_cli.py` e `test_connector.py`; G2 PASS em a217e1d; G4 `verify` 9/9 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.46 depois do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- O nome do zip e o `created` do manifesto do `backup` seguem no relógio da máquina (fora do contrato).
+- `init --force` regenera o `brain-config.yml` do modelo e perde o `timezone` (comportamento de hoje do `--force`, com `.bak`).
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0109`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | `tests/test_connector.py` em `touches` para os testes da SPEC-0044 aceitarem o `created` com deslocamento | G2 da SPEC-0109: testes antigos fixavam o formato sem fuso (TEST_DEFECT) | nenhuma | thomas, 2026-11-26 (piloto automático com o recomendado) |

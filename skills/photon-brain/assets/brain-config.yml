@@ -29,6 +29,9 @@ processors: {}            # tipo → {command: "executável {input} {output}"} (
 #     command: "pdftotext -enc UTF-8 -nopgbrk {input} {output}"
 #     check: "pdftotext -v"
 inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inbox list e lint)
+# timezone: fuso do vault, nome IANA (references/config.md). Ausente = o fuso da máquina. As datas que o brain.py
+# grava (created das capturas e das notas, hora do log.md) saem nesse fuso, mesmo numa sessão em UTC. Por exemplo:
+# timezone: America/Sao_Paulo
 # conflict_patterns: regex sobre o nome do arquivo, com o grupo "base" (o nome do original sem ".md"), que o lint
 # usa para achar cópias de conflito da sincronização. Ausente = os padrões do provider desta máquina
 # (references/providers.md). Para trocar, por exemplo:
