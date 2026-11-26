@@ -180,7 +180,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — a217e1d | 2026-11-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — b7e30eb | 2026-11-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na segunda rodada (backup no fuso do vault resolvido, minors resolvidos) — 530cb37 | 2026-11-26 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — d69df22 | 2026-11-26 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
