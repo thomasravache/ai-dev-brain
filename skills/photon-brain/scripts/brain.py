@@ -138,6 +138,8 @@ TITLE_FORBIDDEN = frozenset('/\\:*?"<>|#^[]')  # characters a note title cannot 
 RELATIONS_HEADING = "## Relations"
 RELATION_LINE_RE = re.compile(r"^[-*][ \t]+\[\[([^\[\]\n]+?)\]\][ \t]*—[ \t]*(.*?)[ \t]*$")
 SECTION_END_RE = re.compile(r"^#{1,2}[ \t]")  # a "## " (or "# ") heading ends the Relations section
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")  # opens (or, alone on its line, closes) a fenced code block
+RELATIONS_LINE_RE = re.compile(r"##[ \t]+relations[ \t]*", re.IGNORECASE)  # fullmatch: "## Relations" in any case
 URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
 DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 PLACEHOLDER_LINE_RE = re.compile(r"""^([^\s:#][^:]*:[ \t]*)(["']?)\{(\w+)\}\2[ \t]*$""")
@@ -1861,10 +1863,34 @@ def append_relation(text: str, target: str, why: str) -> str:
     return "".join(lines)
 
 
+def heading_lines(lines: list) -> list:
+    """For each line, True when it can be a heading: outside a fenced code block (``` or ~~~, closed only by a
+    line with the same fence character, at least as long; an unclosed block goes to the end). Fence lines = False."""
+    result, fence = [], None
+    for line in lines:
+        m = FENCE_RE.match(line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+            result.append(fence is None)
+            continue
+        if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
+            fence = None
+        result.append(False)
+    return result
+
+
 def section_start(lines: list, heading: str):
-    """Index of the line "## <heading>" (trailing spaces and line ending aside), or None."""
-    title = f"## {heading}"
-    return next((i for i, item in enumerate(lines) if item.rstrip() == title), None)
+    """Index of the line "## <heading>" outside a fenced code block (trailing spaces and line ending aside), or
+    None."""
+    title, outside = f"## {heading}", heading_lines(lines)
+    return next((i for i, item in enumerate(lines) if outside[i] and item.rstrip() == title), None)
+
+
+def has_relations_line(text: str) -> bool:
+    """True when text has a "## Relations" line (any case, any spaces after "##") outside a fenced code block."""
+    lines = text.splitlines()
+    return any(ok and RELATIONS_LINE_RE.fullmatch(line.strip()) for ok, line in zip(heading_lines(lines), lines))
 
 
 def with_newline(addition: str, nl: str) -> str:
@@ -1876,19 +1902,21 @@ def with_newline(addition: str, nl: str) -> str:
 def append_section(text: str, heading: str, addition: str) -> str:
     """Text with addition at the end of the "## <heading>" section (before the next "# " or "## " heading or the
     end of the file), after the old text and a blank line; without the section, "## <heading>" with addition is
-    created right before "## Relations" (at the end without it). The inserted lines use the text's line ending and
-    end with one. Pure; the rest of the text never changes."""
+    created right before "## Relations" (at the end without it), whose preceding blank lines become one. Lines in
+    a fenced code block are never headings. The inserted lines use the text's line ending and end with one. Pure;
+    besides those blank lines, the rest of the text never changes."""
     nl = newline_of(text)
     add = with_newline(addition, nl)
     lines = text.splitlines(keepends=True)
+    outside = heading_lines(lines)
     start = section_start(lines, heading)
     if start is None:
         section = f"## {heading}{nl}{nl}{add}"
-        rel = next((i for i, item in enumerate(lines) if item.rstrip() == RELATIONS_HEADING), None)
+        rel = next((i for i, item in enumerate(lines) if outside[i] and item.rstrip() == RELATIONS_HEADING), None)
         head = "".join(lines if rel is None else lines[:rel]).rstrip("\r\n")
         tail = "" if rel is None else nl + "".join(lines[rel:])
         return (f"{head}{nl}{nl}" if head else "") + section + tail
-    end = next((i for i in range(start + 1, len(lines)) if SECTION_END_RE.match(lines[i])), len(lines))
+    end = next((i for i in range(start + 1, len(lines)) if outside[i] and SECTION_END_RE.match(lines[i])), len(lines))
     last = max(i for i in range(start, end) if lines[i].strip())
     if not lines[last].endswith("\n"):
         lines[last] += nl
@@ -3497,6 +3525,8 @@ def cmd_append(args, config_home=None) -> int:
         raise BrainError(f"--section inválido: {one_line(args.section)!r} — o título sem '#', numa linha só, "
                          f"e não '{RELATIONS_HEADING[3:]}' (use relate)")
     addition = read_input_text(args.text_file, "--text-file")
+    if has_relations_line(addition):
+        raise BrainError(f"--text-file com uma linha '{RELATIONS_HEADING}': as relações são com relate")
     index = LinkIndex(rel for _, rel in walk_notes(values))
     note = find_note(args.note, index)
     target = write_target(vault, note)  # a link out of the vault is refused before anything is read
@@ -3519,7 +3549,7 @@ def cmd_new_note(args, config_home=None) -> int:
     body = None
     if args.body_file is not None:
         body = read_input_text(args.body_file, "--body-file")
-        if section_start(body.splitlines(), "Relations") is not None:
+        if has_relations_line(body):
             raise BrainError(f"--body-file com uma linha '{RELATIONS_HEADING}': a seção vem do modelo — "
                              "use relate para as relações")
     vault_ref = (args.vault_ref or "").strip()

@@ -33,13 +33,13 @@ brain.py index --context college
 - Nota que já existe: exit 2 `nota já existe: CAMINHO`, sem mudar nada. Escolha outro título ou complemente a nota existente (só acrescentando).
 - Tipo desconhecido ou contexto inexistente: exit 2 com a lista válida.
 - `--source` aceita o caminho da nota de fonte (vira `"[[raw/...]]"`) ou uma URL.
-- `--body-file ARQ`: o texto do arquivo (UTF-8, até 1 MiB) substitui as seções do modelo entre o `# título` e `## Relations`; o frontmatter e `## Relations` ficam como no modelo. O log registra `<tipo>; com corpo`. Arquivo ausente, binário, vazio ou maior que 1 MiB, ou corpo com uma linha `## Relations` (a seção é do modelo; use `relate`): exit 2 e nada é criado. É o jeito de escrever o corpo de uma nota nova — nunca edite o arquivo à mão.
+- `--body-file ARQ`: o texto do arquivo (UTF-8, até 1 MiB) substitui as seções do modelo entre o `# título` e `## Relations`; o frontmatter e `## Relations` ficam como no modelo. O log registra `<tipo>; com corpo`. Arquivo ausente, binário, vazio ou maior que 1 MiB, ou corpo com uma linha `## Relations` fora de bloco de código, em qualquer caixa e com qualquer espaço depois de `##` (a seção é do modelo; use `relate`): exit 2 e nada é criado. É o jeito de escrever o corpo de uma nota nova — nunca edite o arquivo à mão.
 
 ## `append NOTA --section TÍTULO --text-file ARQ [--json]`
 
 - NOTA é o nome ou o caminho da nota, resolvido como no `relate`; inexistente, fora do vault ou link simbólico para fora sai com 2.
-- Com `## TÍTULO` na nota, o texto entra no fim dessa seção (antes do próximo título `#` ou `##`), depois de uma linha em branco; sem a seção, `## TÍTULO` com o texto é criada logo antes de `## Relations` (no fim, sem `## Relations`). Nada do que já está na nota muda; BOM e fim de linha (LF ou CRLF) são mantidos.
-- TÍTULO sem `#`, numa linha só e diferente de `Relations` (relações são com `relate`); o arquivo de texto segue as regras do `--body-file`. Erro: exit 2 e nada gravado.
+- Com `## TÍTULO` na nota, o texto entra no fim dessa seção (antes do próximo título `#` ou `##`), depois de uma linha em branco; sem a seção, `## TÍTULO` com o texto é criada logo antes de `## Relations` (no fim, sem `## Relations`). Linhas dentro de bloco de código cercado (```` ``` ```` ou `~~~`, até a mesma cerca; sem fechamento, até o fim) nunca são título. Nada do que já está na nota muda além das linhas em branco antes de `## Relations`, que viram uma; BOM e fim de linha (LF ou CRLF) são mantidos.
+- TÍTULO sem `#`, numa linha só e diferente de `Relations` (relações são com `relate`); o arquivo de texto segue as regras do `--body-file`, inclusive a recusa de uma linha `## Relations` fora de bloco de código. Erro: exit 2 e nada gravado.
 - Saída: `acrescentado: <caminho> — ## TÍTULO`; com `--json`, `{"note", "section", "created_section"}`. O log registra `append <caminho> — ## TÍTULO`, nunca o texto.
 - É o jeito de completar uma nota existente (o fluxo de guardar achou que o conteúdo já tem nota): nunca edite o arquivo à mão.
 
