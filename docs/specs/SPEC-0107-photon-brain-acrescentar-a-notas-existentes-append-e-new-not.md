@@ -4,7 +4,7 @@ title: "photon-brain: acrescentar a notas existentes (append e new-note --body-f
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
