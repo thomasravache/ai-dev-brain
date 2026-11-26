@@ -33,7 +33,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.26"
+ATLAS_VERSION = "2026.11.28"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -4788,6 +4788,12 @@ PROBE_CONTRACTS = (PROBE_CONTRACT, PROBE_CONTRACT_2)
 PROBE_TARGETS = ("deployment",) + RESOURCE_KINDS  # the target kinds a probe@2 capability may declare
 PROBE_ACCESS = ("cluster", "cloud", "database", "urls")  # the local access blocks, in the order they are checked
 PROBE_INPUTS = ("change", "journeys")
+# the functional capability (SPEC-0103, ADR-0026 rule 4): only in tier: test, only with curated journeys, and its own
+# output rule (one item per journey of target.journeys, closed keys)
+FUNCTIONAL_CAPABILITY = "functional"
+FUNCTIONAL_RESULTS = ("passed", "failed", "skipped")
+FUNCTIONAL_ITEM_KEYS = ("journey", "result", "duration_seconds", "failed_steps")
+FUNCTIONAL_STEPS_MAX, FUNCTIONAL_STEP_CHARS = 5, 200
 PROBE_CLUSTER_FIELDS = ("clusters", "context", "namespace", "workloads")  # only with cluster in access (together)
 # the keys of a probes.log line, the one list write_probe_log uses (SPEC-0096): resource and commit only when used;
 # reason (and access, for a missing local access) only outside "ok" (SPEC-0104)
@@ -5294,6 +5300,50 @@ def validate_probe_output(data) -> list:
     return problems
 
 
+def _functional_item_problems(index, item) -> list:
+    where = f"items[{index}]"
+    if not isinstance(item, dict):
+        return [f"{where} precisa ser um objeto"]
+    problems = _closed_keys(item, FUNCTIONAL_ITEM_KEYS, FUNCTIONAL_ITEM_KEYS, where)
+    if "journey" in item and not (isinstance(item["journey"], str) and item["journey"]):
+        problems.append(f"{where}.journey precisa ser um texto não vazio")
+    if "result" in item and item["result"] not in FUNCTIONAL_RESULTS:
+        problems.append(f"{where}.result precisa ser um de: {', '.join(FUNCTIONAL_RESULTS)}")
+    duration = item.get("duration_seconds")
+    if "duration_seconds" in item and not (isinstance(duration, (int, float)) and not isinstance(duration, bool)
+                                           and math.isfinite(duration) and duration >= 0):
+        problems.append(f"{where}.duration_seconds precisa ser um número >= 0")
+    steps = item.get("failed_steps")
+    if "failed_steps" in item and not (isinstance(steps, list) and len(steps) <= FUNCTIONAL_STEPS_MAX
+                                       and all(isinstance(s, str) and len(s) <= FUNCTIONAL_STEP_CHARS
+                                               for s in steps)):
+        problems.append(f"{where}.failed_steps precisa ser uma lista de até {FUNCTIONAL_STEPS_MAX} textos de até "
+                        f"{FUNCTIONAL_STEP_CHARS} caracteres")
+    return problems
+
+
+def validate_functional_output(data, journeys) -> list:
+    """The own rule of the functional output (SPEC-0103), on top of validate_probe_output; [] = valid: with status
+    ok, one item per id of `journeys` (target.journeys), in the same order, each with exactly journey, result
+    (passed | failed | skipped), duration_seconds (>= 0) and failed_steps (up to 5 texts of up to 200 characters).
+    Never quotes a value."""
+    if not isinstance(data, dict):
+        return ["a saída precisa ser um objeto JSON"]
+    if data.get("status") == "error":
+        return []
+    items = data.get("items")
+    if not isinstance(items, list):
+        return ["items precisa ser uma lista com um item por jornada pedida"]
+    problems = []
+    for index, item in enumerate(items):
+        problems += _functional_item_problems(index, item)
+    ids = [item.get("journey") for item in items if isinstance(item, dict)]
+    if not problems and ids != list(journeys):
+        problems.append("items precisa ter um item por jornada de target.journeys, na mesma ordem, sem jornada a mais, "
+                        "faltando ou repetida")
+    return problems
+
+
 # ---------------------------------------------------------------- probe: summary of log lines
 
 def log_level(line: str) -> str:
@@ -5534,6 +5584,23 @@ def probe_journeys(graph: dict, service: str) -> list:
     return list(dict.fromkeys(journeys))
 
 
+def functional_journeys(graph: dict, service: str, environment: str, tiers: dict, chosen) -> list:
+    """The rules of the functional capability that the core keeps before any process (SPEC-0103, ADR-0026 rule 4):
+    only in tier: test (exit 4, with or without --confirm-production), only with curated journeys (exit 4), and
+    --journey only among the curated (exit 2). The journeys of target.journeys, in the curated order."""
+    if tiers.get(environment) != "test":
+        raise AtlasError(f"validação funcional só roda em ambiente tier: test ({environment} não é)", 4,
+                         "not_test_tier")
+    curated = probe_journeys(graph, service)
+    if not curated:
+        raise AtlasError(f"sem jornadas curadas para {service} (attrs.journeys) — references/probes.md", 4,
+                         "no_journeys")
+    for journey in chosen:
+        if journey not in curated:
+            raise AtlasError(f"jornada {journey} não curada para {service} (attrs.journeys)", 2)
+    return [j for j in curated if j in chosen] if chosen else curated
+
+
 def _adapter_failure(aid, step, error: CollectorError, extras) -> AtlasError:
     tail = stderr_tail(error.stderr, extras)
     detail = probe_mask(error.reason, extras)
@@ -5722,6 +5789,10 @@ def _probe_arguments(args, record: dict) -> tuple:
             raise AtlasError("--commit inválido — use o sha do commit, de 7 a 40 caracteres hexadecimais minúsculos",
                              2)
         record["commit"] = commit
+    journeys = getattr(args, "journey", None)
+    if journeys and any(not isinstance(j, str) or not ENVIRONMENT_NAME_RE.match(j) for j in journeys):
+        raise AtlasError("--journey inválido — use o id de uma jornada curada (letras, dígitos, . _ -, sem espaço, "
+                         "sem começar com -)", 2)
     return kind, rid, commit
 
 
@@ -5766,6 +5837,10 @@ def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list
     if problem:  # checked before any process runs, --describe included (Emenda v4)
         raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2,
                          "invalid_target")
+    chosen = list(getattr(args, "journey", None) or [])
+    curated = None
+    if args.capability == FUNCTIONAL_CAPABILITY:  # SPEC-0103: before any process, --describe included
+        curated = functional_journeys(graph, args.service, target["environment"], tiers, chosen)
     reachable = [c for c in target["clusters"] if c in access["clusters"]
                  or target["cluster_ids"].get(c) in access["clusters"]]
     context = (access["clusters"].get(reachable[0]) or access["clusters"][target["cluster_ids"][reachable[0]]]
@@ -5790,7 +5865,11 @@ def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list
         raise AtlasError(f"{args.capability} exige --commit (o sha da mudança)", 2)
     if commit is not None and "change" not in spec["inputs"]:
         raise AtlasError(f"--commit não é aceito por {args.capability} (o adaptador {aid} não declara change)", 2)
-    journeys = probe_journeys(graph, args.service) if "journeys" in spec["inputs"] else None
+    if chosen and "journeys" not in spec["inputs"]:
+        raise AtlasError(f"--journey não é aceito por {args.capability} (o adaptador {aid} não declara journeys)", 2)
+    journeys = None
+    if "journeys" in spec["inputs"]:
+        journeys = curated if curated is not None else probe_journeys(graph, args.service)
     allowed = [verb for verb in spec["verbs"] if verb in adapter["verbs"]]
     if args.verb not in allowed:
         raise AtlasError(f"verbo {args.verb} não permitido para {args.capability} no adaptador {aid} (permitidos: "
@@ -5846,6 +5925,8 @@ def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list
     data = _run_adapter(aid, argv, adapter, extras, json.dumps(request, ensure_ascii=False), contract,
                         passfile if "database" in declared else None)
     problems = validate_probe_output(data)
+    if not problems and args.capability == FUNCTIONAL_CAPABILITY:
+        problems = validate_functional_output(data, journeys or [])
     if not problems:
         if data["contract"] != contract:
             problems.append("contract diferente do --describe do adaptador")
@@ -6510,11 +6591,16 @@ VERIFY_CONTRACTS = (VERIFY_CONTRACT_1, VERIFY_CONTRACT)
 # The one registry of checks (the extension point of SPEC-0102): each check with its level. A "deployment" check has
 # "resource": null, is observed by _verify_observe and compared by _delivery_check, _runtime_check or _logs_check; a
 # "resource" check has "resource": "<kind:id>", is observed by _verify_observe_resource and compared by
-# _dependencies_check or _signals_check. SPEC-0103 adds functional (deployment) here.
+# _dependencies_check or _signals_check. functional (SPEC-0103) is a deployment check of compare --functional only:
+# absolute (the journeys pass or not after the deploy), never in the snapshot.
 VERIFY_CHECK_LEVELS = {"delivery": "deployment", "runtime": "deployment", "logs": "deployment",
-                       "dependencies": "resource", "signals": "resource"}
+                       "dependencies": "resource", "signals": "resource", "functional": "deployment"}
 VERIFY_CHECKS = tuple(VERIFY_CHECK_LEVELS)
 VERIFY_DEPLOYMENT_CHECKS = tuple(c for c, level in VERIFY_CHECK_LEVELS.items() if level == "deployment")
+VERIFY_SNAPSHOT_CHECKS = tuple(c for c in VERIFY_DEPLOYMENT_CHECKS if c != "functional")
+VERIFY_FUNCTIONAL_KEYS = ("environment_tier", "journeys")
+NOT_TEST_TIER = "validação funcional só em tier: test"
+NOT_DELIVERED = "entrega não confirmada: a jornada rodaria contra outra versão"
 VERIFY_RESOURCE_CHECKS = tuple(c for c, level in VERIFY_CHECK_LEVELS.items() if level == "resource")
 VERIFY_STATUSES = ("ok", "failed", "not_verified")
 VERDICT_EXITS = {"passou": 0, "degradou": 1, "inconclusivo": 5}
@@ -6698,7 +6784,7 @@ def validate_verify_snapshot(data) -> list:
             continue
         resource = "resource" in item and not v1
         keys = VERIFY_RESOURCE_NOT_VERIFIED_KEYS if resource else VERIFY_NOT_VERIFIED_KEYS
-        checks = VERIFY_RESOURCE_CHECKS if resource else VERIFY_DEPLOYMENT_CHECKS
+        checks = VERIFY_RESOURCE_CHECKS if resource else VERIFY_SNAPSHOT_CHECKS
         problems += _closed_keys(item, keys, keys, where)
         if "deployment" in item and not _verify_text(item["deployment"]):
             problems.append(f"{where}.deployment precisa ser um texto não vazio")
@@ -6717,6 +6803,24 @@ def verdict_of(statuses) -> str:
     return "degradou" if "failed" in statuses else "inconclusivo" if "not_verified" in statuses else "passou"
 
 
+def _functional_evidence_problems(evidence: dict, where: str) -> list:
+    """Problems of the evidence of a functional check (SPEC-0103): {environment_tier, journeys}, each journey with
+    the closed keys of the functional output."""
+    where = f"{where}.evidence"
+    problems = _closed_keys(evidence, VERIFY_FUNCTIONAL_KEYS, VERIFY_FUNCTIONAL_KEYS, where)
+    tier = evidence.get("environment_tier")
+    if "environment_tier" in evidence and tier is not None and tier not in TIERS:
+        problems.append(f"{where}.environment_tier precisa ser {' ou '.join(TIERS)} ou null")
+    journeys = evidence.get("journeys")
+    if "journeys" in evidence:
+        if not isinstance(journeys, list):
+            problems.append(f"{where}.journeys precisa ser uma lista")
+        else:
+            for index, journey in enumerate(journeys):
+                problems += [f"{where}.{p}" for p in _functional_item_problems(index, journey)]
+    return problems
+
+
 def validate_verify_result(data) -> list:
     """Problems of the output of `verify compare --json`, verify@1 (SPEC-0090: checks without resource) or verify@2
     (SPEC-0102: resource in every check, null in the deployment checks and <kind:id> in the resource checks); [] =
@@ -6729,7 +6833,7 @@ def validate_verify_result(data) -> list:
         problems.append(f"contract precisa ser {' ou '.join(VERIFY_CONTRACTS)}")
     v1 = data.get("contract") == VERIFY_CONTRACT_1
     keys = VERIFY_CHECK_KEYS_1 if v1 else VERIFY_CHECK_KEYS
-    allowed_checks = VERIFY_DEPLOYMENT_CHECKS if v1 else VERIFY_CHECKS
+    allowed_checks = VERIFY_SNAPSHOT_CHECKS if v1 else VERIFY_CHECKS
     if "verdict" in data and data["verdict"] not in VERDICT_EXITS:
         problems.append(f"verdict precisa ser um de: {', '.join(VERDICT_EXITS)}")
     checks = data.get("checks")
@@ -6754,6 +6858,8 @@ def validate_verify_result(data) -> list:
             problems.append(f"{where}.status precisa ser um de: {', '.join(VERIFY_STATUSES)}")
         if "evidence" in item and not isinstance(item["evidence"], dict):
             problems.append(f"{where}.evidence precisa ser um objeto")
+        elif not v1 and item.get("check") == "functional" and "evidence" in item:
+            problems += _functional_evidence_problems(item["evidence"], where)
         if "reason" in item and not isinstance(item["reason"], str):
             problems.append(f"{where}.reason precisa ser um texto")
         if item.get("status") == "not_verified" and not _verify_text(item.get("reason")):
@@ -7625,6 +7731,42 @@ def _logs_check(target, seen, baseline, max_errors: int, window_seconds: int) ->
     return _check(deployment, "logs", "ok", evidence, f"{len(new)} assinatura(s) de erro nova(s)")
 
 
+def _functional_check(setup, args, target, checks) -> dict:
+    """The functional check of compare --functional (SPEC-0103, ADR-0026 rule 4), after the checks of verify@2: outside
+    tier: test or with a delivery not ok it is not verified and nothing runs (no process, no line in probes.log);
+    else `probe functional run` through run_probe. ok only when every journey passed; failed when one failed;
+    not_verified for a skipped journey, a refusal, an error or an output out of the contract."""
+    deployment = target["deployment"]
+    tier = validate_environments(setup["shared"].get("environments")).get(target["environment"])
+    evidence = {"environment_tier": tier, "journeys": []}
+    if tier != "test":
+        return _check(deployment, "functional", "not_verified", evidence, NOT_TEST_TIER)
+    if any(c["check"] == "delivery" and c["status"] != "ok" for c in checks):
+        return _check(deployment, "functional", "not_verified", evidence, NOT_DELIVERED)
+    query = argparse.Namespace(capability=FUNCTIONAL_CAPABILITY, verb="run", service=args.service, env=args.env,
+                               since=None, lines=None, summary=False, journey=args.journey or None,
+                               confirm_production=args.confirm_production, atlas=args.atlas, json=True)
+    try:
+        outcome = run_probe(query, setup["name"], setup["probes"], setup["entry"], deployment)
+    except AtlasError as e:
+        return _check(deployment, "functional", "not_verified", evidence, f"probe functional: {e}")
+    result = outcome["result"]
+    if result["status"] != "ok":
+        return _check(deployment, "functional", "not_verified", evidence,
+                      f"probe functional respondeu com erro: {outcome['message'] or '(sem mensagem)'}")
+    journeys = result["items"]
+    evidence["journeys"] = journeys
+    failed = [j["journey"] for j in journeys if j["result"] == "failed"]
+    skipped = [j["journey"] for j in journeys if j["result"] == "skipped"]
+    if failed:
+        return _check(deployment, "functional", "failed", evidence, f"jornada com falha: {', '.join(failed)}")
+    if skipped:
+        return _check(deployment, "functional", "not_verified", evidence, f"jornada pulada: {', '.join(skipped)}")
+    if result["truncated"] or not journeys:
+        return _check(deployment, "functional", "not_verified", evidence, "nenhuma jornada rodou por inteiro")
+    return _check(deployment, "functional", "ok", evidence, f"{len(journeys)} jornada(s) passaram")
+
+
 def verify_suggestion(targets) -> str:
     """The fixed text of `degradou`: the person decides the rollback, through the configuration repository of the
     delivery (SPEC-0086); never a command, never executed."""
@@ -7662,6 +7804,11 @@ def cmd_verify_compare(args) -> int:
     """verify compare (SPEC-0090, SPEC-0102, ADR-0024, ADR-0026): delivery, runtime and logs of each deployment against
     the snapshot and the expected image, dependencies and signals of each resource of the scope against the photo;
     verdict passou (0), degradou (1) or inconclusivo (5). Nothing is written to the atlas."""
+    if args.journey and not args.functional:
+        raise AtlasError("--journey vale só com --functional (references/verify.md)", 2)
+    if args.journey and any(not ENVIRONMENT_NAME_RE.match(j) for j in args.journey):
+        raise AtlasError("--journey inválido — use o id de uma jornada curada (letras, dígitos, . _ -, sem espaço, "
+                         "sem começar com -)", 2)
     setup = _verify_setup(args)
     match = EXPECT_IMAGE_RE.match(normalize_expected_image(args.expect_image))
     if not match or not (match.group("tag") or match.group("digest")):
@@ -7687,6 +7834,8 @@ def cmd_verify_compare(args) -> int:
                    _runtime_check(target, seen, baseline, max_restarts),
                    _logs_check(target, seen, baseline, max_errors, window_seconds)]
     checks += _resource_checks(setup, args, plan["scope"], plan["max_resources"], baseline, limits, window)
+    if args.functional:
+        checks.append(_functional_check(setup, args, targets[0], checks))
     verdict = verdict_of(c["status"] for c in checks)
     result = {"contract": VERIFY_CONTRACT, "verdict": verdict, "checks": checks,
               "suggestion": verify_suggestion(targets) if verdict == "degradou" else ""}
@@ -8145,6 +8294,8 @@ def main(argv=None):
     p.add_argument("--resource", help="recurso do grafo ligado ao deployment: <kind>:<id> (datastore, queue, topic, "
                                       "bucket)")
     p.add_argument("--commit", help="sha da mudança (7 a 40 hexadecimais), para a capacidade que declara change")
+    p.add_argument("--journey", action="append", help="jornada curada (attrs.journeys) para a capacidade functional "
+                                                      "(repetível)")
     p.add_argument("--json", action="store_true")
     add_atlas_option(p)
     p = sub.add_parser("probes", help="uso das probes desta máquina: contagens do probes.log e sugestões")
@@ -8197,6 +8348,9 @@ def main(argv=None):
                                                                "[<datastore>=]<migration> (repetível)")
     q.add_argument("--max-signal-increase", help="piora tolerada nas métricas de erro e latência (0 a 100; padrão "
                                                  f"{VERIFY_MAX_SIGNAL_INCREASE} = 50%%)")
+    q.add_argument("--functional", action="store_true", help="roda as jornadas curadas (só em tier: test, depois da "
+                                                             "entrega confirmada)")
+    q.add_argument("--journey", action="append", help="restringe a --functional a esta jornada curada (repetível)")
     q.add_argument("--confirm-production", action="store_true",
                    help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
     q.add_argument("--json", action="store_true")

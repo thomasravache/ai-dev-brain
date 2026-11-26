@@ -70,6 +70,7 @@ atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem>
     [--resource <kind:id>]... [--max-resources 20]
     [--max-new-dlq 0] [--max-queue-age 10m] [--expect-migration [<datastore>=]<migration>]...
     [--max-signal-increase 0.5]
+    [--functional [--journey <id>]...]
     [--confirm-production] [--json] [--atlas X]
 ```
 
@@ -78,6 +79,7 @@ atlas.py verify compare --service <id> --env <ambiente> --expect-image <imagem>
 - `--window` — a janela dos eventos e dos logs (padrão `10m`, até `24h`).
 - `--max-new-errors` e `--max-new-restarts` — o que se tolera (padrão `0` e `0`, conservadores).
 - As opções das dependências e dos sinais (`--resource`, `--max-resources`, `--max-new-dlq`, `--max-queue-age`, `--expect-migration`, `--max-signal-increase`) estão em [Dependências e sinais](#dependências-e-sinais-verify2).
+- `--functional` e `--journey` (a validação funcional, só em `tier: test`) estão em [Validação funcional](#validação-funcional---functional).
 
 Roda as mesmas três probes por deployment e faz três verificações em cada um:
 
@@ -373,13 +375,58 @@ Uma verificação `verify@2` sem `resource` é recusada pelo validador:
 - Os adaptadores `probe@1` continuam valendo para o `runtime`; um adaptador `probe@1` nunca recebe um recurso.
 - Rollback da skill: uma foto `verify@2` é recusada pelo `compare` antigo (exit 2); basta tirar a foto de novo.
 
+## Validação funcional (`--functional`)
+
+Com `--functional`, o `compare` acrescenta a verificação `functional` (SPEC-0103, ADR-0026 regra 4): a jornada principal do serviço roda no ambiente de teste, depois do deploy, e entra no veredito. Sem `--functional`, nada muda e nenhuma jornada roda; `--journey` sem `--functional` sai com 2.
+
+- **Pré-requisitos:** jornadas curadas no serviço (atributo `journeys`, pelo arquivo de fatos do coletor `generic`: `references/collectors/generic.md`), a URL base do ambiente em `access.urls` e um adaptador da capacidade `functional` com o verbo `run` (o `suite` da skill: `references/probes/suite.md`).
+- `--journey <id>` (repetível) restringe às jornadas curadas escolhidas; fora da regra de nome simples, exit 2 `--journey inválido`.
+- Uma só verificação por serviço e ambiente, depois das verificações do `verify@2`, com `deployment` o do alvo (o primeiro pelo id) e `resource: null`.
+
+| Situação | `status` | `reason` |
+|---|---|---|
+| ambiente com `tier` diferente de `test` (inclusive sem `tier`, mesmo com `--confirm-production`) | `not_verified` | `validação funcional só em tier: test` — nenhum processo roda e nada vai para o `probes.log` |
+| alguma `delivery` que não deu `ok` | `not_verified` | `entrega não confirmada: a jornada rodaria contra outra versão` — não roda |
+| todas as jornadas `passed` (ao menos uma) | `ok` | `<n> jornada(s) passaram` |
+| alguma jornada `failed` | `failed` | `jornada com falha: <ids>` (os passos na evidência) |
+| nenhuma `failed` e alguma `skipped` | `not_verified` | `jornada pulada: <ids>` |
+| probe recusada (sem jornadas curadas, sem acesso local: urls, sem adaptador), com erro (arquivo de jornadas inválido) ou fora do contrato | `not_verified` | o motivo da probe |
+
+Senão, a verificação roda `probe functional run` pelo mesmo `run_probe` das outras (com os `--journey`). Jornada pulada, recusa ou erro nunca dão `ok`. O veredito, os exits e a sugestão seguem as regras do `verify@2` (`failed` → `degradou`). A foto do `snapshot` não muda: a jornada é absoluta, não comparada com antes.
+
+Evidência: `{"environment_tier": "test", "journeys": [{"journey", "result", "duration_seconds", "failed_steps"}]}`, com os itens da saída da probe (`journeys` vazia quando nada rodou). O `validate_verify_result` confere essas chaves e cada jornada pela regra da saída de `functional`; o contrato continua `verify@2`.
+
+```json
+{
+  "contract": "verify@2",
+  "verdict": "degradou",
+  "checks": [
+    {"deployment": "dev-api", "resource": null, "check": "delivery", "status": "ok",
+     "evidence": {"expected": "acme/api:1.4.2", "rollout_complete": true, "ready_pods": 2, "pods_with_other_image": [], "workloads_not_found": []},
+     "reason": "2 pod(s) pronto(s) com acme/api:1.4.2"},
+    {"deployment": "dev-api", "resource": null, "check": "runtime", "status": "ok",
+     "evidence": {"workloads_not_found": [], "not_ready_pods": [], "new_restarts": {}, "new_restarts_total": 0, "max_new_restarts": 0, "baseline": "foto", "new_warnings": []},
+     "reason": "pods prontos, sem restart nem aviso novo"},
+    {"deployment": "dev-api", "resource": null, "check": "logs", "status": "ok",
+     "evidence": {"window_seconds": 600, "max_new_errors": 0, "new_error_signatures": {}, "known_error_signatures": 0, "truncated": false},
+     "reason": "0 assinatura(s) de erro nova(s)"},
+    {"deployment": "dev-api", "resource": null, "check": "functional", "status": "failed",
+     "evidence": {"environment_tier": "test",
+                  "journeys": [{"journey": "checkout", "result": "passed", "duration_seconds": 12.4, "failed_steps": []},
+                               {"journey": "login", "result": "failed", "duration_seconds": 3.1, "failed_steps": ["campo senha não apareceu"]}]},
+     "reason": "jornada com falha: login"}
+  ],
+  "suggestion": "Degradou: mostre as evidências à pessoa e deixe que ela decida se volta a versão anterior. O rollback, se ela decidir, é feito no repositório de configuração do delivery (acme/iac), pelo fluxo de mudança do time. O verify não executa nenhuma ação no ambiente."
+}
+```
+
 ## Validadores
 
-`atlas.py` tem `validate_verify_snapshot(data)` e `validate_verify_result(data)`, que devolvem a lista de problemas (`[]` = válido). Os dois aceitam `verify@1` e `verify@2` e recusam qualquer outro `contract`. O `snapshot` só grava uma foto `verify@2` válida, o `compare` só aceita uma `--baseline` válida (`verify@1` ou `verify@2`) e só imprime um resultado `verify@2` válido. O conjunto fechado de `check` vem do registro `VERIFY_CHECKS` do `atlas.py` (o ponto de extensão: a SPEC-0103 acrescenta `functional`, no nível do deployment, com `resource: null`).
+`atlas.py` tem `validate_verify_snapshot(data)` e `validate_verify_result(data)`, que devolvem a lista de problemas (`[]` = válido). Os dois aceitam `verify@1` e `verify@2` e recusam qualquer outro `contract`. O `snapshot` só grava uma foto `verify@2` válida, o `compare` só aceita uma `--baseline` válida (`verify@1` ou `verify@2`) e só imprime um resultado `verify@2` válido. O conjunto fechado de `check` vem do registro `VERIFY_CHECKS` do `atlas.py` (o ponto de extensão; `functional`, da SPEC-0103, é uma verificação de deployment, com `resource: null`, só do `compare --functional`, e nunca entra na foto).
 
 ## Uso típico (G6 da gluon-spec)
 
 1. Antes do merge: `verify snapshot --service api --env dev --out <pasta da tarefa>/foto.json`.
-2. Depois que o roteiro de verificação (SPEC-0086) mostra a imagem nova no repositório de configuração: `verify compare --service api --env dev --baseline <pasta da tarefa>/foto.json --expect-image acme/api:1.4.2 --json` (com `--expect-migration <datastore>=<migration>` quando o PR traz uma migration, e `--resource` para restringir às dependências que o PR toca).
+2. Depois que o roteiro de verificação (SPEC-0086) mostra a imagem nova no repositório de configuração: `verify compare --service api --env dev --baseline <pasta da tarefa>/foto.json --expect-image acme/api:1.4.2 --json` (com `--expect-migration <datastore>=<migration>` quando o PR traz uma migration, `--resource` para restringir às dependências que o PR toca e, num ambiente `tier: test` com jornadas curadas, `--functional`).
 3. Leve o veredito e as evidências ao Relatório de Entrega; em `degradou`, mostre a sugestão e deixe a pessoa decidir. Se o rollout ainda não terminou, repita depois da janela.
 4. Apague a foto no fim da tarefa.
