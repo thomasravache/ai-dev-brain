@@ -370,3 +370,31 @@ def probe_log_findings(source, filename, function="write_probe_log", constant="P
             findings.append((node.lineno, (f"{filename}:{node.lineno} — {RULE_PROBE_LOG} — chave fixa em "
                                           f"{function}(), fora de {constant}")))
     return [message for _, message in sorted(findings)]
+
+
+# ---------------------------------------------------------------- probes.log: o conjunto fechado (SPEC-0104)
+
+RULE_PROBE_LOG_SET = "probes.log só com o conjunto fechado de chaves do contrato"
+# as de hoje (SPEC-0088), resource e commit (SPEC-0096), reason e access (SPEC-0104)
+PROBE_LOG_CONTRACT_KEYS = frozenset({"at", "atlas", "service", "environment", "capability", "verb", "adapter",
+                                     "status", "exit", "confirmed_production", "resource", "commit", "reason",
+                                     "access"})
+
+
+def probe_log_key_set_findings(source, filename, expected=PROBE_LOG_CONTRACT_KEYS, constant="PROBE_LOG_KEYS"):
+    """SPEC-0104 (UT-06): a constante `constant` do módulo tem exatamente o conjunto `expected`; uma chave a mais
+    (por exemplo um valor de acesso ou um resultado) ou a menos é violação, citando a chave."""
+    tree = ast.parse(source)
+    keys = None
+    line = 1
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == constant for t in node.targets):
+            keys, line = _string_items(node.value), node.lineno
+    if keys is None:
+        return [(f"{filename}:1 — {RULE_PROBE_LOG_SET} — {constant} não é uma constante do módulo com os nomes das "
+                 "chaves")]
+    findings = [f"{filename}:{line} — {RULE_PROBE_LOG_SET} — chave a mais em {constant}: {key}"
+                for key in sorted(set(keys) - set(expected))]
+    findings += [f"{filename}:{line} — {RULE_PROBE_LOG_SET} — falta em {constant}: {key}"
+                 for key in sorted(set(expected) - set(keys))]
+    return findings

@@ -1,0 +1,11 @@
+version: 1
+organization: Acme
+mode: local
+language: auto
+stale_days: 14
+categories: [code, delivery]
+collectors: []
+redaction: {extra_patterns: []}
+environments:
+  dev: {tier: test}
+  prod: {tier: production}

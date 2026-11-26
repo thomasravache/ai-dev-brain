@@ -1,0 +1,216 @@
+{
+  "built_at": "2026-11-24T00:00:00Z",
+  "edges": [
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "service:api",
+      "type": "deploys"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "cluster:cluster-dev",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "environment:dev",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "queue:orders",
+      "type": "writes"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "datastore:orders-db",
+      "type": "reads"
+    },
+    {
+      "from": "deployment:dev-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "datastore:cache",
+      "type": "reads"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "service:api",
+      "type": "deploys"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "cluster:cluster-prod",
+      "type": "runs_in"
+    },
+    {
+      "from": "deployment:prod-api",
+      "inferred": false,
+      "sources": [
+        "facts"
+      ],
+      "to": "environment:prod",
+      "type": "runs_in"
+    }
+  ],
+  "nodes": [
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "cluster:cluster-dev",
+      "kind": "cluster",
+      "name": "cluster-dev",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "cluster:cluster-prod",
+      "kind": "cluster",
+      "name": "cluster-prod",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "engine": "redis"
+      },
+      "conflicts": [],
+      "key": "datastore:cache",
+      "kind": "datastore",
+      "name": "cache",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "engine": "postgres"
+      },
+      "conflicts": [],
+      "key": "datastore:orders-db",
+      "kind": "datastore",
+      "name": "orders-db",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "namespace": "api-dev",
+        "workloads": [
+          "Deployment/api"
+        ]
+      },
+      "conflicts": [],
+      "key": "deployment:dev-api",
+      "kind": "deployment",
+      "name": "dev-api",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "namespace": "api-prod",
+        "workloads": [
+          "Deployment/api"
+        ]
+      },
+      "conflicts": [],
+      "key": "deployment:prod-api",
+      "kind": "deployment",
+      "name": "prod-api",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "environment:dev",
+      "kind": "environment",
+      "name": "dev",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "environment:prod",
+      "kind": "environment",
+      "name": "prod",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {
+        "region": "us-east-1"
+      },
+      "conflicts": [],
+      "key": "queue:orders",
+      "kind": "queue",
+      "name": "orders",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    },
+    {
+      "attrs": {},
+      "conflicts": [],
+      "key": "service:api",
+      "kind": "service",
+      "name": "api",
+      "seen_at": "2026-11-24",
+      "sources": [
+        "facts"
+      ]
+    }
+  ],
+  "organization": "Acme",
+  "version": 1
+}

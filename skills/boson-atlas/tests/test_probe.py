@@ -627,7 +627,8 @@ class LocalLogTest(ProbeCase):
         lines = self.log()
         self.assertEqual(len(lines), len(runs), lines)
         for line, (_, code, adapter, env, capability, verb) in zip(lines, runs):
-            self.assertEqual(set(line), LOG_KEYS)
+            # SPEC-0104:UT-06 — reason fora do ok
+            self.assertEqual(set(line), LOG_KEYS if line["status"] == "ok" else LOG_KEYS | {"reason"})
             self.assertEqual((line["atlas"], line["service"], line["environment"], line["capability"], line["verb"],
                               line["adapter"], line["exit"]), ("acme", "api", env, capability, verb, adapter, code))
             self.assertIs(line["confirmed_production"], False)

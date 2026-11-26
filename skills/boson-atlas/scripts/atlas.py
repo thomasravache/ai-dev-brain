@@ -33,7 +33,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.25"
+ATLAS_VERSION = "2026.11.26"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -66,11 +66,14 @@ FLOW_SPECIAL = ",[]{}"
 
 
 class AtlasError(Exception):
-    """Error shown to the user without a traceback; `code` is the exit code."""
+    """Error shown to the user without a traceback; `code` is the exit code. A probe refusal or failure also carries
+    `reason` (the closed code of probes.log) and, for a missing local access, `access` (SPEC-0104)."""
 
-    def __init__(self, message, code=1):
+    def __init__(self, message, code=1, reason=None, access=None):
         super().__init__(message)
         self.code = code
+        self.reason = reason
+        self.access = access
 
 
 # ---------------------------------------------------------------- yaml subset
@@ -671,18 +674,23 @@ def _access_item_problem(block, name, entry):
         if key not in entry:
             return f"falta {key}"
     for key, what in fields:
-        value = entry[key]
-        if key == "base_url":
-            reason = _base_url_problem(value)
-        else:
-            reason = _access_text_problem(value, what)
-            if reason is None and value.startswith("-"):
-                reason = f"{what} começa com -"
-            if reason is None and key == "passfile" and not (os.path.isabs(value) or value.startswith("~/")):
-                reason = f"{what} precisa ser absoluto ou começar com ~/"
+        reason = _access_field_problem(key, what, entry[key])
         if reason:
             return reason
     return None
+
+
+def _access_field_problem(key, what, value):
+    """Reason why one field of an item of access.cloud, access.databases or access.urls is invalid, or None (the one
+    rule of local_access and of access setup, SPEC-0104). Fixed text: never the value."""
+    if key == "base_url":
+        return _base_url_problem(value)
+    reason = _access_text_problem(value, what)
+    if reason is None and value.startswith("-"):
+        reason = f"{what} começa com -"
+    if reason is None and key == "passfile" and not (os.path.isabs(value) or value.startswith("~/")):
+        reason = f"{what} precisa ser absoluto ou começar com ~/"
+    return reason
 
 
 def _join_names(names) -> str:
@@ -4781,9 +4789,19 @@ PROBE_TARGETS = ("deployment",) + RESOURCE_KINDS  # the target kinds a probe@2 c
 PROBE_ACCESS = ("cluster", "cloud", "database", "urls")  # the local access blocks, in the order they are checked
 PROBE_INPUTS = ("change", "journeys")
 PROBE_CLUSTER_FIELDS = ("clusters", "context", "namespace", "workloads")  # only with cluster in access (together)
-# the keys of a probes.log line, the one list write_probe_log uses (SPEC-0096): resource and commit only when used
+# the keys of a probes.log line, the one list write_probe_log uses (SPEC-0096): resource and commit only when used;
+# reason (and access, for a missing local access) only outside "ok" (SPEC-0104)
 PROBE_LOG_KEYS = ("at", "atlas", "service", "environment", "capability", "verb", "adapter", "status", "exit",
-                  "confirmed_production", "resource", "commit")
+                  "confirmed_production", "resource", "commit", "reason", "access")
+PROBE_STATUSES = ("ok", "error", "invalid", "refused")
+# the closed reason codes of probes.log, by status (SPEC-0104); not_test_tier and no_journeys are for SPEC-0103
+PROBE_REASONS = {
+    "refused": ("no_adapter", "verb_not_allowed", "production_unconfirmed", "no_access", "not_test_tier",
+                "no_journeys"),
+    "invalid": ("invalid_args", "no_deployment", "not_linked", "invalid_target"),
+    "error": ("adapter_failed", "timeout", "contract"),
+}
+PROBE_DEFAULT_REASON = {"refused": "production_unconfirmed", "invalid": "invalid_args", "error": "adapter_failed"}
 RESOURCE_ARG_RE = re.compile(r"^(datastore|queue|topic|bucket):(\S+)\Z")
 COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}\Z")
 RESOURCE_ATTR_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}\Z")
@@ -5387,7 +5405,7 @@ def probe_targets(atlas: Path, service: str, environment: str, graph=None) -> li
     found = _environment_deployments(index, service, environment)
     if not found:
         raise AtlasError(f"nenhum deployment de service:{service} em environment:{environment} no atlas (veja "
-                         "`context` ou rode scan e build)", 2)
+                         "`context` ou rode scan e build)", 2, "no_deployment")
     targets = []
     for deployment, eid in found:
         attrs = index.nodes.get(deployment, {}).get("attrs", {})
@@ -5472,14 +5490,15 @@ def probe_resource(graph: dict, service: str, env: str, kind: str, rid: str) -> 
     key = f"{kind}:{rid}"
     node = next((n for n in graph["nodes"] if isinstance(n, dict) and n.get("key") == key), None)
     if node is None or node.get("kind") != kind:
-        raise AtlasError(f"recurso {key} não existe no atlas (veja `context` ou rode scan e build)", 2)
+        raise AtlasError(f"recurso {key} não existe no atlas (veja `context` ou rode scan e build)", 2, "not_linked")
     links = [link for link in linked_resources(graph, service, env) if link["resource"] == key]
     if not links:
         raise AtlasError(f"recurso {key} não ligado a {service} em {env} (ADR-0025: só um recurso ligado ao "
-                         "deployment do serviço no ambiente)", 2)
+                         "deployment do serviço no ambiente)", 2, "not_linked")
     problem, attrs = _resource_attrs(node, rid)
     if problem:
-        raise AtlasError(f"alvo inválido no atlas: resource.{problem} — corrija o atlas (references/probes.md)", 2)
+        raise AtlasError(f"alvo inválido no atlas: resource.{problem} — corrija o atlas (references/probes.md)", 2,
+                         "invalid_target")
     return {"kind": kind, "id": rid, "attrs": attrs}, links[0]["deployment"]
 
 
@@ -5491,12 +5510,12 @@ def probe_change_repositories(graph: dict, service: str) -> list:
     repositories = sorted({e["to"].split(":", 1)[1] for e in _code_edges(key, index)})
     if not repositories:
         raise AtlasError(f"nenhum repositório de código de service:{service} no atlas para --commit (veja "
-                         "`context`)", 2)
+                         "`context`)", 2, "invalid_target")
     for repository in repositories:
         owner, sep, name = repository.partition("/")
         if not sep or not ENVIRONMENT_NAME_RE.match(owner) or not ENVIRONMENT_NAME_RE.match(name):
             raise AtlasError("alvo inválido no atlas: change.repositories com um id fora de <dono>/<nome> — corrija "
-                             "o atlas (references/probes.md)", 2)
+                             "o atlas (references/probes.md)", 2, "invalid_target")
     return repositories
 
 
@@ -5511,7 +5530,7 @@ def probe_journeys(graph: dict, service: str) -> list:
     if not isinstance(journeys, list) or any(not isinstance(j, str) or not ENVIRONMENT_NAME_RE.match(j)
                                              for j in journeys):
         raise AtlasError("alvo inválido no atlas: journeys com um id fora da regra de nome (letras, dígitos, . _ -, "
-                         "sem espaço) — corrija o atlas (references/probes.md)", 2)
+                         "sem espaço) — corrija o atlas (references/probes.md)", 2, "invalid_target")
     return list(dict.fromkeys(journeys))
 
 
@@ -5521,7 +5540,8 @@ def _adapter_failure(aid, step, error: CollectorError, extras) -> AtlasError:
     text = f"adaptador {aid}: {step} falhou — {detail}"
     if tail:
         text += "\n" + "\n".join(f"  {line}" for line in tail)
-    return AtlasError(text, 1)
+    reason = "timeout" if str(error.reason).startswith("tempo esgotado") else "adapter_failed"
+    return AtlasError(text, 1, reason)
 
 
 def _reject_surrogates(data) -> None:
@@ -5628,12 +5648,12 @@ def _run_adapter(aid, argv, adapter, extras, input_text=None, contract=PROBE_CON
         return data
     except (ValueError, RecursionError):  # also NaN/Infinity, numbers out of range and deep nesting (Emenda v4)
         raise AtlasError(f"adaptador {aid}: {step} — a saída não é JSON válido (contrato {contract})",
-                         1) from None
+                         1, "contract") from None
 
 
 def _contract_failure(aid, what, problems, extras, contract=PROBE_CONTRACT) -> AtlasError:
     shown = probe_mask(problems[:10], extras)
-    return AtlasError(f"adaptador {aid}: {what} fora do contrato {contract} — {'; '.join(shown)}", 1)
+    return AtlasError(f"adaptador {aid}: {what} fora do contrato {contract} — {'; '.join(shown)}", 1, "contract")
 
 
 def choose_adapter(probes, capability, extras, literals, kind="deployment") -> tuple:
@@ -5656,8 +5676,8 @@ def choose_adapter(probes, capability, extras, literals, kind="deployment") -> t
         if spec and kind in spec["targets"]:
             return aid, adapter, argv, spec
     if kind != "deployment":
-        raise AtlasError(f"nenhum adaptador para {capability} com alvo {kind} (probes.adapters)", 4)
-    raise AtlasError(f"nenhum adaptador para {capability} (probes.adapters)", 4)
+        raise AtlasError(f"nenhum adaptador para {capability} com alvo {kind} (probes.adapters)", 4, "no_adapter")
+    raise AtlasError(f"nenhum adaptador para {capability} (probes.adapters)", 4, "no_adapter")
 
 
 def _item_line(item: dict) -> str:
@@ -5710,7 +5730,7 @@ def _no_access(what: str) -> AtlasError:
     value."""
     block = {"cluster": "clusters", "database": "databases"}.get(what, what)
     return AtlasError(f"sem acesso local: {what} — declare access.{block} na configuração local desta máquina "
-                      "(references/config.md)", 4)
+                      "(references/config.md)", 4, "no_access", what)
 
 
 def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list, deployment=None) -> dict:
@@ -5740,10 +5760,12 @@ def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list
     repositories = probe_change_repositories(graph, args.service) if commit is not None else None
     target = next((t for t in targets if t["deployment"] == deployment), None) if deployment else targets[0]
     if target is None:
-        raise AtlasError(f"deployment {deployment} não é de service:{args.service} em environment:{args.env}", 2)
+        raise AtlasError(f"deployment {deployment} não é de service:{args.service} em environment:{args.env}", 2,
+                         "no_deployment")
     problem = target_problem(target, args.service)
     if problem:  # checked before any process runs, --describe included (Emenda v4)
-        raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
+        raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2,
+                         "invalid_target")
     reachable = [c for c in target["clusters"] if c in access["clusters"]
                  or target["cluster_ids"].get(c) in access["clusters"]]
     context = (access["clusters"].get(reachable[0]) or access["clusters"][target["cluster_ids"][reachable[0]]]
@@ -5773,16 +5795,17 @@ def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list
     if args.verb not in allowed:
         raise AtlasError(f"verbo {args.verb} não permitido para {args.capability} no adaptador {aid} (permitidos: "
                          f"{', '.join(allowed) or 'nenhum'}; a interseção dos verbos do adaptador com "
-                         f"probes.adapters.{aid}.verbs)", 4)
+                         f"probes.adapters.{aid}.verbs)", 4, "verb_not_allowed")
     if tiers.get(target["environment"]) != "test" and not args.confirm_production:
         raise AtlasError(f"ambiente {args.env} é de produção ou sem marcação: confirme com a pessoa e use "
-                         "--confirm-production", 4)
+                         "--confirm-production", 4, "production_unconfirmed")
     probe1 = spec["contract"] == PROBE_CONTRACT
     if probe1 and not target["clusters"]:
         raise AtlasError(f"sem acesso local ao cluster: o deployment {target['deployment']} não tem cluster no "
-                         "atlas", 4)
+                         "atlas", 4, "no_access", "cluster")
     if probe1 and not reachable:
-        raise AtlasError(f"sem acesso local ao cluster {', '.join(target['clusters'])} (access.clusters)", 4)
+        raise AtlasError(f"sem acesso local ao cluster {', '.join(target['clusters'])} (access.clusters)", 4,
+                         "no_access", "cluster")
     declared = spec["access"]
     for what, missing in (("cluster", not reachable), ("cloud", profile is None),
                           ("database", database is None or passfile_problem(passfile)[0] == "não encontrado"),
@@ -5818,7 +5841,8 @@ def _probe_query(args, record: dict, probes: dict, entry: dict, extras_box: list
     contract = spec["contract"]
     problems = validate_probe_input(request)
     if problems:  # the atlas has a value the contract does not accept: never sent to the adapter
-        raise AtlasError(f"alvo fora do contrato {contract} — {'; '.join(probe_mask(problems, extras))}", 2)
+        raise AtlasError(f"alvo fora do contrato {contract} — {'; '.join(probe_mask(problems, extras))}", 2,
+                         "invalid_target")
     data = _run_adapter(aid, argv, adapter, extras, json.dumps(request, ensure_ascii=False), contract,
                         passfile if "database" in declared else None)
     problems = validate_probe_output(data)
@@ -5859,17 +5883,22 @@ def run_probe(args, name: str, probes: dict, entry: dict, deployment=None) -> di
     record = {"atlas": name, "service": args.service, "environment": args.env, "capability": args.capability,
               "verb": args.verb, "adapter": "", "confirmed_production": bool(args.confirm_production)}
     extras_box = list(PROBE_PATTERNS)  # _probe_query adds redaction.extra_patterns once the atlas is read
-    code = 1
+    code, reason, access = 1, None, None
     try:
         outcome = _probe_query(args, record, probes, entry, extras_box, deployment)
         code = 0 if outcome["result"]["status"] == "ok" else 1
         return outcome
     except AtlasError as e:
-        code = e.code
+        code, reason, access = e.code, e.reason, e.access
         raise
     finally:
         record["status"] = {0: "ok", 1: "error", 2: "invalid", 4: "refused"}.get(code, "error")
         record["exit"] = code
+        status = record["status"]
+        if status != "ok":  # a closed code of the core, never the text of the message (SPEC-0104)
+            record["reason"] = reason if reason in PROBE_REASONS[status] else PROBE_DEFAULT_REASON[status]
+            if record["reason"] == "no_access":
+                record["access"] = access if access in PROBE_ACCESS else "cluster"
         record["at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         write_probe_log(record, extras_box)
 
@@ -5896,6 +5925,580 @@ def cmd_probe(args):
         print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
     else:
         print_probe(result, outcome["request_view"], args.summary)
+    return 0
+
+
+# ---------------------------------------------------------------- probes stats (references/probes.md, SPEC-0104)
+
+STATS_CONTRACT = "probe-stats@1"
+STATS_KEYS = ("contract", "atlas", "since", "total", "by_status", "refused", "no_access", "no_adapter",
+              "by_capability", "skipped_lines", "suggestions")
+STATS_SINCE = "30d"
+STATS_SINCE_RE = re.compile(r"^(\d{1,4})([hd])\Z")
+STATS_SINCE_MIN, STATS_SINCE_MAX = 3600, 365 * 86400
+STATS_UNKNOWN = "unknown"  # a refused line without reason (written before SPEC-0104)
+STATS_AT_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+DOCTOR_USAGE_ITEM = "uso das probes"
+DOCTOR_USAGE_MAX = 5
+SETUP_HINT = "rode atlas.py access setup"
+# suggestion of each reason: (the fields of the line that group it, the text); the others are no suggestion
+ACCESS_SUGGESTIONS = {
+    "cluster": "{n} probe(s) recusada(s) por falta de access.clusters em {environment}: " + SETUP_HINT,
+    "cloud": "{n} probe(s) recusada(s) por falta de access.cloud em {environment}: " + SETUP_HINT,
+    "database": "{n} probe(s) recusada(s) por falta de access.databases para {target}: " + SETUP_HINT,
+    "urls": "{n} probe(s) recusada(s) por falta de access.urls em {environment}: " + SETUP_HINT,
+}
+REASON_SUGGESTIONS = {
+    "no_journeys": ("{n} probe(s) funcional(is) sem jornadas curadas para {service}: declare journeys no arquivo de "
+                    "fatos do coletor generic (references/collectors/generic.md)"),
+    "no_adapter": "{n} probe(s) sem adaptador para {capability}: declare um em probes.adapters (references/probes.md)",
+    "verb_not_allowed": ("{n} probe(s) com verbo não liberado em {adapter}: libere em probes.adapters.{adapter}.verbs "
+                         "se for de leitura"),
+    "not_linked": ("{n} probe(s) em recurso não ligado a {service} em {environment}: complete o mapa do atlas "
+                   "(coletor aws ou fatos do generic)"),
+    "no_deployment": "{n} probe(s) sem deployment de {service} em {environment}: mapeie o deployment no atlas",
+}
+
+
+def stats_since(value) -> int:
+    """Seconds of --since of probes stats: <n>h or <n>d, from 1h to 365d; otherwise AtlasError (code 2)."""
+    match = STATS_SINCE_RE.match(value) if isinstance(value, str) else None
+    seconds = int(match.group(1)) * DURATION_SECONDS[match.group(2)] if match else 0
+    if not STATS_SINCE_MIN <= seconds <= STATS_SINCE_MAX:
+        raise AtlasError("--since inválido — use <n>d ou <n>h, de 1h a 365d (como 30d ou 24h)", 2)
+    return seconds
+
+
+def _stats_name(value) -> str:
+    """A name of a probes.log line safe to show in a suggestion (the name rule), else "?"."""
+    return value if isinstance(value, str) and ENVIRONMENT_NAME_RE.match(value) else "?"
+
+
+def _stats_line(text: str):
+    """The fields of one probes.log line that the counts use, or None when it is malformed."""
+    try:
+        line = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(line, dict):
+        return None
+    try:
+        at = datetime.datetime.strptime(str(line.get("at")), STATS_AT_FORMAT).replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+    capability = line.get("capability")
+    if (not isinstance(line.get("atlas"), str) or line.get("status") not in PROBE_STATUSES
+            or not isinstance(capability, str) or not PROBE_WORD_RE.match(capability)):
+        return None
+    return dict(line, at=at)
+
+
+def _suggestion(line: dict):
+    """The suggestion text of a non-ok line, with "{n}" for the count of its group, or None (SPEC-0104)."""
+    reason = line.get("reason")
+    resource = line.get("resource")
+    fields = {"environment": _stats_name(line.get("environment")), "service": _stats_name(line.get("service")),
+              "capability": _stats_name(line.get("capability")), "adapter": _stats_name(line.get("adapter")),
+              "target": _stats_name(resource.split(":", 1)[-1] if isinstance(resource, str) else None)}
+    if line["status"] == "refused" and reason == "no_access" and line.get("access") in ACCESS_SUGGESTIONS:
+        template = ACCESS_SUGGESTIONS[line["access"]]
+    elif reason in REASON_SUGGESTIONS and reason in PROBE_REASONS.get(line["status"], ()):
+        template = REASON_SUGGESTIONS[reason]
+    else:
+        return None
+    return template.format(n="{n}", **fields)
+
+
+def probe_stats(name: str, since: str, seconds: int, path=None, now=None) -> dict:
+    """The counts of probes.log for the atlas `name` within the last `seconds` (contract probe-stats@1, SPEC-0104),
+    read line by line: a malformed line counts in skipped_lines, a refused line without reason as "unknown"; the
+    suggestions are grouped, one per group, sorted by count. Only names of the record, never an access value."""
+    path = probe_log_path() if path is None else path
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    start = now - datetime.timedelta(seconds=seconds)
+    stats = {"contract": STATS_CONTRACT, "atlas": name, "since": since, "total": 0,
+             "by_status": {status: 0 for status in PROBE_STATUSES}, "refused": {},
+             "no_access": {kind: 0 for kind in PROBE_ACCESS}, "no_adapter": {}, "by_capability": {},
+             "skipped_lines": 0, "suggestions": []}
+    groups = {}
+    if path.is_file():
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for text in handle:
+                if not text.strip():
+                    continue
+                line = _stats_line(text)
+                if line is None:
+                    stats["skipped_lines"] += 1
+                    continue
+                if line["atlas"] != name or line["at"] < start:
+                    continue
+                status, capability = line["status"], line["capability"]
+                stats["total"] += 1
+                stats["by_status"][status] += 1
+                counts = stats["by_capability"].setdefault(capability, {s: 0 for s in PROBE_STATUSES})
+                counts[status] += 1
+                reason = line.get("reason")
+                if status == "refused":
+                    key = reason if reason in PROBE_REASONS["refused"] else STATS_UNKNOWN
+                    stats["refused"][key] = stats["refused"].get(key, 0) + 1
+                    if key == "no_access" and line.get("access") in PROBE_ACCESS:
+                        stats["no_access"][line["access"]] += 1
+                    if key == "no_adapter":
+                        stats["no_adapter"][capability] = stats["no_adapter"].get(capability, 0) + 1
+                if status != "ok":
+                    template = _suggestion(line)
+                    if template:
+                        groups[template] = groups.get(template, 0) + 1
+    ordered = sorted(groups.items(), key=lambda item: (-item[1], item[0]))
+    stats["suggestions"] = [template.replace("{n}", str(count)) for template, count in ordered]
+    return stats
+
+
+def _count_problems(value, where, keys=None, positive=False) -> list:
+    """Problems of a map of counts: closed keys (all of them, when `keys` is given) and non-negative integers (or
+    positive ones)."""
+    if not isinstance(value, dict):
+        return [f"{where} precisa ser um objeto"]
+    problems = []
+    if keys is not None:
+        problems += [f"{where}: chave desconhecida {_show(k)}" for k in value if k not in keys]
+        problems += [f"{where}: falta {k}" for k in keys if k not in value]
+    for key, count in value.items():
+        if not isinstance(key, str) or not PROBE_WORD_RE.match(key):
+            problems.append(f"{where}: chave fora da regra de nome")
+        if not _verify_int(count) or count < (1 if positive else 0):
+            problems.append(f"{where}.{_show(key)} precisa ser um inteiro {'maior que 0' if positive else '≥ 0'}")
+    return problems
+
+
+def validate_probe_stats(data) -> list:
+    """Problems of a probe-stats@1 document (empty = valid): closed keys, the contract, the counts as non-negative
+    integers (refused and no_adapter only above 0), by_status, no_access and every by_capability item with all their
+    keys, and suggestions as a list of texts (SPEC-0104)."""
+    if not isinstance(data, dict):
+        return ["o documento precisa ser um objeto"]
+    problems = [f"chave desconhecida: {_show(k)}" for k in data if k not in STATS_KEYS]
+    problems += [f"falta {k}" for k in STATS_KEYS if k not in data]
+    if problems:
+        return problems
+    if data["contract"] != STATS_CONTRACT:
+        problems.append(f"contract precisa ser {STATS_CONTRACT}")
+    if not isinstance(data["atlas"], str) or not ATLAS_NAME_RE.match(data["atlas"]):
+        problems.append("atlas precisa ser o nome de um atlas")
+    try:
+        stats_since(data["since"])
+    except AtlasError:
+        problems.append("since precisa ser <n>d ou <n>h, de 1h a 365d")
+    for key in ("total", "skipped_lines"):
+        if not _verify_int(data[key]) or data[key] < 0:
+            problems.append(f"{key} precisa ser um inteiro ≥ 0")
+    problems += _count_problems(data["by_status"], "by_status", PROBE_STATUSES)
+    refused_keys = PROBE_REASONS["refused"] + (STATS_UNKNOWN,)
+    refused = data["refused"]
+    problems += _count_problems(refused, "refused", positive=True)
+    if isinstance(refused, dict):
+        problems += [f"refused: motivo desconhecido {_show(k)}" for k in refused if k not in refused_keys]
+    problems += _count_problems(data["no_access"], "no_access", PROBE_ACCESS)
+    problems += _count_problems(data["no_adapter"], "no_adapter", positive=True)
+    by_capability = data["by_capability"]
+    if not isinstance(by_capability, dict):
+        problems.append("by_capability precisa ser um objeto")
+    else:
+        for capability, counts in by_capability.items():
+            if not isinstance(capability, str) or not PROBE_WORD_RE.match(capability):
+                problems.append("by_capability: capacidade fora da regra de nome")
+            problems += _count_problems(counts, f"by_capability.{_show(capability)}", PROBE_STATUSES)
+    suggestions = data["suggestions"]
+    if not isinstance(suggestions, list) or not all(isinstance(s, str) and s for s in suggestions):
+        problems.append("suggestions precisa ser uma lista de textos")
+    return problems
+
+
+def print_probe_stats(stats: dict) -> None:
+    def joined(counts):
+        return " · ".join(f"{key} {count}" for key, count in counts.items()) or "nenhuma"
+
+    print(f"# Uso das probes — {stats['atlas']} (últimos {stats['since']})")
+    print()
+    print(f"- Total: {stats['total']}")
+    print(f"- Por status: {joined(stats['by_status'])}")
+    print(f"- Recusadas por motivo: {joined(stats['refused'])}")
+    print(f"- Sem acesso local: {joined(stats['no_access'])}")
+    print(f"- Sem adaptador: {joined(stats['no_adapter'])}")
+    for capability, counts in sorted(stats["by_capability"].items()):
+        print(f"- {capability}: {joined(counts)}")
+    print(f"- Linhas puladas: {stats['skipped_lines']}")
+    print()
+    print("## Sugestões")
+    print()
+    for suggestion in stats["suggestions"] or ["nenhuma"]:
+        print(f"- {suggestion}")
+
+
+def cmd_probes_stats(args) -> int:
+    """probes stats [--since 30d] [--json] [--atlas X] (SPEC-0104): the counts of probes.log of the chosen atlas and
+    the suggestions; nothing is written."""
+    _, name, _ = chosen_atlas(choice=args.atlas)
+    stats = probe_stats(name, args.since, stats_since(args.since))
+    if args.json:
+        print(json.dumps(stats, ensure_ascii=False, indent=2))
+    else:
+        print_probe_stats(stats)
+    return 0
+
+
+def probe_usage_items(choice=None) -> list:
+    """doctor AVISO rows "uso das probes" (SPEC-0104): the suggestions of probes stats --since 30d of the chosen atlas,
+    up to 5 and then one "… e mais N" row; none without probes.log or suggestion. Never changes the exit."""
+    try:
+        _, name, _ = chosen_atlas(choice=choice)
+        if not probe_log_path().is_file():
+            return []
+        suggestions = probe_stats(name, STATS_SINCE, stats_since(STATS_SINCE))["suggestions"]
+    except (AtlasError, OSError):
+        return []
+    rows = [("AVISO", DOCTOR_USAGE_ITEM, s) for s in suggestions[:DOCTOR_USAGE_MAX]]
+    if len(suggestions) > DOCTOR_USAGE_MAX:
+        rows.append(("AVISO", DOCTOR_USAGE_ITEM,
+                     f"… e mais {len(suggestions) - DOCTOR_USAGE_MAX}: rode atlas.py probes stats"))
+    return rows
+
+
+# ---------------------------------------------------------------- access setup (references/access-setup.md, SPEC-0104)
+
+KUBECTL_CONTEXTS = ["kubectl", "config", "get-contexts", "-o", "name"]
+KUBECTL_TIMEOUT = 10
+POSTGRES_ENGINES = ("postgres", "aurora-postgresql")
+SETUP_TRIES = 3
+SETUP_NO_TTY = "access setup interativo precisa de um terminal; use --cluster, --cloud, --base-url ou --db-*"
+SETUP_NO_GRAPH = "sem graph.json: rode atlas.py build"
+SETUP_KEEP, SETUP_DELETE = object(), object()  # answers: Enter (keep or skip) and "-" (delete)
+# the options of the non-interactive mode: (option, block, field, kind of the name in the graph)
+SETUP_OPTIONS = (("--cluster", "clusters", "context", "cluster"), ("--cloud", "cloud", "profile", "environment"),
+                 ("--base-url", "urls", "base_url", "environment"), ("--db-user", "databases", "user", "datastore"),
+                 ("--db-name", "databases", "database", "datastore"),
+                 ("--db-passfile", "databases", "passfile", "datastore"))
+SETUP_KIND_TEXT = {"cluster": "cluster", "environment": "ambiente", "datastore": "datastore"}
+SETUP_SUMMARY_BLOCKS = ("clusters", "cloud", "urls", "databases")
+DB_FIELDS = (("user", "o usuário"), ("database", "o banco"), ("passfile", "o arquivo de senhas"))
+
+
+def detect_contexts() -> list:
+    """The context names of this machine's kubeconfig, by `kubectl config get-contexts -o name` only (a list, no
+    shell, timeout of 10 s); [] without kubectl, on an error or when the time runs out (SPEC-0104)."""
+    try:
+        stdout, _ = run_collector(list(KUBECTL_CONTEXTS), timeout=KUBECTL_TIMEOUT)
+    except (CollectorError, OSError):
+        return []
+    names = [line.strip() for line in stdout.splitlines()]
+    return list(dict.fromkeys(n for n in names if n and not _access_text_problem(n, "o contexto")))
+
+
+def detect_profiles() -> list:
+    """The profile names of the AWS CLI configuration file (AWS_CONFIG_FILE or ~/.aws/config), from the section
+    names only: [default] -> default, [profile x] -> x; other sections are ignored. The credentials file is never
+    opened; a missing or unreadable file = [] (SPEC-0104)."""
+    import configparser
+
+    path = os.environ.get("AWS_CONFIG_FILE") or os.path.join(os.path.expanduser("~"), ".aws", "config")
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            parser.read_file(handle)
+    except (OSError, UnicodeDecodeError, configparser.Error):
+        return []
+    names = []
+    for section in parser.sections():
+        if section.strip() == "default":
+            names.append("default")
+        elif section.startswith("profile "):
+            names.append(section[len("profile "):].strip())
+    return list(dict.fromkeys(n for n in names if n and not _access_field_problem("profile", "o profile", n)))
+
+
+def _kind_ids(graph, kind) -> list:
+    nodes = graph.get("nodes") if isinstance(graph, dict) else None
+    return sorted({n["key"].split(":", 1)[1] for n in (nodes if isinstance(nodes, list) else [])
+                   if isinstance(n, dict) and n.get("kind") == kind and isinstance(n.get("key"), str)
+                   and ":" in n["key"]})
+
+
+def setup_items(graph: dict, tiers: dict) -> dict:
+    """What access setup asks, only for what the graph uses (SPEC-0104): {"clusters": the clusters of some
+    deployment, "cloud": the environments with a resource linked to a deployment, "urls": the environments of
+    tier test, "databases": the datastores of engine postgres or aurora-postgresql}, each sorted."""
+    index = _Index(graph)
+    clusters, cloud = set(), set()
+    for key, node in index.nodes.items():
+        if node.get("kind") != "deployment":
+            continue
+        clusters |= {c.split(":", 1)[1] for c in index.targets(key, "runs_in", "cluster")}
+        services = [s.split(":", 1)[1] for s in index.targets(key, "deploys", "service")]
+        for env in index.targets(key, "runs_in", "environment"):
+            eid = env.split(":", 1)[1]
+            if any(linked_resources(graph, service, eid) for service in services):
+                cloud.add(eid)
+    environments = set(_kind_ids(graph, "environment"))
+    databases = [key.split(":", 1)[1] for key, node in sorted(index.nodes.items())
+                 if node.get("kind") == "datastore" and (node.get("attrs") or {}).get("engine") in POSTGRES_ENGINES]
+    return {"clusters": sorted(clusters), "cloud": sorted(cloud),
+            "urls": sorted(e for e in environments if tiers.get(e) == "test"), "databases": databases}
+
+
+def access_entry(access: dict) -> dict:
+    """The `access` key of an entry from local_access(...): only the blocks with items (SPEC-0087, SPEC-0096)."""
+    entry = {}
+    if access["clusters"]:
+        entry["clusters"] = {name: {"context": value} for name, value in access["clusters"].items()}
+    if access["cloud"]:
+        entry["cloud"] = {name: {"profile": value} for name, value in access["cloud"].items()}
+    if access["databases"]:
+        entry["databases"] = {name: dict(value) for name, value in access["databases"].items()}
+    if access["urls"]:
+        entry["urls"] = {name: {"base_url": value} for name, value in access["urls"].items()}
+    return entry
+
+
+def setup_summary(before: dict, after: dict, changed: set, names: dict) -> list:
+    """One line per item, never the value: "access.<bloco>.<nome>: definido | não definido | mantido | apagado"."""
+    lines = []
+    for block in SETUP_SUMMARY_BLOCKS:
+        for name in sorted(set(names.get(block, ())) | set(before[block]) | set(after[block])):
+            if name in after[block]:
+                state = "definido" if (block, name) in changed or name not in before[block] else "mantido"
+            else:
+                state = "apagado" if name in before[block] else "não definido"
+            lines.append(f"access.{block}.{name}: {state}")
+    return lines
+
+
+def passfile_warnings(access: dict, changed: set) -> list:
+    """The warnings of the passfiles set now (os.stat only, never opened): missing or open to other users."""
+    warnings = []
+    for name, entry in sorted(access["databases"].items()):
+        if ("databases", name) not in changed:
+            continue
+        problem, _ = passfile_problem(entry["passfile"])
+        if problem == "não encontrado":
+            warnings.append(f"aviso: arquivo de senhas de {name} não encontrado")
+        elif problem:
+            warnings.append(f"aviso: arquivo de senhas de {name} legível por outros: o psql ignora (use chmod 600)")
+    return warnings
+
+
+def _setup_options(args) -> list:
+    """[(option, position, block, field, kind, name, value)] of the options of the non-interactive mode, in the order
+    of SETUP_OPTIONS; an item without "=" or with a name out of the rule = AtlasError (code 2), never the value."""
+    items = []
+    for option, block, field, kind in SETUP_OPTIONS:
+        for position, text in enumerate(getattr(args, option[2:].replace("-", "_")) or [], start=1):
+            name, sep, value = text.partition("=")
+            if not sep or not ENVIRONMENT_NAME_RE.match(name):
+                raise AtlasError(f"opção {option}: item {position} inválido — nome fora da regra", 2)
+            items.append((option, position, block, field, kind, name, value))
+    return items
+
+
+def _option_problem(block, field, value):
+    if block == "clusters":
+        return _access_text_problem(value, "o contexto")
+    what = dict(ACCESS_FIELDS[block])[field]
+    return _access_field_problem(field, what, value)
+
+
+def setup_from_options(items, graph, before: dict) -> tuple:
+    """(access after the options, changed items) of the non-interactive mode: names of the graph first, then the
+    values by the rules of access.*, then each datastore complete (SPEC-0104). AtlasError (code 2) otherwise."""
+    known = {kind: set(_kind_ids(graph, kind)) for kind in SETUP_KIND_TEXT}
+    for _, _, _, _, kind, name, _ in items:
+        if name not in known[kind]:
+            raise AtlasError(f"{SETUP_KIND_TEXT[kind]} {name} não está no atlas", 2)
+    for option, position, block, field, _, _, value in items:
+        reason = _option_problem(block, field, value)
+        if reason:  # the option, the position and the reason: never the value
+            raise AtlasError(f"{option}: item {position} inválido — {reason}", 2)
+    after = {block: {k: (dict(v) if isinstance(v, dict) else v) for k, v in before[block].items()}
+             for block in ACCESS_BLOCKS}
+    changed = set()
+    for _, _, block, field, _, name, value in items:
+        changed.add((block, name))
+        if block == "databases":
+            after[block].setdefault(name, {})[field] = value
+        else:
+            after[block][name] = value
+    for name, entry in sorted(after["databases"].items()):
+        missing = [key for key, _ in DB_FIELDS if key not in entry]
+        if missing:
+            raise AtlasError(f"datastore {name}: faltam {', '.join(missing)}", 2)
+    return after, changed
+
+
+class _SetupIO:
+    """The terminal of the interactive mode: questions to stdout, answers line by line from stdin."""
+
+    def __init__(self, stdin=None, stdout=None):
+        self.stdin = stdin or sys.stdin
+        self.stdout = stdout or sys.stdout
+
+    def say(self, text: str) -> None:
+        print(text, file=self.stdout, flush=True)
+
+    def answer(self) -> str:
+        line = self.stdin.readline()
+        return line.strip()
+
+    def ask(self, question: str, check, options=(), defined=False, suggestion=None):
+        """One question, up to 3 tries: SETUP_KEEP (Enter, or 3 invalid answers), SETUP_DELETE ("-" on a defined
+        item) or the value (a number picks a detected option). The value already defined never shows."""
+        text = question
+        if options:
+            text += " Detectados: " + " ".join(f"{i}) {option}" for i, option in enumerate(options, start=1))
+            if suggestion:
+                text += f" (sugestão: {suggestion})"
+            text += " — número, nome ou Enter para pular"
+        else:
+            text += " — Enter para pular"
+        if defined:
+            text += " · já definido — Enter mantém, '-' apaga, ou digite outro"
+        for _ in range(SETUP_TRIES):
+            self.say(text)
+            answer = self.answer()
+            if not answer:
+                return SETUP_KEEP
+            if answer == "-":
+                return SETUP_DELETE if defined else SETUP_KEEP
+            if answer.isdigit() and options and 1 <= int(answer) <= len(options):
+                answer = options[int(answer) - 1]
+            reason = check(answer)
+            if not reason:
+                return answer
+            self.say(f"resposta inválida — {reason}")
+        self.say("três respostas inválidas: item pulado")
+        return SETUP_KEEP
+
+
+def _matching(options, name):
+    return next((option for option in options if name and name in option), None)
+
+
+def setup_interactive(io: _SetupIO, items: dict, before: dict) -> tuple:
+    """(access after the answers, changed items) of the interactive mode, in the order of the contract: context per
+    cluster, profile per environment with a resource, base URL per test environment, then user, database and
+    passfile per PostgreSQL datastore (SPEC-0104)."""
+    after = {block: {k: (dict(v) if isinstance(v, dict) else v) for k, v in before[block].items()}
+             for block in ACCESS_BLOCKS}
+    changed = set()
+
+    def apply(block, name, value):
+        if value is SETUP_KEEP:
+            return
+        changed.add((block, name))
+        if value is SETUP_DELETE:
+            after[block].pop(name, None)
+        else:
+            after[block][name] = value
+
+    contexts = detect_contexts() if items["clusters"] else []
+    for cluster in items["clusters"]:
+        value = io.ask(f"Qual o contexto do kubectl do cluster {cluster}? (de preferência com papel só de leitura)",
+                       lambda v: _access_text_problem(v, "o contexto"), contexts, cluster in before["clusters"],
+                       _matching(contexts, cluster))
+        apply("clusters", cluster, value)
+    profiles = detect_profiles() if items["cloud"] else []
+    for environment in items["cloud"]:
+        value = io.ask(f"Qual profile da AWS você usa no ambiente {environment}? (use um profile só de leitura)",
+                       lambda v: _access_field_problem("profile", "o profile", v), profiles,
+                       environment in before["cloud"], _matching(profiles, environment))
+        apply("cloud", environment, value)
+    for environment in items["urls"]:
+        value = io.ask(f"Qual a URL base do ambiente {environment} (para as jornadas funcionais em teste)? URL "
+                       "http(s)", _base_url_problem, (), environment in before["urls"])
+        apply("urls", environment, value)
+    pgpass = os.path.join(os.path.expanduser("~"), ".pgpass")
+    passfiles = ["~/.pgpass"] if os.path.isfile(pgpass) else []
+    for datastore in items["databases"]:
+        current = before["databases"].get(datastore)
+        questions = (("user", f"Qual usuário só de leitura do banco {datastore}? (crie um só para leitura)", ()),
+                     ("database", "Qual o nome do banco?", ()),
+                     ("passfile", "Qual o arquivo de senhas (.pgpass) desse usuário?", passfiles))
+        entry = dict(current or {})
+        given = False
+        for field, question, options in questions:
+            what = dict(DB_FIELDS)[field]
+            value = io.ask(question, lambda v, f=field, w=what: _access_field_problem(f, w, v), options,
+                           current is not None)
+            if value is SETUP_DELETE:
+                apply("databases", datastore, SETUP_DELETE)
+                break
+            if value is SETUP_KEEP:
+                if field == "user" and current is None:
+                    break  # Enter on the user of a new datastore skips the block
+                continue
+            entry[field] = value
+            given = True
+        else:
+            if given:
+                missing = [key for key, _ in DB_FIELDS if key not in entry]
+                if missing:
+                    io.say(f"banco {datastore} incompleto (faltam {', '.join(missing)}): não definido")
+                else:
+                    apply("databases", datastore, entry)
+    return after, changed
+
+
+def write_access(config: dict, name: str, access: dict) -> Path:
+    """Writes only the `access` key of the entry `name` (the rest of the local layer stays as it is): exclusive
+    temporary file, renamed, 0600 (SPEC-0104)."""
+    entries = {key: dict(value) for key, value in config["entries"].items()}
+    entry = access_entry(access)
+    if entry:
+        entries[name]["access"] = entry
+    else:
+        entries[name].pop("access", None)
+    target = local_config_write_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    write_exclusive(target, render_atlases(entries, config["default"]))
+    return target
+
+
+def cmd_access_setup(args) -> int:
+    """access setup [--atlas X] [--dry-run] [--cluster|--cloud|--base-url|--db-user|--db-name|--db-passfile
+    <nome>=<valor>]... (SPEC-0104, ADR-0025): writes the local access of the chosen atlas from the options, or asks
+    in plain language on a terminal. Only names are detected (kubectl contexts, AWS profiles); no value is ever
+    printed after it is given."""
+    config, name, _ = chosen_atlas(choice=args.atlas)
+    entry = config["entries"][name]
+    atlas = entry_atlas(entry)
+    graph = read_json_file(Path(atlas) / GRAPH_FILE) if atlas else None
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list) or not isinstance(
+            graph.get("edges"), list):
+        raise AtlasError(SETUP_NO_GRAPH, 2)
+    before = local_access(entry.get("access"))
+    options = _setup_options(args)
+    if options:
+        after, changed = setup_from_options(options, graph, before)
+        names = {}
+    else:
+        if not sys.stdin.isatty():
+            raise AtlasError(SETUP_NO_TTY, 2)
+        shared = read_yaml(Path(atlas) / SHARED_FILE) if (Path(atlas) / SHARED_FILE).is_file() else {}
+        names = setup_items(graph, validate_environments(shared.get("environments")))
+        after, changed = setup_interactive(_SetupIO(), names, before)
+    local_access(access_entry(after))  # the same rules as config and probe, before anything is written
+    for warning in passfile_warnings(after, changed):
+        print(warning)
+    for line in setup_summary(before, after, changed, names):
+        print(line)
+    if args.dry_run:
+        print("dry-run: nada gravado")
+        return 0
+    if not options:
+        print("Gravar? [s/N]", flush=True)
+        if sys.stdin.readline().strip().lower() not in ("s", "sim"):
+            print("nada gravado")
+            return 0
+    target = write_access(config, name, after)
+    print(f"access gravado em {target}")
     return 0
 
 
@@ -7469,6 +8072,7 @@ def old_copy_items(atlas: Path) -> list:
 def cmd_doctor(as_json, choice=None):
     rows = doctor_rows(choice=choice)
     rows[1:1] = old_config_items()
+    rows += probe_usage_items(choice)  # AVISO only: the exit never changes (SPEC-0104)
     has_error = any(status == "ERRO" for status, _, _ in rows)
     if as_json:
         checks = [{"status": s, "item": i, "detail": d} for s, i, d in rows]
@@ -7543,6 +8147,21 @@ def main(argv=None):
     p.add_argument("--commit", help="sha da mudança (7 a 40 hexadecimais), para a capacidade que declara change")
     p.add_argument("--json", action="store_true")
     add_atlas_option(p)
+    p = sub.add_parser("probes", help="uso das probes desta máquina: contagens do probes.log e sugestões")
+    probes_sub = p.add_subparsers(dest="action", required=True)
+    q = probes_sub.add_parser("stats", help="contagens do probes.log (recusas por motivo, sem acesso, sem adaptador) "
+                                            "e o que falta configurar ou mapear")
+    q.add_argument("--since", default=STATS_SINCE, help="janela: <n>d ou <n>h, de 1h a 365d (padrão 30d)")
+    q.add_argument("--json", action="store_true", help="contrato probe-stats@1")
+    add_atlas_option(q)
+    p = sub.add_parser("access", help="acesso local desta máquina (references/access-setup.md)")
+    access_sub = p.add_subparsers(dest="action", required=True)
+    q = access_sub.add_parser("setup", help="pergunta (ou recebe por opções) o contexto, o profile, a URL base e o "
+                                            "banco de cada item do atlas e grava em access.*")
+    for option, _, _, _ in SETUP_OPTIONS:
+        q.add_argument(option, action="append", metavar="NOME=VALOR", help=argparse.SUPPRESS)
+    q.add_argument("--dry-run", action="store_true", help="só mostra o resumo, sem gravar")
+    add_atlas_option(q)
     p = sub.add_parser("verify", help="foto antes do merge e comparação depois do deploy, com veredito (só leitura, "
                                       "pelas probes; references/verify.md)")
     phases = p.add_subparsers(dest="phase", required=True)
@@ -7627,6 +8246,10 @@ def main(argv=None):
             return cmd_probe(args)
         if args.command == "verify":
             return cmd_verify(args)
+        if args.command == "probes":
+            return cmd_probes_stats(args)
+        if args.command == "access":
+            return cmd_access_setup(args)
         if args.command == "vendor":
             return cmd_vendor(args)
     except AtlasError as e:

@@ -266,7 +266,8 @@ class CharacterizationTest(ResourceCase):
         result = self.probe("runtime", "status")
         self.assertExit(result, 4)
         self.assertIn("sem acesso local ao cluster cluster-dev (access.clusters)", output(result))
-        self.assertEqual(set(self.log()[-1]), LOG_KEYS)
+        # SPEC-0104:UT-06 — reason e access na recusa por acesso
+        self.assertEqual(set(self.log()[-1]), LOG_KEYS | {"reason", "access"})
 
     def test_config_doctor_and_context_without_new_keys_show_only_todays_access(self):
         """SPEC-0096:CH-01 — só access.clusters: config --json mostra só o bloco clusters (definido); o doctor não tem
