@@ -54,7 +54,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.8"
+BRAIN_VERSION = "2026.11.9"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -138,6 +138,8 @@ TITLE_FORBIDDEN = frozenset('/\\:*?"<>|#^[]')  # characters a note title cannot 
 RELATIONS_HEADING = "## Relations"
 RELATION_LINE_RE = re.compile(r"^[-*][ \t]+\[\[([^\[\]\n]+?)\]\][ \t]*—[ \t]*(.*?)[ \t]*$")
 SECTION_END_RE = re.compile(r"^#{1,2}[ \t]")  # a "## " (or "# ") heading ends the Relations section
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")  # opens (or, alone on its line, closes) a fenced code block
+RELATIONS_LINE_RE = re.compile(r"##[ \t]+relations[ \t]*", re.IGNORECASE)  # fullmatch: "## Relations" in any case
 URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
 DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 PLACEHOLDER_LINE_RE = re.compile(r"""^([^\s:#][^:]*:[ \t]*)(["']?)\{(\w+)\}\2[ \t]*$""")
@@ -154,6 +156,7 @@ INBOX_TEXT_SUFFIXES = (".md", ".txt")
 INBOX_LINK_SUFFIXES = (".url", ".webloc")
 ICLOUD_SUFFIX = ".icloud"  # placeholder of a file iCloud has not downloaded yet
 SYNCING_SECONDS = 600  # a 0-byte file modified less than this ago is still syncing
+TEXT_FILE_MAX_BYTES = 1024 * 1024  # --text-file (append) and --body-file (new-note); larger = refused
 INBOX_READ_BYTES = 8192  # enough to classify and preview a text item (a longer text is not "only a URL")
 PREVIEW_MAX = 120
 STALE_DAYS_DEFAULT = 7
@@ -1860,6 +1863,68 @@ def append_relation(text: str, target: str, why: str) -> str:
     return "".join(lines)
 
 
+def heading_lines(lines: list) -> list:
+    """For each line, True when it can be a heading: outside a fenced code block (``` or ~~~, closed only by a
+    line with the same fence character, at least as long; an unclosed block goes to the end). Fence lines = False."""
+    result, fence = [], None
+    for line in lines:
+        m = FENCE_RE.match(line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+            result.append(fence is None)
+            continue
+        if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
+            fence = None
+        result.append(False)
+    return result
+
+
+def section_start(lines: list, heading: str):
+    """Index of the line "## <heading>" outside a fenced code block (trailing spaces and line ending aside), or
+    None."""
+    title, outside = f"## {heading}", heading_lines(lines)
+    return next((i for i, item in enumerate(lines) if outside[i] and item.rstrip() == title), None)
+
+
+def has_relations_line(text: str) -> bool:
+    """True when text has a "## Relations" line (any case, any spaces after "##") outside a fenced code block."""
+    lines = text.splitlines()
+    return any(ok and RELATIONS_LINE_RE.fullmatch(line.strip()) for ok, line in zip(heading_lines(lines), lines))
+
+
+def with_newline(addition: str, nl: str) -> str:
+    """addition without leading and trailing blank lines, its lines ending with nl (the last one too)."""
+    body = addition.lstrip("﻿").replace("\r\n", "\n").replace("\r", "\n").strip("\n")
+    return nl.join(body.split("\n")) + nl
+
+
+def append_section(text: str, heading: str, addition: str) -> str:
+    """Text with addition at the end of the "## <heading>" section (before the next "# " or "## " heading or the
+    end of the file), after the old text and a blank line; without the section, "## <heading>" with addition is
+    created right before "## Relations" (at the end without it), whose preceding blank lines become one. Lines in
+    a fenced code block are never headings. The inserted lines use the text's line ending and end with one. Pure;
+    besides those blank lines, the rest of the text never changes."""
+    nl = newline_of(text)
+    add = with_newline(addition, nl)
+    lines = text.splitlines(keepends=True)
+    outside = heading_lines(lines)
+    start = section_start(lines, heading)
+    if start is None:
+        section = f"## {heading}{nl}{nl}{add}"
+        rel = next((i for i, item in enumerate(lines) if outside[i] and item.rstrip() == RELATIONS_HEADING), None)
+        head = "".join(lines if rel is None else lines[:rel]).rstrip("\r\n")
+        tail = "" if rel is None else nl + "".join(lines[rel:])
+        return (f"{head}{nl}{nl}" if head else "") + section + tail
+    end = next((i for i in range(start + 1, len(lines)) if outside[i] and SECTION_END_RE.match(lines[i])), len(lines))
+    last = max(i for i in range(start, end) if lines[i].strip())
+    if not lines[last].endswith("\n"):
+        lines[last] += nl
+    after = nl if last + 1 == end < len(lines) else ""  # a heading right after: keep a blank line before it
+    lines.insert(last + 1, nl + add + after)
+    return "".join(lines)
+
+
 def region_markers(name: str):
     return f"<!-- brain:begin {name} -->", f"<!-- brain:end {name} -->"
 
@@ -3416,11 +3481,77 @@ def check_secret_ref(note_type: str, vault_ref):
                          f"{one_line(vault_ref)}")
 
 
+def read_input_text(arg: str, option: str) -> str:
+    """UTF-8 text of the input file given in option (--text-file, --body-file), without a leading BOM. Missing,
+    larger than TEXT_FILE_MAX_BYTES, binary (NUL bytes or not UTF-8) or empty = BrainError (exit 2)."""
+    path = Path(arg).expanduser()
+    if not path.is_file():
+        raise BrainError(f"{option}: arquivo não encontrado: {arg}")
+    if path.stat().st_size > TEXT_FILE_MAX_BYTES:
+        raise BrainError(f"{option}: arquivo maior que {TEXT_FILE_MAX_BYTES // (1024 * 1024)} MiB: {arg}")
+    data = path.read_bytes()
+    try:
+        text = data.decode("utf-8").lstrip("﻿")
+    except UnicodeDecodeError:
+        text = None
+    if text is None or "\x00" in text:
+        raise BrainError(f"{option}: arquivo binário (não é texto UTF-8): {arg}")
+    if not text.strip():
+        raise BrainError(f"{option}: arquivo vazio: {arg}")
+    return text
+
+
+def with_body(text: str, body: str) -> str:
+    """Rendered template text with what is between the "# título" line and "## Relations" replaced by body;
+    frontmatter, title and "## Relations" kept. Without "## Relations", the body and the section go at the end."""
+    nl = newline_of(text)
+    lines = text.splitlines(keepends=True)
+    skip = 0  # the line after the frontmatter, where the search for "# título" starts
+    if lines and lines[0].lstrip("﻿").rstrip() == "---":
+        skip = next((i + 1 for i in range(1, len(lines)) if lines[i].rstrip() in ("---", "...")), 0)
+    title = next((i for i in range(skip, len(lines)) if lines[i].startswith("# ")), None)
+    rel = next((i for i in range(title + 1 if title is not None else skip, len(lines))
+                if lines[i].rstrip() == RELATIONS_HEADING), None)
+    head = "".join(lines[:title + 1] if title is not None else lines[:skip]).rstrip("\r\n")
+    tail = "".join(lines[rel:]) if rel is not None else RELATIONS_HEADING + nl
+    return f"{head}{nl}{nl}{with_newline(body, nl)}{nl}{tail}"
+
+
+def cmd_append(args, config_home=None) -> int:
+    values, vault, layout = store_config(config_home)
+    heading = args.section.strip()
+    if not heading or CONTROL_RE.search(args.section) or heading.startswith("#") \
+            or heading.casefold() == RELATIONS_HEADING[3:].casefold():
+        raise BrainError(f"--section inválido: {one_line(args.section)!r} — o título sem '#', numa linha só, "
+                         f"e não '{RELATIONS_HEADING[3:]}' (use relate)")
+    addition = read_input_text(args.text_file, "--text-file")
+    if has_relations_line(addition):
+        raise BrainError(f"--text-file com uma linha '{RELATIONS_HEADING}': as relações são com relate")
+    index = LinkIndex(rel for _, rel in walk_notes(values))
+    note = find_note(args.note, index)
+    target = write_target(vault, note)  # a link out of the vault is refused before anything is read
+    text = read_exact(target, note)
+    created = section_start(text.splitlines(), heading) is None
+    rewrite_file(target, append_section(text, heading, addition))
+    append_log(vault, layout, "append", f"{note} — ## {heading}")
+    if args.json:
+        print_json({"note": note, "section": heading, "created_section": created})
+    else:
+        print(f"acrescentado: {note} — ## {heading}")
+    return 0
+
+
 def cmd_new_note(args, config_home=None) -> int:
     values, vault, layout = store_config(config_home)
     if args.type not in NOTE_TYPES:
         raise BrainError(f"tipo desconhecido: {args.type} — use um de: {', '.join(NOTE_TYPES)}")
     check_secret_ref(args.type, args.vault_ref)
+    body = None
+    if args.body_file is not None:
+        body = read_input_text(args.body_file, "--body-file")
+        if has_relations_line(body):
+            raise BrainError(f"--body-file com uma linha '{RELATIONS_HEADING}': a seção vem do modelo — "
+                             "use relate para as relações")
     vault_ref = (args.vault_ref or "").strip()
     title = " ".join(args.title.split())
     rel = note_path(title, args.context, values)
@@ -3436,8 +3567,11 @@ def cmd_new_note(args, config_home=None) -> int:
         if vault_ref:
             keys["vault_ref"] = json.dumps(vault_ref, ensure_ascii=False)
         text = with_frontmatter_keys(text, keys)
+    if body is not None:
+        text = with_body(text, body)
     write_new_file(vault / rel, text)
-    append_log(vault, layout, "new-note", f"{rel} — {args.type}" + ("; confidencial" if confidential else ""))
+    append_log(vault, layout, "new-note", f"{rel} — {args.type}" + ("; confidencial" if confidential else "")
+               + ("; com corpo" if body is not None else ""))
     if args.json:
         print_json({"path": rel})
     else:
@@ -4545,6 +4679,13 @@ def main(argv=None) -> int:
     p.add_argument("--vault-ref", metavar="REF",
                    help="só com --type secret-ref: onde o segredo está no gerenciador (<esquema>://<caminho>)")
     p.add_argument("--confidential", action="store_true", help="marca a nota com confidential: true")
+    p.add_argument("--body-file", metavar="ARQ",
+                   help="arquivo de texto UTF-8 com o corpo: substitui as seções do modelo entre o título e Relations")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("append", help="acrescenta texto à seção '## TÍTULO' da nota (criada antes de Relations se faltar)")
+    p.add_argument("note", metavar="NOTA", help="caminho ou nome da nota")
+    p.add_argument("--section", required=True, metavar="TÍTULO", help="título da seção, sem '## '")
+    p.add_argument("--text-file", required=True, metavar="ARQ", help="arquivo de texto UTF-8 com o que acrescentar (até 1 MiB)")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("relate", help="acrescenta '- [[PARA]] — motivo' na seção Relations de DE")
     p.add_argument("source", metavar="DE", help="caminho ou nome da nota")
@@ -4626,6 +4767,8 @@ def main(argv=None) -> int:
             return cmd_new_note(args)
         if args.command == "relate":
             return cmd_relate(args)
+        if args.command == "append":
+            return cmd_append(args)
         if args.command == "index":
             return cmd_index(args)
         if args.command == "capture":

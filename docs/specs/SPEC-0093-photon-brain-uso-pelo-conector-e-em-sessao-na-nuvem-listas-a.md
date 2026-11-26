@@ -3,7 +3,7 @@ id: SPEC-0093
 title: "photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta)"
 tier: epic
 type: feature
-status: approved
+status: in-progress
 created: 2026-11-23
 depends_on: []
 adrs: [ADR-0027]
