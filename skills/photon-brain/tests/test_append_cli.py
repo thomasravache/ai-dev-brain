@@ -133,8 +133,8 @@ class AppendFormatTest(AppendCliTestCase):
         for _ in range(2):  # a primeira cria a seção, a segunda acrescenta a ela
             self.assertExit(self.append(rel, "--section", "Resumo", "--text-file", addition), 0)
         data = (self.box.vault / rel).read_bytes()
-        self.assertTrue(data.startswith("﻿".encode("utf-8")), data[:10])
-        self.assertEqual(data.count("﻿".encode("utf-8")), 1, data)
+        self.assertTrue(data.startswith("﻿".encode()), data[:10])
+        self.assertEqual(data.count("﻿".encode()), 1, data)
         new = data.decode("utf-8")
         self.assertNotRegex(new, r"(?<!\r)\n", "toda linha termina com CRLF, inclusive as acrescentadas")
         self.assertEqual(new.count("Linha um.\r\nLinha dois.\r\n"), 2, new)
