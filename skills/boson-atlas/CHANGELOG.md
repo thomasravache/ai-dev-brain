@@ -9,6 +9,16 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.25] - 2026-11-25
+
+### Added
+- `verify@2`: o `verify snapshot` grava `dependencies`, o estado de cada `queue`, `topic` e `datastore` ligado ao deployment do serviço no ambiente (`linked_resources`, sem a DLQ ligada só por `dlq` nem `bucket`), só com os campos da regra 4a do ADR-0026 (fila: `visible`, `in_flight`, `oldest_age_seconds`, `dlq_visible`; tópico: assinaturas por `destination` e `filter_fingerprint`; PostgreSQL: migrations aplicadas e tabelas; sinais por `name|stat`; permissões por ação), ordenados e mascarados; o `verify compare` ganha, por recurso, as verificações `dependencies` e `signals` com `resource` (`kind:id`) contra a foto, e as opções `--resource` (repetível), `--max-resources` (1..50, padrão 20), `--max-new-dlq`, `--max-queue-age`, `--expect-migration [<datastore>=]<migration>` (repetível) e `--max-signal-increase`. Sem adaptador de recurso e sem `--resource`, o resultado fica como no `verify@1`; o que falta (adaptador, acesso, foto, item fora do contrato, probe cortada) fica `not_verified` com o motivo, nunca `ok` (SPEC-0102, ADR-0026).
+- Registro único `VERIFY_CHECKS` (com o nível de cada verificação), o ponto de extensão para a verificação `functional` (SPEC-0103) (SPEC-0102).
+- `references/verify.md`: escopo, aspectos por kind, contrato dos itens com os blocos `verify-items` válidos e inválidos, regras, opções, evidências, exemplos `verify@2` e a compatibilidade com o `verify@1`; `references/probes.md` aponta para o contrato dos itens; `SKILL.md` com as opções novas (SPEC-0102).
+
+### Changed
+- A foto e a saída do `verify` passam a `verify@2` (cada verificação com `resource`, `null` nas de deployment; a tabela Markdown com a coluna "recurso"); `validate_verify_snapshot` e `validate_verify_result` aceitam `verify@1` e `verify@2` e recusam outros contratos; o `compare` continua aceitando uma foto `verify@1` como `--baseline` (as verificações novas ficam "foto sem dependências") (SPEC-0102).
+
 ## [2026.11.22] - 2026-11-25
 
 ### Added
