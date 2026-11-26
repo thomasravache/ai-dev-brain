@@ -1,0 +1,35 @@
+{
+  "entities": [
+    {"kind": "environment", "id": "dev"},
+    {"kind": "environment", "id": "prod"},
+    {"kind": "environment", "id": "stage"},
+    {"kind": "cluster", "id": "cluster-dev"},
+    {"kind": "cluster", "id": "cluster-prod"},
+    {"kind": "cluster", "id": "cluster-stage"},
+    {"kind": "service", "id": "api", "attrs": {"journeys": ["checkout", "login"]}},
+    {"kind": "service", "id": "worker"},
+    {"kind": "service", "id": "batch", "attrs": {"journeys": []}},
+    {"kind": "deployment", "id": "dev-api", "attrs": {"namespace": "api-dev", "workloads": ["Deployment/api"]}},
+    {"kind": "deployment", "id": "prod-api", "attrs": {"namespace": "api-prod", "workloads": ["Deployment/api"]}},
+    {"kind": "deployment", "id": "stage-api", "attrs": {"namespace": "api-stage", "workloads": ["Deployment/api"]}},
+    {"kind": "deployment", "id": "dev-worker", "attrs": {"namespace": "worker-dev", "workloads": ["Deployment/worker"]}},
+    {"kind": "deployment", "id": "dev-batch", "attrs": {"namespace": "batch-dev", "workloads": ["Deployment/batch"]}}
+  ],
+  "relations": [
+    {"from": "deployment:dev-api", "to": "service:api", "type": "deploys"},
+    {"from": "deployment:dev-api", "to": "environment:dev", "type": "runs_in"},
+    {"from": "deployment:dev-api", "to": "cluster:cluster-dev", "type": "runs_in"},
+    {"from": "deployment:prod-api", "to": "service:api", "type": "deploys"},
+    {"from": "deployment:prod-api", "to": "environment:prod", "type": "runs_in"},
+    {"from": "deployment:prod-api", "to": "cluster:cluster-prod", "type": "runs_in"},
+    {"from": "deployment:stage-api", "to": "service:api", "type": "deploys"},
+    {"from": "deployment:stage-api", "to": "environment:stage", "type": "runs_in"},
+    {"from": "deployment:stage-api", "to": "cluster:cluster-stage", "type": "runs_in"},
+    {"from": "deployment:dev-worker", "to": "service:worker", "type": "deploys"},
+    {"from": "deployment:dev-worker", "to": "environment:dev", "type": "runs_in"},
+    {"from": "deployment:dev-worker", "to": "cluster:cluster-dev", "type": "runs_in"},
+    {"from": "deployment:dev-batch", "to": "service:batch", "type": "deploys"},
+    {"from": "deployment:dev-batch", "to": "environment:dev", "type": "runs_in"},
+    {"from": "deployment:dev-batch", "to": "cluster:cluster-dev", "type": "runs_in"}
+  ]
+}

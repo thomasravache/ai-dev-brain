@@ -398,3 +398,18 @@ def probe_log_key_set_findings(source, filename, expected=PROBE_LOG_CONTRACT_KEY
     findings += [f"{filename}:{line} — {RULE_PROBE_LOG_SET} — falta em {constant}: {key}"
                  for key in sorted(set(expected) - set(keys))]
     return findings
+
+
+# ---------------------------------------------------------------- adaptadores de probe da skill (SPEC-0103)
+
+RULE_PROBE_ADAPTER = "adaptador de probe da skill: só biblioteca padrão e processos sem shell"
+# os adaptadores de assets/probes/ que ficam sob as regras "só biblioteca padrão" e "processos sem shell"
+PROBE_ADAPTERS_UNDER_RULES = ("suite.py",)
+
+
+def probe_adapter_findings(source, filename):
+    """SPEC-0103 (G3): um adaptador de probe que vem com a skill (assets/probes/<id>.py) importa só a biblioteca
+    padrão, nada de outra skill nem de tools/, e nenhuma chamada passa shell= diferente de False (ADR-0010,
+    ADR-0023): as suítes do time rodam com lista de argumentos."""
+    return (import_findings(source, filename) + cross_skill_path_findings(source, filename)
+            + shell_findings(source, filename))

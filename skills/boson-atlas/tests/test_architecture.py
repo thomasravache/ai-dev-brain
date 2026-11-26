@@ -14,7 +14,9 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 - nenhum caminho pessoal absoluto em arquivos de skills/boson-atlas/ fora de tests/ (placeholders como
   /Users/<nome> são permitidos);
 - a entrada de uma probe só ganha "resource" numa função que passa por linked_resources, e write_probe_log só grava as
-  chaves da constante PROBE_LOG_KEYS (SPEC-0096, ADR-0025).
+  chaves da constante PROBE_LOG_KEYS (SPEC-0096, ADR-0025);
+- os adaptadores de probe de assets/probes/ listados em PROBE_ADAPTERS_UNDER_RULES (o suite.py) importam só a
+  biblioteca padrão e rodam processos sem shell (SPEC-0103).
 """
 import unittest
 
@@ -412,6 +414,42 @@ class ProbeRulesTest(unittest.TestCase):
         self.assertEqual(len(rule(missing, "scripts/atlas.py")), 1)
         self.assertEqual(len(rule("X = 1\n", "scripts/atlas.py")), 1)
         findings = rule(script_source(), "scripts/atlas.py")
+        self.assertEqual(findings, [], report(findings))
+
+
+PROBES = SKILL / "assets" / "probes"
+
+
+class ProbeAdapterRulesTest(unittest.TestCase):
+    def test_an_adapter_with_shell_or_third_party_import_is_reported(self):
+        """SPEC-0103:UT-08 — a regra dos adaptadores de probe: um suite.py de exemplo com shell=True e import de
+        terceiro tem os dois achados; o mesmo com lista de argumentos e só a biblioteca padrão, nenhum."""
+        # SPEC-0103:UT-08
+        rule = probe_rule("probe_adapter_findings")
+        bad = ("import subprocess\n"
+               "import requests\n"
+               "def run_journey(command):\n"
+               "    return subprocess.run(' '.join(command), shell=True)\n")
+        findings = rule(bad, "assets/probes/suite.py")
+        self.assertEqual(len(findings), 2, report(findings))
+        self.assertTrue(any("assets/probes/suite.py:4" in f and "shell" in f for f in findings), report(findings))
+        self.assertTrue(any("requests" in f for f in findings), report(findings))
+        good = ("import subprocess\n"
+                "def run_journey(command):\n"
+                "    return subprocess.run(command, shell=False, start_new_session=True)\n")
+        self.assertEqual(rule(good, "assets/probes/suite.py"), [])
+
+    def test_suite_adapter_follows_the_rules(self):
+        """SPEC-0103:UT-08 — assets/probes/suite.py está sob "só biblioteca padrão" e "processos sem shell"
+        (PROBE_ADAPTERS_UNDER_RULES) e o arquivo real passa nas duas."""
+        # SPEC-0103:UT-08
+        self.assertIn("suite.py", getattr(architecture_rules, "PROBE_ADAPTERS_UNDER_RULES", ()))
+        rule = probe_rule("probe_adapter_findings")
+        findings = []
+        for name in architecture_rules.PROBE_ADAPTERS_UNDER_RULES:
+            path = PROBES / name
+            self.assertTrue(path.is_file(), f"{path} não existe (SPEC-0103)")
+            findings += rule(path.read_text(encoding="utf-8"), path.relative_to(SKILL).as_posix())
         self.assertEqual(findings, [], report(findings))
 
 
