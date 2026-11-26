@@ -83,8 +83,9 @@ class PrintMatchesCaptureTest(PrintCliTestCase):
         self.assertEqual(normalize(printed["content"]), normalize(written), "mesmo conteúdo do capture")
         stamp = STAMP.search(printed["path"]).group(0)
         created = re.search(r"(?m)^created: (.*)$", printed["content"]).group(1)
-        self.assertEqual(dt.datetime.strptime(stamp, "%Y-%m-%d-%H%M%S").isoformat(timespec="seconds"), created,
-                         "o nome e o created vêm do mesmo instante")
+        local = dt.datetime.strptime(stamp, "%Y-%m-%d-%H%M%S").isoformat(timespec="seconds")
+        # SPEC-0109: o created leva o deslocamento do fuso (±HH:MM) depois da mesma data e hora do nome
+        self.assertRegex(created, rf"^{re.escape(local)}[+-]\d{{2}}:\d{{2}}$", "o nome e o created vêm do mesmo instante")
 
 
 class PrintInboxFolderTest(PrintCliTestCase):
@@ -123,7 +124,7 @@ class PrintWithoutConfigTest(PrintCliTestCase):
         m = re.match(rf"^inbox/{PRINT_NAME}$", data["path"])
         self.assertTrue(m, f"caminho fora do contrato: {data['path']}")
         self.assertIn(m.group(1), days)
-        self.assertRegex(data["content"], r"^---\ntype: capture\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\n---\n")
+        self.assertRegex(data["content"], r"^---\ntype: capture\ncreated: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\n---\n")
         self.assertTrue(data["content"].endswith("\n\nIdeia rápida\n"), data["content"])
 
         path, sep, content = out.stdout.partition("\n\n")
