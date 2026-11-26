@@ -9,6 +9,18 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.26] - 2026-11-25
+
+### Added
+- `access setup`: onboarding do acesso local depois do `build`. Num terminal, pergunta em linguagem simples só o que o grafo usa (contexto do kubectl de cada cluster de algum deployment, profile da AWS de cada ambiente com recurso ligado, URL base de cada ambiente `tier: test`, usuário só de leitura, banco e arquivo de senhas de cada datastore `postgres`/`aurora-postgresql`), com os detectados numerados (só nomes: `kubectl config get-contexts -o name` com timeout de 10 s e as seções de `AWS_CONFIG_FILE` ou `~/.aws/config`; o arquivo de credenciais nunca é aberto), "já definido" sem o valor, até 3 tentativas com o motivo, resumo `definido | não definido | mantido | apagado` e "Gravar? [s/N]". Modo não interativo por `--cluster`, `--cloud`, `--base-url`, `--db-user`, `--db-name` e `--db-passfile` (`<nome>=<valor>`), com `--dry-run`: nomes conferidos no grafo, valores pelas regras de `access.*` (posição e motivo, nunca o valor), campos do banco somados aos da entrada. Grava só `access` da entrada escolhida, num temporário exclusivo renomeado, 0600; avisa arquivo de senhas ausente ou legível por outros só por `os.stat` (SPEC-0104, ADR-0010, ADR-0025).
+- `probes.log`: fora de `ok`, a linha traz `reason` (código fechado do núcleo: `no_adapter`, `verb_not_allowed`, `production_unconfirmed`, `no_access`, `invalid_args`, `no_deployment`, `not_linked`, `invalid_target`, `adapter_failed`, `timeout`, `contract`) e, nas recusas por acesso, `access` (`cluster`, `cloud`, `database`, `urls`). A linha `ok` fica igual; `PROBE_LOG_KEYS` e a regra de arquitetura `probe_log_key_set_findings` fecham o conjunto (SPEC-0104, ADR-0023).
+- `probes stats [--since 30d] [--json]`: contagens do `probes.log` do atlas escolhido (por status, recusas por motivo, sem acesso por tipo, sem adaptador por capacidade, por capacidade, linhas puladas; recusa antiga sem `reason` = `unknown`) e as sugestões do que falta configurar ou mapear, no contrato `probe-stats@1` (`validate_probe_stats`); `--since` de 1h a 365d (SPEC-0104).
+- `doctor`: `AVISO uso das probes — <sugestão>` para as sugestões dos últimos 30 dias, até 5 e depois `… e mais N: rode atlas.py probes stats`; também nos checks do `doctor --json`; nunca muda o exit (SPEC-0104).
+- `references/access-setup.md` (novo), `reason`/`access`, `probes stats` e as sugestões em `references/probes.md`, o ponteiro para o setup em `references/config.md` e as linhas do `SKILL.md` (SPEC-0104).
+
+### Changed
+- Uma versão anterior à SPEC-0096 sai com 2 com `access.cloud`, `access.databases` ou `access.urls` gravados pelo `access setup`: para voltar, tire esses blocos (SPEC-0104).
+
 ## [2026.11.24] - 2026-11-25
 
 ### Added

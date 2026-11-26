@@ -318,12 +318,91 @@ Cada probe que passa da verificação de "ligadas" deixa uma linha JSON em `prob
 - `status`: `ok`, `error` (exit 1), `invalid` (exit 2) ou `refused` (exit 4); as recusas (verbo, produção, sem acesso, sem adaptador) também entram.
 - `resource` (`"<kind:id>"`) só com `--resource` e `commit` (o sha em minúsculas) só com `--commit` (SPEC-0096); sem eles a linha fica igual. As chaves ficam numa constante única do núcleo, `PROBE_LOG_KEYS`, que o `write_probe_log` e a regra de arquitetura usam.
 - Nunca guarda `items`, `message`, o contexto do cluster nem um valor de acesso (profile, usuário, banco, arquivo de senhas, URL base). Com as probes desligadas, nada é registrado.
+- Fora de `ok`, a linha traz `reason`, um código fechado do núcleo (nunca o texto da mensagem), e, nas recusas por falta de acesso local, `access` (SPEC-0104). A linha `ok` fica igual:
+
+| `status` | `reason` |
+|---|---|
+| `refused` | `no_adapter` (capacidade sem adaptador), `verb_not_allowed`, `production_unconfirmed` (produção sem `--confirm-production`), `no_access` (com `access`: `cluster`, `cloud`, `database` ou `urls`), `not_test_tier` e `no_journeys` (da capacidade `functional`, SPEC-0103) |
+| `invalid` | `invalid_args` (argumento fora da regra, como `--lines 0`), `no_deployment` (nenhum deployment do serviço no ambiente), `not_linked` (recurso que o atlas não liga ao deployment), `invalid_target` (campo do atlas fora da regra) |
+| `error` | `adapter_failed` (o adaptador saiu com erro), `timeout`, `contract` (saída fora do contrato) |
+
+```json
+{"at": "2026-11-23T10:05:00Z", "atlas": "acme", "service": "api", "environment": "dev", "capability": "messaging", "verb": "queue", "adapter": "aws-messaging", "status": "refused", "exit": 4, "confirmed_production": false, "resource": "queue:orders", "reason": "no_access", "access": "cloud"}
+```
+
+- O conjunto de chaves é fechado: as de hoje, `resource` e `commit` (SPEC-0096), `reason` e `access` (SPEC-0104). A regra de arquitetura `probe_log_key_set_findings` recusa uma chave a mais ou a menos em `PROBE_LOG_KEYS`.
+
+## Uso das probes (`probes stats`)
+
+`atlas.py probes stats [--since 30d] [--json] [--atlas X]` lê o `probes.log` da pasta da configuração local, linha a linha, e conta só as linhas do atlas escolhido dentro da janela (`--since` `<n>d` ou `<n>h`, de 1h a 365d; fora disso, exit 2). Nada é gravado e nada sai da máquina (ADR-0023).
+
+- Linha malformada é pulada e contada em `skipped_lines`; recusa antiga, sem `reason`, conta como `unknown`.
+- `by_status`, `no_access` e cada capacidade de `by_capability` trazem sempre as quatro chaves; `refused` e `no_adapter`, só as contagens maiores que 0.
+- Sem `probes.log`: `total` 0, sem sugestões, exit 0. Sem configuração local: exit 3.
+- Sem `--json`, o mesmo em Markdown.
+
+Contrato `probe-stats@1` (chaves fechadas):
+
+```json probe-stats@1 valid
+{"contract": "probe-stats@1", "atlas": "acme", "since": "30d", "total": 12,
+ "by_status": {"ok": 7, "error": 1, "invalid": 1, "refused": 3},
+ "refused": {"no_access": 3},
+ "no_access": {"cluster": 0, "cloud": 3, "database": 0, "urls": 0},
+ "no_adapter": {},
+ "by_capability": {"messaging": {"ok": 7, "error": 1, "invalid": 1, "refused": 3}},
+ "skipped_lines": 0,
+ "suggestions": ["3 probe(s) recusada(s) por falta de access.cloud em dev: rode atlas.py access setup"]}
+```
+
+Uma chave a mais, o `contract` errado e uma contagem negativa são recusados:
+
+```json probe-stats@1 invalid
+{"contract": "probe-stats@1", "atlas": "acme", "since": "30d", "total": 0,
+ "by_status": {"ok": 0, "error": 0, "invalid": 0, "refused": 0}, "refused": {},
+ "no_access": {"cluster": 0, "cloud": 0, "database": 0, "urls": 0}, "no_adapter": {}, "by_capability": {},
+ "skipped_lines": 0, "suggestions": [], "profile": "dev-ro"}
+```
+
+```json probe-stats@1 invalid
+{"contract": "probe-stats@2", "atlas": "acme", "since": "30d", "total": 0,
+ "by_status": {"ok": 0, "error": 0, "invalid": 0, "refused": 0}, "refused": {},
+ "no_access": {"cluster": 0, "cloud": 0, "database": 0, "urls": 0}, "no_adapter": {}, "by_capability": {},
+ "skipped_lines": 0, "suggestions": []}
+```
+
+```json probe-stats@1 invalid
+{"contract": "probe-stats@1", "atlas": "acme", "since": "30d", "total": 1,
+ "by_status": {"ok": 0, "error": 0, "invalid": 0, "refused": 1}, "refused": {"no_access": 1},
+ "no_access": {"cluster": 0, "cloud": -1, "database": 0, "urls": 0}, "no_adapter": {}, "by_capability": {},
+ "skipped_lines": 0, "suggestions": []}
+```
+
+O validador é `validate_probe_stats` (lista de problemas; vazia = válido).
+
+### Sugestões
+
+Agregadas por grupo, uma por grupo, em ordem decrescente de contagem. Os nomes vêm do registro (do atlas ou da configuração), nunca um valor de acesso. São sempre propostas: nada é alterado sozinho.
+
+| Motivo | Grupo | Sugestão |
+|---|---|---|
+| `no_access` `cluster` | ambiente A | `N probe(s) recusada(s) por falta de access.clusters em A: rode atlas.py access setup` |
+| `no_access` `cloud` | ambiente A | `N probe(s) recusada(s) por falta de access.cloud em A: rode atlas.py access setup` |
+| `no_access` `database` | recurso R | `N probe(s) recusada(s) por falta de access.databases para R: rode atlas.py access setup` |
+| `no_access` `urls` | ambiente A | `N probe(s) recusada(s) por falta de access.urls em A: rode atlas.py access setup` |
+| `no_journeys` | serviço S | `N probe(s) funcional(is) sem jornadas curadas para S: declare journeys no arquivo de fatos do coletor generic (references/collectors/generic.md)` |
+| `no_adapter` | capacidade C | `N probe(s) sem adaptador para C: declare um em probes.adapters (references/probes.md)` |
+| `verb_not_allowed` | adaptador D | `N probe(s) com verbo não liberado em D: libere em probes.adapters.D.verbs se for de leitura` |
+| `not_linked` | serviço S, ambiente A | `N probe(s) em recurso não ligado a S em A: complete o mapa do atlas (coletor aws ou fatos do generic)` |
+| `no_deployment` | serviço S, ambiente A | `N probe(s) sem deployment de S em A: mapeie o deployment no atlas` |
+
+`production_unconfirmed`, `not_test_tier`, `invalid_args`, `invalid_target` e os de `error` não viram sugestão: são escolhas ou falhas, não falta de mapa ou acesso. Para configurar o acesso, `references/access-setup.md`.
 
 ## O `doctor`
 
 - Sem a chave `probes`, nenhuma linha (o `doctor` fica como antes). Com ela: `OK probes — ligadas, N adaptador(es)` ou `OK probes — desligadas (probes.enabled: false)`; `ERRO probes — probes: <campo> inválido — …`.
 - Uma linha por adaptador: `OK adaptador <id> — executável … encontrado`, ou não encontrado (ERRO com as probes ligadas, AVISO com elas desligadas). O `doctor` só usa `shutil.which`: não roda o `--describe`.
 - O acesso local à nuvem, ao banco e à URL base (`acesso nuvem <ambiente>`, `acesso banco <id>`, `acesso url <ambiente>`) tem as linhas descritas em `references/config.md`.
+- Com o `probes.log` e alguma sugestão nos últimos 30 dias (as mesmas do `probes stats --since 30d` do atlas escolhido): uma linha `AVISO uso das probes — <sugestão>` por sugestão, até 5, e depois `AVISO uso das probes — … e mais N: rode atlas.py probes stats`. No `doctor --json`, cada uma é um check `{"item": "uso das probes", "status": "AVISO", "detail": "<sugestão>"}`. Nunca muda o exit; sem log ou sem sugestão, nenhuma linha (SPEC-0104).
 
 ## Escrever um adaptador
 
