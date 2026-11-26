@@ -396,6 +396,24 @@ class ProbeRulesTest(unittest.TestCase):
         for forbidden in ("items", "message", "context", "profile", "user", "database", "passfile", "base_url"):
             self.assertNotIn(forbidden, keys)
 
+    def test_log_keys_are_exactly_the_closed_set(self):
+        """SPEC-0104:UT-06 — a regra do conjunto fechado: PROBE_LOG_KEYS com uma chave a mais (profile) ou a menos é
+        violação; exatamente as de hoje, resource, commit, reason e access, não; e o atlas.py real segue a regra."""
+        # SPEC-0104:UT-06
+        rule = probe_rule("probe_log_key_set_findings")
+        keys = sorted(PROBE_LOG_TODAY | {"resource", "commit"} | PROBE_LOG_LATER)
+        exact = f"PROBE_LOG_KEYS = {tuple(keys)!r}\n"
+        self.assertEqual(rule(exact, "scripts/atlas.py"), [])
+        extra = f"PROBE_LOG_KEYS = {tuple(keys + ['profile'])!r}\n"
+        findings = rule(extra, "scripts/atlas.py")
+        self.assertEqual(len(findings), 1, report(findings))
+        self.assertIn("profile", findings[0])
+        missing = f"PROBE_LOG_KEYS = {tuple(k for k in keys if k != 'reason')!r}\n"
+        self.assertEqual(len(rule(missing, "scripts/atlas.py")), 1)
+        self.assertEqual(len(rule("X = 1\n", "scripts/atlas.py")), 1)
+        findings = rule(script_source(), "scripts/atlas.py")
+        self.assertEqual(findings, [], report(findings))
+
 
 if __name__ == "__main__":
     unittest.main()

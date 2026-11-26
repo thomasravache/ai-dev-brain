@@ -1,0 +1,16 @@
+{
+  "entities": [
+    {"kind": "service", "id": "api", "name": "api"},
+    {"kind": "cluster", "id": "cluster-dev", "name": "cluster-dev"},
+    {"kind": "environment", "id": "dev", "name": "dev"},
+    {"kind": "deployment", "id": "dev-api", "name": "dev-api",
+     "attrs": {"namespace": "api-dev", "workloads": ["Deployment/api"]}},
+    {"kind": "queue", "id": "orders", "name": "orders", "attrs": {"region": "us-east-1"}}
+  ],
+  "relations": [
+    {"from": "deployment:dev-api", "to": "service:api", "type": "deploys"},
+    {"from": "deployment:dev-api", "to": "cluster:cluster-dev", "type": "runs_in"},
+    {"from": "deployment:dev-api", "to": "environment:dev", "type": "runs_in"},
+    {"from": "deployment:dev-api", "to": "queue:orders", "type": "writes"}
+  ]
+}
