@@ -4,7 +4,7 @@ title: "gluon-spec: G6 com verify@2, acompanhamento da entrega e validação fun
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0103, SPEC-0106]
