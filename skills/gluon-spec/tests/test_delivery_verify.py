@@ -275,10 +275,11 @@ class ContractTest(unittest.TestCase):
         """SPEC-0091:CT-01 — toda opção citada na verificação ativa do G6 existe no --help real de atlas.py verify
         snapshot/compare; as citadas logo depois de cada subcomando existem no help dele."""
         snapshot, compare = help_flags("snapshot"), help_flags("compare")
+        track = help_flags("track")  # SPEC-0105:CT-01 — o --commit só existe no verify track
         text = active_section()
         cited = set(FLAG.findall(text))
         self.assertTrue(cited, "gates.md (G6): nenhuma opção do atlas.py verify citada")
-        unknown = cited - (snapshot | compare)
+        unknown = cited - (snapshot | compare | track)  # SPEC-0105:CT-01
         self.assertFalse(unknown, f"gates.md (G6): opções fora do atlas.py verify: {sorted(unknown)}")
         for sub, flags in (("snapshot", snapshot), ("compare", compare)):
             for match in re.finditer(rf"verify {sub}\b([^`\n]*)", text):
@@ -365,7 +366,10 @@ class ToolVersionTest(unittest.TestCase):
     def test_tool_version_and_dated_changelog_section(self):
         """SPEC-0091:UT-01 (Emenda v3) — SDD_TOOL_VERSION é 2026.11.10 e o CHANGELOG tem a seção datada [2026.11.10]
         com a entrada da verificação ativa (não só em [Unreleased])."""
-        self.assertEqual(sg.SDD_TOOL_VERSION, TOOL_VERSION, "spec_graph.py: SDD_TOOL_VERSION não subiu")
+        # SPEC-0105:IT-02 — a versão sobe nas specs seguintes: maior ou igual a 2026.11.10, não fixa
+        self.assertGreaterEqual(tuple(int(n) for n in sg.SDD_TOOL_VERSION.split(".")),
+                                tuple(int(n) for n in TOOL_VERSION.split(".")),
+                                "spec_graph.py: SDD_TOOL_VERSION abaixo de 2026.11.10")
         text = changelog_section(TOOL_VERSION)
         self.assertIn("SPEC-0091", text, "CHANGELOG [2026.11.10]: sem a entrada da SPEC-0091")
         self.assertIn("atlas.py verify", text, "CHANGELOG [2026.11.10]: sem a verificação ativa com atlas.py verify")

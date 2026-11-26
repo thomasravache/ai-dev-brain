@@ -4,14 +4,14 @@ title: "gluon-spec: G6 com verify@2, acompanhamento da entrega e validação fun
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0103, SPEC-0106]
 consumes_contract: []
-contract_version: 1
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/CHANGELOG.md, skills/gluon-spec/tests/test_delivery_verify2.py, .claude-plugin/plugin.json]
+touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/CHANGELOG.md, skills/gluon-spec/tests/test_delivery_verify2.py, skills/gluon-spec/tests/test_delivery_verify.py, .claude-plugin/plugin.json]
 adrs: [ADR-0023, ADR-0024, ADR-0025, ADR-0026]
 external: []
 size: S
@@ -175,6 +175,14 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
   a foto é apagada no fim da tarefa; nunca entra em commit
 ```
 
+**Esclarecimentos (Emenda v2):**
+- `test_delivery_verify.py` (SPEC-0091) entra nos `touches` e deixa de ficar como está em dois pontos só: o conjunto de opções citadas aceitas passa a incluir o `--help` do `verify track` (o `--commit` só existe nele), e a versão da ferramenta passa a ser conferida como maior ou igual a 2026.11.10, não fixa. O resto desse arquivo não muda.
+
+**Esclarecimentos (Emenda v3):**
+- `--expect-migration <datastore>=<id>` só vai para o `compare` quando o datastore está no escopo da foto (a foto tem `dependencies` com `datastore:<id>`). Com `dependencies: {}` (nenhum adaptador de recurso declarado nesta máquina, o sinal do fallback `verify@1`), a opção não é passada e a migration entra no Relatório de Entrega como não verificada. Ao restringir com `--resource`, o datastore de cada migration esperada entra sempre na lista. Motivo: fora do escopo, o `compare` sai com 2 e o agente perderia as verificações do `verify@1`.
+- Sem o "sim" de produção numa execução, o agente para de acompanhar, registra "sem confirmação de produção" e segue a rota manual (passos 1 e 2 à mão), como no limite de `track_max_minutes`.
+- As linhas de comando do `track` e do `compare` mostram `[--confirm-production]`, como opção que só entra com o sim daquela execução.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -183,7 +191,7 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
 - `skills/gluon-spec/SKILL.md`: uma oração no passo 7.
 - `skills/gluon-spec/scripts/spec_graph.py`: só o `SDD_TOOL_VERSION`.
 - CHANGELOG da gluon-spec (seção datada) e `plugin.json`.
-- `skills/gluon-spec/tests/test_delivery_verify2.py` (novo): os testes desta spec, no estilo de `test_delivery_verify.py`, que fica como está.
+- `skills/gluon-spec/tests/test_delivery_verify2.py` (novo): os testes desta spec, no estilo de `test_delivery_verify.py`, que só muda nos dois pontos da Emenda v2.
 
 ### 6.1 Mapa de Comportamentos
 | Cenário | Condição / Entrada | Resultado esperado | Testes |
@@ -276,33 +284,37 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01 escrito(s) com a tag `SPEC-0105:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+- [x] CH-01 escrito(s) com a tag `SPEC-0105:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
 
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-01 com a tag `SPEC-0105:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-01 com a tag `SPEC-0105:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=43, skipped=1)) — 6f731fc | 2026-11-26 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 722fc81 | 2026-11-26 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 82b5beb | 2026-11-26 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (2ª rodada): APPROVED — major resolvido pela Emenda v3 (migration esperada só no escopo da foto; testes pegam a reversão); 1 minor (datastore de migration não ligado ao serviço faz o snapshot sair com 2) — f7033a5 | 2026-11-26 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 6b3d565 | 2026-11-26 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 1f8c9d2 | 2026-11-26 |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-26 — reviewer independente: CHANGES_REQUESTED — major: --expect-migration sempre quebra o fallback verify@1 (datastore fora do escopo = exit 2 no compare) e acima de max_resources; minors: sinal de 'sem adaptador' não definido, sem o sim de produção não diz o que fazer, linhas sem [--confirm-production] — eaf75e3
+- G4 PASS 2026-11-26 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -314,38 +326,60 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+G6 da gluon-spec com a verificação completa da boson-atlas: depois do merge, o agente acompanha a entrega com `verify track` (com limite de `track_max_minutes`) até a imagem do commit, roda o `verify compare` com o `verify@2` (dependências e sinais dos recursos ligados, com os limites novos) e, só em `tier: test` e com `delivery_check.functional`, a validação funcional; o Relatório de Entrega registra as dependências verificadas e as jornadas. Seis chaves novas no `delivery_check` do `sdd-config` (`functional`, `max_new_dlq`, `max_queue_age`, `max_signal_increase`, `max_resources`, `track_max_minutes`), mostradas pelo `whats-new`. Versões: gluon-spec 2026.11.11 e plugin 2026.11.44.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`references/gates.md`:** a seção de verificação ativa ganhou o escopo de dependências, o `track` com um item por estado e saída, os limites novos nas linhas de comando, a validação funcional e as regras de produção (um sim por execução, inclusive em cada repetição do `track`).
+- **`references/sdd-config.template.yml`:** as seis chaves, cada uma com comentário.
+- **`SKILL.md`:** uma oração no passo 7 apontando para o G6.
+- **Emendas:** v2 (dois testes da SPEC-0091 aceitam o `track` e a versão nova) e v3 (a migration esperada só vai para o `compare` com o datastore no escopo da foto, para não quebrar o fallback `verify@1`; rota manual sem o sim de produção).
+- **G4 em duas rodadas:** a primeira pediu a Emenda v3; a segunda aprovou.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 9fa8d46, 6f731fc e b6729ab (G1) e green em 375cff6 e 722fc81 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | o roteiro do G6 de hoje continua presente | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-01 | as seis chaves novas no template, com comentários | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-02 | verify track no G6, com o limite de track_max_minutes | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-03 | dependências no G6: escopo, fallback verify@1 e migration só no escopo | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-04 | --functional só com delivery_check.functional e tier: test | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-05 | produção: um sim por execução e rota manual sem ele | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-06 | o passo 7 da SKILL.md cita track, dependências e functional | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| IT-01 | opções do G6 batem com o atlas.py do repositório | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| IT-02 | whats-new mostra as chaves novas num projeto com a versão anterior | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| CT-01 | toda opção citada no G6 existe no --help real | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.44 depois do merge. Projetos com `tools/sdd` veem as chaves novas pelo `whats-new` e atualizam com `vendor --force`.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minor do G4 no radar** do épico SPEC-0095: o datastore de uma migration que não está ligado ao serviço no atlas faz o `snapshot` sair com 2 quando entra no `--resource`.
+- A cópia em `tools/sdd/` deste repositório fica em 2026.11.10 até o `vendor --force`, feito no fechamento do épico.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0105`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-26 | `--expect-migration` só para datastore no escopo da foto; rota manual sem o sim de produção; `[--confirm-production]` nas linhas | Major do G4: a instrução "sempre" quebrava o fallback `verify@1` com exit 2 | nenhuma | thomas, 2026-11-26 (piloto automático com o recomendado) |
+| 2 | 2026-11-26 | `test_delivery_verify.py` nos `touches` (opções do `track` e versão mínima) | SPEC_DEFECT do Test-writer: dois testes da SPEC-0091 falham com qualquer implementação conforme | SPEC-0091 (só testes) | thomas, 2026-11-26 (piloto automático com o recomendado) |
