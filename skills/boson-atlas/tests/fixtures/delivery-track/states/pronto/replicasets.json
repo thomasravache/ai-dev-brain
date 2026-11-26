@@ -1,0 +1,35 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "ReplicaSet",
+      "metadata": {
+        "name": "api-7c2d",
+        "namespace": "api-dev",
+        "labels": {
+          "app": "api",
+          "pod-template-hash": "7c2d"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "api",
+            "controller": true
+          }
+        ]
+      },
+      "spec": {
+        "selector": {
+          "matchLabels": {
+            "app": "api",
+            "pod-template-hash": "7c2d"
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {}
+}

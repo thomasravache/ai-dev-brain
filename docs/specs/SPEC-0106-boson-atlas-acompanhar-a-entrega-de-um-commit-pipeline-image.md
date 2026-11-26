@@ -4,12 +4,12 @@ title: "boson-atlas: acompanhar a entrega de um commit — pipeline, imagem, Git
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/github-actions.py, skills/boson-atlas/assets/probes/argocd.py, skills/boson-atlas/references/probes/github-actions.md, skills/boson-atlas/references/probes/argocd.md, skills/boson-atlas/references/verify.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_github_actions.py, skills/boson-atlas/tests/test_probe_argocd.py, skills/boson-atlas/tests/test_verify_track.py, skills/boson-atlas/tests/fixtures/github-actions/**, skills/boson-atlas/tests/fixtures/delivery-track/**, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0022, ADR-0023, ADR-0024, ADR-0025]
@@ -266,6 +266,9 @@ Exemplos de contrato que vão para as referências (os testes leem os blocos):
 {"contract": "probe@2", "adapter": "argocd", "capability": "gitops", "verb": "application", "status": "ok", "items": [{"application": "dev-api", "source": {"repoURL": "https://github.com/acme/iac"}}], "truncated": false}
 ```
 
+**Esclarecimentos (Emenda v2):**
+- A máscara do núcleo (`atlas.py`) passa a cobrir também o id de conta de 12 dígitos no host de registro ECR (`<conta>.dkr.ecr.<região>.amazonaws.com`) e em ARN escrito em maiúsculas (`ARN:AWS:...`), que hoje passam pela máscara: a imagem e os eventos do GitOps e da CI trazem esses textos. O UT-14 confere, além dos valores de credencial, que nenhum desses ids aparece na saída, nas evidências nem no `probes.log`. (Minor do G4 da SPEC-0096, no radar do épico SPEC-0095.)
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -377,30 +380,30 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, UT-09, UT-10, UT-11, UT-12, UT-13, UT-14, IT-01, IT-02, CT-01, CT-02 com a tag `SPEC-0106:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, UT-09, UT-10, UT-11, UT-12, UT-13, UT-14, IT-01, IT-02, CT-01, CT-02 com a tag `SPEC-0106:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=174, skipped=1)) — f50d638 | 2026-11-26 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 497247b | 2026-11-26 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8836c6f | 2026-11-26 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 2 minor + 1 nit (pipeline not_verified permanente conta como em andamento sem --expect-image; mesma imagem com e sem digest vira ambígua; DNS_SUBDOMAIN_RE aceita '..') — 3a937fd | 2026-11-26 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — b093db6 | 2026-11-26 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — dd5184d | 2026-11-26 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -412,38 +415,68 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`atlas.py verify track` do boson-atlas: acompanha a entrega de um commit por quatro etapas — pipeline (execuções da CI do commit pelo novo adaptador `github-actions`), imagem (a imagem do commit chegando ao GitOps), gitops (a Application do Argo CD pelo novo adaptador `argocd`: sincronizada e saudável) e rollout (pods prontos na imagem esperada) —, com estado `pending`, `running`, `ready`, `failed` ou `not_verified`, a etapa atual e o contrato `track@1`. A máscara do núcleo passa a cobrir o id de conta no host ECR e em ARN maiúsculo (Emenda v2). Versões: boson-atlas 2026.11.27 e plugin 2026.11.42.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`assets/probes/github-actions.py`:** só `gh api -X GET` das execuções do commit; 404 vira `found: false`; limite, 401/403 e timeout com mensagens fixas; `GH_TOKEN` só por nome.
+- **`assets/probes/argocd.py`:** só `kubectl get applications.argoproj.io`, lendo os campos listados; contexto de gestão por `ATLAS_GITOPS_CONTEXT`.
+- **`scripts/atlas.py`:** `verify track` com as guardas na ordem do contrato (produção antes de qualquer probe), etapas como funções puras, `validate_track_result` na saída real e máscara estendida em `PROBE_PATTERNS`.
+- **Documentação:** `references/probes/github-actions.md`, `references/probes/argocd.md` e a seção `track@1` do `references/verify.md`.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em f50d638 (G1) e green em 14e1dd7 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | execuções da CI do commit por repositório | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-02 | total acima da página ou de limits.lines vira truncated | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-03 | gh ausente, 401, 403, limite e timeout com mensagens fixas | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-04 | argv do gh fixo: api -X GET das execuções do commit | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-05 | Application com sync, saúde, revisão e imagens | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-06 | Application inexistente e erros do kubectl | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-07 | argv do kubectl fixo: get applications.argoproj.io | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-08 | etapa pipeline a partir das execuções | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-09 | imagem esperada normalizada, sem host do registro | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-10 | etapa gitops: Synced/Healthy, fora de sincronia, falha | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-11 | etapa rollout pelos pods na imagem esperada | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-12 | estado e etapa atual entre etapas e deployments | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-13 | --commit, --expect-image e produção validados antes das probes | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| UT-14 | atlas intocado, credenciais e ids de conta mascarados | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| IT-01 | track de ponta a ponta até pronto, com snapshot e compare | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| IT-02 | CI com falha: exit 1 e etapa pipeline | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| CT-01 | saídas dos dois adaptadores no contrato probe@2 | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
+| CT-02 | blocos track@1 válidos e inválidos do verify.md | PASS | `test_probe_github_actions.py`, `test_probe_argocd.py` e `test_verify_track.py`; G2 PASS em 497247b; G4 `verify` 18/18 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.42 depois do merge. O `track` só lê, pelas probes ligadas e com os adaptadores declarados.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - sem `--expect-image`, uma pipeline `not_verified` permanente conta como em andamento e o `track` fica em exit 6 (a SPEC-0105 limita as tentativas);
+  - a mesma imagem do commit com e sem digest em duas Applications vira ambígua;
+  - `DNS_SUBDOMAIN_RE` do `argocd` aceita `..`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0106`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | Máscara do núcleo cobre a conta no host ECR e em ARN maiúsculo; UT-14 confere | Minor do G4 da SPEC-0096: esses ids passavam pela máscara, e o `track` lê imagens e eventos que os trazem | nenhuma | thomas, 2026-11-26 (piloto automático com o recomendado) |
