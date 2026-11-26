@@ -321,7 +321,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=100, skipped=1)) — 01461f1 | 2026-11-25 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 8284c0c | 2026-11-25 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — ddf056f | 2026-11-25 |
-| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED — major: a regra da Emenda v2 (PartialData só na última página) não tem teste que a prove (mutante passa); minors: overflow vira Infinity, OverflowError sem tratamento, NaN/Infinity sem teste | 2026-11-25 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (2ª rodada): APPROVED — major da 1ª rodada resolvido (mutante da Emenda v2 pego pelo UT-03 de 3 páginas; overflow tratado); 2 minor (NextToken começando com '-', entrada Fixed no CHANGELOG) — 6f2ea31 | 2026-11-25 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -329,6 +329,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-25 — reviewer independente: CHANGES_REQUESTED — major: a regra da Emenda v2 (PartialData só na última página) não tem teste que a prove (mutante passa); minors: overflow vira Infinity, OverflowError sem tratamento, NaN/Infinity sem teste — 599f0ca
+- G4 PASS 2026-11-25 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. -->
