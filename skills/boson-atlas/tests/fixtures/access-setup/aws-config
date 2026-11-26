@@ -1,0 +1,10 @@
+# AWS CLI de teste (SPEC-0104:UT-01): só os nomes das seções interessam
+[default]
+region = us-east-1
+
+[profile dev-ro]
+region = us-east-1
+sso_session = x
+
+[sso-session x]
+sso_region = us-east-1
