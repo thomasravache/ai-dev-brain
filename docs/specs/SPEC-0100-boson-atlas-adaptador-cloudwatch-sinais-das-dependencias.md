@@ -4,12 +4,12 @@ title: "boson-atlas: adaptador cloudwatch — sinais das dependências"
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/cloudwatch.py, skills/boson-atlas/references/probes/cloudwatch.md, skills/boson-atlas/tests/test_probe_cloudwatch.py, skills/boson-atlas/tests/fixtures/cloudwatch/**, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025, ADR-0026]
@@ -213,6 +213,10 @@ erros → exit 0, status: "error", items: [], message fixa (sem stderr, profile,
 
 **Registro:** o adaptador não grava nada; o `probes.log` é do núcleo, com `resource` e sem resultado.
 
+**Esclarecimentos (Emenda v2):**
+- `PartialData` só conta na última página lida (a resposta sem `NextToken`, ou a 5ª página): nas páginas intermediárias a AWS usa esse status para dizer que há mais páginas, e isso não marca `truncated`.
+- O UT-03 cobre isso com 3 páginas: `PartialData` só nas intermediárias → `truncated: false`; `PartialData` na última → `truncated: true`. O UT-04 cobre valores `NaN`, `Infinity` e estouro na agregação (sum/avg não finitos) → "resposta inválida da aws".
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -298,30 +302,34 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-02, CT-01 com a tag `SPEC-0100:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-02, CT-01 com a tag `SPEC-0100:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=100, skipped=1)) — 01461f1 | 2026-11-25 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 8284c0c | 2026-11-25 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — ddf056f | 2026-11-25 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (2ª rodada): APPROVED — major da 1ª rodada resolvido (mutante da Emenda v2 pego pelo UT-03 de 3 páginas; overflow tratado); 2 minor (NextToken começando com '-', entrada Fixed no CHANGELOG) — 6f2ea31 | 2026-11-25 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 7be6a07 | 2026-11-25 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-25 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-25 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — d4783c9 | 2026-11-25 |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-25 — reviewer independente: CHANGES_REQUESTED — major: a regra da Emenda v2 (PartialData só na última página) não tem teste que a prove (mutante passa); minors: overflow vira Infinity, OverflowError sem tratamento, NaN/Infinity sem teste — 599f0ca
+- G4 PASS 2026-11-25 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. -->
@@ -332,33 +340,54 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Preenchido no CLOSE (G7). -->
 
 ### O que foi entregue
+Adaptador `cloudwatch` (`probe@2`, capacidade `signals`, verbo `metrics`), só de leitura pela AWS CLI. Para rds, aurora, elasticache (por nós ou serverless), sqs e sns, traz as métricas de uma tabela fixa na janela pedida, cada uma com nome, estatística, valor e tipo (erro, latência, saturação ou tráfego), seguindo a regra 4a do ADR-0026. Versões: boson-atlas 2026.11.23 e plugin 2026.11.38.
 
 ### Como foi feito
+- **`assets/probes/cloudwatch.py`:** uma chamada `get-metric-data` com até 60 consultas MetricStat da tabela fixa, até 5 páginas; nós do cache por `describe-replication-groups` (até 6); valores não finitos e estouro na agregação viram "resposta inválida da aws"; conta mascarada; mensagens fixas.
+- **Documentação:** `references/probes/cloudwatch.md`, com a tabela de métricas e a política IAM.
+- **Emenda v2:** `PartialData` só marca `truncated` na última página lida.
+- **G4 em duas rodadas:** a primeira pediu o teste de 3 páginas da Emenda v2 e o tratamento de estouro; a segunda aprovou.
 
 ### Prova de Correção
+N/A — `type: feature`. Red em f29e4a8 e 66fa9c9 (G1) e green em 49de034 e 8284c0c (G2).
 
 ### Verificação
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| UT-01 | métricas do rds com valor, estatística e tipo da tabela | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| UT-02 | cache por nós: média sobre todos os pontos, no máximo 6 nós | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| UT-03 | serverless, fila e tópico; PartialData só na última página | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| UT-04 | erros da CLI, NaN, Infinity e estouro com mensagens fixas | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| UT-05 | só get-metric-data e describe-replication-groups, consultas fixas | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| UT-06 | tipo de recurso sem sinais e entrada inválida recusados | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| IT-01 | probe metrics de ponta a ponta com o atlas.py real | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| IT-02 | SSO expirado vira erro com a mensagem fixa | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| CT-02 | itens conferidos contra a regra 4a do ADR-0026 | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
+| CT-01 | describe, saídas reais e blocos válidos e inválidos do probe@2 | PASS | `test_probe_cloudwatch.py`; G2 PASS em 8284c0c; G4 `verify` 10/10 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.38 depois do merge. O adaptador só roda declarado em `probes.adapters`, com as probes ligadas.
 
 ### Pendências
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - um `NextToken` começando com `-` seria recusado como "chamada não permitida";
+  - a entrada Fixed do CHANGELOG é de um defeito nunca publicado.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0100`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | `PartialData` só marca `truncated` na última página lida | Achado do Test-writer: nas páginas intermediárias o status só indica que há mais páginas | nenhuma | thomas, 2026-11-25 (piloto automático com o recomendado) |
