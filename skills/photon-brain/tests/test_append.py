@@ -1,4 +1,4 @@
-"""Função pura do `append`: acrescentar uma seção (ou texto a uma seção existente) a uma nota (SPEC-0107: UT-01, UT-02).
+"""Função pura do `append`: acrescentar uma seção (ou texto a uma seção existente) a uma nota (SPEC-0107: UT-01, UT-02, UT-07).
 
 Contrato esperado de scripts/brain.py (seções 4 e 6 da spec), ao lado de `append_relation`:
 
@@ -113,6 +113,64 @@ class ExistingSectionTest(unittest.TestCase):
         twice = append_section(once, "Resumo", "Segundo.\n")
         self.assertRegex(twice, r"## Resumo\n\nPrimeiro\.\n\nSegundo\.\n\n*## Relations")
         self.assertTrue(twice.endswith(RELATIONS), twice)
+
+
+class FencedCodeTest(unittest.TestCase):
+    """Emenda v2: linha dentro de bloco cercado (``` ou ~~~, até a mesma cerca; sem fechamento, até o fim) nunca é
+    título — não abre nem fecha seção."""
+
+    SETUP = "## Setup\n\nInstale assim:\n\n```bash\n# instala\n## não é título\napt install x\n```\n"
+    OTHER = "## Outra\n\n~~~\n## Resumo\n# também não\n~~~\n"
+
+    def text(self):
+        return HEAD + self.SETUP + "\n" + self.OTHER + "\n" + RELATIONS
+
+    def test_text_goes_after_the_closing_fence_of_the_section(self):
+        """SPEC-0107:UT-07 — "# instala" no bloco ```bash não fecha ## Setup; o bloco fica igual."""
+        # SPEC-0107:UT-07
+        text = self.text()
+        new = append_section(text, "Setup", "Texto novo.\n")
+        self.assertIn(self.SETUP + "\nTexto novo.\n", new, "o texto entra depois do fechamento do bloco")
+        self.assertTrue(new.startswith(HEAD + self.SETUP), new)
+        self.assertTrue(new.endswith("\n" + self.OTHER + "\n" + RELATIONS), new)
+        self.assertEqual(new.count("Texto novo."), 1, new)
+
+    def test_heading_inside_a_tilde_block_is_not_the_section(self):
+        """SPEC-0107:UT-07 — "## Resumo" dentro de ~~~ não conta: a seção é criada antes de ## Relations."""
+        # SPEC-0107:UT-07
+        text = self.text()
+        new = append_section(text, "Resumo", "Texto novo.\n")
+        self.assertTrue(new.startswith(HEAD + self.SETUP + "\n" + self.OTHER), "os blocos ficam iguais")
+        self.assertTrue(new.endswith(RELATIONS), new)
+        self.assertRegex(new[len(HEAD + self.SETUP + "\n" + self.OTHER):],
+                         r"\A\n*## Resumo\n\nTexto novo\.\n\n*## Relations\n")
+
+    def test_relations_inside_a_block_is_not_the_relations_heading(self):
+        """SPEC-0107:UT-07 — "## Relations" num bloco cercado não é a seção: a nova vai antes da de verdade."""
+        # SPEC-0107:UT-07
+        block = "## Setup\n\n```markdown\n## Relations\n\n- [[X]] — y\n```\n\n"
+        text = HEAD + block + RELATIONS
+        new = append_section(text, "Resumo", "Texto novo.\n")
+        self.assertTrue(new.startswith(HEAD + block.rstrip("\n")), new)
+        self.assertTrue(new.endswith(RELATIONS), new)
+        self.assertRegex(new[len(HEAD + block.rstrip("\n")):], r"\A\n+## Resumo\n\nTexto novo\.\n\n*## Relations\n")
+
+    def test_a_fence_closes_only_with_the_same_fence(self):
+        """SPEC-0107:UT-07 — "~~~" dentro de ``` não fecha o bloco; "## Resumo" continua dentro dele."""
+        # SPEC-0107:UT-07
+        block = "## Setup\n\n```\n~~~\n## Resumo\n~~~\n```\n\n"
+        text = HEAD + block + RELATIONS
+        new = append_section(text, "Resumo", "Texto novo.\n")
+        self.assertTrue(new.startswith(HEAD + block.rstrip("\n")), new)
+        self.assertRegex(new[len(HEAD + block.rstrip("\n")):], r"\A\n+## Resumo\n\nTexto novo\.\n\n*## Relations\n")
+
+    def test_an_unclosed_block_goes_to_the_end_of_the_file(self):
+        """SPEC-0107:UT-07 — bloco sem fechamento vai até o fim: "# x" nele não fecha ## Setup."""
+        # SPEC-0107:UT-07
+        text = HEAD + "## Setup\n\n```bash\n# x\nmake\n"
+        new = append_section(text, "Setup", "Texto novo.\n")
+        self.assertTrue(new.startswith(text), new)
+        self.assertRegex(new[len(text):], r"\A\n*Texto novo\.\n\Z")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Integração pela CLI: `append` e `new-note --body-file` (SPEC-0107: CH-01, UT-03 a UT-06, IT-01, IT-02).
+"""Integração pela CLI: `append` e `new-note --body-file` (SPEC-0107: CH-01, UT-03 a UT-08, IT-01, IT-02).
 
 Cada teste cria o vault com o `brain.py init` real num diretório temporário com HOME, XDG_CONFIG_HOME e
 BRAIN_CONFIG_HOME isolados (brain_support.Sandbox). Mensagens de erro podem ir para stdout ou stderr.
@@ -337,6 +337,78 @@ class AppendJourneyTest(AppendCliTestCase):
         self.assertTrue(m, lines[1])
         self.assertEqual(m.groups(), (rel, "Aula 2", "continua"))
         self.assertEqual(self.lint_findings(), [], "vault sem achados")
+
+
+class FencedCodeCliTest(AppendCliTestCase):
+    """Emenda v2 pela CLI: blocos de código cercados na nota e no texto."""
+
+    def test_append_skips_headings_inside_code_blocks(self):
+        """SPEC-0107:UT-07 — # comentário em ```bash não fecha a seção; ## Resumo em ~~~ não é a seção."""
+        # SPEC-0107:UT-07
+        setup = "## Setup\n\n```bash\n# instala\napt install x\n```\n"
+        other = "## Outra\n\n~~~\n## Resumo\n~~~\n"
+        rel, _ = self.note(body=setup + "\n" + other + "\n")
+        addition = self.text_file("add.txt", "Depois do bloco.\n")
+        out = self.append(rel, "--section", "Setup", "--text-file", addition, "--json")
+        self.assertExit(out, 0)
+        self.assertEqual(json.loads(out.stdout), {"note": rel, "section": "Setup", "created_section": False})
+        self.assertIn(setup + "\nDepois do bloco.\n", self.read(rel))
+        out = self.append(rel, "--section", "Resumo", "--text-file", addition, "--json")
+        self.assertExit(out, 0)
+        self.assertEqual(json.loads(out.stdout), {"note": rel, "section": "Resumo", "created_section": True})
+        text = self.read(rel)
+        self.assertIn(other, text, "o bloco ~~~ fica igual")
+        self.assertRegex(text, r"## Resumo\n~~~\n\n+## Resumo\n\nDepois do bloco\.\n\n*## Relations\n\Z")
+
+
+class RelationsInTextTest(AppendCliTestCase):
+    """Emenda v2: "## Relations" fora de bloco no texto do append ou no corpo do new-note = exit 2."""
+
+    VARIANTS = ("## Relations\n", "## relations\n", "##  Relations\n", "## RELATIONS  \n")
+
+    def test_append_refuses_relations_outside_a_block(self):
+        """SPEC-0107:UT-08 — texto do append com ## Relations (qualquer caixa e espaços): exit 2, nada gravado."""
+        # SPEC-0107:UT-08
+        rel, _ = self.note()
+        vault_before = snapshot(self.box.vault)
+        for i, line in enumerate(self.VARIANTS):
+            with self.subTest(linha=line):
+                addition = self.text_file(f"rel{i}.txt", "Texto.\n\n" + line + "\n- [[X]] — y\n")
+                out = self.append(rel, "--section", "Resumo", "--text-file", addition)
+                self.assertExit(out, 2)
+                self.assertNotIn("usage:", output(out), "recusado pelo comando, não pelo parser")
+                self.assertEqual(snapshot(self.box.vault), vault_before, "nota e log iguais")
+
+    def test_new_note_refuses_relations_outside_a_block(self):
+        """SPEC-0107:UT-08 — corpo do new-note com ## relations ou ##  Relations: exit 2, nada criado."""
+        # SPEC-0107:UT-08
+        vault_before = snapshot(self.box.vault)
+        for i, line in enumerate(self.VARIANTS):
+            with self.subTest(linha=line):
+                body = self.text_file(f"corpo{i}.md", "## Ideias\n\nA.\n\n" + line)
+                out = self.box.run("new-note", "--type", "note", "--title", f"Aula 5{i}", "--context", "college",
+                                   "--body-file", body)
+                self.assertExit(out, 2)
+                self.assertNotIn("usage:", output(out), "recusado pelo comando, não pelo parser")
+                self.assertEqual(snapshot(self.box.vault), vault_before, "nada criado, log igual")
+
+    def test_relations_inside_a_block_is_accepted(self):
+        """SPEC-0107:UT-08 — a mesma linha dentro de um bloco cercado é aceita no append e no new-note."""
+        # SPEC-0107:UT-08
+        block = "Exemplo de nota:\n\n```markdown\n## Relations\n\n- [[X]] — y\n```\n"
+        rel, _ = self.note()
+        addition = self.text_file("bloco.txt", block)
+        self.assertExit(self.append(rel, "--section", "Resumo", "--text-file", addition), 0)
+        text = self.read(rel)
+        self.assertIn("## Resumo\n\n" + block, text)
+        self.assertTrue(text.endswith(("```\n\n## Relations\n", "```\n## Relations\n")), text)
+        body = self.text_file("corpo.md", "## Ideias\n\n" + block)
+        out = self.box.run("new-note", "--type", "note", "--title", "Aula 6", "--context", "college",
+                           "--body-file", body)
+        self.assertExit(out, 0)
+        text = self.read("projects/college/Aula 6.md")
+        self.assertRegex(text, r"# Aula 6\n\n## Ideias\n\nExemplo de nota:\n\n```markdown\n## Relations\n\n"
+                               r"- \[\[X\]\] — y\n```\n\n*## Relations\n\Z")
 
 
 if __name__ == "__main__":
