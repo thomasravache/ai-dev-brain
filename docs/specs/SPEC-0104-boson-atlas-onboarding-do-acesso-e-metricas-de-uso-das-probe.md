@@ -343,7 +343,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — d6fbf5b | 2026-11-25 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — bee68b3 | 2026-11-25 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 5 minor (write_access perde comentários, reason padrão sem código, --cloud repetido, deployment sem cluster vira no_access, --cluster com '-') — 14ae0d4 | 2026-11-26 |
-| G5 Integração & CI | PENDING | | |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — c987384 | 2026-11-26 |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
