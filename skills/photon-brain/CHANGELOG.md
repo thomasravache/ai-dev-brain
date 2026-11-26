@@ -12,6 +12,15 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Fixed
 - Regra de arquitetura de processo (`tests/brain_architecture_rules.py`, `subprocess_findings`): fora de `run_processor` passa a reportar também `from subprocess import ...`, `import subprocess as x`, `from os import system`/`popen`/`exec*`/`spawn*` e as chamadas feitas pelo apelido ou pelo nome importado, como a regra da `boson-atlas`. A regra é por nome e não pega acesso dinâmico (`__import__`, `importlib`, `getattr`). Só teste: o `brain.py` e a `BRAIN_VERSION` não mudam (ADR-0007) (SPEC-0062).
 
+## [2026.11.9] - 2026-11-26
+
+### Added
+- `append NOTA --section TÍTULO --text-file ARQ [--json]`: acrescenta o texto do arquivo no fim da seção `## TÍTULO` da nota, ou cria a seção logo antes de `## Relations` (no fim, sem ela). Só acrescenta; BOM e fim de linha mantidos; escrita atômica e recusa de link simbólico para fora do vault como no `relate`. O `log.md` recebe `append <caminho> — ## TÍTULO`, nunca o texto. Título vazio, com quebra de linha, começando com `#` ou igual a `Relations`, arquivo ausente, binário, vazio ou maior que 1 MiB e nota não encontrada ou fora do vault saem com 2 sem gravar nada (ADR-0007) (SPEC-0107).
+- `new-note --body-file ARQ`: o texto do arquivo substitui as seções do modelo entre o `# título` e `## Relations`, com o frontmatter e `## Relations` do modelo; o log registra `<tipo>; com corpo`. Arquivo inválido ou corpo com uma linha `## Relations` sai com 2 sem criar nada (SPEC-0107).
+
+### Changed
+- `SKILL.md` e `references/store-flow.md`: o corpo de uma nota nova vai por `new-note --body-file` e o acréscimo a uma nota existente por `append`, nunca editando o arquivo à mão (SPEC-0107).
+
 ## [2026.11.8] - 2026-11-17
 
 ### Changed
