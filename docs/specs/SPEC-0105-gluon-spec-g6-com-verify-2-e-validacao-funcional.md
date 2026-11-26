@@ -284,19 +284,19 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01 escrito(s) com a tag `SPEC-0105:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+- [x] CH-01 escrito(s) com a tag `SPEC-0105:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
 
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-01 com a tag `SPEC-0105:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02, CT-01 com a tag `SPEC-0105:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -326,36 +326,56 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+G6 da gluon-spec com a verificação completa da boson-atlas: depois do merge, o agente acompanha a entrega com `verify track` (com limite de `track_max_minutes`) até a imagem do commit, roda o `verify compare` com o `verify@2` (dependências e sinais dos recursos ligados, com os limites novos) e, só em `tier: test` e com `delivery_check.functional`, a validação funcional; o Relatório de Entrega registra as dependências verificadas e as jornadas. Seis chaves novas no `delivery_check` do `sdd-config` (`functional`, `max_new_dlq`, `max_queue_age`, `max_signal_increase`, `max_resources`, `track_max_minutes`), mostradas pelo `whats-new`. Versões: gluon-spec 2026.11.11 e plugin 2026.11.44.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`references/gates.md`:** a seção de verificação ativa ganhou o escopo de dependências, o `track` com um item por estado e saída, os limites novos nas linhas de comando, a validação funcional e as regras de produção (um sim por execução, inclusive em cada repetição do `track`).
+- **`references/sdd-config.template.yml`:** as seis chaves, cada uma com comentário.
+- **`SKILL.md`:** uma oração no passo 7 apontando para o G6.
+- **Emendas:** v2 (dois testes da SPEC-0091 aceitam o `track` e a versão nova) e v3 (a migration esperada só vai para o `compare` com o datastore no escopo da foto, para não quebrar o fallback `verify@1`; rota manual sem o sim de produção).
+- **G4 em duas rodadas:** a primeira pediu a Emenda v3; a segunda aprovou.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 9fa8d46, 6f731fc e b6729ab (G1) e green em 375cff6 e 722fc81 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | o roteiro do G6 de hoje continua presente | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-01 | as seis chaves novas no template, com comentários | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-02 | verify track no G6, com o limite de track_max_minutes | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-03 | dependências no G6: escopo, fallback verify@1 e migration só no escopo | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-04 | --functional só com delivery_check.functional e tier: test | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-05 | produção: um sim por execução e rota manual sem ele | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| UT-06 | o passo 7 da SKILL.md cita track, dependências e functional | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| IT-01 | opções do G6 batem com o atlas.py do repositório | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| IT-02 | whats-new mostra as chaves novas num projeto com a versão anterior | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
+| CT-01 | toda opção citada no G6 existe no --help real | PASS | `test_delivery_verify2.py` e `test_delivery_verify.py`; G2 PASS em 722fc81; G4 `verify` 10/10 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.44 depois do merge. Projetos com `tools/sdd` veem as chaves novas pelo `whats-new` e atualizam com `vendor --force`.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minor do G4 no radar** do épico SPEC-0095: o datastore de uma migration que não está ligado ao serviço no atlas faz o `snapshot` sair com 2 quando entra no `--resource`.
+- A cópia em `tools/sdd/` deste repositório fica em 2026.11.10 até o `vendor --force`, feito no fechamento do épico.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0105`. -->
