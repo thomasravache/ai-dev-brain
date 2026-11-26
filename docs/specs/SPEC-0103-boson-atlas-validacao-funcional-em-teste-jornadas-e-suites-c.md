@@ -4,14 +4,14 @@ title: "boson-atlas: validação funcional em teste — jornadas e suítes curad
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0104]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/probes/suite.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/probes/suite.md, skills/boson-atlas/references/verify.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/generic.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_functional.py, skills/boson-atlas/tests/test_probe_suite.py, skills/boson-atlas/tests/test_verify_functional.py, skills/boson-atlas/tests/fixtures/functional/**, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/probes/suite.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/probes/suite.md, skills/boson-atlas/references/verify.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/generic.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_functional.py, skills/boson-atlas/tests/test_probe_suite.py, skills/boson-atlas/tests/test_verify_functional.py, skills/boson-atlas/tests/test_probe_resource.py, skills/boson-atlas/tests/fixtures/functional/**, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0012, ADR-0023, ADR-0025, ADR-0026]
 external: []
 size: M
@@ -238,6 +238,9 @@ VERIFY
   o snapshot não muda
 ```
 
+**Esclarecimentos (Emenda v2):**
+- `test_probe_resource.py` (SPEC-0096) entra nos `touches`: três testes dele (`test_urls_and_journeys`, `test_the_log_has_resource_only_when_used`, `test_delivery_and_functional_through_the_cli`) esperam um `worker` sem jornadas com exit 0 e uma saída funcional que este contrato passa a recusar. Só esses testes mudam, para o comportamento desta spec (exit 4 sem jornadas curadas e saída funcional no contrato).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -351,33 +354,33 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01 escrito(s) com a tag `SPEC-0103:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+- [x] CH-01 escrito(s) com a tag `SPEC-0103:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
 
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, IT-01, IT-02, CT-01 com a tag `SPEC-0103:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, IT-01, IT-02, CT-01 com a tag `SPEC-0103:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=59, skipped=1)) — 07f8dbf | 2026-11-26 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 3094697 | 2026-11-26 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8141f21 | 2026-11-26 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 4 minor (--journey ignorado em capacidade não functional, regra de tier presa ao nome functional, cwd inexistente com mensagem errada, SKILL.md sem as opções na tabela) — dd12f47 | 2026-11-26 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ab5f08d | 2026-11-26 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — f348ed4 | 2026-11-26 |
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -389,38 +392,63 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Validação funcional em ambiente de teste no boson-atlas: a capacidade `functional` roda as jornadas curadas do serviço (`attrs.journeys` no atlas, escritas à mão pelo coletor `generic`) pelo novo adaptador `suite`, que executa as suítes do time contra a URL de `access.urls`; só em `tier: test`, recusada antes de qualquer processo fora dele ou sem jornadas curadas; `--journey` escolhe jornadas dentro das curadas; e `verify compare --functional` acrescenta a verificação funcional ao `verify@2`, só com a entrega confirmada. Versões: boson-atlas 2026.11.28 e plugin 2026.11.43.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/atlas.py`:** recusas por tier e por jornadas antes de escolher o adaptador; `--journey` validado e mantido na ordem curada; `validate_functional_output` público; verificação `functional` no `compare`, fora da foto.
+- **`assets/probes/suite.py`:** arquivo de jornadas validado inteiro com chaves fechadas; cada suíte em argv sem shell, em grupo de processos próprio, com timeout e ambiente mínimo (base + `ATLAS_*` + as credenciais da jornada); pasta da suíte nunca é a do adaptador; só linhas `ATLAS-FAILED-STEP:` saem.
+- **Documentação:** `references/probes/suite.md` (novo), `references/verify.md`, `probes.md`, `collector-contract.md` e `collectors/generic.md`.
+- **Emenda v2:** três testes da SPEC-0096 passam ao comportamento novo.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em af618fc e 07f8dbf (G1) e green em 3094697 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | probe e verify compare sem --functional ficam iguais | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-01 | validação funcional recusada fora de tier: test, antes de qualquer processo | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-02 | só jornadas curadas em attrs.journeys; --journey filtra e valida | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-03 | alvo com as jornadas curadas e a URL de access.urls | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-04 | saída funcional fora do contrato recusada | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-05 | adaptador suite: describe, arquivo de jornadas validado e mensagens | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-06 | suítes sem shell, com timeout, ambiente mínimo e pasta própria | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-07 | verify compare --functional só em test e com entrega confirmada | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| UT-08 | coletores da skill não emitem journeys; o generic emite | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| IT-01 | probe functional de ponta a ponta com scan e build | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| IT-02 | verify compare --functional de ponta a ponta | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
+| CT-01 | blocos probe@2 functional válidos e inválidos do suite.md | PASS | `test_probe_functional.py`, `test_probe_suite.py` e `test_verify_functional.py`; G2 PASS em 3094697; G4 `verify` 12/12 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.43 depois do merge. A validação funcional só roda com o adaptador `suite` declarado, as jornadas curadas e o ambiente em `tier: test`.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - `--journey` passa sem filtro numa capacidade que não é `functional` mas declara `inputs: [journeys]`;
+  - as regras de tier e de jornadas curadas dependem do nome `functional`;
+  - `cwd` inexistente dá "comando da suíte não encontrado";
+  - a tabela de comandos do `SKILL.md` não lista `--journey` e `--functional`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0103`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | `test_probe_resource.py` nos `touches` | SPEC_DEFECT do Test-writer: três testes da SPEC-0096 contradizem as regras desta spec | SPEC-0096 (só testes) | thomas, 2026-11-26 (piloto automático com o recomendado) |

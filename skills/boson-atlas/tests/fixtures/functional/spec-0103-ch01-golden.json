@@ -1,0 +1,154 @@
+{
+ "foto": {
+  "contract": "verify@2",
+  "dependencies": {},
+  "deployments": {
+   "dev-api": {
+    "desired": 3,
+    "error_signatures": {},
+    "images": [
+     "acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e"
+    ],
+    "ready": 3,
+    "restarts": {
+     "api-7f9c-aaaa": 0,
+     "api-7f9c-bbbb": 0,
+     "api-7f9c-cccc": 0
+    },
+    "warnings": []
+   }
+  },
+  "environment": "dev",
+  "not_verified": [],
+  "service": "api",
+  "taken_at": "<TS>"
+ },
+ "probe runtime status --json": [
+  0,
+  "{\n  \"contract\": \"probe@1\",\n  \"adapter\": \"fake\",\n  \"capability\": \"runtime\",\n  \"verb\": \"status\",\n  \"status\": \"ok\",\n  \"items\": [\n    {\n      \"kind\": \"workload\",\n      \"workload\": \"Deployment/api\",\n      \"found\": true,\n      \"desired\": 3,\n      \"updated\": 3,\n      \"ready\": 3,\n      \"available\": 3,\n      \"rollout_complete\": true\n    },\n    {\n      \"kind\": \"pod\",\n      \"workload\": \"Deployment/api\",\n      \"pod\": \"api-7f9c-aaaa\",\n      \"phase\": \"Running\",\n      \"ready\": true,\n      \"restarts\": 0,\n      \"images\": [\n        \"acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e\"\n      ],\n      \"last_termination\": \"\"\n    },\n    {\n      \"kind\": \"pod\",\n      \"workload\": \"Deployment/api\",\n      \"pod\": \"api-7f9c-bbbb\",\n      \"phase\": \"Running\",\n      \"ready\": true,\n      \"restarts\": 0,\n      \"images\": [\n        \"acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e\"\n      ],\n      \"last_termination\": \"\"\n    },\n    {\n      \"kind\": \"pod\",\n      \"workload\": \"Deployment/api\",\n      \"pod\": \"api-7f9c-cccc\",\n      \"phase\": \"Running\",\n      \"ready\": true,\n      \"restarts\": 0,\n      \"images\": [\n        \"acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e\"\n      ],\n      \"last_termination\": \"\"\n    }\n  ],\n  \"truncated\": false\n}\n"
+ ],
+ "probes.log": [
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "status"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "status"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "events"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "logs"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "status"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "events"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "logs"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "status"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "events"
+  },
+  {
+   "adapter": "fake",
+   "atlas": "acme",
+   "capability": "runtime",
+   "confirmed_production": false,
+   "environment": "dev",
+   "exit": 0,
+   "service": "api",
+   "status": "ok",
+   "verb": "logs"
+  }
+ ],
+ "verify compare": [
+  0,
+  "# verify — api em dev: passou\n\nImagem esperada: `acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e`.\n\n| deployment | recurso | verificação | status | motivo |\n|---|---|---|---|---|\n| dev-api |  | delivery | ok | 3 pod(s) pronto(s) com acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e |\n| dev-api |  | runtime | ok | pods prontos, sem restart nem aviso novo |\n| dev-api |  | logs | ok | 0 assinatura(s) de erro nova(s) |\n\n## Evidências\n- dev-api · delivery: `{\"expected\": \"acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e\", \"rollout_complete\": true, \"ready_pods\": 3, \"pods_with_other_image\": [], \"workloads_not_found\": []}`\n- dev-api · runtime: `{\"workloads_not_found\": [], \"not_ready_pods\": [], \"new_restarts\": {}, \"new_restarts_total\": 0, \"max_new_restarts\": 0, \"baseline\": \"foto\", \"new_warnings\": []}`\n- dev-api · logs: `{\"window_seconds\": 600, \"max_new_errors\": 0, \"new_error_signatures\": {}, \"known_error_signatures\": 0, \"truncated\": false}`\n"
+ ],
+ "verify compare --json": [
+  0,
+  "{\n  \"contract\": \"verify@2\",\n  \"verdict\": \"passou\",\n  \"checks\": [\n    {\n      \"deployment\": \"dev-api\",\n      \"resource\": null,\n      \"check\": \"delivery\",\n      \"status\": \"ok\",\n      \"evidence\": {\n        \"expected\": \"acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e\",\n        \"rollout_complete\": true,\n        \"ready_pods\": 3,\n        \"pods_with_other_image\": [],\n        \"workloads_not_found\": []\n      },\n      \"reason\": \"3 pod(s) pronto(s) com acme/api:1.4.2@sha256:9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e9f8e\"\n    },\n    {\n      \"deployment\": \"dev-api\",\n      \"resource\": null,\n      \"check\": \"runtime\",\n      \"status\": \"ok\",\n      \"evidence\": {\n        \"workloads_not_found\": [],\n        \"not_ready_pods\": [],\n        \"new_restarts\": {},\n        \"new_restarts_total\": 0,\n        \"max_new_restarts\": 0,\n        \"baseline\": \"foto\",\n        \"new_warnings\": []\n      },\n      \"reason\": \"pods prontos, sem restart nem aviso novo\"\n    },\n    {\n      \"deployment\": \"dev-api\",\n      \"resource\": null,\n      \"check\": \"logs\",\n      \"status\": \"ok\",\n      \"evidence\": {\n        \"window_seconds\": 600,\n        \"max_new_errors\": 0,\n        \"new_error_signatures\": {},\n        \"known_error_signatures\": 0,\n        \"truncated\": false\n      },\n      \"reason\": \"0 assinatura(s) de erro nova(s)\"\n    }\n  ],\n  \"suggestion\": \"\"\n}\n"
+ ],
+ "verify snapshot": [
+  0,
+  "foto verify@2 gravada em <ROOT>/work-tests/test_todays_probe_and_verify_keep_their_outputs/foto.json: api em dev, 1 deployment(s), 0 recurso(s), 0 verificação(ões) não feita(s)\na foto é da tarefa: apague o arquivo no fim (references/verify.md)\n"
+ ]
+}

@@ -9,6 +9,16 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.28] - 2026-11-26
+
+### Added
+- Capacidade `functional` no `probe` (verbo `run`): só em ambiente `tier: test` (qualquer outro, inclusive sem `tier`, sai com 4 `validação funcional só roda em ambiente tier: test (<ambiente> não é)`, mesmo com `--confirm-production`, sem rodar nada, nem o `--describe`; `probes.log` com `reason: not_test_tier`) e só com jornadas curadas (atributo `journeys` do serviço; sem elas, exit 4 `sem jornadas curadas para <serviço> (attrs.journeys)`, `reason: no_journeys`). `--journey <id>` (repetível) restringe às curadas, na ordem curada; fora da regra de nome, não curada ou numa capacidade sem `journeys` em `inputs` sai com 2. A saída de `functional` tem validação própria (`validate_functional_output`: um item por jornada pedida, na mesma ordem, chaves fechadas `journey`, `result`, `duration_seconds`, `failed_steps`); uma jornada `failed` não muda o exit (SPEC-0103, ADR-0026).
+- Adaptador de probe `suite` da skill (`assets/probes/suite.py`, contrato `probe@2`, `functional: run`, acesso `urls`, entrada `journeys`): lê o arquivo de jornadas local (`--journeys-file` no `command`, JSON validado inteiro, chaves fechadas, mensagens sem o valor) e roda só as jornadas pedidas, sem shell, num grupo de processos próprio, com o `timeout` de cada jornada (1 a 300 s, padrão 120) e o ambiente mínimo das probes mais as credenciais daquela jornada e `ATLAS_SERVICE`, `ATLAS_ENVIRONMENT`, `ATLAS_JOURNEY` e `ATLAS_BASE_URL`. Exit 0 `passed`, 77 `skipped`, outro `failed` com as linhas `ATLAS-FAILED-STEP:` (até 5, 200 caracteres); id sem comando, credencial não recebida ou executável ausente `skipped`; tempo esgotado `failed` com o grupo encerrado. Nenhuma outra linha da suíte sai do adaptador (SPEC-0103).
+- `verify compare --functional [--journey <id>]...`: a verificação `functional` (nível deployment, `resource: null`) depois das do `verify@2`: `ok` com todas as jornadas `passed`, `failed` com alguma `failed` (jornadas e passos na evidência), `not_verified` com jornada pulada, recusa, erro ou saída fora do contrato; fora de `tier: test` ou com a entrega não confirmada fica `not_verified` sem rodar nada. `validate_verify_result` aceita `check: functional` com a evidência `{environment_tier, journeys}`; o contrato continua `verify@2` e a foto não muda (SPEC-0103).
+- `references/probes/suite.md` (novo); a capacidade `functional`, os passos 3a/3b e `--journey` em `references/probes.md`; `--functional` em `references/verify.md`; o atributo `journeys` em `references/collector-contract.md` e `references/collectors/generic.md`; as linhas do `SKILL.md`; a regra de arquitetura dos adaptadores de probe da skill (`suite.py`: só biblioteca padrão, processos sem shell) (SPEC-0103).
+
+### Changed
+- Um serviço sem jornadas curadas deixa de receber `target.journeys: []` na capacidade `functional`: a probe é recusada com exit 4 (SPEC-0103).
 ## [2026.11.27] - 2026-11-26
 
 ### Added

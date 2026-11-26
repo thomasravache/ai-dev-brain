@@ -30,6 +30,12 @@ collectors:
 
 - `kind` and `id` are required in every entity; `name` defaults to the id and `attrs` to `{}`.
 - `from`, `to` and `type` are required in every relation.
+- **Curated journeys** (SPEC-0103): the `journeys` attr of a `service` lists the ids of the user journeys that the `functional` probe runs in a `tier: test` environment. Only a person declares them, here, and the atlas PR (mode `repo`) or the person's own edit (mode `local`) is the confirmation; no other collector emits them. Only ids: never a command, script or URL (the commands live in the journeys file of the machine, `references/probes/suite.md`).
+
+```json
+{"entities": [{"kind": "service", "id": "api", "attrs": {"journeys": ["checkout", "login"]}}]}
+```
+
 - Kinds, relation types and `attrs` rules are the contract's: the `scan` validates the output, drops forbidden keys and masks secrets. Never put a secret value in the file; a `secret-ref` holds only the name and where the secret lives.
 
 ## Output

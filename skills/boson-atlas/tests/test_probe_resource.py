@@ -73,6 +73,9 @@ CAPS = {
     "delivery": {"verbs": ["trace"], "targets": ["deployment"], "access": [], "inputs": ["change"]},
     "functional": {"verbs": ["run"], "targets": ["deployment"], "access": ["urls"], "inputs": ["journeys"]},
 }
+# SPEC-0103:UT-04 — a saída de functional: um item por jornada curada de api (checkout, login), chaves fechadas
+FUNCTIONAL_ITEMS = [{"journey": j, "result": "passed", "duration_seconds": 0.5, "failed_steps": []}
+                    for j in ("checkout", "login")]
 ORDERS_ATTRS = {"region": "us-east-1", "dlq": "orders-dlq", "fifo": False, "retention_days": 4}
 ARN = f"arn:aws:sqs:us-east-1:{ACCOUNT}:orders"
 QUEUE_URL = f"https://sqs.us-east-1.amazonaws.com/{ACCOUNT}/orders"
@@ -760,12 +763,13 @@ class MinimalInputTest(ResourceCase):
 
     def test_urls_and_journeys(self):
         """SPEC-0096:UT-07 — urls em access e inputs [journeys]: target.urls.base_url e target.journeys igual ao
-        atributo journeys do serviço, sem repetição e em ordem (["checkout", "login"]); um serviço sem o atributo dá
-        journeys []; uma jornada com espaço no atlas: exit 2 "alvo inválido no atlas: journeys", sem o valor, e a
-        capacidade não roda."""
+        atributo journeys do serviço, sem repetição e em ordem (["checkout", "login"]); um serviço sem o atributo sai
+        com 4 "sem jornadas curadas" sem rodar a consulta (SPEC-0103:UT-02); uma jornada com espaço no atlas: exit 2
+        "alvo inválido no atlas: journeys", sem o valor, e a capacidade não roda."""
         # SPEC-0096:UT-07
         access = self.access()
         self.configure(access=access)
+        self.write_scenario({"run": {"items": FUNCTIONAL_ITEMS}})  # SPEC-0103:UT-04 — saída no contrato de functional
         self.assertExit(self.probe("functional", "run", "--json"), 0)
         run = self.received()
         target = run["input"]["target"]
@@ -774,8 +778,10 @@ class MinimalInputTest(ResourceCase):
         self.assertEqual(target["journeys"], ["checkout", "login"])
         self.assertEqual(f("validate_probe_input")(run["input"]), [])
         self.reset_calls()
-        self.assertExit(self.probe("functional", "run", "--json", service="worker"), 0)
-        self.assertEqual(self.received()["input"]["target"]["journeys"], [])
+        result = self.probe("functional", "run", "--json", service="worker")
+        self.assertExit(result, 4)  # SPEC-0103:UT-02 — sem jornadas curadas, recusada
+        self.assertIn("sem jornadas curadas para worker (attrs.journeys)", output(result))  # SPEC-0103:UT-02
+        self.assertEqual(self.calls("run"), [])  # SPEC-0103:UT-02
         self.reset_calls()
         self.set_attrs("service:api", journeys=["check out-0096"])
         result = self.probe("functional", "run")
@@ -852,6 +858,7 @@ class MaskTest(ResourceCase):
         self.configure()
         self.assertExit(self.probe("messaging", "queue", "--resource", "queue:orders", "--json"), 0)
         self.assertEqual(self.log()[-1].get("resource"), "queue:orders")
+        self.write_scenario({"run": {"items": FUNCTIONAL_ITEMS}})  # SPEC-0103:UT-04 — saída no contrato de functional
         self.assertExit(self.probe("functional", "run", "--json"), 0)
         last = self.log()[-1]
         self.assertNotIn("resource", last)
@@ -1025,7 +1032,8 @@ class EndToEndTest(ResourceCase):
         journeys): target.urls.base_url e target.journeys, e a URL não sai no stdout, no stderr nem no probes.log."""
         # SPEC-0096:IT-02
         self.write_scenario({"trace": {"items": [{"commit": "3f2ef04"}]},
-                             "run": {"items": [{"journey": "checkout", "ok": True}], "message": f"rodou em {BASE_URL}"}})
+                             # SPEC-0103:UT-04 — um item por jornada curada, no contrato de functional
+                             "run": {"items": FUNCTIONAL_ITEMS, "message": f"rodou em {BASE_URL}"}})
         self.configure([self.adapter2(credentials=("FAKE_CI_TOKEN",))])
         result = self.probe("delivery", "trace", "--commit", "3f2ef04", "--json",
                             environ={"FAKE_CI_TOKEN": "valor-ci-falso-0096"})

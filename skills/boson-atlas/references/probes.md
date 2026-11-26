@@ -53,17 +53,20 @@ Nenhuma variável declarada só para outro adaptador ou para os coletores chega 
 
 ```text
 atlas.py probe <capacidade> <verbo> --service <id> --env <ambiente>
-    [--resource <kind:id>] [--commit <sha>]
+    [--resource <kind:id>] [--commit <sha>] [--journey <id>]...
     [--since 30m] [--lines N] [--summary] [--confirm-production] [--json] [--atlas X]
 ```
 
 - `--resource <kind>:<id>` (SPEC-0096) mira um recurso do grafo — `datastore`, `queue`, `topic` ou `bucket` — ligado ao deployment do serviço no ambiente, em vez do deployment. Só um adaptador `probe@2` que declara esse tipo de alvo recebe o recurso.
 - `--commit <sha>` (SPEC-0096) entrega a mudança (`target.change`) à capacidade que declara `inputs: [change]`; o sha é normalizado para minúsculas.
+- `--journey <id>` (SPEC-0103, repetível) restringe `target.journeys` às jornadas curadas escolhidas, na ordem curada; vale só para a capacidade que declara `inputs: [journeys]`.
+
+**Capacidade `functional`** (SPEC-0103, ADR-0026 regra 4): roda as jornadas curadas do serviço (verbo `run`) e só existe em ambiente `tier: test`. O núcleo garante duas regras antes de escolher o adaptador, sem opção que as desligue: **só `tier: test`** (passo 3a) e **ao menos uma jornada curada** (passo 3b). A saída tem uma validação própria (`validate_functional_output`): um item por jornada pedida, na mesma ordem, com exatamente `journey`, `result` (`passed`, `failed` ou `skipped`), `duration_seconds` (≥ 0) e `failed_steps` (até 5 textos de até 200 caracteres); fora disso, exit 1 `saída fora do contrato`. Uma jornada `failed` não muda o exit (0): o probe informa e o `verify compare --functional` julga (`references/verify.md`). A skill traz o adaptador `suite`, que roda as suítes do time a partir de um arquivo de jornadas local: `references/probes/suite.md`.
 
 Os passos, nesta ordem:
 
 1. Sem `probes.enabled: true` → exit 4 `probes desligadas nesta máquina (probes.enabled)`. Nada roda, nem o `--describe`, e nada é registrado.
-2. `--lines` fora de 1..2000 ou `--since` fora do formato ou acima de 24h → exit 2. `--resource` fora de `<kind>:<id>` (kind `datastore`, `queue`, `topic` ou `bucket`) → exit 2 `--resource inválido — …`; `--commit`, depois de ir para minúsculas, fora de `^[0-9a-f]{7,40}$` → exit 2 `--commit inválido — …`. Nada roda.
+2. `--lines` fora de 1..2000 ou `--since` fora do formato ou acima de 24h → exit 2. `--resource` fora de `<kind>:<id>` (kind `datastore`, `queue`, `topic` ou `bucket`) → exit 2 `--resource inválido — …`; `--commit`, depois de ir para minúsculas, fora de `^[0-9a-f]{7,40}$` → exit 2 `--commit inválido — …`; `--journey` fora da regra de nome simples → exit 2 `--journey inválido — …`. Nada roda.
 3. **Alvo:** o deployment de `service:<id>` que faz `runs_in` em `environment:<ambiente>` no `graph.json` (o primeiro pelo id, se houver mais de um). Nenhum → exit 2 com o serviço e o ambiente procurados.
    Os campos do alvo que vêm do atlas são conferidos antes de qualquer processo rodar (nem o `--describe`); fora da regra → exit 2 `alvo inválido no atlas: …`, sem citar o valor:
    - `namespace` (quando há) segue o DNS-1123: minúsculas, dígitos e `-`, até 63, sem começar nem terminar com `-`;
@@ -76,13 +79,15 @@ Os passos, nesta ordem:
    - precisa estar em `linked_resources(graph, serviço, ambiente)` (abaixo); a primeira entrada dele dá o deployment do alvo → senão exit 2 `recurso <kind:id> não ligado a <serviço> em <ambiente>`. Uma aresta só do serviço, sem o deployment do ambiente, não basta; um recurso ligado ao deployment de outro ambiente também não;
    - os atributos dele são conferidos (ver "Campos do recurso") → fora da regra, exit 2 `alvo inválido no atlas: resource.<campo> …`, sem o valor.
    **Mudança** (só com `--commit`): `target.change.repositories` = os repositórios de código do serviço (`delivery.code_repositories` do `context`, SPEC-0086), em ordem. Nenhum → exit 2 `nenhum repositório de código de service:<id> no atlas para --commit`; um id fora de `<dono>/<nome>` → exit 2 `alvo inválido no atlas: change.repositories …`.
+   **3a. Só `tier: test`** (capacidade `functional`): `tier` do ambiente diferente de `test`, inclusive sem `tier` → exit 4 `validação funcional só roda em ambiente tier: test (<ambiente> não é)`, com ou sem `--confirm-production`; nada roda, nem o `--describe`; `probes.log`: `refused`, `reason: not_test_tier`.
+   **3b. Jornadas curadas** (capacidade `functional`): o atributo `journeys` do serviço (conferido pela regra de nome simples; fora → exit 2 `alvo inválido no atlas: journeys …`) ausente ou vazio → exit 4 `sem jornadas curadas para <serviço> (attrs.journeys)`, `probes.log`: `refused`, `reason: no_journeys`; um `--journey` fora das curadas → exit 2 `jornada <id> não curada para <serviço>`.
 4. **Adaptador:** o primeiro em `adapters` cujo `--describe` declara a capacidade **e** aceita o tipo de alvo (`deployment` sem `--resource`; o kind do recurso com ele; `probe@1` aceita só `deployment`). Nenhum → exit 4 `nenhum adaptador para <capacidade>` ou, com `--resource`, `nenhum adaptador para <capacidade> com alvo <kind>`.
-   **Entradas:** capacidade com `change` em `inputs` e sem `--commit` → exit 2 `<capacidade> exige --commit`; `--commit` numa capacidade sem `change` (inclusive `probe@1`) → exit 2 `--commit não é aceito por <capacidade>`. Com `journeys` em `inputs`, as jornadas do serviço (atributo `journeys`, ADR-0026; sem repetição, em ordem; sem o atributo, `[]`) são conferidas pela regra de nome simples → fora, exit 2 `alvo inválido no atlas: journeys …`, sem o valor.
+   **Entradas:** capacidade com `change` em `inputs` e sem `--commit` → exit 2 `<capacidade> exige --commit`; `--commit` numa capacidade sem `change` (inclusive `probe@1`) → exit 2 `--commit não é aceito por <capacidade>`. Com `journeys` em `inputs`, as jornadas do serviço (atributo `journeys`, ADR-0026; sem repetição, em ordem; sem o atributo, `[]`) são conferidas pela regra de nome simples → fora, exit 2 `alvo inválido no atlas: journeys …`, sem o valor; com `--journey`, só as escolhidas, na ordem curada. `--journey` numa capacidade sem `journeys` em `inputs` → exit 2 `--journey não é aceito por <capacidade>`.
 5. **Verbo:** fora de (verbos do `--describe` ∩ `verbs` da configuração) → exit 4 `verbo <v> não permitido`. O adaptador não roda.
 6. **Produção:** `tier` do ambiente (em `environments:` do `atlas-config.yml`) diferente de `test`, inclusive sem `tier`, e sem `--confirm-production` → exit 4 `ambiente <a> é de produção ou sem marcação: confirme com a pessoa e use --confirm-production`. O recurso herda o ambiente do deployment que o liga.
 7. **Acesso:** `probe@1`: nenhum cluster do deployment em `access.clusters` → exit 4 `sem acesso local ao cluster <c> (access.clusters)`. Vale o contexto do primeiro cluster (pelo nome) que tem acesso local. `probe@2`: só o que a capacidade declara em `access`, na ordem `cluster` (como no `probe@1`), `cloud` (`access.cloud.<ambiente>.profile`), `database` (`access.databases.<id do recurso>`, com o arquivo de senhas existente como arquivo, conferido só por `os.stat`) e `urls` (`access.urls.<ambiente>.base_url`); faltou → exit 4 `sem acesso local: cluster|cloud|database|urls`, sem citar o valor.
 8. Roda o adaptador com a entrada no stdin, as credenciais dele (e `PGPASSFILE`, só com `database`) e o timeout; lê no máximo 1 MB do stdout.
-9. Valida a saída contra o contrato do `--describe` do adaptador, mascara, corta em `lines` itens e imprime (Markdown ou `--json`); registra.
+9. Valida a saída contra o contrato do `--describe` do adaptador (e, na capacidade `functional`, pela validação própria acima), mascara, corta em `lines` itens e imprime (Markdown ou `--json`); registra.
 
 ### Recursos ligados (`linked_resources`)
 
