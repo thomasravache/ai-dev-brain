@@ -306,7 +306,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=43, skipped=1)) — 6f731fc | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 722fc81 | 2026-11-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 82b5beb | 2026-11-26 |
-| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED — major: --expect-migration sempre quebra o fallback verify@1 (datastore fora do escopo = exit 2 no compare) e acima de max_resources; minors: sinal de 'sem adaptador' não definido, sem o sim de produção não diz o que fazer, linhas sem [--confirm-production] | 2026-11-26 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente (2ª rodada): APPROVED — major resolvido pela Emenda v3 (migration esperada só no escopo da foto; testes pegam a reversão); 1 minor (datastore de migration não ligado ao serviço faz o snapshot sair com 2) — f7033a5 | 2026-11-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -314,6 +314,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-26 — reviewer independente: CHANGES_REQUESTED — major: --expect-migration sempre quebra o fallback verify@1 (datastore fora do escopo = exit 2 no compare) e acima de max_resources; minors: sinal de 'sem adaptador' não definido, sem o sim de produção não diz o que fazer, linhas sem [--confirm-production] — eaf75e3
+- G4 PASS 2026-11-26 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
