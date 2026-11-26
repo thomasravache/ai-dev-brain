@@ -4,7 +4,7 @@ title: "photon-brain: brain.py sem assets/ quando o vault já tem a configuraç�
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
@@ -15,8 +15,8 @@ touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/references/c
 adrs: [ADR-0007]
 external: []
 size: S
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-26
 ---
 
 # SPEC-0111 — photon-brain: brain.py sem assets/ quando o vault já tem a configuração

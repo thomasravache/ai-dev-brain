@@ -4,7 +4,7 @@ title: "photon-brain: tipo list para listas de consulta e list add"
 tier: full
 type: feature
 user_facing: false
-status: proposed
+status: approved
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: [SPEC-0107]
@@ -15,8 +15,8 @@ touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/assets/templ
 adrs: [ADR-0007, ADR-0027]
 external: []
 size: M
-approved_by:
-approved_at:
+approved_by: thomas
+approved_at: 2026-11-26
 ---
 
 # SPEC-0108 — photon-brain: tipo list para listas de consulta e list add

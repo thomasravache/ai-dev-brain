@@ -1,7 +1,7 @@
 ---
 id: ADR-0027
 title: Integrações do agente no photon-brain por orientação e configuração, nunca pelo brain.py
-status: proposed
+status: accepted
 origin: decision
 date: 2026-11-26
 pillars: [arquitetura]
