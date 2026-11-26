@@ -4,7 +4,7 @@ title: "photon-brain: fuso horário nas datas das capturas e do log"
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
@@ -183,7 +183,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — d69df22 | 2026-11-26 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — c7704f2 | 2026-11-26 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-26 — CHANGES_REQUESTED: cmd_backup não usa o relógio do vault — linha do log.md no fuso da máquina e, com timezone inválido, grava e sai com 0 em vez de 2 (contrato: comandos que gravam datas) — 4392048
