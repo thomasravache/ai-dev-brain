@@ -9,9 +9,9 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/config.md, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/access-setup.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_access_setup.py, skills/boson-atlas/tests/test_probe_stats.py, skills/boson-atlas/tests/fixtures/access-setup/**, skills/boson-atlas/tests/fixtures/probe-stats/**, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/references/config.md, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/access-setup.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_access_setup.py, skills/boson-atlas/tests/test_probe_stats.py, skills/boson-atlas/tests/test_probe.py, skills/boson-atlas/tests/test_probe_resource.py, skills/boson-atlas/tests/fixtures/access-setup/**, skills/boson-atlas/tests/fixtures/probe-stats/**, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0023, ADR-0025]
 external: []
 size: M
@@ -207,6 +207,9 @@ doctor (com o probes.log da pasta local e alguma sugestão nos últimos 30 dias)
   doctor --json: cada uma como um check {"item": "uso das probes", "status": "AVISO", "detail": "<sugestão>"}
 ```
 
+**Esclarecimentos (Emenda v2):**
+- `test_probe.py` (SPEC-0088 UT-05) e `test_probe_resource.py` (SPEC-0096 CH-01) entram nos `touches`: eles exigem que as linhas recusadas e de erro do `probes.log` tenham exatamente as chaves antigas, e este contrato acrescenta `reason` (e `access` em `no_access`) fora do `ok`. Só essas asserções mudam, para o conjunto novo de `PROBE_LOG_KEYS`.
+
 **Design:** N/A — sem interface gráfica; as perguntas estão no contrato.
 
 **Arquivos/módulos afetados:**
@@ -390,3 +393,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0104`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-25 | `test_probe.py` e `test_probe_resource.py` nos `touches` | TEST_DEFECT do Implementer: asserções antigas das chaves do `probes.log` contradizem o UT-06 | SPEC-0088, SPEC-0096 (só testes) | thomas, 2026-11-25 (piloto automático com o recomendado) |
