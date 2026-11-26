@@ -230,6 +230,46 @@ class NotesAndLogCliTest(TimezoneCliTestCase):
         self.assertTrue(before - SLACK <= stamp <= after + SLACK, f"hora do log fora do fuso do vault: {entries[-1]}")
 
 
+class BackupTimezoneCliTest(TimezoneCliTestCase):
+    def backup(self, tz):
+        dest = self.box.root / "backups"
+        dest.mkdir(exist_ok=True)
+        return self.run_tz(tz, "backup", "--dest", dest, "--json"), dest
+
+    def test_backup_with_an_invalid_timezone_exits_2_without_log_nor_zip(self):
+        """SPEC-0109:UT-03"""
+        # SPEC-0109:UT-03
+        self.make_vault(timezone="../etc/passwd")
+        log_before = (self.box.vault / "log.md").read_text(encoding="utf-8")
+        out, dest = self.backup("UTC")
+        self.assertExit(out, 2)
+        self.assertIn(INVALID, output(out))
+        self.assertEqual((self.box.vault / "log.md").read_text(encoding="utf-8"), log_before, "nada no log.md")
+        self.assertEqual(sorted(p.name for p in dest.rglob("*")), [], "nenhum zip (nem .partial) criado")
+
+    def test_backup_log_line_uses_the_vault_zone_like_a_capture(self):
+        """SPEC-0109:UT-05"""
+        # SPEC-0109:UT-05
+        tz = zone("Asia/Tokyo")
+        self.make_vault(timezone="Asia/Tokyo")
+        log_before = (self.box.vault / "log.md").read_text(encoding="utf-8")
+        before = dt.datetime.now(dt.timezone.utc)
+        self.assertExit(self.run_tz("UTC", "capture", "Ideia sobre grafos"), 0)
+        out, _ = self.backup("UTC")
+        after = dt.datetime.now(dt.timezone.utc)
+        self.assertExit(out, 0)
+        log = (self.box.vault / "log.md").read_text(encoding="utf-8")[len(log_before):]
+        stamps = {command: dt.datetime.strptime(when, "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+                  for when, command in LOG_ENTRY.findall(log)}
+        self.assertEqual(set(stamps), {"capture", "backup"}, log)
+        for command, stamp in stamps.items():
+            with self.subTest(command=command):
+                self.assertTrue(before - SLACK <= stamp <= after + SLACK,
+                                f"hora do log de {command} fora do fuso do vault: {stamp:%Y-%m-%d %H:%M}\n{log}")
+        gap = stamps["backup"] - stamps["capture"]
+        self.assertTrue(dt.timedelta(0) <= gap <= SLACK, f"backup e captura no mesmo fuso: {log}")
+
+
 class DoctorZoneCliTest(TimezoneCliTestCase):
     def test_timezone_key_is_known_and_doctor_shows_the_zone_in_use(self):
         """SPEC-0109:UT-06"""
