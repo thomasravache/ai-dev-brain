@@ -345,7 +345,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 5 minor (write_access perde comentários, reason padrão sem código, --cloud repetido, deployment sem cluster vira no_access, --cluster com '-') — 14ae0d4 | 2026-11-26 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — c987384 | 2026-11-26 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
