@@ -4,7 +4,7 @@ title: "boson-atlas: adaptador cloudwatch — sinais das dependências"
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
@@ -325,7 +325,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 7be6a07 | 2026-11-25 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-25 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-25 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — d4783c9 | 2026-11-25 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-25 — reviewer independente: CHANGES_REQUESTED — major: a regra da Emenda v2 (PartialData só na última página) não tem teste que a prove (mutante passa); minors: overflow vira Infinity, OverflowError sem tratamento, NaN/Infinity sem teste — 599f0ca
