@@ -9,9 +9,9 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0103, SPEC-0106]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/CHANGELOG.md, skills/gluon-spec/tests/test_delivery_verify2.py, .claude-plugin/plugin.json]
+touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/CHANGELOG.md, skills/gluon-spec/tests/test_delivery_verify2.py, skills/gluon-spec/tests/test_delivery_verify.py, .claude-plugin/plugin.json]
 adrs: [ADR-0023, ADR-0024, ADR-0025, ADR-0026]
 external: []
 size: S
@@ -174,6 +174,9 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
     "sem adaptador de recurso nesta máquina"); jornadas funcionais com o resultado (só em tier test)
   a foto é apagada no fim da tarefa; nunca entra em commit
 ```
+
+**Esclarecimentos (Emenda v2):**
+- `test_delivery_verify.py` (SPEC-0091) entra nos `touches` e deixa de ficar como está em dois pontos só: o conjunto de opções citadas aceitas passa a incluir o `--help` do `verify track` (o `--commit` só existe nele), e a versão da ferramenta passa a ser conferida como maior ou igual a 2026.11.10, não fixa. O resto desse arquivo não muda.
 
 **Design:** N/A — sem interface gráfica.
 
@@ -349,3 +352,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0105`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | `test_delivery_verify.py` nos `touches` (opções do `track` e versão mínima) | SPEC_DEFECT do Test-writer: dois testes da SPEC-0091 falham com qualquer implementação conforme | SPEC-0091 (só testes) | thomas, 2026-11-26 (piloto automático com o recomendado) |
