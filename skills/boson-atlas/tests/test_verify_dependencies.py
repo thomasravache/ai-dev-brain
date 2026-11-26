@@ -43,14 +43,15 @@ import shutil
 import stat
 import sys
 import unittest
+from typing import ClassVar
 
 from helpers import SKILL, TESTS, Sandbox, atlas, fn, output, snapshot
 from test_probe import adapter_yaml, probes_yaml
 from test_probe_resource import access_text
-from test_verify import COMMAND_RE, OLD_IMAGE as API_OLD_IMAGE
+from test_verify import COMMAND_RE, VerifyCase, baseline_data, deployment_state
 from test_verify import DEPLOYMENTS as API_DEPLOYMENTS
+from test_verify import OLD_IMAGE as API_OLD_IMAGE
 from test_verify import PODS as API_PODS
-from test_verify import VerifyCase, baseline_data, deployment_state
 
 SPEC = "SPEC-0102"
 FAKES = TESTS / "fixtures" / "fake-probes"
@@ -429,7 +430,7 @@ class DepsCase(unittest.TestCase):
     tem a própria configuração local, os próprios cenários dos dois adaptadores falsos, os próprios registros de
     processos e a própria pasta da tarefa."""
 
-    GRAPH = {}
+    GRAPH: ClassVar[dict] = {}
 
     @classmethod
     def setUpClass(cls):
@@ -919,7 +920,7 @@ class DatabaseTest(DepsCase):
             self.set_resource("datastore:orders-db", tables=answer([{"name": n} for n in names], tables_cut))
         return self.status_of(*self.DB, *extra, resource="datastore:orders-db")
 
-    M1 = {"id": "m1", "success": True}
+    M1: ClassVar[dict] = {"id": "m1", "success": True}
 
     def test_expected_migration(self):
         """SPEC-0102:UT-05 — --expect-migration m2: aplicada (success true) dá ok com new_since_baseline 1; ausente,
@@ -1012,7 +1013,7 @@ class PermissionsTest(DepsCase):
 
 
 class PublishedQueuePermissionsTest(DepsCase):
-    GRAPH = {"extra_out": True}
+    GRAPH: ClassVar[dict] = {"extra_out": True}
 
     def test_publishes_on_a_queue_requires_send(self):
         """SPEC-0102:UT-06 — queue:orders-out ligada por publishes (send allowed na foto): send denied agora dá
@@ -1358,7 +1359,7 @@ IT_METRICS = [metric("Errors", "sum", 0, "error"), metric("Latency", "p95", 120,
 
 
 class EndToEndTest(DepsCase):
-    GRAPH = {"minimal": True}
+    GRAPH: ClassVar[dict] = {"minimal": True}
 
     def tools(self):
         """aws, psql e kubectl falsos no começo do PATH: só registram que foram chamados e falham."""
