@@ -320,19 +320,19 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01 escrito(s) com a tag `SPEC-0104:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+- [x] CH-01 escrito(s) com a tag `SPEC-0104:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
 
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, IT-01, CT-01 com a tag `SPEC-0104:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, IT-01, CT-01 com a tag `SPEC-0104:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -358,36 +358,59 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Onboarding do acesso local e métricas de uso das probes no boson-atlas: `atlas.py access setup` (interativo, com os contextos do `kubectl` e os profiles da AWS detectados, ou por opções) grava `access.clusters`, `access.cloud`, `access.databases` e `access.urls` na configuração local da máquina, só por nome; o `probes.log` passa a registrar `reason` (código fechado) e `access` nas recusas e falhas; `atlas.py probes stats` resume o uso por status, capacidade e acesso faltante, e o `doctor` mostra as sugestões em "uso das probes". Versões: boson-atlas 2026.11.26 e plugin 2026.11.41.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/atlas.py`:** `AtlasError` carrega `reason` e `access`; `PROBE_LOG_KEYS` ganha as duas chaves; detecção pelo `run_collector` com timeout de 10 s e `configparser` só nos nomes das seções; validação compartilhada (`_access_field_problem`) entre o setup e a leitura; escrita atômica com permissão 0600; `validate_probe_stats` para a saída do `stats`.
+- **Documentação:** `references/access-setup.md` (novo), `references/probes.md` e `references/config.md`.
+- **Emenda v2:** as asserções antigas das chaves do `probes.log` (SPEC-0088 e SPEC-0096) passam a aceitar `reason` e `access` fora do `ok`.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em cf51be6 (G1) e green em 6064038 e d6fbf5b (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | probe ok, config, doctor e init --join sem recusas ficam iguais | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-01 | detecção de contextos do kubectl e profiles da aws, só leitura | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-02 | modo interativo: perguntas numeradas, recusa com motivo e resumo | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-03 | modo não interativo: mantido, apagado e mescla dos campos do banco | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-04 | nenhum valor de credencial nas saídas depois do setup | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-05 | arquivo de senhas ausente vira aviso e grava | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-06 | reason e access fechados no probes.log por motivo | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-07 | probes stats só do atlas escolhido, na janela, ignorando linhas ruins | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| UT-08 | doctor com as linhas de uso das probes e o limite de 5 sugestões | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| IT-01 | setup e probe de ponta a ponta num atlas temporário | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
+| CT-01 | blocos probe-stats@1 válidos e inválidos do probes.md | PASS | `test_access_setup.py` e `test_probe_stats.py`; G2 PASS em d6fbf5b; G4 `verify` 11/11 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.41 depois do merge. O `access setup` só grava a configuração local da máquina, nunca o atlas.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - `write_access` regrava o `config.yml` e perde comentários (o texto do `access-setup.md` diz que o resto fica igual);
+  - `AtlasError` sem `reason` cai num padrão (código 1 vira `adapter_failed`);
+  - `--cloud dev=x --cloud dev=y` fica com o último sem aviso;
+  - deployment sem cluster no atlas é registrado como `no_access` e sugere `access setup`;
+  - `--cluster C=-ctx` é aceito.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0104`. -->
