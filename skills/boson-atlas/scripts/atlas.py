@@ -33,7 +33,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-ATLAS_VERSION = "2026.11.24"
+ATLAS_VERSION = "2026.11.25"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "atlas-config.yml"
@@ -5901,16 +5901,57 @@ def cmd_probe(args):
 
 # ---------------------------------------------------------------- verify (references/verify.md, ADR-0024)
 
-VERIFY_CONTRACT = "verify@1"
-VERIFY_CHECKS = ("delivery", "runtime", "logs")
+VERIFY_CONTRACT = "verify@2"  # what snapshot writes and compare prints (SPEC-0102, ADR-0026)
+VERIFY_CONTRACT_1 = "verify@1"  # still accepted as --baseline (SPEC-0090)
+VERIFY_CONTRACTS = (VERIFY_CONTRACT_1, VERIFY_CONTRACT)
+# The one registry of checks (the extension point of SPEC-0102): each check with its level. A "deployment" check has
+# "resource": null, is observed by _verify_observe and compared by _delivery_check, _runtime_check or _logs_check; a
+# "resource" check has "resource": "<kind:id>", is observed by _verify_observe_resource and compared by
+# _dependencies_check or _signals_check. SPEC-0103 adds functional (deployment) here.
+VERIFY_CHECK_LEVELS = {"delivery": "deployment", "runtime": "deployment", "logs": "deployment",
+                       "dependencies": "resource", "signals": "resource"}
+VERIFY_CHECKS = tuple(VERIFY_CHECK_LEVELS)
+VERIFY_DEPLOYMENT_CHECKS = tuple(c for c, level in VERIFY_CHECK_LEVELS.items() if level == "deployment")
+VERIFY_RESOURCE_CHECKS = tuple(c for c, level in VERIFY_CHECK_LEVELS.items() if level == "resource")
 VERIFY_STATUSES = ("ok", "failed", "not_verified")
 VERDICT_EXITS = {"passou": 0, "degradou": 1, "inconclusivo": 5}
-VERIFY_SNAPSHOT_KEYS = ("contract", "service", "environment", "taken_at", "deployments", "not_verified")
+VERIFY_SNAPSHOT_KEYS_1 = ("contract", "service", "environment", "taken_at", "deployments", "not_verified")
+VERIFY_SNAPSHOT_KEYS = VERIFY_SNAPSHOT_KEYS_1 + ("dependencies",)
 VERIFY_DEPLOYMENT_KEYS = ("images", "ready", "desired", "restarts", "warnings", "error_signatures")
 VERIFY_NOT_VERIFIED_KEYS = ("deployment", "check", "reason")
+VERIFY_RESOURCE_NOT_VERIFIED_KEYS = ("deployment", "resource", "check", "reason")
 VERIFY_RESULT_KEYS = ("contract", "verdict", "checks", "suggestion")
-VERIFY_CHECK_KEYS = ("deployment", "check", "status", "evidence", "reason")
+VERIFY_CHECK_KEYS_1 = ("deployment", "check", "status", "evidence", "reason")
+VERIFY_CHECK_KEYS = ("deployment", "resource", "check", "status", "evidence", "reason")
+VERIFY_DEPENDENCY_BASE_KEYS = ("deployment", "relations", "dlq_of")
+VERIFY_QUEUE_FIELDS = ("visible", "in_flight", "oldest_age_seconds", "dlq_visible")
 VERIFY_SINCE, VERIFY_WINDOW = "30m", "10m"
+# the resources of verify@2 (ADR-0026 4a: bucket stays out in this version)
+VERIFY_RESOURCE_RE = re.compile(r"^(datastore|queue|topic):(.+)\Z")
+VERIFY_RESOURCE_CAPABILITIES = ("messaging", "database", "signals", "permissions")
+VERIFY_MAX_RESOURCES, VERIFY_MAX_RESOURCES_MAX = 20, 50
+VERIFY_MAX_QUEUE_AGE, VERIFY_MAX_SIGNAL_INCREASE = "10m", "0.5"
+POSTGRES_ENGINES = ("postgres", "aurora-postgresql")
+# aspect -> (check, capability, verb): the probes of a resource (section 6.1 of SPEC-0102)
+VERIFY_ASPECTS = {"queue": ("dependencies", "messaging", "queue"),
+                  "subscriptions": ("dependencies", "messaging", "subscriptions"),
+                  "migrations": ("dependencies", "database", "migrations"),
+                  "tables": ("dependencies", "database", "tables"),
+                  "permissions": ("dependencies", "permissions", "simulate"),
+                  "signals": ("signals", "signals", "metrics")}
+# (relation, kind) -> the actions it requires (ADR-0026 rule 3); any other pair requires none
+REQUIRED_ACTIONS = {("publishes", "topic"): ("publish",), ("publishes", "queue"): ("send",),
+                    ("consumes", "queue"): ("receive", "delete"), ("depends_on", "queue"): ("send",)}
+PERMISSION_ACTIONS = ("publish", "send", "receive", "delete", "read", "write")
+PERMISSION_DECISIONS = ("allowed", "denied")
+METRIC_KINDS = ("error", "latency", "saturation", "traffic")
+METRIC_STAT_RE = re.compile(r"^(sum|count|avg|min|max|p\d{1,2}(\.\d)?)\Z")
+MIGRATION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+INCREASE_RE = re.compile(r"^\d+(\.\d+)?\Z")
+NO_RESOURCE_BASELINE = "sem foto de antes: dependências e sinais não se comparam"
+OLD_BASELINE = "foto sem dependências"
+OUT_OF_PHOTO = "recurso fora da foto"
+NOTHING_COMPARABLE = "nenhuma métrica de erro ou latência comparável"
 VERIFY_VERBS = ("status", "events", "logs")
 ISO_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)\Z")
 # the expected image: the normalized path (no registry host, SPEC-0082) with ":<tag>" and/or "@<digest>"
@@ -5935,13 +5976,80 @@ def _verify_text(value) -> bool:
     return isinstance(value, str) and bool(value)
 
 
+def _verify_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _resource_key_problem(value) -> bool:
+    """True when `value` is not a "<kind>:<id>" of verify@2 (kind datastore, queue or topic; id by the name rule)."""
+    match = VERIFY_RESOURCE_RE.match(value) if isinstance(value, str) else None
+    return not match or not ENVIRONMENT_NAME_RE.match(match.group(2))
+
+
+def _sorted_texts(value) -> bool:
+    return isinstance(value, list) and all(_verify_text(v) for v in value) and value == sorted(value)
+
+
+def _dependency_problems(key, entry) -> list:
+    """Problems of one entry of `dependencies` of a verify@2 photo (section 6.4 of SPEC-0102)."""
+    where = f"dependencies.{_show(key)}"
+    if _resource_key_problem(key):
+        return [f"{where}: a chave precisa ser <kind>:<id> com kind datastore, queue ou topic"]
+    if not isinstance(entry, dict):
+        return [f"{where} precisa ser um objeto"]
+    problems = _closed_keys(entry, VERIFY_DEPENDENCY_BASE_KEYS + tuple(VERIFY_ASPECTS), VERIFY_DEPENDENCY_BASE_KEYS,
+                            where)
+    if "deployment" in entry and not _verify_text(entry["deployment"]):
+        problems.append(f"{where}.deployment precisa ser um texto não vazio")
+    if "relations" in entry and not (isinstance(entry["relations"], list)
+                                     and all(_verify_text(r) for r in entry["relations"])):
+        problems.append(f"{where}.relations precisa ser uma lista de textos")
+    if entry.get("dlq_of") is not None and _resource_key_problem(entry["dlq_of"]):
+        problems.append(f"{where}.dlq_of precisa ser <kind>:<id> ou null")
+    queue = entry.get("queue")
+    if "queue" in entry and not (isinstance(queue, dict) and set(queue) == set(VERIFY_QUEUE_FIELDS)
+                                 and _verify_int(queue["visible"]) and _verify_int(queue["in_flight"])
+                                 and all(queue[k] is None or _verify_int(queue[k])
+                                         for k in ("oldest_age_seconds", "dlq_visible"))):
+        problems.append(f"{where}.queue precisa ter {', '.join(VERIFY_QUEUE_FIELDS)} (inteiros >= 0; os dois últimos "
+                        "podem ser null)")
+    subs = entry.get("subscriptions")
+    if "subscriptions" in entry and not (isinstance(subs, list) and all(
+            isinstance(s, dict) and set(s) == {"destination", "filter_fingerprint"} and _verify_text(s["destination"])
+            and (s["filter_fingerprint"] is None or _verify_text(s["filter_fingerprint"])) for s in subs)):
+        problems.append(f"{where}.subscriptions precisa ser uma lista de {{destination, filter_fingerprint}}")
+    for aspect in ("migrations", "tables"):
+        if aspect in entry and not _sorted_texts(entry[aspect]):
+            problems.append(f"{where}.{aspect} precisa ser uma lista ordenada de textos")
+    signals = entry.get("signals")
+    if "signals" in entry:
+        if not (isinstance(signals, dict) and set(signals) == {"window_seconds", "metrics"}
+                and _verify_int(signals["window_seconds"]) and isinstance(signals["metrics"], dict)):
+            problems.append(f"{where}.signals precisa ser {{window_seconds, metrics}}")
+        else:
+            for name, value in signals["metrics"].items():
+                metric, sep, stat = str(name).rpartition("|")
+                if not (sep and metric and METRIC_STAT_RE.match(stat) and isinstance(value, dict)
+                        and set(value) == {"kind", "value"} and value["kind"] in METRIC_KINDS
+                        and (value["value"] is None or _verify_number(value["value"]))):
+                    problems.append(f"{where}.signals.metrics.{_show(name)} precisa ser <name>|<stat>: {{kind, value}}")
+    permissions = entry.get("permissions")
+    if "permissions" in entry and not (isinstance(permissions, dict) and all(
+            a in PERMISSION_ACTIONS and d in PERMISSION_DECISIONS for a, d in permissions.items())):
+        problems.append(f"{where}.permissions precisa ser um mapa <ação>: allowed | denied")
+    return problems
+
+
 def validate_verify_snapshot(data) -> list:
-    """Problems of a snapshot file (verify@1, SPEC-0090); [] = valid. Closed keys at every level."""
+    """Problems of a snapshot file, verify@1 (SPEC-0090) or verify@2 (SPEC-0102, with `dependencies`); [] = valid.
+    Closed keys at every level; any other contract is refused."""
     if not isinstance(data, dict):
         return ["a foto precisa ser um objeto JSON"]
-    problems = _closed_keys(data, VERIFY_SNAPSHOT_KEYS, VERIFY_SNAPSHOT_KEYS)
-    if data.get("contract") != VERIFY_CONTRACT:
-        problems.append(f"contract precisa ser {VERIFY_CONTRACT}")
+    v1 = data.get("contract") == VERIFY_CONTRACT_1
+    keys = VERIFY_SNAPSHOT_KEYS_1 if v1 else VERIFY_SNAPSHOT_KEYS
+    problems = _closed_keys(data, keys, keys)
+    if data.get("contract") not in VERIFY_CONTRACTS:
+        problems.append(f"contract precisa ser {' ou '.join(VERIFY_CONTRACTS)}")
     for key in ("service", "environment"):
         if key in data and not _verify_text(data[key]):
             problems.append(f"{key} precisa ser um texto não vazio")
@@ -5970,6 +6078,13 @@ def validate_verify_snapshot(data) -> list:
         if "warnings" in entry and not (isinstance(entry["warnings"], list)
                                         and all(_verify_text(w) and "|" in w for w in entry["warnings"])):
             problems.append(f"{where}.warnings precisa ser uma lista de \"<motivo>|<objeto>\"")
+    dependencies = data.get("dependencies")
+    if "dependencies" in data and not v1:
+        if not isinstance(dependencies, dict):
+            problems.append("dependencies precisa ser um mapa <kind:id>: {...}")
+        else:
+            for key, entry in dependencies.items():
+                problems += _dependency_problems(key, entry)
     not_verified = data.get("not_verified")
     if "not_verified" in data and not isinstance(not_verified, list):
         problems.append("not_verified precisa ser uma lista")
@@ -5978,11 +6093,16 @@ def validate_verify_snapshot(data) -> list:
         if not isinstance(item, dict):
             problems.append(f"{where} precisa ser um objeto")
             continue
-        problems += _closed_keys(item, VERIFY_NOT_VERIFIED_KEYS, VERIFY_NOT_VERIFIED_KEYS, where)
+        resource = "resource" in item and not v1
+        keys = VERIFY_RESOURCE_NOT_VERIFIED_KEYS if resource else VERIFY_NOT_VERIFIED_KEYS
+        checks = VERIFY_RESOURCE_CHECKS if resource else VERIFY_DEPLOYMENT_CHECKS
+        problems += _closed_keys(item, keys, keys, where)
         if "deployment" in item and not _verify_text(item["deployment"]):
             problems.append(f"{where}.deployment precisa ser um texto não vazio")
-        if "check" in item and item["check"] not in VERIFY_CHECKS:
-            problems.append(f"{where}.check precisa ser um de: {', '.join(VERIFY_CHECKS)}")
+        if resource and _resource_key_problem(item["resource"]):
+            problems.append(f"{where}.resource precisa ser <kind>:<id> com kind datastore, queue ou topic")
+        if "check" in item and item["check"] not in checks:
+            problems.append(f"{where}.check precisa ser um de: {', '.join(checks)}")
         if "reason" in item and not _verify_text(item["reason"]):
             problems.append(f"{where}.reason precisa ser um texto não vazio")
     return problems
@@ -5995,13 +6115,18 @@ def verdict_of(statuses) -> str:
 
 
 def validate_verify_result(data) -> list:
-    """Problems of the output of `verify compare --json` (verify@1, SPEC-0090); [] = valid: closed keys, the verdict
-    by the rule, reason in every not_verified, a suggestion only in degradou and never with a command."""
+    """Problems of the output of `verify compare --json`, verify@1 (SPEC-0090: checks without resource) or verify@2
+    (SPEC-0102: resource in every check, null in the deployment checks and <kind:id> in the resource checks); [] =
+    valid: closed keys, the verdict by the rule, reason in every not_verified, a suggestion only in degradou and
+    never with a command."""
     if not isinstance(data, dict):
         return ["a saída precisa ser um objeto JSON"]
     problems = _closed_keys(data, VERIFY_RESULT_KEYS, VERIFY_RESULT_KEYS)
-    if data.get("contract") != VERIFY_CONTRACT:
-        problems.append(f"contract precisa ser {VERIFY_CONTRACT}")
+    if data.get("contract") not in VERIFY_CONTRACTS:
+        problems.append(f"contract precisa ser {' ou '.join(VERIFY_CONTRACTS)}")
+    v1 = data.get("contract") == VERIFY_CONTRACT_1
+    keys = VERIFY_CHECK_KEYS_1 if v1 else VERIFY_CHECK_KEYS
+    allowed_checks = VERIFY_DEPLOYMENT_CHECKS if v1 else VERIFY_CHECKS
     if "verdict" in data and data["verdict"] not in VERDICT_EXITS:
         problems.append(f"verdict precisa ser um de: {', '.join(VERDICT_EXITS)}")
     checks = data.get("checks")
@@ -6012,11 +6137,16 @@ def validate_verify_result(data) -> list:
         if not isinstance(item, dict):
             problems.append(f"{where} precisa ser um objeto")
             continue
-        problems += _closed_keys(item, VERIFY_CHECK_KEYS, ("deployment", "check", "status", "evidence"), where)
+        problems += _closed_keys(item, keys, tuple(k for k in keys if k != "reason"), where)
         if "deployment" in item and not _verify_text(item["deployment"]):
             problems.append(f"{where}.deployment precisa ser um texto não vazio")
-        if "check" in item and item["check"] not in VERIFY_CHECKS:
-            problems.append(f"{where}.check precisa ser um de: {', '.join(VERIFY_CHECKS)}")
+        if "check" in item and item["check"] not in allowed_checks:
+            problems.append(f"{where}.check precisa ser um de: {', '.join(allowed_checks)}")
+        if not v1 and "resource" in item and item.get("check") in VERIFY_CHECK_LEVELS:
+            if VERIFY_CHECK_LEVELS[item["check"]] == "deployment" and item["resource"] is not None:
+                problems.append(f"{where}.resource precisa ser null em {item['check']}")
+            if VERIFY_CHECK_LEVELS[item["check"]] == "resource" and _resource_key_problem(item["resource"]):
+                problems.append(f"{where}.resource precisa ser <kind>:<id> com kind datastore, queue ou topic")
         if "status" in item and item["status"] not in VERIFY_STATUSES:
             problems.append(f"{where}.status precisa ser um de: {', '.join(VERIFY_STATUSES)}")
         if "evidence" in item and not isinstance(item["evidence"], dict):
@@ -6134,17 +6264,19 @@ def _verify_out(value, atlas: Path) -> Path:
 
 
 def _verify_baseline(value, service: str, environment: str) -> dict:
-    """The --baseline file, read and validated (verify@1) for this service and environment; else exit 2."""
+    """The --baseline file, read and validated (verify@1 or verify@2) for this service and environment; else exit
+    2."""
     path = Path(os.path.expanduser(str(value)))
     if not path.is_file():
         raise AtlasError("--baseline não encontrado: indique a foto gravada pelo verify snapshot", 2)
     try:
         data = json.loads(read_text(path), parse_constant=_reject_constant)
     except (ValueError, RecursionError):
-        raise AtlasError(f"--baseline não é JSON válido (contrato {VERIFY_CONTRACT})", 2) from None
+        raise AtlasError(f"--baseline não é JSON válido (contrato {' ou '.join(VERIFY_CONTRACTS)})", 2) from None
     problems = validate_verify_snapshot(data)
     if problems:
-        raise AtlasError(f"--baseline fora do contrato {VERIFY_CONTRACT} — {'; '.join(problems[:10])}", 2)
+        raise AtlasError(f"--baseline fora do contrato {' ou '.join(VERIFY_CONTRACTS)} — {'; '.join(problems[:10])}",
+                         2)
     if (data["service"], data["environment"]) != (service, environment):
         raise AtlasError("--baseline é a foto de outro serviço ou ambiente", 2)
     return data
@@ -6167,17 +6299,23 @@ def _verify_setup(args) -> dict:
     return {"name": name, "entry": entry, "probes": probes, "atlas": atlas, "shared": shared}
 
 
-def _verify_targets(setup, args) -> list:
-    tiers = validate_environments(setup["shared"].get("environments"))
-    targets = probe_targets(setup["atlas"], args.service, args.env)
+def _verify_targets(setup, args, graph) -> list:
+    """The deployments of the service in the environment, each by the rules of the target (exit 2)."""
+    targets = probe_targets(setup["atlas"], args.service, args.env, graph)
     for target in targets:
         problem = target_problem(target, args.service)
         if problem:
             raise AtlasError(f"alvo inválido no atlas: {problem} — corrija o atlas (references/probes.md)", 2)
+    return targets
+
+
+def _verify_production(setup, args, targets) -> None:
+    """Production (or no tier) only with --confirm-production (exit 4), for every target before any probe."""
+    tiers = validate_environments(setup["shared"].get("environments"))
+    for target in targets:
         if tiers.get(target["environment"]) != "test" and not args.confirm_production:
             raise AtlasError(f"ambiente {args.env} é de produção ou sem marcação: confirme com a pessoa e use "
                              "--confirm-production", 4)
-    return targets
 
 
 def _verify_observe(setup, args, target, window: str) -> dict:
@@ -6264,14 +6402,488 @@ def _logs_problem(seen):
     return seen["logs"].get("reason")
 
 
+# ---- verify@2: the resources of the service (SPEC-0102, ADR-0026)
+
+
+def _verify_resource_options(args) -> tuple:
+    """(requested, max_resources) of --resource and --max-resources, checked before anything is read (exit 2):
+    each --resource as <kind>:<id> with kind queue, topic or datastore and the id by the name rule, a repeated one
+    counted once; --max-resources an integer from 1 to 50; more --resource than --max-resources is refused."""
+    text = str(getattr(args, "max_resources", None) or VERIFY_MAX_RESOURCES).strip()
+    if not re.match(r"^\d{1,3}\Z", text) or not 1 <= int(text) <= VERIFY_MAX_RESOURCES_MAX:
+        raise AtlasError(f"--max-resources inválido — use um inteiro de 1 a {VERIFY_MAX_RESOURCES_MAX}", 2)
+    requested = []
+    for value in getattr(args, "resource", None) or []:
+        if _resource_key_problem(value) or any(is_control(c) for c in value):
+            raise AtlasError("--resource inválido — use <kind>:<id> com kind queue, topic ou datastore", 2)
+        if value not in requested:
+            requested.append(value)
+    if len(requested) > int(text):
+        raise AtlasError("mais recursos em --resource que --max-resources", 2)
+    return requested, int(text)
+
+
+def _resource_adapter_declared(setup) -> bool:
+    """True when an adapter of probes.adapters declares, in a probe@2 --describe, one of the resource capabilities
+    (messaging, database, signals, permissions). Only --describe runs (never a query); an adapter whose description
+    fails or is out of the contract counts as not declaring."""
+    patterns = probe_extras(setup["shared"])
+    for aid, adapter in setup["probes"]["adapters"].items():
+        argv = adapter_command(aid, adapter)
+        if argv is None:
+            continue
+        try:
+            described = _run_adapter(aid, argv + ["--describe"], adapter,
+                                     patterns + literal_masks(adapter_values(adapter)))
+        except AtlasError:
+            continue
+        if validate_probe_describe(described) or described["contract"] != PROBE_CONTRACT_2:
+            continue
+        if any(cap in described["capabilities"] for cap in VERIFY_RESOURCE_CAPABILITIES):
+            return True
+    return False
+
+
+def _scope_entry(graph, links, key) -> dict:
+    """One resource of the scope: the deployment that links it (the first by id), the relations of that link (a
+    config_refs counts as depends_on), dlq_of (the queue whose `dlq` names it, when it is linked only so) and the
+    aspects of its kind (section 6.1 of SPEC-0102)."""
+    kind, rid = key.split(":", 1)
+    nodes = {n.get("key"): n for n in graph["nodes"] if isinstance(n, dict)}
+    mine = [link for link in links if link["resource"] == key]
+    real = [link for link in mine if link["relation"] != "dlq"]
+    deployment = (real or mine)[0]["deployment"]
+    relations = sorted({"depends_on" if link["relation"] == "config_ref" else link["relation"]
+                        for link in real if link["deployment"] == deployment})
+    dlq_of = None
+    if not real:
+        mains = sorted({link["resource"] for link in links if link["deployment"] == deployment
+                        and link["relation"] != "dlq" and link["resource"].startswith("queue:")
+                        and ((nodes.get(link["resource"]) or {}).get("attrs") or {}).get("dlq") == rid})
+        dlq_of = mains[0] if mains else None
+    required = list(dict.fromkeys(a for relation in relations for a in REQUIRED_ACTIONS.get((relation, kind), ())))
+    engine = ((nodes.get(key) or {}).get("attrs") or {}).get("engine")
+    if kind == "queue":
+        aspects = ["queue"] + (["permissions"] if required and not dlq_of else [])
+    elif kind == "topic":
+        aspects = ["subscriptions"] + (["permissions"] if required else [])
+    else:
+        aspects = ["migrations", "tables"] if engine in POSTGRES_ENGINES else []
+    checks = (("dependencies",) if aspects else ()) + ("signals",)
+    return {"resource": key, "kind": kind, "id": rid, "deployment": deployment, "relations": relations,
+            "dlq_of": dlq_of, "required": required, "aspects": aspects + ["signals"], "checks": checks}
+
+
+def _verify_scope(setup, args, graph, requested) -> list:
+    """The resources of verify@2, in kind:id order (section 6.1 of SPEC-0102): the --resource list (each linked to
+    the deployment of the service in the environment, SPEC-0096, else exit 2), or every queue, topic and datastore
+    of linked_resources but a queue linked only as the dlq of another one. Without --resource and without any
+    adapter that declares a resource capability (probe@2), the scope is empty: verify stays as verify@1."""
+    links = linked_resources(graph, args.service, args.env)
+    if requested:
+        for key in requested:
+            kind, rid = key.split(":", 1)
+            probe_resource(graph, args.service, args.env, kind, rid)
+        keys = requested
+    else:
+        keys = sorted({link["resource"] for link in links if link["relation"] != "dlq"
+                       and link["resource"].split(":", 1)[0] in ("datastore", "queue", "topic")})
+        if keys and not _resource_adapter_declared(setup):
+            return []
+    return [_scope_entry(graph, links, key) for key in sorted(keys)]
+
+
+def _parse_expect_migrations(values) -> list:
+    """[(datastore id or None, migration)] of --expect-migration [<datastore>=]<migration>; out of the form = 2."""
+    parsed = []
+    for value in values or []:
+        datastore, sep, migration = str(value).rpartition("=")
+        if (sep and not ENVIRONMENT_NAME_RE.match(datastore)) or not MIGRATION_RE.match(migration):
+            raise AtlasError("--expect-migration inválido — use [<datastore>=]<migration> (a migration com letras, "
+                             "dígitos, . _ -, até 128 caracteres)", 2)
+        parsed.append((datastore if sep else None, migration))
+    return parsed
+
+
+def _expected_migrations(parsed, scope) -> dict:
+    """{"datastore:<id>": [migrations]}: the short form goes to the one datastore of the scope (zero or more than one
+    = exit 2); a datastore out of the scope = exit 2."""
+    keys = {entry["resource"] for entry in scope}
+    datastores = sorted(k for k in keys if k.startswith("datastore:"))
+    expected = {}
+    for datastore, migration in parsed:
+        if datastore is None:
+            if len(datastores) != 1:
+                raise AtlasError(f"--expect-migration {migration} ambígua: use <datastore>=<migration>", 2)
+            key = datastores[0]
+        else:
+            key = f"datastore:{datastore}"
+            if key not in keys:
+                raise AtlasError(f"recurso {key} fora do escopo do verify", 2)
+        expected.setdefault(key, [])
+        if migration not in expected[key]:
+            expected[key].append(migration)
+    return expected
+
+
+def _verify_increase(value) -> float:
+    text = str(value if value is not None else VERIFY_MAX_SIGNAL_INCREASE).strip()
+    if not INCREASE_RE.match(text) or float(text) > 100:
+        raise AtlasError("--max-signal-increase inválido — use um decimal de 0 a 100 (0.5 = 50%)", 2)
+    return float(text)
+
+
+def _item_rules(aspect) -> tuple:
+    """(field, test) of the items of an aspect: the table of rule 4a of ADR-0026 (section 6.2 of SPEC-0102)."""
+    count_or_none = (lambda v: v is None or _verify_int(v))
+    return {"queue": (("visible", _verify_int), ("in_flight", _verify_int), ("oldest_age_seconds", count_or_none),
+                      ("dlq_visible", count_or_none)),
+            "subscriptions": (("destination", _verify_text),
+                              ("filter_fingerprint", lambda v: v is None or _verify_text(v))),
+            "migrations": (("id", _verify_text), ("success", lambda v: v is None or isinstance(v, bool))),
+            "tables": (("name", _verify_text),),
+            "signals": (("name", _verify_text), ("stat", lambda v: isinstance(v, str) and bool(METRIC_STAT_RE.match(v))),
+                        ("value", lambda v: v is None or _verify_number(v)), ("kind", lambda v: v in METRIC_KINDS)),
+            "permissions": (("action", lambda v: v in PERMISSION_ACTIONS), ("api_action", lambda v: isinstance(v, str)),
+                            ("decision", lambda v: v in PERMISSION_DECISIONS))}[aspect]
+
+
+def _aspect_now(aspect, items, window_seconds) -> tuple:
+    """(state, problem) of the items of one probe: only the fields of rule 4a of ADR-0026 (extra fields dropped); an
+    item out of the contract gives the problem (the aspect is then not verified)."""
+    _, capability, verb = VERIFY_ASPECTS[aspect]
+    if aspect == "queue" and len(items) != 1:
+        return None, f"resposta de messaging queue com {len(items)} item(ns), esperado 1"
+    for item in items:
+        for field, test in _item_rules(aspect):
+            if not isinstance(item, dict) or field not in item or not test(item[field]):
+                return None, f"item fora do contrato de {capability} {verb}: {field}"
+    if aspect == "queue":
+        return {k: items[0][k] for k in VERIFY_QUEUE_FIELDS}, None
+    if aspect == "subscriptions":
+        subs = [{"destination": i["destination"], "filter_fingerprint": i["filter_fingerprint"]} for i in items]
+        return sorted(subs, key=lambda s: (s["destination"], s["filter_fingerprint"] or "")), None
+    if aspect == "migrations":
+        return {"applied": sorted({i["id"] for i in items if i["success"] is not False}),
+                "not_applied": sorted({i["id"] for i in items if i["success"] is False})}, None
+    if aspect == "tables":
+        return sorted({i["name"] for i in items}), None
+    if aspect == "signals":
+        metrics = {}
+        for item in items:
+            name = f"{item['name']}|{item['stat']}"
+            if name in metrics:
+                return None, f"métrica repetida: {name}"
+            metrics[name] = {"kind": item["kind"], "value": item["value"]}
+        return {"window_seconds": window_seconds, "metrics": metrics}, None
+    decisions, api_actions = {}, {}
+    for item in items:  # the same action with different decisions counts as denied (conservative reading)
+        action = item["action"]
+        decisions[action] = "denied" if "denied" in (decisions.get(action), item["decision"]) else "allowed"
+        api_actions.setdefault(action, item["api_action"])
+    return {"decisions": decisions, "api_actions": api_actions}, None
+
+
+def _photo_value(aspect, now):
+    """What the photo keeps of an aspect (section 6.4 of SPEC-0102)."""
+    if aspect == "migrations":
+        return now["applied"]
+    if aspect == "permissions":
+        return now["decisions"]
+    return now
+
+
+def _verify_observe_resource(setup, args, entry, window: str) -> dict:
+    """The probes of one resource, one per aspect of its kind, each by run_probe (the path, protections, mask and log
+    of `probe`, with "resource" in probes.log): {aspect: {"now", "truncated"} | {"reason"}}. A refusal, failure,
+    answer with error or item out of the contract becomes the reason (never a pass)."""
+    seen = {}
+    window_seconds = parse_duration(window)
+    for aspect in entry["aspects"]:
+        _, capability, verb = VERIFY_ASPECTS[aspect]
+        query = argparse.Namespace(capability=capability, verb=verb, service=args.service, env=args.env,
+                                   since=window, lines=PROBE_LINES_MAX, summary=False,
+                                   confirm_production=args.confirm_production, atlas=args.atlas, json=True,
+                                   resource=entry["resource"], commit=None)
+        try:
+            outcome = run_probe(query, setup["name"], setup["probes"], setup["entry"], entry["deployment"])
+        except AtlasError as e:
+            seen[aspect] = {"reason": f"probe {'recusada' if e.code == 4 else 'falhou'} — {e}"}
+            continue
+        result = outcome["result"]
+        if result["status"] != "ok":
+            seen[aspect] = {"reason": f"probe de {verb} respondeu com erro: {outcome['message'] or '(sem mensagem)'}"}
+            continue
+        now, problem = _aspect_now(aspect, result["items"], window_seconds)
+        seen[aspect] = {"reason": problem} if problem else {"now": now, "truncated": bool(result["truncated"])}
+    return seen
+
+
+def _cut_reason(aspect) -> str:
+    return f"probe de {VERIFY_ASPECTS[aspect][2]} cortada"
+
+
+def _queue_aspect(now, base, dlq_of, limits) -> tuple:
+    """(status, evidence, reason) of the queue aspect against the photo: the DLQ growth (or, for a queue in the role
+    dlq_of, its own growth) above --max-new-dlq, or the age that crossed --max-queue-age after the deploy."""
+    max_new, max_age = limits["max_new_dlq"], limits["max_queue_age"]
+    above = base["oldest_age_seconds"] is not None and base["oldest_age_seconds"] > max_age
+    evidence = {"now": now, "baseline": base, "new_dlq": None, "max_new_dlq": max_new,
+                "max_queue_age_seconds": max_age, "age_above_limit_in_baseline": above}
+    if dlq_of:
+        evidence["new_dlq"] = now["visible"] - base["visible"]
+        if evidence["new_dlq"] > max_new:
+            return "failed", evidence, f"a DLQ ganhou {evidence['new_dlq']} mensagem(ns), acima de {max_new}"
+        return "ok", evidence, ""
+    reasons, unverified = [], ""
+    if now["dlq_visible"] is None:
+        if base["dlq_visible"] is not None:
+            unverified = "DLQ sem leitura agora"
+    else:
+        evidence["new_dlq"] = now["dlq_visible"] - (base["dlq_visible"] or 0)
+        if evidence["new_dlq"] > max_new:
+            reasons.append(f"a DLQ ganhou {evidence['new_dlq']} mensagem(ns), acima de {max_new}")
+    age = now["oldest_age_seconds"]
+    if age is not None and age > max_age and not above:
+        reasons.append(f"mensagem mais antiga com {age}s, acima de {max_age}s depois do deploy")
+    if reasons:
+        return "failed", evidence, "; ".join(reasons)
+    return ("not_verified", evidence, unverified) if unverified else ("ok", evidence, "")
+
+
+def _subscriptions_aspect(now, base) -> tuple:
+    def grouped(subs):
+        found = {}
+        for sub in subs:
+            found.setdefault(sub["destination"], set()).add(sub["filter_fingerprint"] or "")
+        return found
+    before, after = grouped(base), grouped(now)
+    missing = sorted(d for d in before if d not in after)
+    changed = sorted(d for d in before if d in after and before[d] != after[d])
+    evidence = {"missing": missing, "changed": changed, "new": sorted(d for d in after if d not in before)}
+    reasons = ([f"{len(missing)} assinatura(s) sumiu(ram)"] if missing else []) + (
+        [f"{len(changed)} assinatura(s) mudou(aram) de filtro"] if changed else [])
+    return ("failed", evidence, "; ".join(reasons)) if reasons else ("ok", evidence, "")
+
+
+def _migrations_aspect(now, base, expected, truncated) -> tuple:
+    applied = set(now["applied"])
+    missing = [m for m in expected if m not in applied]
+    evidence = {"expected": expected, "missing": missing, "not_applied": now["not_applied"],
+                "new_since_baseline": len(applied - set(base)) if base is not None else None}
+    if truncated and missing:  # finding is proof; not finding in a cut list is not
+        return "not_verified", evidence, _cut_reason("migrations")
+    if missing:
+        return "failed", evidence, f"migration(ões) esperada(s) não aplicada(s): {', '.join(missing)}"
+    return "ok", evidence, ""
+
+
+def _tables_aspect(now, base) -> tuple:
+    missing = sorted(set(base) - set(now))
+    evidence = {"missing": missing, "new": len(set(now) - set(base))}
+    if missing:
+        return "failed", evidence, f"{len(missing)} tabela(s) sumiu(ram)"
+    return "ok", evidence, ""
+
+
+def _permissions_aspect(now, base, required) -> tuple:
+    decisions = now["decisions"]
+    evidence = {"required": {a: decisions.get(a, "ausente") for a in required},
+                "api_actions": {a: now["api_actions"][a] for a in required if a in now["api_actions"]},
+                "denied_in_baseline": []}
+    failed, unverified = [], []
+    for action in required:
+        if action not in decisions:
+            unverified.append(f"ação {action} não simulada")
+        elif action not in base:
+            unverified.append(f"ação {action} fora da foto")
+        elif base[action] == "allowed" and decisions[action] == "denied":
+            failed.append(action)
+        elif base[action] == "denied" and decisions[action] == "denied":
+            evidence["denied_in_baseline"].append(action)
+            unverified.append("permissão já negada antes do deploy")
+    if failed:
+        return "failed", evidence, f"permissão negada depois do deploy: {', '.join(failed)}"
+    if unverified:
+        return "not_verified", evidence, "; ".join(dict.fromkeys(unverified))
+    return "ok", evidence, ""
+
+
+def _dependencies_check(entry, photo, seen, limits) -> dict:
+    """The dependencies check of one resource against the photo (section 6.3 of SPEC-0102), a pure function: failed
+    when one aspect fails; else not_verified when one could not be verified; else ok."""
+    evidence = {"relations": entry["relations"], "dlq_of": entry["dlq_of"]}
+    statuses, failed, unverified = [], [], {}
+    for aspect in entry["aspects"]:
+        if aspect == "signals":
+            continue
+        observed = seen[aspect]
+        if "reason" in observed:
+            unverified[aspect] = observed["reason"]
+            continue
+        now, truncated = observed["now"], observed["truncated"]
+        base = photo.get(aspect)
+        if truncated and aspect != "migrations":
+            unverified[aspect] = _cut_reason(aspect)
+            continue
+        if base is None and aspect != "migrations":
+            unverified[aspect] = f"{aspect} ausente da foto"
+            continue
+        if aspect == "queue":
+            status, part, reason = _queue_aspect(now, base, entry["dlq_of"], limits)
+        elif aspect == "subscriptions":
+            status, part, reason = _subscriptions_aspect(now, base)
+        elif aspect == "migrations":
+            status, part, reason = _migrations_aspect(now, base, limits["migrations"].get(entry["resource"], []),
+                                                      truncated)
+        elif aspect == "tables":
+            status, part, reason = _tables_aspect(now, base)
+        else:
+            status, part, reason = _permissions_aspect(now, base, entry["required"])
+        evidence[aspect] = part
+        statuses.append(status)
+        if status == "failed":
+            failed.append(f"{aspect}: {reason}")
+        elif status == "not_verified":
+            unverified[aspect] = reason
+    evidence["not_verified"] = unverified
+    deployment, resource = entry["deployment"], entry["resource"]
+    if failed:
+        return _check(deployment, "dependencies", "failed", evidence, "; ".join(failed), resource)
+    if unverified:
+        reason = "; ".join(f"{aspect}: {why}" for aspect, why in unverified.items())
+        return _check(deployment, "dependencies", "not_verified", evidence, reason, resource)
+    return _check(deployment, "dependencies", "ok", evidence, "dependências seguem a foto", resource)
+
+
+def _per_minute(value, stat, window_seconds):
+    """sum and count normalized per minute (the windows of the photo and of now differ); the others as they come."""
+    if value is None or stat not in ("sum", "count"):
+        return value
+    return value / (window_seconds / 60)
+
+
+def _signals_check(entry, photo, seen, window_seconds: int, increase: float) -> dict:
+    """The signals check of one resource against the photo (section 6.3 of SPEC-0102), a pure function: an error or
+    latency metric worse than the photo by more than --max-signal-increase fails; saturation and traffic never fail."""
+    deployment, resource = entry["deployment"], entry["resource"]
+    evidence = {"window_seconds": window_seconds, "baseline_window_seconds": None, "max_signal_increase": increase,
+                "worse": [], "compared": 0, "without_baseline": [], "without_data": [], "other": []}
+    observed = seen["signals"]
+    reason = observed.get("reason")
+    if reason is None and observed["truncated"]:
+        reason = _cut_reason("signals")
+    if reason is None and photo.get("signals") is None:
+        reason = "signals ausente da foto"
+    if reason:
+        return _check(deployment, "signals", "not_verified", evidence, f"signals: {reason}", resource)
+    base = photo["signals"]
+    evidence["baseline_window_seconds"] = base["window_seconds"]
+    for name, metric in sorted(observed["now"]["metrics"].items()):
+        stat = name.rpartition("|")[2]
+        kind = metric["kind"]
+        before = base["metrics"].get(name)
+        now = _per_minute(metric["value"], stat, window_seconds)
+        then = _per_minute(before["value"], stat, base["window_seconds"]) if before else None
+        if kind not in ("error", "latency"):
+            evidence["other"].append({"metric": name, "kind": kind, "baseline": then, "now": now})
+            continue
+        if now is None:
+            evidence["without_data"].append(name)
+            continue
+        if before is None or (kind == "latency" and not then):
+            evidence["without_baseline"].append(name)
+            continue
+        evidence["compared"] += 1
+        worse = now > 0 if not then else now > then * (1 + increase)
+        if worse:
+            evidence["worse"].append({"metric": name, "kind": kind, "baseline": then, "now": now})
+    if evidence["worse"]:
+        names = ", ".join(w["metric"] for w in evidence["worse"])
+        return _check(deployment, "signals", "failed", evidence,
+                      f"{len(evidence['worse'])} métrica(s) pior(es) que a foto acima de {increase:g}: {names}",
+                      resource)
+    if not evidence["compared"]:
+        return _check(deployment, "signals", "not_verified", evidence, f"signals: {NOTHING_COMPARABLE}", resource)
+    return _check(deployment, "signals", "ok", evidence,
+                  f"{evidence['compared']} métrica(s) de erro ou latência dentro do limite", resource)
+
+
+def _resource_skipped(entry, reason) -> list:
+    """The checks of one resource that are not verified before any probe (cut, no photo, old photo, out of it)."""
+    evidence = {"dependencies": {"relations": entry["relations"], "dlq_of": entry["dlq_of"]}, "signals": {}}
+    return [_check(entry["deployment"], name, "not_verified", dict(evidence[name]), reason, entry["resource"])
+            for name in entry["checks"]]
+
+
+def _resource_checks(setup, args, scope, max_resources, baseline, limits, window) -> list:
+    """The dependencies and signals checks of every resource of the scope (section 6.3 of SPEC-0102). Without a
+    verify@2 photo, no resource probe runs."""
+    checks = []
+    for position, entry in enumerate(scope):
+        reason = None
+        if position >= max_resources:
+            reason = f"acima de --max-resources ({max_resources})"
+        elif baseline is None:
+            reason = NO_RESOURCE_BASELINE
+        elif baseline["contract"] != VERIFY_CONTRACT:
+            reason = OLD_BASELINE
+        elif entry["resource"] not in baseline["dependencies"]:
+            reason = OUT_OF_PHOTO
+        if reason:
+            checks += _resource_skipped(entry, reason)
+            continue
+        photo = baseline["dependencies"][entry["resource"]]
+        seen = _verify_observe_resource(setup, args, entry, window)
+        if "dependencies" in entry["checks"]:
+            checks.append(_dependencies_check(entry, photo, seen, limits))
+        checks.append(_signals_check(entry, photo, seen, limits["window_seconds"], limits["increase"]))
+    return checks
+
+
+def _resource_photo(setup, args, scope, max_resources, window) -> tuple:
+    """(dependencies, not_verified) of the photo: only the fields of rule 4a of ADR-0026; an aspect the probe did not
+    sustain stays out, with its reason (starting with the aspect) in not_verified."""
+    dependencies, not_verified = {}, []
+    for position, entry in enumerate(scope):
+        base = {"deployment": entry["deployment"], "resource": entry["resource"]}
+        if position >= max_resources:
+            not_verified += [dict(base, check=name, reason=f"acima de --max-resources ({max_resources})")
+                             for name in entry["checks"]]
+            continue
+        state = {"deployment": entry["deployment"], "relations": entry["relations"], "dlq_of": entry["dlq_of"]}
+        for aspect, observed in _verify_observe_resource(setup, args, entry, window).items():
+            check = VERIFY_ASPECTS[aspect][0]
+            if "reason" in observed:
+                not_verified.append(dict(base, check=check, reason=f"{aspect}: {observed['reason']}"))
+            elif observed["truncated"]:
+                not_verified.append(dict(base, check=check, reason=f"{aspect}: {_cut_reason(aspect)}"))
+            else:
+                state[aspect] = _photo_value(aspect, observed["now"])
+        dependencies[entry["resource"]] = state
+    return dependencies, not_verified
+
+
+def _verify_plan(setup, args) -> dict:
+    """What both phases check before any probe, after the arguments: the deployments (exit 2), the resources of the
+    scope (exit 2 for a --resource out of the graph)."""
+    requested, max_resources = _verify_resource_options(args)
+    graph = read_probe_graph(setup["atlas"])
+    targets = _verify_targets(setup, args, graph)
+    scope = _verify_scope(setup, args, graph, requested)
+    return {"targets": targets, "scope": scope, "max_resources": max_resources}
+
+
 def cmd_verify_snapshot(args) -> int:
-    """verify snapshot (SPEC-0090, ADR-0024): the photo of a service in an environment before the merge, in a task
-    file outside the atlas."""
+    """verify snapshot (SPEC-0090, SPEC-0102, ADR-0024, ADR-0026): the photo of a service in an environment before the
+    merge, with the dependencies of the scope, in a task file outside the atlas."""
     setup = _verify_setup(args)
     out = _verify_out(args.out, setup["atlas"])
     window = args.since or VERIFY_SINCE
     _verify_duration(window, "--since")
-    targets = _verify_targets(setup, args)
+    plan = _verify_plan(setup, args)
+    targets = plan["targets"]
+    _verify_production(setup, args, targets)
     deployments, not_verified = {}, []
     for target in targets:
         seen = _verify_observe(setup, args, target, window)
@@ -6285,23 +6897,27 @@ def cmd_verify_snapshot(args) -> int:
             missing.append(("logs", _logs_problem(seen)))
         not_verified += [{"deployment": target["deployment"], "check": check, "reason": reason}
                          for check, reason in missing]
+    dependencies, resources_not_verified = _resource_photo(setup, args, plan["scope"], plan["max_resources"], window)
+    not_verified += resources_not_verified
     photo = {"contract": VERIFY_CONTRACT, "service": args.service, "environment": args.env,
              "taken_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-             "deployments": deployments, "not_verified": not_verified}
+             "deployments": deployments, "dependencies": dependencies, "not_verified": not_verified}
     problems = validate_verify_snapshot(photo)
     if problems:  # never written out of the contract
         raise AtlasError(f"foto fora do contrato {VERIFY_CONTRACT} — {'; '.join(problems[:10])}", 1)
     write_exclusive(out, json.dumps(photo, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     print(f"foto {VERIFY_CONTRACT} gravada em {out}: {args.service} em {args.env}, {len(deployments)} deployment(s), "
-          f"{len(not_verified)} verificação(ões) não feita(s)")
+          f"{len(dependencies)} recurso(s), {len(not_verified)} verificação(ões) não feita(s)")
     for item in not_verified:
-        print(f"- não verificado: {item['deployment']} · {item['check']} — {item['reason']}")
+        where = f"{item['deployment']} · {item['resource']}" if "resource" in item else item["deployment"]
+        print(f"- não verificado: {where} · {item['check']} — {item['reason']}")
     print("a foto é da tarefa: apague o arquivo no fim (references/verify.md)")
     return 0
 
 
-def _check(deployment, check, status, evidence, reason) -> dict:
-    return {"deployment": deployment, "check": check, "status": status, "evidence": evidence, "reason": reason}
+def _check(deployment, check, status, evidence, reason, resource=None) -> dict:
+    return {"deployment": deployment, "resource": resource, "check": check, "status": status, "evidence": evidence,
+            "reason": reason}
 
 
 def _delivery_check(target, seen, expect: str) -> dict:
@@ -6423,15 +7039,16 @@ def print_verify(result: dict, args) -> None:
     print()
     print(f"Imagem esperada: `{args.expect_image}`.")
     print()
-    print("| Deployment | Verificação | Status | Motivo |")
-    print("|---|---|---|---|")
+    print("| deployment | recurso | verificação | status | motivo |")
+    print("|---|---|---|---|---|")
     for item in result["checks"]:
         reason = item["reason"].replace("|", "\\|")
-        print(f"| {item['deployment']} | {item['check']} | {item['status']} | {reason} |")
+        print(f"| {item['deployment']} | {item['resource'] or ''} | {item['check']} | {item['status']} | {reason} |")
     print()
     print("## Evidências")
     for item in result["checks"]:
-        print(f"- {item['deployment']} · {item['check']}: `{json.dumps(item['evidence'], ensure_ascii=False)}`")
+        where = f"{item['deployment']} · {item['resource']}" if item["resource"] else item["deployment"]
+        print(f"- {where} · {item['check']}: `{json.dumps(item['evidence'], ensure_ascii=False)}`")
     if result["suggestion"]:
         print()
         print("## Sugestão")
@@ -6439,8 +7056,9 @@ def print_verify(result: dict, args) -> None:
 
 
 def cmd_verify_compare(args) -> int:
-    """verify compare (SPEC-0090, ADR-0024): delivery, runtime and logs of each deployment against the snapshot and
-    the expected image; verdict passou (0), degradou (1) or inconclusivo (5). Nothing is written to the atlas."""
+    """verify compare (SPEC-0090, SPEC-0102, ADR-0024, ADR-0026): delivery, runtime and logs of each deployment against
+    the snapshot and the expected image, dependencies and signals of each resource of the scope against the photo;
+    verdict passou (0), degradou (1) or inconclusivo (5). Nothing is written to the atlas."""
     setup = _verify_setup(args)
     match = EXPECT_IMAGE_RE.match(normalize_expected_image(args.expect_image))
     if not match or not (match.group("tag") or match.group("digest")):
@@ -6450,14 +7068,22 @@ def cmd_verify_compare(args) -> int:
     window_seconds = _verify_duration(window, "--window")
     max_errors = _verify_limit(args.max_new_errors, "--max-new-errors")
     max_restarts = _verify_limit(args.max_new_restarts, "--max-new-restarts")
+    limits = {"max_new_dlq": _verify_limit(args.max_new_dlq, "--max-new-dlq"),
+              "max_queue_age": _verify_duration(args.max_queue_age or VERIFY_MAX_QUEUE_AGE, "--max-queue-age"),
+              "increase": _verify_increase(args.max_signal_increase), "window_seconds": window_seconds}
+    migrations = _parse_expect_migrations(args.expect_migration)
     baseline = _verify_baseline(args.baseline, args.service, args.env) if args.baseline is not None else None
-    targets = _verify_targets(setup, args)
+    plan = _verify_plan(setup, args)
+    limits["migrations"] = _expected_migrations(migrations, plan["scope"])
+    targets = plan["targets"]
+    _verify_production(setup, args, targets)
     checks = []
     for target in targets:
         seen = _verify_observe(setup, args, target, window)
         checks += [_delivery_check(target, seen, args.expect_image),
                    _runtime_check(target, seen, baseline, max_restarts),
                    _logs_check(target, seen, baseline, max_errors, window_seconds)]
+    checks += _resource_checks(setup, args, plan["scope"], plan["max_resources"], baseline, limits, window)
     verdict = verdict_of(c["status"] for c in checks)
     result = {"contract": VERIFY_CONTRACT, "verdict": verdict, "checks": checks,
               "suggestion": verify_suggestion(targets) if verdict == "degradou" else ""}
@@ -6924,7 +7550,11 @@ def main(argv=None):
     q.add_argument("--service", required=True, help="id do serviço no atlas")
     q.add_argument("--env", required=True, help="ambiente dos deployments")
     q.add_argument("--out", required=True, help="arquivo da foto (fora da pasta do atlas)")
-    q.add_argument("--since", help=f"janela dos eventos e logs (padrão {VERIFY_SINCE}; até 24h)")
+    q.add_argument("--since", help=f"janela dos eventos, logs e sinais (padrão {VERIFY_SINCE}; até 24h)")
+    q.add_argument("--resource", action="append", help="restringe as dependências a este recurso ligado: "
+                                                       "<kind>:<id> (queue, topic, datastore; repetível)")
+    q.add_argument("--max-resources", help=f"máximo de recursos verificados (1..{VERIFY_MAX_RESOURCES_MAX}; padrão "
+                                           f"{VERIFY_MAX_RESOURCES})")
     q.add_argument("--confirm-production", action="store_true",
                    help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
     add_atlas_option(q)
@@ -6934,9 +7564,20 @@ def main(argv=None):
     q.add_argument("--env", required=True, help="ambiente dos deployments")
     q.add_argument("--expect-image", required=True, help="imagem esperada: caminho com :<tag> e/ou @<digest>")
     q.add_argument("--baseline", help="a foto do verify snapshot (sem ela, os logs ficam não verificados)")
-    q.add_argument("--window", help=f"janela dos eventos e logs (padrão {VERIFY_WINDOW}; até 24h)")
+    q.add_argument("--window", help=f"janela dos eventos, logs e sinais (padrão {VERIFY_WINDOW}; até 24h)")
     q.add_argument("--max-new-errors", default="0", help="assinaturas de erro novas toleradas (padrão 0)")
     q.add_argument("--max-new-restarts", default="0", help="restarts novos tolerados (padrão 0)")
+    q.add_argument("--resource", action="append", help="restringe as dependências a este recurso ligado: "
+                                                       "<kind>:<id> (queue, topic, datastore; repetível)")
+    q.add_argument("--max-resources", help=f"máximo de recursos verificados (1..{VERIFY_MAX_RESOURCES_MAX}; padrão "
+                                           f"{VERIFY_MAX_RESOURCES})")
+    q.add_argument("--max-new-dlq", default="0", help="mensagens novas toleradas na DLQ (padrão 0)")
+    q.add_argument("--max-queue-age", help=f"idade máxima da mensagem mais antiga (padrão {VERIFY_MAX_QUEUE_AGE}; até "
+                                           "24h)")
+    q.add_argument("--expect-migration", action="append", help="migration que precisa estar aplicada: "
+                                                               "[<datastore>=]<migration> (repetível)")
+    q.add_argument("--max-signal-increase", help="piora tolerada nas métricas de erro e latência (0 a 100; padrão "
+                                                 f"{VERIFY_MAX_SIGNAL_INCREASE} = 50%%)")
     q.add_argument("--confirm-production", action="store_true",
                    help="só depois do \"sim\" da pessoa: ambiente de produção ou sem marcação")
     q.add_argument("--json", action="store_true")
