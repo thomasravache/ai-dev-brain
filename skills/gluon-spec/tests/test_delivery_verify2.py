@@ -345,6 +345,32 @@ class DependenciesTest(unittest.TestCase):
                 with self.subTest(valor=value):
                     self.assertRegex(value, r"^<datastore>=<", "gates.md (G6): --expect-migration sem o datastore")
 
+    # SPEC-0105:UT-03 (Emenda v3)
+    def test_expect_migration_only_when_the_datastore_is_in_the_snapshot_scope(self):
+        """SPEC-0105:UT-03 (Emenda v3) — gates.md (G6): --expect-migration só vai ao compare quando a foto tem
+        dependencies com datastore:<id>; com dependencies: {} não é passado e a migration entra no Relatório de
+        Entrega como não verificada; ao restringir com --resource, o datastore de cada migration esperada entra
+        sempre na lista; nenhum item manda passar --expect-migration "sempre" sem a condição do escopo (fora do
+        escopo o compare sai com 2 e o G6 perderia as verificações do verify@1)."""
+        text = active_section()
+        scoped = chunks_with(text, r"--expect-migration", r"\bdependencies\b", r"datastore:<?\w",
+                             r"snapshot|foto")
+        self.assertTrue(scoped, "gates.md (G6): --expect-migration não depende de a foto ter datastore:<id> em "
+                                "dependencies")
+        empty = chunks_with(text, r"--expect-migration", r"dependencies:?`?\s*`?\{\}",
+                            r"\b(?:not|no|never|don't|do not|without|nunca|não|sem)\b", r"Relatório de Entrega",
+                            r"não verificada|not verified|unverified")
+        self.assertTrue(empty, "gates.md (G6): com dependencies: {} o --expect-migration ainda é passado, ou a "
+                               "migration não vai ao Relatório de Entrega como não verificada")
+        restricted = chunks_with(text, r"--resource", r"migration", r"\bdatastore\b", r"\balways\b|\bsempre\b",
+                                 r"\blist\b|lista")
+        self.assertTrue(restricted, "gates.md (G6): ao restringir com --resource, o datastore da migration esperada "
+                                    "não entra sempre na lista")
+        for chunk in chunks_with(text, r"--expect-migration", r"\balways\b|\bsempre\b"):
+            with self.subTest(trecho=chunk.strip()[:80]):
+                self.assertRegex(chunk, r"\bdependencies\b|datastore:<?\w|\bscope\b|escopo",
+                                 "gates.md (G6): manda passar --expect-migration sempre, sem a condição do escopo")
+
     # SPEC-0105:UT-03
     def test_no_resource_adapter_is_like_verify_1_and_not_inconclusive(self):
         """SPEC-0105:UT-03 — gates.md (G6): sem nenhum adaptador de recurso declarado, o escopo fica vazio, o verify
@@ -429,6 +455,15 @@ class ProductionAndReportTest(unittest.TestCase):
                       "produção'")
         self.assertTrue([c for c in chunks(text) if PRODUCTION.search(c) and re.search(r"passiv", c, re.IGNORECASE)],
                         "gates.md (G6): produção deixou de ser só passiva")
+
+    # SPEC-0105:UT-05 (Emenda v3)
+    def test_missing_production_yes_falls_back_to_the_manual_route(self):
+        """SPEC-0105:UT-05 (Emenda v3) — gates.md (G6): sem o "sim" de produção numa execução, o agente para de
+        acompanhar, registra "sem confirmação de produção" e segue o roteiro manual (passos 1 e 2 à mão), como no
+        limite de track_max_minutes."""
+        found = chunks_with(active_section(), r"sem confirmação de produção", MANUAL,
+                            r"steps? 1 (?:and|e) 2|passos? 1 e 2|steps? 1\s*[–-]\s*2")
+        self.assertTrue(found, "gates.md (G6): sem o sim de produção, não segue o roteiro manual (passos 1 e 2 à mão)")
 
     # SPEC-0105:UT-05
     def test_delivery_report_line_per_service_and_environment(self):
@@ -551,6 +586,22 @@ class ContractTest(unittest.TestCase):
                 extra = set(FLAG.findall(match.group(1))) - flags
                 with self.subTest(subcomando=sub, trecho=match.group(0)):
                     self.assertFalse(extra, f"gates.md (G6): verify {sub} não tem {sorted(extra)}")
+
+    # SPEC-0105:CT-01 (Emenda v3)
+    def test_track_and_compare_command_lines_show_confirm_production(self):
+        """SPEC-0105:CT-01 (Emenda v3) — gates.md (G6): as linhas de comando do verify track e do verify compare
+        mostram [--confirm-production], a opção que só entra com o sim daquela execução (e que existe no --help de
+        cada um)."""
+        text = active_section()
+        for sub in ("track", "compare"):
+            with self.subTest(subcomando=sub):
+                self.assertIn("--confirm-production", help_flags(sub), f"atlas.py verify {sub} --help sem "
+                                                                       "--confirm-production")
+                lines = [m.group(0) for m in re.finditer(rf"atlas\.py verify {sub}\b[^`\n]*", text)]
+                self.assertTrue(lines, f"gates.md (G6): sem a linha de comando do verify {sub}")
+                for line in lines:
+                    self.assertIn("[--confirm-production]", line,
+                                  f"gates.md (G6): a linha de comando do verify {sub} sem [--confirm-production]")
 
     # SPEC-0105:CT-01
     def test_track_contract_states_exits_and_stages_match_verify_md(self):
