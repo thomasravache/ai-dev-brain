@@ -4,8 +4,8 @@
 
 ## Saúde
 
-- Validação (G0): **6 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 3, approved 1, implemented 88
+- Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
+- Specs: proposed 10, approved 1, implemented 88
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -39,6 +39,13 @@ Perfil: **minimo**
 | 2 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073 |
 | 3 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo |
 | 4 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
+| 5 | SPEC-0107 | photon-brain: acrescentar a notas existentes (append e new-note --body-file) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0028; saiu da onda 3: arquivos em comum com SPEC-0083; saiu da onda 4: arquivos em comum com SPEC-0085 |
+| 6 | SPEC-0108 | photon-brain: tipo list para listas de consulta e list add | full/M | proposed | ⏳ aguardando aprovação (H1) |  |
+| 7 | SPEC-0109 | photon-brain: fuso horário nas datas das capturas e do log | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0028; saiu da onda 3: arquivos em comum com SPEC-0083; saiu da onda 4: arquivos em comum com SPEC-0085; saiu da onda 5: arquivos em comum com SPEC-0107; saiu da onda 6: arquivos em comum com SPEC-0108 |
+| 8 | SPEC-0110 | photon-brain: conector e sessão na nuvem — achar o vault, ler a config e conectar só a pasta | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0028; saiu da onda 3: arquivos em comum com SPEC-0083; saiu da onda 4: arquivos em comum com SPEC-0085; saiu da onda 5: arquivos em comum com SPEC-0107; saiu da onda 6: arquivos em comum com SPEC-0108; saiu da onda 7: arquivos em comum com SPEC-0109 |
+| 9 | SPEC-0111 | photon-brain: brain.py sem assets/ quando o vault já tem a configuração | full/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0028; saiu da onda 3: arquivos em comum com SPEC-0083; saiu da onda 4: arquivos em comum com SPEC-0085; saiu da onda 5: arquivos em comum com SPEC-0107; saiu da onda 6: arquivos em comum com SPEC-0108; saiu da onda 7: arquivos em comum com SPEC-0109; saiu da onda 8: arquivos em comum com SPEC-0110 |
+| 10 | SPEC-0112 | photon-brain: segredo na inbox — lint e inbox list avisam sem mostrar o valor | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0028; saiu da onda 3: arquivos em comum com SPEC-0083; saiu da onda 4: arquivos em comum com SPEC-0085; saiu da onda 5: arquivos em comum com SPEC-0107; saiu da onda 6: arquivos em comum com SPEC-0108; saiu da onda 7: arquivos em comum com SPEC-0109; saiu da onda 8: arquivos em comum com SPEC-0110; saiu da onda 9: arquivos em comum com SPEC-0111 |
+| 11 | SPEC-0113 | photon-brain: inbox que separa ação de conhecimento e listas de tarefas por contexto | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 7: arquivos em comum com SPEC-0109; saiu da onda 8: arquivos em comum com SPEC-0110; saiu da onda 9: arquivos em comum com SPEC-0111; saiu da onda 10: arquivos em comum com SPEC-0112 |
 
 ## Épicos
 
@@ -55,7 +62,7 @@ Perfil: **minimo**
 | SPEC-0075 | boson-atlas: mapa de acesso, observabilidade e validação por ambiente e serviço | implemented | 3/3 implementadas |
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | implemented | 3/3 implementadas |
 | SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
-| SPEC-0093 | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | proposed | 0/0 implementadas |
+| SPEC-0093 | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | proposed | 0/7 implementadas |
 | SPEC-0095 | boson-atlas: verificação completa depois do deploy — dependências, sinais e funcional | implemented | 11/11 implementadas |
 
 ## Grafo de Dependências
@@ -77,6 +84,15 @@ flowchart LR
     S0072["SPEC-0072<br/>fermion_doctor e guarda de nomes cobrem…"]:::implemented
     S0073["SPEC-0073<br/>Remoção dos nomes técnicos antigos na v…"]:::approved
   end
+  subgraph E0093["SPEC-0093 · photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta)"]
+    S0107["SPEC-0107<br/>photon-brain: acrescentar a notas exist…"]:::proposed
+    S0108["SPEC-0108<br/>photon-brain: tipo list para listas de …"]:::proposed
+    S0109["SPEC-0109<br/>photon-brain: fuso horário nas datas da…"]:::proposed
+    S0110["SPEC-0110<br/>photon-brain: conector e sessão na nuve…"]:::proposed
+    S0111["SPEC-0111<br/>photon-brain: brain.py sem assets/ quan…"]:::proposed
+    S0112["SPEC-0112<br/>photon-brain: segredo na inbox — lint e…"]:::proposed
+    S0113["SPEC-0113<br/>photon-brain: inbox que separa ação de …"]:::proposed
+  end
   S0023 --> S0028
   S0070 --> S0071
   S0069 --> S0072
@@ -86,6 +102,8 @@ flowchart LR
   S0070 --> S0073
   S0071 --> S0073
   S0072 --> S0073
+  S0107 --> S0108
+  S0108 --> S0113
   classDef proposed fill:#fef3c7,stroke:#d97706,color:#111
   classDef approved fill:#dbeafe,stroke:#2563eb,color:#111
   classDef inprogress fill:#ede9fe,stroke:#7c3aed,color:#111
@@ -202,6 +220,13 @@ flowchart LR
 | [SPEC-0104](SPEC-0104-boson-atlas-onboarding-do-acesso-e-metricas-de-uso-das-probe.md) | boson-atlas: onboarding do acesso e métricas de uso das probes | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0096 | — |
 | [SPEC-0105](SPEC-0105-gluon-spec-g6-com-verify-2-e-validacao-funcional.md) | gluon-spec: G6 com verify@2, acompanhamento da entrega e validação funcional | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0102, SPEC-0103, SPEC-0106 | — |
 | [SPEC-0106](SPEC-0106-boson-atlas-acompanhar-a-entrega-de-um-commit-pipeline-image.md) | boson-atlas: acompanhar a entrega de um commit — pipeline, imagem, GitOps e rollout | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0096 | — |
+| [SPEC-0107](SPEC-0107-photon-brain-acrescentar-a-notas-existentes-append-e-new-not.md) | photon-brain: acrescentar a notas existentes (append e new-note --body-file) | full | feature | proposed | 2026-11-26 | SPEC-0093 | — | — |
+| [SPEC-0108](SPEC-0108-photon-brain-tipo-list-para-listas-de-consulta-e-list-add.md) | photon-brain: tipo list para listas de consulta e list add | full | feature | proposed | 2026-11-26 | SPEC-0093 | SPEC-0107 | — |
+| [SPEC-0109](SPEC-0109-photon-brain-fuso-horario-nas-datas-das-capturas-e-do-log.md) | photon-brain: fuso horário nas datas das capturas e do log | full | feature | proposed | 2026-11-26 | SPEC-0093 | — | — |
+| [SPEC-0110](SPEC-0110-photon-brain-conector-e-sessao-na-nuvem-achar-o-vault-ler-a.md) | photon-brain: conector e sessão na nuvem — achar o vault, ler a config e conectar só a pasta | full | feature | proposed | 2026-11-26 | SPEC-0093 | — | — |
+| [SPEC-0111](SPEC-0111-photon-brain-brain-py-sem-assets-quando-o-vault-ja-tem-a-con.md) | photon-brain: brain.py sem assets/ quando o vault já tem a configuração | full | feature | proposed | 2026-11-26 | SPEC-0093 | — | — |
+| [SPEC-0112](SPEC-0112-photon-brain-segredo-na-inbox-lint-e-inbox-list-avisam-sem-m.md) | photon-brain: segredo na inbox — lint e inbox list avisam sem mostrar o valor | full | feature | proposed | 2026-11-26 | SPEC-0093 | — | — |
+| [SPEC-0113](SPEC-0113-photon-brain-inbox-que-separa-acao-de-conhecimento-e-listas.md) | photon-brain: inbox que separa ação de conhecimento e listas de tarefas por contexto | full | feature | proposed | 2026-11-26 | SPEC-0093 | SPEC-0108 | — |
 
 ## ADRs
 
@@ -232,3 +257,4 @@ flowchart LR
 | [ADR-0024](../adr/ADR-0024-verificacao-depois-do-deploy-por-foto-e-comparacao-com-vered.md) | Verificação depois do deploy por foto e comparação, com veredito e nada guardado no atlas | accepted | testes da SPEC-0090 (UT-03 a UT-06, IT-01) e da SPEC-0091 (UT-01) |
 | [ADR-0025](../adr/ADR-0025-probes-de-dependencias-alvo-do-grafo-acesso-local-a-nuvem-e.md) | Probes de dependências: alvo do grafo, acesso local à nuvem e ao banco e contrato probe@2 | accepted | testes da SPEC-0096 (alvo, acesso e máscara) e dos adaptadores SPEC-0098 a SPEC-0101, SPEC-0103 (`suite`) e SPEC-0106 (`github-actions`, `argocd`), que só usam verbos de leitura e nunca shell |
 | [ADR-0026](../adr/ADR-0026-verify-2-dependencias-sinais-e-validacao-funcional-so-em-tes.md) | verify@2: dependências, sinais e validação funcional só em teste | accepted | testes da SPEC-0102 (verify@2 sem escrita no atlas, verify@1 aceito, não verificado com motivo) e da SPEC-0103 (funcional só em tier test) |
+| [ADR-0027](../adr/ADR-0027-integracoes-do-agente-no-photon-brain-por-orientacao-e-confi.md) | Integrações do agente no photon-brain por orientação e configuração, nunca pelo brain.py | proposed | skills/photon-brain/tests/test_architecture.py (sem módulo de rede no brain.py, ADR-0007) |

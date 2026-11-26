@@ -6,7 +6,7 @@ type: feature
 status: proposed
 created: 2026-11-23
 depends_on: []
-adrs: []
+adrs: [ADR-0027]
 external: []
 approved_by:
 approved_at:
@@ -14,7 +14,7 @@ approved_at:
 
 # SPEC-0093 — photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) (Épico)
 
-> **Radar (thomas, 2026-11-23):** primeiro feedback de uso real da photon-brain por conector, numa sessão na nuvem. Está registrado na inbox do vault, na nota `inbox/2026-11-23-020743-feedback-da-skill-second-brain-melhorias.md`; novos feedbacks entram na inbox do mesmo jeito. Um segundo feedback, do modo só conector no Google Drive (thomas, 2026-11-23), acrescentou os pontos 6 e 7 e detalhes nos pontos 3 e 5. Um terceiro, de uso real em 2026-11-25 (thomas), confirmou os pontos 1 a 6, trouxe detalhes nos pontos 3, 4 e 5 e acrescentou os pontos 8 a 11. Fica a detalhar antes do G0, sempre agnóstico e configurável. Os pontos:
+> **Origem (thomas, 2026-11-23 a 2026-11-25):** primeiro feedback de uso real da photon-brain por conector, numa sessão na nuvem. Está registrado na inbox do vault, na nota `inbox/2026-11-23-020743-feedback-da-skill-second-brain-melhorias.md`; novos feedbacks entram na inbox do mesmo jeito. Um segundo feedback, do modo só conector no Google Drive (thomas, 2026-11-23), acrescentou os pontos 6 e 7 e detalhes nos pontos 3 e 5. Um terceiro, de uso real em 2026-11-25 (thomas), confirmou os pontos 1 a 6, trouxe detalhes nos pontos 3, 4 e 5 e acrescentou os pontos 8 a 11. Detalhado no G0 de 2026-11-26 nas filhas SPEC-0107 a SPEC-0113, sempre agnóstico e configurável. Os pontos:
 > 1. **Lista que cresce:**
 >    - pelo conector só dá para criar arquivo novo;
 >    - uma lista que vai ganhando itens vira várias capturas soltas na inbox;
@@ -81,47 +81,96 @@ approved_at:
 <!-- type: feature | migration | foundation (produto novo: ver references/greenfield.md). O épico não é executado: define visão, decisões, decomposição e entrega. Quem executa são as specs filhas (tier full ou lite, tamanho S/M, `parent: SPEC-0093`). A ordem de execução é calculada a partir do frontmatter das filhas (`spec_graph.py waves`). -->
 
 ## 1. Visão
-{{Resultado de negócio e técnico esperado ao final do épico.}}
+A photon-brain funciona bem pelo conector e numa sessão na nuvem, e o vault cresce sem edição à mão nem dado solto.
+- **Achar o vault e ler a configuração:** o agente acha o vault e a inbox certos pelos IDs que o próprio vault guarda e lê a configuração pelo conector.
+- **Data e hora:** a captura sai com o fuso da pessoa.
+- **Notas e listas:** notas e listas crescem pelo `brain.py`, com linha no log.
+- **Cópia do script:** funciona sem a pasta `assets/`.
+- **Segredos na inbox:** ficam visíveis para o `lint` e escondidos na prévia.
+- **Ação ou conhecimento:** ao processar a inbox, a ação vira tarefa na lista da área e o conhecimento vira nota.
 
 ## 2. Escopo
 **Objetivos (dentro do escopo):**
-- {{O que o épico entrega}}
+- Acrescentar a notas existentes e criar a nota com o corpo, com log (pontos 1, 10 e 11): SPEC-0107.
+- Tipo `list` para listas de consulta e `list add`, com a regra "o que se marca como feito vai para as tarefas" (pontos 1, 2 e 14): SPEC-0108.
+- Fuso do vault (`timezone`) nas datas, com o deslocamento no `created` da captura (ponto 4): SPEC-0109.
+- IDs da pasta do vault e da inbox por provedor, e instruções do conector e da sessão na nuvem (pontos 3, 5, 6 e 7): SPEC-0110.
+- `brain.py` copiado sozinho, sem `assets/` (ponto 8): SPEC-0111.
+- Segredo na inbox detectado e mascarado (ponto 9): SPEC-0112.
+- Inbox que separa ação de conhecimento e as listas de tarefas por contexto (pontos 12 e 13): SPEC-0113.
 
 **Não-objetivos (fora do escopo):**
-- {{O que fica explicitamente de fora}}
+- O `brain.py` chamar qualquer API (provedor, tarefas, agenda), conforme o ADR-0008 e o ADR-0027.
+- Editar ou mover arquivos do vault pelo conector além de criar o arquivo novo na inbox (ADR-0013).
+- Remover a skill antiga da conta do claude.ai, que é ação da pessoa (só fica documentado, SPEC-0110).
+- Checklist e tarefas dentro do vault.
 
 ## 3. Arquitetura Alvo
-**Contexto:** {{Projeto existente: arquitetura atual (ADRs as-is) e o que muda — se muda, type: migration | Projeto novo: stack e arquitetura definidas nos ADRs de fundação}}
+**Contexto:** projeto existente. A arquitetura da photon-brain é a dos ADR-0007 (fronteiras, sem rede, escrita só pelo `brain.py` com log), ADR-0008 (vault no provedor de arquivos), ADR-0013 (conector do agente só cria arquivo novo na inbox e lê) e ADR-0014 (confidenciais). Nada disso muda.
 
-{{Como o sistema fica ao final: módulos, fronteiras, fluxos principais, contratos entre as filhas. Diagrama se ajudar.}}
+Ao final:
+- **`brain.py`:** ganha `append`, `new-note --body-file`, o tipo `list` com `list add`, `connector set|show`, `context set` e `inbox done --outcome`.
+- **`brain-config.yml`:** ganha as chaves opcionais `timezone`, `connectors.<provedor>` e `contexts.<nome>.tasks`.
+- **Detector de segredos:** passa a cobrir os itens de texto e de link da inbox.
+- **Padrões embutidos:** o `brain.py` passa a ter os padrões da configuração embutidos.
+- **Instruções:** o `SKILL.md` e as referências ganham o roteiro do conector, da sessão na nuvem e do processamento da inbox com ação e conhecimento separados.
+- **Contratos entre filhas:** nenhum entre specs paralelas. A SPEC-0108 usa a escrita da SPEC-0107 e a SPEC-0113 usa a regra de listas da SPEC-0108, as duas por `depends_on`.
 
-**Decisões (ADRs):** {{ADR-NNNN — decisão. Toda decisão transversal vira ADR (liste também no frontmatter `adrs`) | N/A}}
+**Decisões (ADRs):** ADR-0027: integrações do agente por orientação e configuração no vault, nunca pelo `brain.py`.
 
-**Regras de arquitetura a garantir (G3):** {{ex: Domain não referencia Infrastructure; módulos só se comunicam por contratos públicos — cada regra com o teste de arquitetura que a garante}}
+**Regras de arquitetura a garantir (G3):**
+- `brain.py` sem módulo de rede (`tests/test_architecture.py`, ADR-0007).
+- Os padrões embutidos iguais ao `assets/brain-config.yml` (regra nova da SPEC-0111).
 
 ## 4. Decomposição
-<!-- Uma linha por spec filha. As colunas de dependência são informativas: a fonte da verdade é o frontmatter de cada filha. -->
 | Spec | Título | Tier | Tipo | Tamanho | Depende de | Consome contrato de |
 |---|---|---|---|---|---|---|
-| {{SPEC-NNNN}} | {{título}} | {{full}} | {{feature}} | {{M}} | {{—}} | {{—}} |
+| SPEC-0107 | acrescentar a notas existentes (`append` e `new-note --body-file`) | full | feature | M | — | — |
+| SPEC-0108 | tipo `list` para listas de consulta e `list add` | full | feature | M | SPEC-0107 | — |
+| SPEC-0109 | fuso horário nas datas das capturas e do log | full | feature | M | — | — |
+| SPEC-0110 | conector e sessão na nuvem: achar o vault, ler a config e conectar só a pasta | full | feature | M | — | — |
+| SPEC-0111 | `brain.py` sem `assets/` quando o vault já tem a configuração | full | feature | S | — | — |
+| SPEC-0112 | segredo na inbox: `lint` e `inbox list` avisam sem mostrar o valor | full | feature | M | — | — |
+| SPEC-0113 | inbox que separa ação de conhecimento e listas de tarefas por contexto | full | feature | M | SPEC-0108 | — |
 
 ## 5. Estratégia de Entrega
-- **Ambientes:** {{ex: staging automático a cada merge; produção via pipeline com aprovação}}
-- **Entrega por onda:** {{o que vai para produção ao fim de cada onda e o que fica atrás de feature flag}}
-- **Feature flags:** {{nome — o que controla — critério para ligar e para remover | N/A}}
-- **Rollback:** {{como reverter cada onda}}
-- **Métricas de sucesso pós-release:** {{o que observar e por quanto tempo}}
+- **Ambientes:** N/A. A skill chega pelo plugin `fermion` depois de cada merge (pilar de entrega dispensado no `sdd-config.yml`).
+- **Entrega por onda:**
+  - As filhas tocam o `brain.py`, o CHANGELOG e o `plugin.json`, então rodam uma de cada vez. A ordem segue o valor para o uso real:
+    1. 0107 (`append`);
+    2. 0109 (fuso);
+    3. 0110 (conector e nuvem);
+    4. 0112 (segredos);
+    5. 0111 (script sozinho);
+    6. 0108 (listas);
+    7. 0113 (ação e conhecimento).
+  - Cada merge sobe a versão do plugin e a `BRAIN_VERSION`.
+- **Feature flags:** N/A. Todas as mudanças são opcionais ou aditivas.
+- **Rollback:** reverter o merge da filha. As chaves novas são opcionais, e o vault continua válido.
+- **Métricas de sucesso pós-release:** no uso real, nas próximas semanas:
+  - nenhum texto escrito à mão fora do log;
+  - capturas com o fuso certo na nuvem;
+  - a sessão no celular ou na nuvem acha o vault sem procurar;
+  - itens de ação da inbox indo para o Tasks.
 
 ## 6. Riscos & Mitigações
-- {{risco — mitigação | N/A}}
+- **O conector do Drive mudar de nome ou de ferramenta:** as instruções tratam os nomes como os de hoje e dão a alternativa (seguir com `inbox` e avisar); a SPEC-0110 registra a data da conferência.
+- **Falso positivo no detector de segredos:** os casos negativos ficam nos testes da SPEC-0112 e os valores-marcador continuam ignorados.
+- **Fuso ausente na base da máquina (Windows):** a mensagem diz o que instalar e o comando não grava data errada (SPEC-0109).
+- **O agente não seguir o roteiro de ação e conhecimento:** o `inbox done --outcome` deixa rastro no log; sem ferramenta de tarefas, o item fica na inbox.
 
 ## 7. Critérios de Aceite do Épico
-<!-- Verificáveis ponta a ponta. Cada critério cita o teste que o prova (`SPEC-NNNN:E2E-01`; IT para critérios que não são jornada). O épico só fecha com todos marcados e todas as filhas implemented/deprecated. -->
-- [ ] {{critério verificável — SPEC-NNNN:E2E-01}}
+- [ ] Uma seção acrescentada a uma nota existente e o corpo de uma nota nova entram pelo `brain.py`, com linha no log — SPEC-0107:IT-01, SPEC-0107:IT-02
+- [ ] Uma lista de consulta cresce com `list add`, sem itens repetidos e sem checklist — SPEC-0108:IT-01
+- [ ] Numa máquina em UTC, a captura de um vault com `timezone` sai com a hora e o deslocamento do fuso da pessoa — SPEC-0109:IT-01
+- [ ] Os IDs do vault e da inbox ficam no vault, e as instruções levam a sessão só com conector à inbox certa e à leitura do `.yml` — SPEC-0110:IT-01, SPEC-0110:UT-06
+- [ ] O `brain.py` copiado sozinho para dentro do vault roda o fluxo de captura e processamento — SPEC-0111:IT-01
+- [ ] Senhas em itens da inbox são acusadas pelo `lint` e mascaradas no `inbox list`, sem o valor em nenhuma saída — SPEC-0112:IT-01
+- [ ] Um item de ação da inbox é fechado como tarefa da lista da área, e um de conhecimento como nota — SPEC-0113:IT-01
 
 ## 8. Questões em Aberto
-<!-- Dúvidas que impedem fechar a spec, respondidas ANTES do H1. Aberta: `- [ ] pergunta (quem responde)`. Respondida: `- [x] pergunta — resposta (quem, data)`. Com alguma aberta o G0 reprova. Sem dúvidas: escreva "Nenhuma". Dúvida que surge depois da aprovação vira impedimento. -->
-{{- [ ] dúvida que precisa de resposta e quem responde | Nenhuma}}
+- [x] Os pontos 12 a 14 ficam neste épico ou num do ecossistema? — Ficam aqui: na photon-brain, eles são configuração e roteiro de processamento da inbox; a ferramenta de tarefas é do repositório próprio (Architect, 2026-11-26, no piloto automático)
+- [x] O ponto 7 (nome antigo na conta) é código? — Não. É a skill antiga avulsa na conta do claude.ai; a SPEC-0110 documenta como reconhecer e o que fazer, e a remoção é da pessoa (anotada na inbox do vault)
 
 ## 9. Aprovação (H1)
 Uma aprovação humana cobre o épico e as specs filhas apresentadas junto com ele. Registrada no frontmatter (`approved_by`, `approved_at`) do épico e de cada filha.
