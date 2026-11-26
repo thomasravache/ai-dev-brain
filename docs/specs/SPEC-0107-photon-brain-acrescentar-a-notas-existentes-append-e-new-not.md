@@ -184,7 +184,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 35be308 | 2026-11-26 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na segunda rodada (M1 e m1–m4 resolvidos; n1/n2 minors para o radar) — 5a6e897 | 2026-11-26 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 1ec47ef | 2026-11-26 |
-| H2 Integração aprovada | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
 
