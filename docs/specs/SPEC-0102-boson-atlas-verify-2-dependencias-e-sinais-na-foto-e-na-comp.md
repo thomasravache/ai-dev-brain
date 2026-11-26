@@ -4,7 +4,7 @@ title: "boson-atlas: verify@2 — dependências e sinais na foto e na comparaç�
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
