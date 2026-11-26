@@ -186,7 +186,7 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
 - `skills/gluon-spec/SKILL.md`: uma oração no passo 7.
 - `skills/gluon-spec/scripts/spec_graph.py`: só o `SDD_TOOL_VERSION`.
 - CHANGELOG da gluon-spec (seção datada) e `plugin.json`.
-- `skills/gluon-spec/tests/test_delivery_verify2.py` (novo): os testes desta spec, no estilo de `test_delivery_verify.py`, que fica como está.
+- `skills/gluon-spec/tests/test_delivery_verify2.py` (novo): os testes desta spec, no estilo de `test_delivery_verify.py`, que só muda nos dois pontos da Emenda v2.
 
 ### 6.1 Mapa de Comportamentos
 | Cenário | Condição / Entrada | Resultado esperado | Testes |
