@@ -4,7 +4,7 @@ title: "boson-atlas: validação funcional em teste — jornadas e suítes curad
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0104]
