@@ -379,7 +379,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 4 minor (--journey ignorado em capacidade não functional, regra de tier presa ao nome functional, cwd inexistente com mensagem errada, SKILL.md sem as opções na tabela) — dd12f47 | 2026-11-26 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — ab5f08d | 2026-11-26 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
-| G6 Deploy | PENDING | | |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
 | G7 Pronto & Docs | PENDING | | |
 
 ## 13. Registro de Impedimentos
