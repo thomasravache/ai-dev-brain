@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **6 erro(s), 26 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 3, approved 3, in-progress 1, implemented 85
+- Specs: proposed 3, approved 2, in-progress 1, implemented 86
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -38,10 +38,9 @@ Perfil: **minimo**
 | 1 | SPEC-0101 | boson-atlas: adaptador de simulação de IAM — permissão do workload no recurso | full/M | in-progress | 🔄 em andamento |  |
 | 1 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) |  |
 | 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 9d) | saiu da onda 1: arquivos em comum com SPEC-0101 |
-| 3 | SPEC-0103 | boson-atlas: validação funcional em teste — jornadas e suítes curadas | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0101; saiu da onda 2: arquivos em comum com SPEC-0073 |
-| 4 | SPEC-0105 | gluon-spec: G6 com verify@2, acompanhamento da entrega e validação funcional | full/S | approved | ⛔ aguarda implementação de SPEC-0103 |  |
-| 5 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo |
-| 6 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo |
+| 3 | SPEC-0105 | gluon-spec: G6 com verify@2, acompanhamento da entrega e validação funcional | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0101; saiu da onda 2: arquivos em comum com SPEC-0073 |
+| 4 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo |
+| 5 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo |
 
 ## Épicos
 
@@ -59,7 +58,7 @@ Perfil: **minimo**
 | SPEC-0077 | boson-atlas: mais de uma organização por máquina | implemented | 3/3 implementadas |
 | SPEC-0084 | boson-atlas: contas de nuvem, operação, fornecedores e ciclo de vida no modelo | proposed | 0/0 implementadas |
 | SPEC-0093 | photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta) | proposed | 0/0 implementadas |
-| SPEC-0095 | boson-atlas: verificação completa depois do deploy — dependências, sinais e funcional | approved | 8/11 implementadas |
+| SPEC-0095 | boson-atlas: verificação completa depois do deploy — dependências, sinais e funcional | approved | 9/11 implementadas |
 
 ## Grafo de Dependências
 
@@ -84,8 +83,7 @@ flowchart LR
     S0096["SPEC-0096<br/>boson-atlas: probe@2 — recursos do graf…"]:::implemented
     S0101["SPEC-0101<br/>boson-atlas: adaptador de simulação de …"]:::inprogress
     S0102["SPEC-0102<br/>boson-atlas: verify@2 — dependências e …"]:::implemented
-    S0103["SPEC-0103<br/>boson-atlas: validação funcional em tes…"]:::approved
-    S0104["SPEC-0104<br/>boson-atlas: onboarding do acesso e mét…"]:::implemented
+    S0103["SPEC-0103<br/>boson-atlas: validação funcional em tes…"]:::implemented
     S0105["SPEC-0105<br/>gluon-spec: G6 com verify@2, acompanham…"]:::approved
     S0106["SPEC-0106<br/>boson-atlas: acompanhar a entrega de um…"]:::implemented
   end
@@ -101,8 +99,6 @@ flowchart LR
   S0096 --> S0101
   S0096 --> S0102
   S0102 --> S0103
-  S0104 --> S0103
-  S0096 --> S0104
   S0102 --> S0105
   S0103 --> S0105
   S0106 --> S0105
@@ -219,7 +215,7 @@ flowchart LR
 | [SPEC-0100](SPEC-0100-boson-atlas-adaptador-cloudwatch-sinais-das-dependencias.md) | boson-atlas: adaptador cloudwatch — sinais das dependências | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0096 | — |
 | [SPEC-0101](SPEC-0101-boson-atlas-adaptador-de-simulacao-de-iam-permissao-do-workl.md) | boson-atlas: adaptador de simulação de IAM — permissão do workload no recurso | full | feature | in-progress | 2026-11-24 | SPEC-0095 | SPEC-0096 | — |
 | [SPEC-0102](SPEC-0102-boson-atlas-verify-2-dependencias-e-sinais-na-foto-e-na-comp.md) | boson-atlas: verify@2 — dependências e sinais na foto e na comparação | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0096 | — |
-| [SPEC-0103](SPEC-0103-boson-atlas-validacao-funcional-em-teste-jornadas-e-suites-c.md) | boson-atlas: validação funcional em teste — jornadas e suítes curadas | full | feature | approved | 2026-11-24 | SPEC-0095 | SPEC-0102, SPEC-0104 | — |
+| [SPEC-0103](SPEC-0103-boson-atlas-validacao-funcional-em-teste-jornadas-e-suites-c.md) | boson-atlas: validação funcional em teste — jornadas e suítes curadas | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0102, SPEC-0104 | — |
 | [SPEC-0104](SPEC-0104-boson-atlas-onboarding-do-acesso-e-metricas-de-uso-das-probe.md) | boson-atlas: onboarding do acesso e métricas de uso das probes | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0096 | — |
 | [SPEC-0105](SPEC-0105-gluon-spec-g6-com-verify-2-e-validacao-funcional.md) | gluon-spec: G6 com verify@2, acompanhamento da entrega e validação funcional | full | feature | approved | 2026-11-24 | SPEC-0095 | SPEC-0102, SPEC-0103, SPEC-0106 | — |
 | [SPEC-0106](SPEC-0106-boson-atlas-acompanhar-a-entrega-de-um-commit-pipeline-image.md) | boson-atlas: acompanhar a entrega de um commit — pipeline, imagem, GitOps e rollout | full | feature | implemented | 2026-11-24 | SPEC-0095 | SPEC-0096 | — |
