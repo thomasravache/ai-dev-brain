@@ -9,7 +9,7 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0103, SPEC-0106]
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/gluon-spec/SKILL.md, skills/gluon-spec/references/gates.md, skills/gluon-spec/references/sdd-config.template.yml, skills/gluon-spec/scripts/spec_graph.py, skills/gluon-spec/CHANGELOG.md, skills/gluon-spec/tests/test_delivery_verify2.py, skills/gluon-spec/tests/test_delivery_verify.py, .claude-plugin/plugin.json]
 adrs: [ADR-0023, ADR-0024, ADR-0025, ADR-0026]
@@ -178,6 +178,11 @@ G6, com delivery_check.verify true e o atlas disponível (regras do org_context)
 **Esclarecimentos (Emenda v2):**
 - `test_delivery_verify.py` (SPEC-0091) entra nos `touches` e deixa de ficar como está em dois pontos só: o conjunto de opções citadas aceitas passa a incluir o `--help` do `verify track` (o `--commit` só existe nele), e a versão da ferramenta passa a ser conferida como maior ou igual a 2026.11.10, não fixa. O resto desse arquivo não muda.
 
+**Esclarecimentos (Emenda v3):**
+- `--expect-migration <datastore>=<id>` só vai para o `compare` quando o datastore está no escopo da foto (a foto tem `dependencies` com `datastore:<id>`). Com `dependencies: {}` (nenhum adaptador de recurso declarado nesta máquina, o sinal do fallback `verify@1`), a opção não é passada e a migration entra no Relatório de Entrega como não verificada. Ao restringir com `--resource`, o datastore de cada migration esperada entra sempre na lista. Motivo: fora do escopo, o `compare` sai com 2 e o agente perderia as verificações do `verify@1`.
+- Sem o "sim" de produção numa execução, o agente para de acompanhar, registra "sem confirmação de produção" e segue a rota manual (passos 1 e 2 à mão), como no limite de `track_max_minutes`.
+- As linhas de comando do `track` e do `compare` mostram `[--confirm-production]`, como opção que só entra com o sim daquela execução.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -301,11 +306,14 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=43, skipped=1)) — 6f731fc | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 375cff6 | 2026-11-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 6e9ab3c | 2026-11-26 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | reviewer independente: CHANGES_REQUESTED — major: --expect-migration sempre quebra o fallback verify@1 (datastore fora do escopo = exit 2 no compare) e acima de max_resources; minors: sinal de 'sem adaptador' não definido, sem o sim de produção não diz o que fazer, linhas sem [--confirm-production] | 2026-11-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-26 — reviewer independente: CHANGES_REQUESTED — major: --expect-migration sempre quebra o fallback verify@1 (datastore fora do escopo = exit 2 no compare) e acima de max_resources; minors: sinal de 'sem adaptador' não definido, sem o sim de produção não diz o que fazer, linhas sem [--confirm-production] — eaf75e3
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -352,4 +360,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0105`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-26 | `--expect-migration` só para datastore no escopo da foto; rota manual sem o sim de produção; `[--confirm-production]` nas linhas | Major do G4: a instrução "sempre" quebrava o fallback `verify@1` com exit 2 | nenhuma | thomas, 2026-11-26 (piloto automático com o recomendado) |
 | 2 | 2026-11-26 | `test_delivery_verify.py` nos `touches` (opções do `track` e versão mínima) | SPEC_DEFECT do Test-writer: dois testes da SPEC-0091 falham com qualquer implementação conforme | SPEC-0091 (só testes) | thomas, 2026-11-26 (piloto automático com o recomendado) |
