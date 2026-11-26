@@ -402,19 +402,19 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 0: Caracterização**
-- [ ] CH-01 escrito(s) com a tag `SPEC-0102:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
+- [x] CH-01 escrito(s) com a tag `SPEC-0102:<ID>`, passando no código atual, commitado(s) antes de qualquer mudança
 
 **Fase 1: Contrato e implementação**
-- [ ] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, UT-09, UT-10, UT-11, IT-01, CT-01, CT-02 com a tag `SPEC-0102:<ID>`, falhando pelo motivo certo
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, UT-08, UT-09, UT-10, UT-11, IT-01, CT-01, CT-02 com a tag `SPEC-0102:<ID>`, falhando pelo motivo certo
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -440,36 +440,62 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+`verify@2` do boson-atlas: a foto e a comparação passam a cobrir, além do deployment, os recursos ligados ao serviço (filas, tópicos, bancos) pelas probes `probe@2` — fila e DLQ, assinaturas, migrations e tabelas (só postgres e aurora-postgresql), permissões do workload e sinais (erro, latência, saturação e tráfego), cada um com a regra 4a do ADR-0026. Novas opções `--resource`, `--max-resources`, `--max-new-dlq`, `--max-queue-age`, `--expect-migration` e `--max-signal-increase`. Sem adaptador de recurso, o comportamento é o do `verify@1`, e uma foto `verify@1` continua aceita como `--baseline`. Versões: boson-atlas 2026.11.25 e plugin 2026.11.40.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/atlas.py`:** registro único de verificações com nível (deployment ou recurso); escopo por `linked_resources`; observação de cada recurso só por `run_probe`, lendo os campos da regra 4a; verificações `dependencies` e `signals` como funções puras; proteção de produção antes de qualquer probe; validadores de foto e de saída para os dois contratos; coluna "recurso" no Markdown.
+- **Documentação:** `references/verify.md` com a seção do `verify@2`, exemplos e os blocos `verify-items` válidos e inválidos; ponteiro em `references/probes.md`.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em fb06868 (G1) e green em 77ffa45 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | serviço sem recurso ligado mantém o comportamento do verify@1 | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-01 | foto verify@2 com o aspecto messaging da fila | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-02 | escopo de recursos pelo grafo, DLQ fora do padrão e --max-resources | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-03 | fila: DLQ nova e idade acima do limite | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-04 | assinaturas sumidas, mudadas e novas | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-05 | migrations e tabelas só em postgres e aurora-postgresql | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-06 | permissão só falha de allowed para denied | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-07 | sinais piores por minuto contra a foto | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-08 | sem adaptador, sem acesso ou probe cortada viram não verificado | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-09 | foto verify@1 não compara dependências nem sinais | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-10 | veredito failed > not_verified > ok entre recursos | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| UT-11 | só o adaptador runtime: nenhuma probe de recurso | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| IT-01 | snapshot e compare de ponta a ponta com o atlas.py real | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| CT-01 | exemplos e blocos inválidos de verify@1 e verify@2 do verify.md | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
+| CT-02 | blocos verify-items conferidos contra a regra 4a | PASS | `test_verify_dependencies.py` e `test_verify.py`; G2 PASS em 52d382c; G4 `verify` 15/15 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.40 depois do merge. Os recursos só entram com adaptadores `probe@2` declarados e as probes ligadas.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minors do G4 no radar** do épico SPEC-0095:
+  - `--expect-migration` é ignorado sem aviso num datastore sem aspecto database;
+  - `signals.window_seconds: 0` numa foto editada derruba o `compare` com divisão por zero;
+  - o cabeçalho do Markdown passou a minúsculas;
+  - `--max-resources ""` vira o padrão em vez de exit 2;
+  - `api_action` vazio é aceito.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0102`. -->
