@@ -158,6 +158,9 @@ org_context: ""
 # que entram no roteiro ([] = todos os do serviço). Sem a chave: ligado, com todos os ambientes.
 # Verificação ativa (SPEC-0091): verify: true tira a foto (atlas.py verify snapshot) antes do merge e compara depois
 # (atlas.py verify compare), com a janela window_minutes e os limites max_new_errors e max_new_restarts.
+# verify@2 (SPEC-0105): o G6 acompanha a entrega do commit do merge com atlas.py verify track (até track_max_minutes),
+# verifica as dependências do serviço com os limites max_new_dlq, max_queue_age, max_signal_increase e max_resources e,
+# com functional: true, roda a validação funcional só nos ambientes tier: test (nunca em produção).
 delivery_check:
   enabled: true
   environments: []
@@ -165,3 +168,9 @@ delivery_check:
   window_minutes: 10      # janela, em minutos, de eventos e logs do verify compare (--window)
   max_new_errors: 0       # assinaturas de erro novas toleradas (--max-new-errors)
   max_new_restarts: 0     # restarts novos tolerados (--max-new-restarts)
+  functional: false       # true: validação funcional (--functional) só nos ambientes tier: test; nunca em produção
+  max_new_dlq: 0          # mensagens novas toleradas na DLQ (--max-new-dlq)
+  max_queue_age: 10m      # idade máxima da mensagem mais antiga da fila (--max-queue-age)
+  max_signal_increase: 0.5 # piora tolerada de erro ou latência contra a foto, 0.5 = 50% (--max-signal-increase)
+  max_resources: 20       # recursos no máximo por verify snapshot e compare (--max-resources)
+  track_max_minutes: 30   # tempo máximo, em minutos, acompanhando a entrega com verify track antes do roteiro manual

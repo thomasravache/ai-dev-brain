@@ -9,6 +9,14 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`); gere-as com `spec_graph.py rep
 
 ## [Unreleased]
 
+## [2026.11.11] - 2026-11-26
+
+### Added
+- G6 com `verify@2` (SPEC-0105): com `delivery_check.verify: true`, o G6 acompanha a entrega do commit do merge com `atlas.py verify track --service --env --commit <sha completo> --json` (saída `track@1`), no lugar dos passos 1 e 2 do roteiro quando disponível: `ok` (exit 0) leva o `expected_image` ao `--expect-image` do `compare`; `running` ou `pending` (exit 6) repete a cada `window_minutes`, até `track_max_minutes`, e depois registra "entrega não acompanhada até o fim: <current_stage>" e segue o roteiro manual; `failed` (exit 1) é G6 FAIL com a etapa, e a pessoa decide; `not_verified` (exit 5), exits 2, 3 e 4 ou o subcomando ausente caem no roteiro manual da SPEC-0086.
+- Dependências do serviço pelo escopo padrão do `verify@2` (os recursos ligados ao serviço no ambiente), sem `--resource`; só acima de `max_resources`, `--resource` para os recursos que o diff aponta, a mesma lista e o mesmo `--max-resources` no `snapshot` e no `compare`, e `--expect-migration <datastore>=<id>` para cada migration nova do diff. Sem adaptador de recurso na máquina, o verify fica como o `verify@1` e o Relatório diz "dependências: sem adaptador de recurso nesta máquina"; recurso sem acesso ou sem adaptador fica `not_verified`, com a sugestão de `access setup` ou de declarar o adaptador (SPEC-0105).
+- Validação funcional (`--functional`) só com `delivery_check.functional: true` e só em ambiente `tier: test`; nunca em produção, nem com `--confirm-production`. Em produção, `snapshot`, `track` e `compare` pedem o "sim" da pessoa a cada execução, inclusive a cada repetição do `track`. O Relatório de Entrega ganha, por serviço e ambiente, as etapas do `track`, a origem da imagem, "dependências: N verificadas, M não verificadas" e as jornadas funcionais (SPEC-0105).
+- Chaves opcionais em `delivery_check`: `functional` (padrão `false`), `max_new_dlq` (0), `max_queue_age` (`10m`), `max_signal_increase` (0.5), `max_resources` (20) e `track_max_minutes` (30); o comentário de `delivery_check`, mostrado pelo `whats-new`, cita `functional` e o `verify track` (SPEC-0105).
+
 ## [2026.11.10] - 2026-11-23
 
 ### Added
