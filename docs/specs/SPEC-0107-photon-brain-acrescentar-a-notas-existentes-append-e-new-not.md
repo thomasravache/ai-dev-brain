@@ -163,16 +163,16 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02 com a tag `SPEC-0107:<ID>`, falhando pelo motivo certo (CH passando)
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01, IT-02 com a tag `SPEC-0107:<ID>`, falhando pelo motivo certo (CH passando)
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -204,36 +204,56 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Dois caminhos de escrita da photon-brain que faltavam para não editar notas à mão: `brain.py append NOTA --section TÍTULO --text-file ARQ [--json]`, que acrescenta o texto no fim da seção (ou cria a seção antes de `## Relations`), e `new-note --body-file ARQ`, que cria a nota já com o corpo. Os dois gravam uma linha no `log.md` sem o texto. Linhas dentro de bloco de código cercado nunca contam como título, e `## Relations` no texto é recusado (Emenda v2). Versões: photon-brain 2026.11.9 e plugin 2026.11.45.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/brain.py`:** função pura `append_section` com `heading_lines` (marca o que é título fora de bloco cercado), `section_start` e `has_relations_line`; `cmd_append` segue o caminho de escrita do `relate` (`find_note`, `write_target`, `read_exact`, `rewrite_file`, `append_log`); `--body-file` no `new-note` por `with_body`; entrada até 1 MiB, UTF-8, sem NUL.
+- **Documentação:** `SKILL.md` (fluxo de guardar com `append` e `--body-file`) e `references/store-flow.md`.
+- **Emenda v2:** blocos de código e `## Relations` no texto, depois do G4 reprovado.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 1bef1d1 e f6831d7 (G1) e green em b5483bc (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | new-note e relate sem as opções novas iguais aos de hoje | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-01 | seção nova antes de ## Relations ou no fim | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-02 | texto no fim de uma seção existente | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-03 | BOM e CRLF preservados | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-04 | entradas inválidas: exit 2, nota e log iguais | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-05 | linha do log com caminho e título, sem o texto | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-06 | new-note --body-file válido e inválido | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-07 | linhas em bloco de código cercado não são título | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| UT-08 | ## Relations no texto recusado sem diferença de caixa e espaço | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| IT-01 | append de ponta a ponta num vault do init | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
+| IT-02 | new-note --body-file de ponta a ponta | PASS | `test_append.py` e `test_append_cli.py`; G2 PASS em b5483bc; G4 `verify` 11/11 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.45 depois do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minors do G4 para o radar** do épico SPEC-0093:
+  - um `--text-file`/`--body-file` com bloco de código sem fechamento engole o `## Relations` real para o `append` seguinte;
+  - `append_relation` (do `relate`) não ignora blocos de código; usar `heading_lines` nele.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0107`. -->
