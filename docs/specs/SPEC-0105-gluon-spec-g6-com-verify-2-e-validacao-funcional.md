@@ -4,7 +4,7 @@ title: "gluon-spec: G6 com verify@2, acompanhamento da entrega e validação fun
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0103, SPEC-0106]
@@ -310,7 +310,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 6b3d565 | 2026-11-26 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-26 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-26 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 1f8c9d2 | 2026-11-26 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-26 — reviewer independente: CHANGES_REQUESTED — major: --expect-migration sempre quebra o fallback verify@1 (datastore fora do escopo = exit 2 no compare) e acima de max_resources; minors: sinal de 'sem adaptador' não definido, sem o sim de produção não diz o que fazer, linhas sem [--confirm-production] — eaf75e3
