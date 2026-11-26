@@ -9,6 +9,12 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 
 ## [Unreleased]
 
+## [2026.11.24] - 2026-11-25
+
+### Added
+- Adaptador de probe `iam` da skill (`assets/probes/iam.py`, contrato `probe@2`, capacidade `permissions`, verbo `simulate`, alvos `queue` e `topic`, acesso `cluster` e `cloud`): lê com o `kubectl` o papel IRSA (`eks.amazonaws.com/role-arn`) da ServiceAccount de cada workload (até 5, `truncated` acima disso), resolve todos os papéis antes de qualquer chamada à nuvem, monta o endereço do recurso pela própria CLI (`sqs get-queue-url` e `get-queue-attributes` com `Policy` e `QueueArn` na fila; `sts get-caller-identity` e `sns get-topic-attributes` no tópico), confere URL e ARN (host, nome, região, conta de 12 dígitos) e roda `iam simulate-principal-policy` uma vez por papel distinto com as ações do tipo e a política do recurso em JSON compacto (sem ela quando o recurso não tem `Policy`). Um item por (workload, ação) com `workload`, `role` (só o nome), `action` (`send`, `receive`, `delete`, `publish`), `api_action`, `decision` (`allowed` ou `denied`), `deny_type` (`explicit`, `implicit` ou `null`), `required_by` (mapa fixo relação → ações) e `resource_policy`. Lista fechada de chamadas do `kubectl` e da `aws`, recusada antes de executar; ambiente da `aws` sem `AWS_PROFILE` nem chaves herdadas e com `AWS_PAGER=""`; workload sem IRSA ou política ilegível derruba a execução inteira; erros como mensagem fixa sem o stderr das ferramentas; nenhum ARN, URL, política ou id de conta na saída (SPEC-0101, ADR-0023, ADR-0025, ADR-0026).
+- `references/probes/iam.md` (configuração, permissões mínimas, chamadas feitas, mapa relação → ações, o que fica não verificado, saída, erros e os blocos de contrato) e o link no `SKILL.md` (SPEC-0101).
+
 ## [2026.11.23] - 2026-11-25
 
 ### Added
