@@ -278,7 +278,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 51f418b | 2026-11-25 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 4 minor (regex de conta não separa _, ensure_ascii na política, RecursionError, AWS_ENDPOINT_URL herdada) — 1e286d0 | 2026-11-25 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — a787cad | 2026-11-25 |
-| H2 Integração aprovada | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-25 |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
 
