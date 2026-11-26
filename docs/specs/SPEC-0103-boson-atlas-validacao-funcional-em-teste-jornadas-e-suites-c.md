@@ -376,7 +376,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=59, skipped=1)) — 07f8dbf | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 3094697 | 2026-11-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8141f21 | 2026-11-26 |
-| G4 Review | PENDING | | |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED — 0 major, 4 minor (--journey ignorado em capacidade não functional, regra de tier presa ao nome functional, cwd inexistente com mensagem errada, SKILL.md sem as opções na tabela) — dd12f47 | 2026-11-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
