@@ -4,7 +4,7 @@ title: "photon-brain: conector e sessão na nuvem — achar o vault, ler a confi
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
@@ -180,7 +180,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PASS | validate: 0 erro(s) — 266f556 (árvore suja) | 2026-11-26 |
+| G0 Spec | PASS | validate: 0 erro(s) — 7c6da0c (árvore suja) | 2026-11-26 |
 | G1 Red | PENDING | | |
 | G2 Green | PENDING | | |
 | G3 Arquitetura | PENDING | | |
