@@ -9,7 +9,7 @@ created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/SKILL.md, skills/photon-brain/references/store-flow.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_append.py, skills/photon-brain/tests/test_append_cli.py, .claude-plugin/plugin.json]
 adrs: [ADR-0007]
@@ -90,6 +90,11 @@ brain.py new-note --type T --title X [...] --body-file ARQ
     corpo com uma linha "## Relations" (a seção é do modelo)
 ```
 
+**Esclarecimentos (Emenda v2):**
+- Uma linha dentro de bloco de código cercado (aberto por ```` ``` ```` ou `~~~`, até o fechamento com a mesma cerca) nunca é título: não abre nem fecha seção, no `append_section`, no `section_start` e na recusa de `## Relations` do corpo. Bloco sem fechamento vai até o fim do arquivo.
+- O `append` recusa com exit 2, sem gravar, um texto que tenha uma linha `## Relations` fora de bloco de código, como o `new-note --body-file`.
+- Nas duas recusas, `## Relations` é comparado sem diferença de maiúsculas e com qualquer quantidade de espaço depois de `##` (`## relations`, `##  Relations`).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:** `scripts/brain.py` (`append_section`, `cmd_append`, parser do `append`, `--body-file` no `new-note`); `SKILL.md` (fluxo de guardar: usar `append` e `--body-file`, nunca editar à mão); `references/store-flow.md`.
@@ -106,6 +111,8 @@ brain.py new-note --type T --title X [...] --body-file ARQ
 | Corpo na criação | `new-note --body-file` | nota com o corpo, frontmatter e `## Relations` do modelo; log "com corpo" | UT-06, IT-02 |
 | Corpo inválido | corpo com `## Relations` ou arquivo inválido | exit 2, nenhuma nota criada | UT-06 |
 | Sem as opções novas | `new-note` e `relate` de hoje | comportamento igual | CH-01 |
+| Bloco de código | `# comentário` ou `## Título` dentro de bloco cercado na nota ou no texto | não conta como título; o texto entra fora do bloco | UT-07 |
+| Relations no texto | texto do `append` ou corpo do `new-note` com `## relations`/`##  Relations` fora de bloco | exit 2, nada gravado | UT-08 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 
@@ -119,6 +126,8 @@ brain.py new-note --type T --title X [...] --body-file ARQ
 - **UT-04** — Quando o `append` recebe título vazio, com quebra de linha, começando com `#` ou igual a `Relations`, arquivo de texto ausente, binário, vazio ou maior que 1 MiB, ou nota fora do vault (inclusive por link simbólico), então sai com 2 e a nota e o `log.md` ficam iguais.
 - **UT-05** — Em todo append com sucesso, a linha nova do `log.md` segue o `LOG_LINE` de hoje, cita o caminho e `## <título>` e não contém nenhuma linha do texto acrescentado.
 - **UT-06** — Quando o `new-note` recebe `--body-file` válido, então a nota tem o frontmatter do modelo, o `# título`, o corpo do arquivo e `## Relations`; com o corpo contendo `## Relations` ou o arquivo inválido, sai com 2 e não cria nada.
+- **UT-07** — Dada uma nota com `## Setup` contendo um bloco ```` ```bash ```` com a linha `# instala`, e um bloco `~~~` com a linha `## Resumo` em outra seção, quando `append_section` recebe `Setup` e um texto, então o texto entra no fim de `## Setup`, depois do fechamento do bloco, e o bloco fica igual; quando recebe `Resumo`, a seção `## Resumo` é criada antes de `## Relations` (a do bloco não conta).
+- **UT-08** — Quando o texto do `append` ou o corpo do `new-note --body-file` tem uma linha `## Relations`, `## relations` ou `##  Relations` fora de bloco de código, então sai com 2 e nada é gravado; a mesma linha dentro de um bloco cercado é aceita.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Num vault temporário criado pelo `init`, quando o `append` roda duas vezes na mesma nota (seção nova, depois a mesma seção), então a nota tem a seção com os dois textos na ordem, o `lint` não acusa nada novo e o `log.md` tem duas linhas `append`.
@@ -173,7 +182,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=40)) — 1bef1d1 | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 2bbbaf8 | 2026-11-26 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — 8b0d2c4 | 2026-11-26 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | CHANGES_REQUESTED: append_section toma linha '#'/'##' dentro de bloco de código cercado como título e grava o texto dentro do bloco (M1); minors: append aceita linha '## Relations' no texto, recusa do new-note só na grafia exata | 2026-11-26 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -182,6 +191,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ### Histórico de reprovações
 - G0 FAIL 2026-11-26 — validate: 1 erro(s) — f2669b5
 - G0 PASS 2026-11-26 — depois de 1 reprovação(ões)
+- G4 FAIL 2026-11-26 — CHANGES_REQUESTED: append_section toma linha '#'/'##' dentro de bloco de código cercado como título e grava o texto dentro do bloco (M1); minors: append aceita linha '## Relations' no texto, recusa do new-note só na grafia exata — fc5ccdd
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -228,3 +238,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0107`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | Linhas em bloco de código cercado não são título; `append` recusa `## Relations` no texto; recusa sem diferença de maiúsculas e de espaços (UT-07, UT-08) | G4 da SPEC-0107: append dentro de bloco de código corrompe a nota | nenhuma | thomas, 2026-11-26 (piloto automático com o recomendado) |
