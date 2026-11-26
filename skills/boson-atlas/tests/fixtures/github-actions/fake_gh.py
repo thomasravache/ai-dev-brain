@@ -107,8 +107,8 @@ def fail(mode, repository, fields):
         print(f'Get "{url}": dial tcp 192.0.2.1:443: i/o timeout {tail}', file=sys.stderr)
         return 1
     bodies = {"401": ("Bad credentials", 401), "403": ("Resource not accessible by integration", 403),
-              "rate-limit": ("API rate limit exceeded for 192.0.2.10. (But here's the good news: Authenticated "
-                             "requests get a higher rate limit.)", 403),
+              "rate-limit": (("API rate limit exceeded for 192.0.2.10. (But here's the good news: Authenticated "
+                              "requests get a higher rate limit.)"), 403),
               "rate-limit-429": ("API rate limit exceeded for 192.0.2.10.", 429),
               "404": ("Not Found", 404)}
     message, code = bodies[mode]
