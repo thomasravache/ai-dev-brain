@@ -374,7 +374,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 |---|---|---|---|
 | G0 Spec | PASS | validate: 0 erro(s) — e297cb0 | 2026-11-24 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=59, skipped=1)) — 07f8dbf | 2026-11-26 |
-| G2 Green | PENDING | | |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (Installed 1 package in 4ms) — 3094697 | 2026-11-26 |
 | G3 Arquitetura | PENDING | | |
 | G4 Review | PENDING | | |
 | G5 Integração & CI | PENDING | | |
