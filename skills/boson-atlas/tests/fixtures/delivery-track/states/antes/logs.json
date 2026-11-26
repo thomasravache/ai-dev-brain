@@ -1,0 +1,6 @@
+{
+  "Deployment/api": [
+    "[pod/api-6a1b-aaaa/api] {{nano-120}} INFO request 1 ok",
+    "[pod/api-6a1b-bbbb/api] {{nano-119}} INFO request 2 ok"
+  ]
+}
