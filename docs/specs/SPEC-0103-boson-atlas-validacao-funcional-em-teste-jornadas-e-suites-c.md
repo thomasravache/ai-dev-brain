@@ -9,9 +9,9 @@ created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0102, SPEC-0104]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
-touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/probes/suite.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/probes/suite.md, skills/boson-atlas/references/verify.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/generic.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_functional.py, skills/boson-atlas/tests/test_probe_suite.py, skills/boson-atlas/tests/test_verify_functional.py, skills/boson-atlas/tests/fixtures/functional/**, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, .claude-plugin/plugin.json]
+touches: [skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/assets/probes/suite.py, skills/boson-atlas/references/probes.md, skills/boson-atlas/references/probes/suite.md, skills/boson-atlas/references/verify.md, skills/boson-atlas/references/collector-contract.md, skills/boson-atlas/references/collectors/generic.md, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_functional.py, skills/boson-atlas/tests/test_probe_suite.py, skills/boson-atlas/tests/test_verify_functional.py, skills/boson-atlas/tests/test_probe_resource.py, skills/boson-atlas/tests/fixtures/functional/**, skills/boson-atlas/tests/architecture_rules.py, skills/boson-atlas/tests/test_architecture.py, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0011, ADR-0012, ADR-0023, ADR-0025, ADR-0026]
 external: []
 size: M
@@ -238,6 +238,9 @@ VERIFY
   o snapshot não muda
 ```
 
+**Esclarecimentos (Emenda v2):**
+- `test_probe_resource.py` (SPEC-0096) entra nos `touches`: três testes dele (`test_urls_and_journeys`, `test_the_log_has_resource_only_when_used`, `test_delivery_and_functional_through_the_cli`) esperam um `worker` sem jornadas com exit 0 e uma saída funcional que este contrato passa a recusar. Só esses testes mudam, para o comportamento desta spec (exit 4 sem jornadas curadas e saída funcional no contrato).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -424,3 +427,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0103`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | `test_probe_resource.py` nos `touches` | SPEC_DEFECT do Test-writer: três testes da SPEC-0096 contradizem as regras desta spec | SPEC-0096 (só testes) | thomas, 2026-11-26 (piloto automático com o recomendado) |
