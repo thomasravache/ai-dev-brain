@@ -4,12 +4,12 @@ title: "boson-atlas: acompanhar a entrega de um commit — pipeline, imagem, Git
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: in-progress
 created: 2026-11-24
 parent: SPEC-0095
 depends_on: [SPEC-0096]
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/boson-atlas/assets/probes/github-actions.py, skills/boson-atlas/assets/probes/argocd.py, skills/boson-atlas/references/probes/github-actions.md, skills/boson-atlas/references/probes/argocd.md, skills/boson-atlas/references/verify.md, skills/boson-atlas/scripts/atlas.py, skills/boson-atlas/SKILL.md, skills/boson-atlas/CHANGELOG.md, skills/boson-atlas/tests/test_probe_github_actions.py, skills/boson-atlas/tests/test_probe_argocd.py, skills/boson-atlas/tests/test_verify_track.py, skills/boson-atlas/tests/fixtures/github-actions/**, skills/boson-atlas/tests/fixtures/delivery-track/**, .claude-plugin/plugin.json]
 adrs: [ADR-0010, ADR-0022, ADR-0023, ADR-0024, ADR-0025]
@@ -266,6 +266,9 @@ Exemplos de contrato que vão para as referências (os testes leem os blocos):
 {"contract": "probe@2", "adapter": "argocd", "capability": "gitops", "verb": "application", "status": "ok", "items": [{"application": "dev-api", "source": {"repoURL": "https://github.com/acme/iac"}}], "truncated": false}
 ```
 
+**Esclarecimentos (Emenda v2):**
+- A máscara do núcleo (`atlas.py`) passa a cobrir também o id de conta de 12 dígitos no host de registro ECR (`<conta>.dkr.ecr.<região>.amazonaws.com`) e em ARN escrito em maiúsculas (`ARN:AWS:...`), que hoje passam pela máscara: a imagem e os eventos do GitOps e da CI trazem esses textos. O UT-14 confere, além dos valores de credencial, que nenhum desses ids aparece na saída, nas evidências nem no `probes.log`. (Minor do G4 da SPEC-0096, no radar do épico SPEC-0095.)
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:**
@@ -447,3 +450,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0106`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-26 | Máscara do núcleo cobre a conta no host ECR e em ARN maiúsculo; UT-14 confere | Minor do G4 da SPEC-0096: esses ids passavam pela máscara, e o `track` lê imagens e eventos que os trazem | nenhuma | thomas, 2026-11-26 (piloto automático com o recomendado) |
