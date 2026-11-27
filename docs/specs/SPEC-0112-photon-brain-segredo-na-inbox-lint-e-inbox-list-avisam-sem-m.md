@@ -4,7 +4,7 @@ title: "photon-brain: segredo na inbox — lint e inbox list avisam sem mostrar 
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
@@ -191,7 +191,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 6ce8e22 | 2026-11-27 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-27 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-27 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 2c69be8 | 2026-11-27 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-27 — CHANGES_REQUESTED: captura antiga com o valor no nome (slug de 6 palavras de antes) vaza o valor pelo caminho no lint, no inbox list e, pelo ingest --move, no log.md e no título da nota — b7d6174
