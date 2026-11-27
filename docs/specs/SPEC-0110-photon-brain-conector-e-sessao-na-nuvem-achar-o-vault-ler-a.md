@@ -189,7 +189,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G0 Spec | PASS | validate: 0 erro(s) — 7c6da0c (árvore suja) | 2026-11-26 |
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=20)) — 38e9568 | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 8043e43 | 2026-11-27 |
-| G3 Arquitetura | PASS | arch_test exit 0 (OK) — d6a68c8 | 2026-11-27 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 54a5fdb | 2026-11-27 |
 | G4 Review | FAIL | CHANGES_REQUESTED: connector set acrescenta campo no provedor seguinte quando há mais de um em connectors (_children não para no irmão); sai com 1, fora do contrato | 2026-11-27 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
