@@ -9,7 +9,7 @@ created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 3
+contract_version: 4
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/references/confidential.md, skills/photon-brain/references/maintenance.md, skills/photon-brain/references/inbox.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_inbox_secrets.py, skills/photon-brain/tests/test_inbox_secrets_cli.py, .claude-plugin/plugin.json]
 adrs: [ADR-0007, ADR-0014]
@@ -98,6 +98,10 @@ inbox list [--json]
 - **Palavras do rótulo:** as até 3 palavras entre o rótulo e o `:`/`=` são palavras de letras (`[^\W\d_][\w'-]*`): não cruzam `|`, `—`, parênteses, crase nem números.
 - Diferenças aceitas e documentadas em `references/inbox.md`: o `inbox list` lê só os primeiros 8 KiB do item para a prévia e a marca, e o `lint` lê até 1 MiB; um valor com espaço entre aspas é mascarado só até o primeiro espaço.
 
+**Esclarecimentos (Emenda v4):**
+- O trecho trocado por `•••` (e por `segredo` no destino) é o slug do valor inteiro **ou** o maior prefixo dele, com 4 caracteres ou mais, que termina o nome (antes da extensão e de um `-N` opcional) — o nome antigo foi cortado em `SLUG_MAX` e pode ter só o começo do valor.
+- O trecho só é trocado quando está entre limites do slug: começo do nome ou `-` antes, e `-`, `-N`, a extensão ou o fim depois. Dígitos da data e da hora do nome (`AAAA-MM-DD-HHMMSS`) nunca são trocados.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:** `scripts/brain.py` (regex de rótulo, `secret_spans`, `secret-in-note` na inbox, máscara e marca no `inbox list`); referências e `SKILL.md`.
@@ -129,7 +133,7 @@ inbox list [--json]
 - **UT-05** — O `inbox list` marca os três itens com `(possível segredo)`, a prévia mostra `•••` no lugar de cada valor, e o `--json` traz `"secret": true` com a prévia mascarada; um item sem segredo sai como hoje.
 - **UT-06** — `references/confidential.md`, `references/maintenance.md`, `references/inbox.md` e `SKILL.md` dizem que um item da inbox com segredo vai para o cofre com a referência `--confidential` e que o valor nunca entra numa nota nem numa resposta.
 - **UT-07** — `capture_name` de "Senha do wifi: abc12345" não contém `abc12345` e contém `senha-do-wifi`; de "PIN 4821" não contém `4821`; de um texto que é só um token cai em `captura`; e o `capture` pela CLI desse texto não mostra o valor no nome do arquivo, na saída nem no `log.md`.
-- **UT-08** — Com `inbox/2026-01-01-120000-senha-do-wifi-qz9vold1.md` contendo "Senha do wifi: qz9vold1": `lint`, `lint --json`, `inbox list` e `inbox list --json` mostram `...-senha-do-wifi-•••.md` e nunca `qz9vold1`; `inbox done` e `ingest --move` aceitam o caminho mascarado; depois do `inbox done` o item fica em `raw/processed/AAAA-MM/...-senha-do-wifi-segredo.md` e depois do `ingest --move` na pasta de arquivos de hoje (SPEC-0021) com o mesmo nome limpo, e nem o `log.md`, nem a nota de fonte, nem as saídas contêm `qz9vold1`; um caminho mascarado que não identifica item sai com 2.
+- **UT-08** — Com `inbox/2026-01-01-120000-senha-do-wifi-qz9vold1.md` contendo "Senha do wifi: qz9vold1": `lint`, `lint --json`, `inbox list` e `inbox list --json` mostram `...-senha-do-wifi-•••.md` e nunca `qz9vold1`; `inbox done` e `ingest --move` aceitam o caminho mascarado; depois do `inbox done` o item fica em `raw/processed/AAAA-MM/...-senha-do-wifi-segredo.md` e depois do `ingest --move` na pasta de arquivos de hoje (SPEC-0021) com o mesmo nome limpo, e nem o `log.md`, nem a nota de fonte, nem as saídas contêm `qz9vold1`; um caminho mascarado que não identifica item sai com 2. Também: um item antigo com `token: <valor de 70 caracteres>` e o nome cortado em 60 caracteres não mostra nenhum pedaço de 4 ou mais caracteres do valor em `lint` e `inbox list`; e um item com "PIN 2026" e nome `2026-01-01-120000-pin-2026.md` mostra `2026-01-01-120000-pin-•••.md`, com a data intacta, e vai para o destino `...-pin-segredo.md`.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Num vault do `init`, quando uma captura com "Senha do wifi: abc12345" (no começo do texto) entra pela `capture` e outra por arquivo `.txt`, então `inbox list` marca as duas, o `lint` acusa as duas com AVISO (a severidade de hoje do `secret-in-note`) e sai com o exit de hoje, e nenhum valor aparece nas saídas.
@@ -183,7 +187,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=51)) — c2e4c0b | 2026-11-27 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — cea89a6 | 2026-11-27 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — b368cf4 | 2026-11-27 |
-| G4 Review | FAIL | CHANGES_REQUESTED: captura antiga com o valor no nome (slug de 6 palavras de antes) vaza o valor pelo caminho no lint, no inbox list e, pelo ingest --move, no log.md e no título da nota | 2026-11-27 |
+| G4 Review | FAIL | CHANGES_REQUESTED: nome antigo com o slug cortado em SLUG_MAX ainda vaza o prefixo do valor longo (token/JWT); máscara não respeita os limites do slug e pega dígitos da data | 2026-11-27 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -191,6 +195,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-27 — CHANGES_REQUESTED: captura antiga com o valor no nome (slug de 6 palavras de antes) vaza o valor pelo caminho no lint, no inbox list e, pelo ingest --move, no log.md e no título da nota — b7d6174
+- G4 FAIL 2026-11-27 — CHANGES_REQUESTED: nome antigo com o slug cortado em SLUG_MAX ainda vaza o prefixo do valor longo (token/JWT); máscara não respeita os limites do slug e pega dígitos da data — b503cd3
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -237,5 +242,6 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0112`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 4 | 2026-11-27 | Máscara do nome antigo cobre o prefixo do valor cortado em `SLUG_MAX` e respeita os limites do slug (data e hora intactas) (UT-08) | 2º G4 da SPEC-0112: valor longo vazava pelo nome cortado; máscara pegava dígitos da data | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |
 | 3 | 2026-11-27 | Nome antigo com o valor mascarado no `lint`/`inbox list`, aceito mascarado e limpo ao sair da inbox (UT-08); palavras do rótulo só de letras (UT-02); diferenças de leitura documentadas | G4 da SPEC-0112: captura antiga vazava o valor pelo nome | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |
 | 2 | 2026-11-27 | Achado com a severidade de hoje (AVISO); nome da captura sem os valores detectados (UT-07) | SPEC_DEFECT do G1: contrato dizia ERRO, contra a regra de hoje; o slug da captura expunha o segredo | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |
