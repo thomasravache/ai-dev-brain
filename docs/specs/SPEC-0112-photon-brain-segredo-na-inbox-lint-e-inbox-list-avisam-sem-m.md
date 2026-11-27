@@ -187,7 +187,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=51)) — c2e4c0b | 2026-11-27 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — e1f05d7 | 2026-11-27 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — e2b9fc3 | 2026-11-27 |
-| G4 Review | FAIL | CHANGES_REQUESTED: nome antigo com o slug cortado em SLUG_MAX ainda vaza o prefixo do valor longo (token/JWT); máscara não respeita os limites do slug e pega dígitos da data | 2026-11-27 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na terceira rodada (nome cortado e limites do slug resolvidos; minors cosméticos no radar) — 07c78e8 | 2026-11-27 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
@@ -196,6 +196,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ### Histórico de reprovações
 - G4 FAIL 2026-11-27 — CHANGES_REQUESTED: captura antiga com o valor no nome (slug de 6 palavras de antes) vaza o valor pelo caminho no lint, no inbox list e, pelo ingest --move, no log.md e no título da nota — b7d6174
 - G4 FAIL 2026-11-27 — CHANGES_REQUESTED: nome antigo com o slug cortado em SLUG_MAX ainda vaza o prefixo do valor longo (token/JWT); máscara não respeita os limites do slug e pega dígitos da data — b503cd3
+- G4 PASS 2026-11-27 — depois de 2 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
