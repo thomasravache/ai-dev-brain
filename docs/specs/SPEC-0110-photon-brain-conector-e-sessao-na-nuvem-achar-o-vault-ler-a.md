@@ -9,7 +9,7 @@ created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/references/connectors.md, skills/photon-brain/references/config.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_connector_ids.py, skills/photon-brain/tests/test_connector_ids_cli.py, skills/photon-brain/tests/test_cloud_session_instructions.py, .claude-plugin/plugin.json]
 adrs: [ADR-0013, ADR-0027]
@@ -102,6 +102,12 @@ doctor
   AVISO "connectors.<x>: provedor desconhecido" | ERRO "connectors.<p>.<campo>: id inválido"
 ```
 
+**Esclarecimentos (Emenda v2):**
+- `connector set` num `brain-config.yml` que já tem `connectors` com vários provedores (e comentários) muda só os campos do provedor pedido; os outros provedores ficam byte a byte iguais. Acrescentar `--inbox-folder-id` depois de gravar só o vault, num provedor que não é o último, funciona (UT-01).
+- `connector show` e `config --json` mostram `(inválido)` no lugar de um ID escrito à mão que não passe na regra ou pareça segredo; o valor nunca aparece (UT-04).
+- `connector set` com `timezone` inválido sai com 2 sem gravar, como os outros comandos que gravam (UT-02).
+- `SKILL.md`, na parte de localizar o vault, também diz para usar primeiro os IDs de `connectors.<provedor>` quando o agente já os tiver (lidos do `brain-config.yml` numa sessão anterior ou dados pela pessoa) e que, só com o conector, o ganho principal dos IDs é escolher a inbox certa (UT-06).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:** `scripts/brain.py` (`SHARED_KEYS`, `check_shared`, `cmd_connector_set`, `cmd_connector_show`, `config --json`, `doctor`); `assets/brain-config.yml` (chave comentada); `references/connectors.md`, `references/config.md` e `SKILL.md`.
@@ -184,11 +190,14 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=20)) — 38e9568 | 2026-11-26 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — aecba24 | 2026-11-27 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — d6a68c8 | 2026-11-27 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | CHANGES_REQUESTED: connector set acrescenta campo no provedor seguinte quando há mais de um em connectors (_children não para no irmão); sai com 1, fora do contrato | 2026-11-27 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-27 — CHANGES_REQUESTED: connector set acrescenta campo no provedor seguinte quando há mais de um em connectors (_children não para no irmão); sai com 1, fora do contrato — ea40dfd
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -235,3 +244,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0110`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-27 | `connector set` com vários provedores muda só o pedido; `(inválido)` no lugar de ID inválido em `show` e `config --json`; fuso inválido sai com 2; IDs primeiro também no `SKILL.md` | G4 da SPEC-0110: campo gravado no provedor seguinte e ID inválido exibido | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |
