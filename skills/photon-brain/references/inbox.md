@@ -19,7 +19,7 @@ brain.py inbox done inbox/2026-10-30-140509-ideia-sobre-grafos.md --note "projec
 
 ## `capture TEXTO [--context C] [--json]`
 
-- Cria `inbox/AAAA-MM-DD-HHMMSS-<slug>.md`, com o slug das seis primeiras palavras (minúsculas, sem acentos). Duas capturas com o mesmo nome no mesmo segundo: a segunda ganha `-1`, a terceira `-2`.
+- Cria `inbox/AAAA-MM-DD-HHMMSS-<slug>.md`, com o slug das seis primeiras palavras (minúsculas, sem acentos), sem os valores com cara de segredo (o rótulo fica: `Senha do wifi: …` vira `…-senha-do-wifi.md`; texto só com segredo vira `…-captura.md`); o nome, a saída e o `log.md` nunca levam o valor. Duas capturas com o mesmo nome no mesmo segundo: a segunda ganha `-1`, a terceira `-2`.
 - Frontmatter `type: capture`, `created` (data e hora no fuso do vault, com o deslocamento: `created: 2026-11-26T09:15:02-03:00`; a chave `timezone` do `brain-config.yml`, ou o fuso da máquina sem ela) e `context` (quando dado; precisa existir no `brain-config.yml`), e o texto como corpo.
 - Imprime o caminho relativo ao vault (`--json`: `{"path": ...}`); o log ganha `- … capture inbox/<nome>`.
 - Texto vazio (ou só espaços) sai com 2 e nada é escrito; `timezone` inválido ou não encontrado também (`references/config.md`).
@@ -35,7 +35,13 @@ brain.py inbox done inbox/2026-10-30-140509-ideia-sobre-grafos.md --note "projec
   - `syncing`: placeholder `*.icloud`, ou arquivo de 0 bytes modificado há menos de 10 minutos (o app do provedor ainda está baixando);
   - `file`: todo o resto (PDF, foto, vídeo...).
 - `size` em bytes, `age_days` desde a última modificação, `stale` quando `age_days` passa de `inbox_stale_days`, `preview` com até 120 caracteres do texto (`text` e `link`; vazio para `file` e `syncing`).
+- `secret`: item `text` ou `link` com senha, token, PIN ou chave (o detector do `secret-in-note`, `references/confidential.md`); a linha do item termina com `(possível segredo)` e a `preview` troca cada valor por `•••`. Sem segredo, `"secret": false` e a prévia como sempre.
 - Inbox vazia: "Inbox vazia" (exit 0); com `--json`, `{"items": []}`. Só lê: nada é escrito.
+- Leitura: o `inbox list` lê só os primeiros 8 KiB do item para a prévia e a marca `(possível segredo)`; o `lint` (`secret-in-note`) lê até 1 MiB. Um segredo depois dos 8 KiB aparece só no `lint`.
+- Valor entre aspas com espaço (`senha: "minha senha"`): o detector pega o valor até o primeiro espaço, e só esse trecho é mascarado com `•••`.
+- Nome antigo com o valor: uma captura feita antes da 2026.11.12 pode ter o valor no nome (`…-senha-do-wifi-<valor>.md`). Quando o slug de um valor do conteúdo (4 caracteres ou mais) está no nome, o `lint` e o `inbox list` (texto, JSON e avisos) mostram o caminho com esse trecho como `•••` (`inbox/2026-01-01-120000-senha-do-wifi-•••.md`). Conta também o maior prefixo do slug (4 caracteres ou mais) que termina o nome, antes de um `-N` e da extensão: o nome antigo era cortado em 60 caracteres e pode ter só o começo do valor. O trecho só é trocado entre limites do slug (começo do nome ou `-` antes; `-`, `-N`, a extensão ou o fim depois), e a data e a hora `AAAA-MM-DD-HHMMSS-` do nome nunca mudam (`PIN 2026` em `…-120000-pin-2026.md` vira `…-120000-pin-•••.md`). Esse caminho mascarado vale como ITEM em `ingest --move` e `inbox done` quando aponta para um único item; senão sai com 2, "item não encontrado". Ao sair da inbox o trecho vira `segredo` (`…-senha-do-wifi-segredo.md`) no destino, no `log.md`, no título da nota de fonte e nas saídas.
+- Item da inbox com segredo: a pessoa guarda o valor no cofre (gerenciador de senhas) e o vault ganha só a referência (`new-note --type secret-ref`, ou `ingest ITEM --confidential --move` para um documento, `references/confidential.md`); depois `inbox done`.
+- Nunca copie o valor de um segredo para uma nota nem para uma resposta, nem abra o item para lê-lo em voz alta: o `•••` da prévia fica como está.
 
 ## `ingest ITEM --move [...]`
 
