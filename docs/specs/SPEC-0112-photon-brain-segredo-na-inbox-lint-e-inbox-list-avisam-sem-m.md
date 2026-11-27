@@ -9,7 +9,7 @@ created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/references/confidential.md, skills/photon-brain/references/maintenance.md, skills/photon-brain/references/inbox.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_inbox_secrets.py, skills/photon-brain/tests/test_inbox_secrets_cli.py, .claude-plugin/plugin.json]
 adrs: [ADR-0007, ADR-0014]
@@ -78,7 +78,7 @@ rótulos detectados (sem diferença de caixa):
 
 lint --only secret-in-note
   percorre: notas de hoje + inbox/*.md, inbox/*.txt, inbox/*.url, inbox/*.webloc
-  achado: "ERRO secret-in-note <arquivo>:<linha> — parece senha ou token; guarde no cofre (references/confidential.md)"
+  achado: "AVISO secret-in-note <arquivo>:<linha> — parece senha ou token; guarde no cofre (references/confidential.md)"
   nunca o valor
 
 inbox list [--json]
@@ -86,6 +86,10 @@ inbox list [--json]
   --json: "secret": true e "preview" já mascarada
   item sem segredo: como hoje
 ```
+
+**Esclarecimentos (Emenda v2):**
+- O achado do `secret-in-note` nos itens da inbox tem a severidade de hoje da regra (AVISO, exit 0), igual ao das notas; esta spec não muda a severidade.
+- O nome da captura (`capture_name`, e por ele o `log.md` e as saídas do `capture`) nunca leva um valor detectado: o slug é montado das primeiras palavras do texto depois de tirar cada trecho de `secret_spans` (o rótulo fica: "Senha do wifi: abc12345" → `...-senha-do-wifi.md`). Texto só com segredo cai no nome padrão `captura` (UT-07).
 
 **Design:** N/A — sem interface gráfica.
 
@@ -102,6 +106,7 @@ inbox list [--json]
 | Prévia mascarada | `inbox list` com item com segredo | marca `possível segredo` e `•••` no lugar do valor; JSON com `secret: true` | UT-05 |
 | Instrução | `confidential.md`, `maintenance.md`, `inbox.md`, `SKILL.md` | item com segredo vai para o cofre com referência, nunca para a nota | UT-06 |
 | Detector de hoje | casos do `SecretDetectorTest` | iguais | CH-01 |
+| Nome da captura | `capture` de "Senha do wifi: abc12345" | nome, log e saídas sem o valor | UT-07, IT-01 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 
@@ -115,9 +120,10 @@ inbox list [--json]
 - **UT-04** — Nas saídas de `lint`, `lint --json`, `inbox list` e `inbox list --json` e no `log.md` depois deles, nenhum dos valores do UT-03 aparece.
 - **UT-05** — O `inbox list` marca os três itens com `(possível segredo)`, a prévia mostra `•••` no lugar de cada valor, e o `--json` traz `"secret": true` com a prévia mascarada; um item sem segredo sai como hoje.
 - **UT-06** — `references/confidential.md`, `references/maintenance.md`, `references/inbox.md` e `SKILL.md` dizem que um item da inbox com segredo vai para o cofre com a referência `--confidential` e que o valor nunca entra numa nota nem numa resposta.
+- **UT-07** — `capture_name` de "Senha do wifi: abc12345" não contém `abc12345` e contém `senha-do-wifi`; de "PIN 4821" não contém `4821`; de um texto que é só um token cai em `captura`; e o `capture` pela CLI desse texto não mostra o valor no nome do arquivo, na saída nem no `log.md`.
 
 ### 7.3 Testes de Integração
-- **IT-01** — Num vault do `init`, quando uma captura com "Senha do wifi: abc12345" entra pela `capture` e outra por arquivo `.txt`, então `inbox list` marca as duas, o `lint` acusa as duas com ERRO e sai com o exit de achado de hoje, e nenhum valor aparece nas saídas.
+- **IT-01** — Num vault do `init`, quando uma captura com "Senha do wifi: abc12345" (no começo do texto) entra pela `capture` e outra por arquivo `.txt`, então `inbox list` marca as duas, o `lint` acusa as duas com AVISO (a severidade de hoje do `secret-in-note`) e sai com o exit de hoje, e nenhum valor aparece nas saídas.
 
 ### 7.4 Testes de Contrato
 - N/A — não há contrato entre specs.
@@ -219,3 +225,4 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0112`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-27 | Achado com a severidade de hoje (AVISO); nome da captura sem os valores detectados (UT-07) | SPEC_DEFECT do G1: contrato dizia ERRO, contra a regra de hoje; o slug da captura expunha o segredo | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |
