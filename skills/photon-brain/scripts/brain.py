@@ -54,7 +54,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.10"
+BRAIN_VERSION = "2026.11.11"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -67,8 +67,12 @@ LAYOUT_FILES = ("index", "log")
 LAYOUT_KEYS = LAYOUT_DIRS + LAYOUT_FILES
 PARA_KEYS = ("projects", "areas", "resources", "archive")
 SHARED_KEYS = ("version", "language", "layout", "para", "contexts", "processors", "inbox_stale_days",
-               "conflict_patterns", "lint", "backup", "timezone")
+               "conflict_patterns", "lint", "backup", "timezone", "connectors")
 SHARED_VERSION = "1"
+# connectors.<provider>: ids of the vault and inbox folders for an agent that only has the provider connector
+# (SPEC-0110, ADR-0027): opaque text, never a credential; brain.py only stores them and never calls the provider.
+CONNECTOR_FIELDS = ("vault_folder_id", "inbox_folder_id")
+CONNECTOR_ID_RE = re.compile(r"[A-Za-z0-9_-]{8,128}")
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
 ORIGIN_LOCAL, ORIGIN_VAULT, ORIGIN_DEFAULT = "local", "vault", "padrão"
@@ -587,6 +591,10 @@ def read_config(config_home=None) -> dict:
             found = key in shared and shared[key] not in (None, "")
             values[key] = shared[key] if found else ""
             origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
+        elif key == "connectors":  # provider -> {vault_folder_id, inbox_folder_id} (SPEC-0110); missing = {}
+            found = key in shared and shared[key] not in (None, "")
+            values[key] = shared[key] if found else {}
+            origins[key] = ORIGIN_VAULT if found else ORIGIN_DEFAULT
         elif key == "conflict_patterns":  # missing = the patterns of the local provider (references/providers.md)
             found = key in shared
             values[key] = shared[key] if found else list(CONFLICT_PATTERNS.get(values["provider"],
@@ -945,6 +953,67 @@ def add_context_text(text: str, name: str, item: dict) -> str:
     elif rest:
         raise BrainError("contexts está em forma inline — converta para bloco")
     lines.insert(_children(lines, start).stop, f"{' ' * _child_indent(lines, start)}{fmt_scalar(name)}: {fmt_flow(item)}")
+    return _join(lines, text)
+
+
+def connector_id_problem(value):
+    """Why a connector folder id is refused ("id inválido ..."), or None; the value itself is never in the message."""
+    if not isinstance(value, str) or not CONNECTOR_ID_RE.fullmatch(value):
+        return "id inválido — use de 8 a 128 letras, números, '_' ou '-'"
+    kind = _secret_kind(value)
+    if kind:
+        return f"id inválido — parece um segredo ({kind}); o id da pasta nunca é uma credencial"
+    return None
+
+
+def _entry(lines: list, start: int, indent: int, key: str):
+    """Index of the `key:` line among the children of lines[start] at that indentation, or None."""
+    for i in _children(lines, start):
+        pair = re.match(r"^(\s+)([^\s:#][^:]*?)\s*:", strip_comment(lines[i]))
+        if pair and pair.group(2) == key and len(pair.group(1)) == indent:
+            return i
+    return None
+
+
+def _block_map(lines: list, i: int, name: str):
+    """lines[i] is `key:` of a block map: an empty inline `{}` becomes a block (the comment stays); other inline
+    values = BrainError (exit 2)."""
+    content = strip_comment(lines[i])
+    rest = content.split(":", 1)[1].strip()
+    if rest == "{}":
+        tail = lines[i][len(content):]
+        lines[i] = content.replace("{}", "  ", 1) + tail if tail.strip() else content.replace("{}", "").rstrip()
+    elif rest:
+        raise BrainError(f"{name} está em forma inline — converta para bloco")
+
+
+def set_connector_text(text: str, provider: str, ids: dict) -> str:
+    """brain-config.yml with connectors.<provider>.<field> set for each field of ids: a value already there is
+    replaced on its own line (its comment stays), a missing one is inserted; every other line stays (SPEC-0110)."""
+    lines = text.splitlines()
+    start = _top_level(lines, "connectors")
+    step = _child_indent(lines, start if start is not None else len(lines) - 1)
+    if start is None:
+        lines.append("connectors:")
+        start = len(lines) - 1
+    else:
+        _block_map(lines, start, "connectors")
+    entry = _entry(lines, start, step, provider)
+    if entry is None:
+        entry = _children(lines, start).stop
+        lines.insert(entry, f"{' ' * step}{fmt_scalar(provider)}:")
+    else:
+        _block_map(lines, entry, f"connectors.{provider}")
+    indent = next((_indent(lines[i]) for i in _children(lines, entry)
+                   if strip_comment(lines[i]).strip() and _indent(lines[i]) > step), step * 2)
+    for field, value in ids.items():
+        i = _entry(lines, entry, indent, field)
+        if i is None:
+            lines.insert(_children(lines, entry).stop, f"{' ' * indent}{field}: {fmt_scalar(value)}")
+            continue
+        content = strip_comment(lines[i])
+        pair = re.match(r"^(\s+[^:]*?\s*:\s*)(.*)$", content)
+        lines[i] = pair.group(1) + fmt_scalar(value) + lines[i][len(content):]
     return _join(lines, text)
 
 
@@ -2327,7 +2396,7 @@ def cmd_config(as_json: bool, config_home=None) -> int:
     for section, keys in (("layout", LAYOUT_KEYS), ("para", PARA_KEYS)):
         for key in keys:
             print(f"{section}.{key}: {values[section][key]}  ({origins[f'{section}.{key}']})")
-    for section in ("contexts", "processors"):
+    for section in ("contexts", "processors", "connectors"):
         items = values[section] if isinstance(values[section], dict) else {}
         print(f"{section}: {len(items)}  ({origins[section]})")
         for name, item in items.items():
@@ -2367,6 +2436,86 @@ def cmd_context_add(args, config_home=None) -> int:
     for path in created:
         print(f"  criado: {path}")
     return 0
+
+
+def connector_args(args) -> dict:
+    """The ids given to connector set, validated (pure, before any read or write): BrainError(code 2)."""
+    if args.provider not in PROVIDERS:
+        raise BrainError(f"provedor desconhecido: {one_line(args.provider)} — use um de: {', '.join(PROVIDERS)}")
+    ids = {"vault_folder_id": args.vault_folder_id}
+    if args.inbox_folder_id is not None:
+        ids["inbox_folder_id"] = args.inbox_folder_id
+    for field, value in ids.items():
+        problem = connector_id_problem(value)
+        if problem:
+            raise BrainError(f"--{field.replace('_', '-')}: {problem}")
+    return ids
+
+
+def cmd_connector_set(args, config_home=None) -> int:
+    ids = connector_args(args)
+    values = load_config(config_home)["values"]
+    vault, shared_path = Path(values["vault"]), shared_config_path(values["vault"])
+    use_vault_clock(values)  # the log line in the vault zone; invalid timezone = code 2 before any write
+    if not vault.is_dir():
+        raise BrainError(f"vault não encontrado: {vault}", 1)
+    if not shared_path.is_file():
+        raise BrainError("vault sem brain-config.yml — rode init", 1)
+    before = shared_path.read_text(encoding="utf-8")
+    text = set_connector_text(before, args.provider, ids)
+    data, old = parse_yaml(text), parse_yaml(before)
+    stored = data.get("connectors", {}).get(args.provider) if isinstance(data.get("connectors"), dict) else None
+    if (not isinstance(stored, dict) or any(stored.get(k) != v for k, v in ids.items())
+            or {k: v for k, v in data.items() if k != "connectors"} != {k: v for k, v in old.items()
+                                                                       if k != "connectors"}):
+        raise BrainError(f"não consegui gravar os ids do conector em {shared_path}", 1)
+    shared_path.write_text(text, encoding="utf-8")
+    append_log(vault, values["layout"], "connector set", args.provider)  # only the provider, never the ids
+    print(f"ids do conector {args.provider} gravados")
+    return 0
+
+
+def cmd_connector_show(as_json: bool, config_home=None) -> int:
+    connectors = load_config(config_home)["values"]["connectors"]
+    connectors = connectors if isinstance(connectors, dict) else {}
+    if as_json:
+        print(json.dumps(connectors, ensure_ascii=False, indent=2))
+        return 0
+    if not connectors:
+        print("nenhum id de conector gravado")
+        return 0
+    for provider, ids in connectors.items():
+        ids = ids if isinstance(ids, dict) else {}
+        line = f"{provider}: vault {ids.get('vault_folder_id') or '(ausente)'}"
+        if ids.get("inbox_folder_id"):
+            line += f", inbox {ids['inbox_folder_id']}"
+        print(one_line(line))
+    return 0
+
+
+def connector_items(connectors) -> list:
+    """doctor lines of connectors.<provider>: AVISO for a provider outside PROVIDERS, ERRO for an invalid id; the
+    ids themselves are never shown."""
+    if connectors in (None, "", {}):
+        return []
+    if not isinstance(connectors, dict):
+        return [("ERRO", "connectors", "use um mapa provedor → {vault_folder_id, inbox_folder_id}")]
+    rows = []
+    for provider, ids in connectors.items():
+        if provider not in PROVIDERS:
+            rows.append(("AVISO", f"connectors.{provider}",
+                         f"provedor desconhecido — use um de: {', '.join(PROVIDERS)}"))
+            continue
+        ids = ids if isinstance(ids, dict) else {}
+        bad = []
+        for field in CONNECTOR_FIELDS:
+            if field == "vault_folder_id" or ids.get(field) not in (None, ""):
+                problem = connector_id_problem(ids.get(field))
+                if problem:
+                    bad.append(("ERRO", f"connectors.{provider}.{field}", problem))
+        stored = [field.split("_")[0] for field in CONNECTOR_FIELDS if ids.get(field) not in (None, "")]
+        rows += bad or [("OK", f"connectors.{provider}", f"ids gravados: {', '.join(stored)}")]
+    return rows
 
 
 def doctor_items(config: dict, local_path: Path) -> list:
@@ -2438,6 +2587,7 @@ def doctor_items(config: dict, local_path: Path) -> list:
             rows.append(("OK" if moc.is_file() else "AVISO", f"contexto {name}",
                          folder + ("" if moc.is_file() else f"; MOC ausente: {moc.relative_to(root).as_posix()}")))
         rows += kebab_context_items(str(name), folder, f"contexts.{name}.folder" in problems)
+    rows += connector_items(values["connectors"])
     rows += processor_items(values["processors"])
     rows.append(lint_item(values, problems))
     rows.append(confidential_item(values, problems))
@@ -4710,6 +4860,14 @@ def main(argv=None) -> int:
     p.add_argument("--max-chars", type=int, default=40000, help="soma máxima do conteúdo das notas (padrão 40000)")
     add_include_confidential(p)
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("connector", help="ids das pastas do vault e da inbox no provedor, para o agente que só tem o conector")
+    connector = p.add_subparsers(dest="connector_command", required=True)
+    q = connector.add_parser("set", help="grava connectors.PROVEDOR no brain-config.yml (o resto do arquivo não muda)")
+    q.add_argument("provider", metavar="PROVEDOR", help=" | ".join(PROVIDERS))
+    q.add_argument("--vault-folder-id", required=True, metavar="ID", help="id da pasta do vault no provedor")
+    q.add_argument("--inbox-folder-id", metavar="ID", help="id da pasta layout.inbox do vault no provedor")
+    q = connector.add_parser("show", help="ids gravados por provedor; só leitura")
+    q.add_argument("--json", action="store_true")
     p = sub.add_parser("doctor", help="o que está configurado, o que funciona e o que falta")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("export-notebooklm", help="pacote de um MOC para subir no NotebookLM, fora do vault; só lê o vault")
@@ -4835,6 +4993,8 @@ def main(argv=None) -> int:
             return cmd_context_add(args)
         if args.command == "context":
             return cmd_context(args)
+        if args.command == "connector":
+            return cmd_connector_set(args) if args.connector_command == "set" else cmd_connector_show(args.json)
         if args.command == "doctor":
             return cmd_doctor(args.json)
         if args.command == "export-notebooklm":
