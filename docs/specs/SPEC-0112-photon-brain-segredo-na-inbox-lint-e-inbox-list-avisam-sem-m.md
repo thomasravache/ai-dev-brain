@@ -189,7 +189,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — e2b9fc3 | 2026-11-27 |
 | G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na terceira rodada (nome cortado e limites do slug resolvidos; minors cosméticos no radar) — 07c78e8 | 2026-11-27 |
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 6ce8e22 | 2026-11-27 |
-| H2 Integração aprovada | PENDING | | |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-27 |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
 
