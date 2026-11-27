@@ -4,7 +4,7 @@ title: "photon-brain: conector e sessão na nuvem — achar o vault, ler a confi
 tier: full
 type: feature
 user_facing: false
-status: in-progress
+status: implemented
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
@@ -194,7 +194,7 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 24d1292 | 2026-11-27 |
 | H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-27 |
 | G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-27 |
-| G7 Pronto & Docs | PENDING | | |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 1964ae9 | 2026-11-27 |
 
 ### Histórico de reprovações
 - G4 FAIL 2026-11-27 — CHANGES_REQUESTED: connector set acrescenta campo no provedor seguinte quando há mais de um em connectors (_children não para no irmão); sai com 1, fora do contrato — ea40dfd
