@@ -100,10 +100,12 @@ A marca vale com qualquer fim de linha (LF ou CRLF) e com o BOM do UTF-8 no iní
 - No modo só conector (`references/connectors.md`), um arquivo com `confidential: true` não é citado nem resumido.
 - Nunca abrir o arquivo do gerenciador de senhas (`.kdbx` e outros), nem pedir a senha mestra.
 - Para documento muito sensível, recomendar o anexo no gerenciador, com só a `secret-ref` no vault.
+- Item da inbox com segredo (senha, token, PIN; o `inbox list` marca `(possível segredo)` e o `lint` acusa `secret-in-note`): ao processar, a pessoa guarda o valor no cofre (gerenciador de senhas) e o agente cria só a referência, `new-note --type secret-ref` (ou `ingest --confidential` para um documento); depois o item sai da inbox com `inbox done`.
+- Nunca copiar o valor de um segredo (senha, token, PIN) para uma nota nem para uma resposta: nem o que o `inbox list` mascarou com `•••`, nem o que aparece ao abrir o item.
 
 ## O alarme do `lint`
 
-Duas regras, as duas **AVISO** (o exit do `lint` não muda), rodam só em notas **sem** `confidential: true` e fora de `templates/`. A saída tem o caminho, a linha (contada do topo do arquivo, frontmatter incluído) e o tipo; **o valor encontrado nunca aparece** (nem no texto, nem no `--json`, nem no `log.md`):
+Duas regras, as duas **AVISO** (o exit do `lint` não muda), rodam só em notas **sem** `confidential: true` e fora de `templates/`; o `secret-in-note` lê também os itens `.txt`, `.url` e `.webloc` da inbox (até 1 MiB cada; item que não é UTF-8 é pulado com um aviso no stderr). A saída tem o caminho, a linha (contada do topo do arquivo, frontmatter incluído) e o tipo; **o valor encontrado nunca aparece** (nem no texto, nem no `--json`, nem no `log.md`):
 
 ```text
 AVISO secret-in-note projects/college/Acessos.md:9 — senha rotulada (sugestão: …)
@@ -116,9 +118,11 @@ AVISO personal-data projects/college/Acessos.md:10 — cpf (sugestão: …)
 |---|---|
 | chave privada | bloco `-----BEGIN … PRIVATE KEY-----` |
 | token | prefixo conhecido: `ghp_` (+ 36), `github_pat_`, `AKIA` (+ 16), `xoxa-`/`xoxb-`/`xoxp-`/`xoxr-`, `sk-` (+ 20 ou mais) |
-| senha rotulada | `senha`, `password`, `passwd`, `pwd`, `pin`, `token`, `api key`, `api_key`, `secret` ou `segredo`, seguido de `:` ou `=` e de um valor de 4 ou mais caracteres sem espaço |
+| senha rotulada | `senha`, `password`, `passwd`, `pwd`, `pin`, `token`, `api key`, `api_key`, `secret` ou `segredo`, com até três palavras antes do `:` ou `=` (`Senha do wifi:`, `token da api =`), e um valor de 4 ou mais caracteres sem espaço; ou `PIN` seguido de 4 a 8 dígitos, sem `:` (`PIN 1234`) |
 
-Marcadores não contam: `***`, `<seu token>`, `${KEY}`, `{{segredo}}`, `xxx`, `...` e os valores `true`, `false`, `null`, `yes`, `no`.
+Marcadores não contam: `***`, `<seu token>`, `${KEY}`, `{{segredo}}`, `xxx`, `...` e os valores `true`, `false`, `null`, `yes`, `no`. Também não contam: texto corrido sem `:`/`=` ("a senha é forte"), `PIN` com menos de 4 dígitos e rótulo com quatro palavras ou mais antes do `:`.
+
+O mesmo detector serve ao `inbox list`, que marca o item com `(possível segredo)` (`"secret": true` no `--json`) e mostra a prévia com `•••` no lugar de cada valor, e ao nome da captura: o slug sai sem os valores (`Senha do wifi: …` vira `…-senha-do-wifi.md`; texto só com segredo vira `…-captura.md`).
 
 Correção: tirar o valor da nota, guardá-lo no gerenciador e deixar uma `secret-ref`; ou, se a nota precisa mesmo ficar como está, marcá-la com `confidential: true`.
 

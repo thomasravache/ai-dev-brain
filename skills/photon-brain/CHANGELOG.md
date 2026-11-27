@@ -12,6 +12,18 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Fixed
 - Regra de arquitetura de processo (`tests/brain_architecture_rules.py`, `subprocess_findings`): fora de `run_processor` passa a reportar também `from subprocess import ...`, `import subprocess as x`, `from os import system`/`popen`/`exec*`/`spawn*` e as chamadas feitas pelo apelido ou pelo nome importado, como a regra da `boson-atlas`. A regra é por nome e não pega acesso dinâmico (`__import__`, `importlib`, `getattr`). Só teste: o `brain.py` e a `BRAIN_VERSION` não mudam (ADR-0007) (SPEC-0062).
 
+## [2026.11.12] - 2026-11-27
+
+### Added
+- `inbox list` marca o item com cara de segredo com `(possível segredo)` e troca, na prévia, cada valor detectado por `•••`; o `--json` traz `"secret": true` (ou `false`) e a `preview` já mascarada. Nenhum valor aparece na saída (ADR-0014) (SPEC-0112).
+- `secret_spans(text)`: as posições de cada valor detectado (senha rotulada, `PIN`, token de prefixo conhecido, chave privada), o detector único do `secret-in-note`, da prévia do `inbox list` e do nome da captura (SPEC-0112).
+
+### Changed
+- `secret-in-note` lê também os itens `.txt`, `.url` e `.webloc` da inbox (até 1 MiB cada), com a severidade de hoje (AVISO, exit 0); item que não é UTF-8 é pulado com um aviso no stderr, sem derrubar o `lint` (SPEC-0112).
+- O rótulo de senha aceita até três palavras antes do `:`/`=` (`Senha do wifi:`, `token da api =`), e `PIN` seguido de 4 a 8 dígitos conta sem `:` (SPEC-0112).
+- O nome da captura sai sem os valores detectados, mantendo o rótulo (`Senha do wifi: …` vira `…-senha-do-wifi.md`; texto só com segredo vira `…-captura.md`), e por ele o `log.md` e a saída do `capture` (SPEC-0112).
+- `references/confidential.md`, `references/maintenance.md`, `references/inbox.md` e `SKILL.md`: item da inbox com segredo vai para o cofre com a referência (`secret-ref`, `--confidential`), e o valor nunca entra numa nota nem numa resposta (SPEC-0112).
+
 ## [2026.11.11] - 2026-11-26
 
 ### Added

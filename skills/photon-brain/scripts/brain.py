@@ -29,6 +29,7 @@ back as a new file next to the current one, the whole backup goes to a new folde
 from __future__ import annotations
 
 import argparse
+import codecs
 import contextlib
 import datetime as dt
 import errno
@@ -54,7 +55,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.11"
+BRAIN_VERSION = "2026.11.12"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
@@ -206,8 +207,14 @@ CONFIDENTIAL_REFUSED = f"nota confidencial — use {INCLUDE_CONFIDENTIAL} só se
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 TOKEN_RE_SECRET = re.compile(r"(?<![\w-])(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|AKIA[0-9A-Z]{16}"
                              r"|xox[abpr]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})(?![\w-])")
+# a label, up to SECRET_LABEL_WORDS words ("senha do wifi:", "token da api ="), ":" or "=", then the value (SPEC-0112)
 SECRET_LABEL_RE = re.compile(r"(?i)(?<![\w-])(?:senha|password|passwd|pwd|pin|token|api[ _-]?key|secret|segredo)"
-                             r"(?![\w-])[*_]*[ \t]*[:=][*_]*[ \t]*(\S*)")
+                             r"(?![\w-])(?:[ \t]+[^\s:=]+){0,3}?[*_]*[ \t]*[:=][*_]*[ \t]*(\S*)")
+SECRET_PIN_RE = re.compile(r"(?i)(?<![\w-])pin(?![\w-])[*_]*[ \t]+[*_]*(\d{4,8})(?![\w-])")  # "PIN 1234", no ":"
+PRIVATE_KEY_END_RE = re.compile(r"-----END [A-Z0-9 ]*PRIVATE KEY-----")
+SECRET_MASK = "•••"  # what inbox list shows in place of each value (SPEC-0112)
+SECRET_SCAN_BYTES = 1 << 20  # bytes of an inbox item that secret-in-note reads (SPEC-0112)
+INBOX_SECRET_SUFFIXES = (".txt", ".url", ".webloc")  # inbox items secret-in-note reads besides the .md notes
 # values that are a marker, not a secret: ***, <...>, ${...}, {{...}}, xxx, ... and YAML booleans/null
 SECRET_PLACEHOLDER_RE = re.compile(r"(?i)^(?:\*+|<.*|\$\{.*|\{\{.*|x{3,}\W*|\.{3,}|…|true|false|null|none|yes|no)$")
 SECRET_MIN = 4  # characters of a labeled value
@@ -1234,16 +1241,62 @@ def with_frontmatter_keys(text: str, keys: dict) -> str:
     return first + "\n" + "".join(f"{line}{nl}" for line in lines) + rest[end.start():]
 
 
+def _labeled_spans(text: str) -> list:
+    """(start, end) of each labeled value of text ("senha do wifi: x", "PIN 1234"), quotes around it excluded;
+    placeholders and values shorter than SECRET_MIN do not count."""
+    found = []
+    for regex in (SECRET_LABEL_RE, SECRET_PIN_RE):
+        for m in regex.finditer(text):
+            start = m.start(1)
+            raw = m.group(1)
+            value = raw.strip("\"'`")
+            if len(value) >= SECRET_MIN and not SECRET_PLACEHOLDER_RE.match(value):
+                start += len(raw) - len(raw.lstrip("\"'`"))
+                found.append((start, start + len(value)))
+    return found
+
+
+def _private_key_spans(text: str) -> list:
+    """(start, end) of each private key block: from its BEGIN line to its END line (or the end of text)."""
+    found = []
+    for m in PRIVATE_KEY_RE.finditer(text):
+        end = PRIVATE_KEY_END_RE.search(text, m.end())
+        found.append((m.start(), end.end() if end else len(text)))
+    return found
+
+
+def secret_spans(text: str) -> list:
+    """[(start, end)] of each value detected in text (end exclusive, sorted, overlaps merged): a labeled value
+    (_labeled_spans), a token with a known prefix and a private key block. The single detector of secret-in-note,
+    of the inbox list preview and of the capture name (SPEC-0112, ADR-0014); never the label."""
+    text = text or ""
+    raw = _labeled_spans(text) + [m.span() for m in TOKEN_RE_SECRET.finditer(text)] + _private_key_spans(text)
+    merged = []
+    for start, end in sorted(raw):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def without_secrets(text: str, replacement: str = " ") -> str:
+    """text with each secret_spans value replaced by `replacement`."""
+    parts, last = [], 0
+    for start, end in secret_spans(text):
+        parts += [text[last:start], replacement]
+        last = end
+    return "".join(parts) + text[last:]
+
+
 def _secret_kind(line: str):
     """The kind of secret written in a line, or None: "chave privada", "token" or "senha rotulada"."""
     if PRIVATE_KEY_RE.search(line):
         return "chave privada"
     if TOKEN_RE_SECRET.search(line):
         return "token"
-    for m in SECRET_LABEL_RE.finditer(line):
-        value = m.group(1).strip("\"'`")
-        if len(value) >= SECRET_MIN and not SECRET_PLACEHOLDER_RE.match(value):
-            return "senha rotulada"
+    if _labeled_spans(line):
+        return "senha rotulada"
     return None
 
 
@@ -3941,9 +3994,11 @@ MOVE_ONLY_INBOX = "--move só vale para itens da inbox"
 
 def capture_name(text: str, existing=(), clock=None) -> str:
     """Name of a capture, "AAAA-MM-DD-HHMMSS-<slug of the first CAPTURE_WORDS words>.md", with the time of clock()
-    (None = the clock of this run); a name in `existing` gets "-1", "-2"... Pure (no I/O)."""
+    (None = the clock of this run); a name in `existing` gets "-1", "-2"... The slug leaves out each secret_spans
+    value and keeps the label ("Senha do wifi: x" -> "senha-do-wifi"; only a secret -> "captura"). Pure (no I/O)."""
     stamp = (clock or current_clock())().strftime("%Y-%m-%d-%H%M%S")
-    base = f"{stamp}-{slugify(' '.join(text.split()[:CAPTURE_WORDS]), fallback='captura')}"
+    words = without_secrets(text).split()[:CAPTURE_WORDS]  # never a detected value in the name (SPEC-0112)
+    base = f"{stamp}-{slugify(' '.join(words), fallback='captura')}"
     taken, name, n = set(existing), f"{base}.md", 0
     while name in taken:
         n += 1
@@ -4107,7 +4162,8 @@ def visible_in_inbox(name: str) -> bool:
 
 
 def inbox_entries(vault: Path, layout: dict, stale_after: int, now=None, items=None) -> list:
-    """The items of `inbox list`, oldest first: path, kind, size, age_days, stale and preview. items = the (path,
+    """The items of `inbox list`, oldest first: path, kind, size, age_days, stale, preview (each secret_spans value
+    as SECRET_MASK) and secret (a value was detected, SPEC-0112). items = the (path,
     path relative to the vault) to describe; None = walk_inbox (lint passes the ones of its single scan)."""
     now = time.time() if now is None else now
     rows = []
@@ -4118,11 +4174,14 @@ def inbox_entries(vault: Path, layout: dict, stale_after: int, now=None, items=N
         except OSError:
             continue  # vanished while listing (the provider moved it)
         age = max(0.0, (now - stat.st_mtime) / 86400)
-        preview = " ".join(CONTROL_RE.sub(" ", item_text(path)).split()) if kind in ("text", "link") else ""
+        text = item_text(path) if kind in ("text", "link") else ""
+        secret = bool(secret_spans(text))
+        preview = " ".join(CONTROL_RE.sub(" ", without_secrets(text, SECRET_MASK)).split())
         if len(preview) > PREVIEW_MAX:
             preview = preview[:PREVIEW_MAX - 1] + "…"
         rows.append((stat.st_mtime, rel, {"path": rel, "kind": kind, "size": stat.st_size,
-                                          "age_days": round(age, 2), "stale": age > stale_after, "preview": preview}))
+                                          "age_days": round(age, 2), "stale": age > stale_after, "preview": preview,
+                                          "secret": secret}))
     return [entry for _, _, entry in sorted(rows, key=lambda row: (row[0], row[1]))]
 
 
@@ -4236,7 +4295,7 @@ def cmd_inbox_list(args, config_home=None) -> int:
         print("Inbox vazia")
         return 0
     for item in items:
-        flag = " (parado)" if item["stale"] else ""
+        flag = (" (parado)" if item["stale"] else "") + (" (possível segredo)" if item.get("secret") else "")
         print(f"{item['kind']:<7} {item['age_days']:>6.1f}d {item['size']:>9}  {one_line(item['path'])}{flag}")
         if item["preview"]:
             print(f"    {item['preview']}")
@@ -4621,13 +4680,42 @@ def check_frontmatter(notes: list) -> list:
     return found
 
 
-def check_secret_in_note(notes: list) -> list:
+SECRET_IN_NOTE_FIX = ("tire o valor da nota e guarde no gerenciador de senhas; no vault, só uma nota secret-ref "
+                      "(references/confidential.md)")
+
+
+def check_secret_in_note(notes: list, items=()) -> list:
     """One warning per line of a note without confidential: true with a secret (find_secrets): "<path>:<line>"
-    and the kind, never the value."""
-    return [Finding("secret-in-note", f"{note.path}:{line}", kind,
-                    "tire o valor da nota e guarde no gerenciador de senhas; no vault, só uma nota secret-ref "
-                    "(references/confidential.md)")
-            for note in notes if not is_confidential(note) for line, kind in find_secrets(note.text)]
+    and the kind, never the value. items = (path relative to the vault, text) of the .txt/.url/.webloc items of
+    the inbox (read_inbox_texts, SPEC-0112), judged the same way."""
+    texts = [(note.path, note.text) for note in notes if not is_confidential(note)] + list(items)
+    return [Finding("secret-in-note", f"{rel}:{line}", kind, SECRET_IN_NOTE_FIX)
+            for rel, text in texts for line, kind in find_secrets(text)]
+
+
+def read_inbox_texts(items) -> list:
+    """(path relative to the vault, text) of each .txt/.url/.webloc inbox item of items ((path, rel)), read up to
+    SECRET_SCAN_BYTES; an item that is not UTF-8 (or binary) is skipped with a notice on stderr, never its
+    content."""
+    texts = []
+    for path, rel in items:
+        if not rel.lower().endswith(INBOX_SECRET_SUFFIXES):
+            continue
+        try:
+            with open(path, "rb") as handle:
+                data = handle.read(SECRET_SCAN_BYTES)
+            # final=False: a character cut at the read limit is not an invalid encoding
+            text = codecs.getincrementaldecoder("utf-8-sig")().decode(data, final=len(data) < SECRET_SCAN_BYTES)
+        except UnicodeDecodeError:
+            print(f"aviso: {one_line(rel)} não é UTF-8 — secret-in-note pulou o item", file=sys.stderr)
+            continue
+        except OSError:
+            continue  # vanished while reading (the provider moved it)
+        if "\x00" in text:
+            print(f"aviso: {one_line(rel)} parece binário — secret-in-note pulou o item", file=sys.stderr)
+            continue
+        texts.append((rel, text))
+    return texts
 
 
 def check_personal_data(notes: list, detectors=None, patterns=None) -> list:
@@ -4718,8 +4806,8 @@ class LintVault:
     """What the rules read, from a single scan of the vault (walk_vault): notes, the link index of the notes and
     of the attachments, every file path, the inbox items, the files folder (None = inaccessible), the valid
     conflict patterns and the config findings, each with the rule it affects."""
-    __slots__ = ("attachments", "config", "detectors", "files", "inbox", "index", "notes", "paths", "patterns",
-                 "personal_patterns", "values")
+    __slots__ = ("attachments", "config", "detectors", "files", "inbox", "inbox_items", "index", "notes", "paths",
+                 "patterns", "personal_patterns", "values")
 
     def __init__(self, values: dict):
         vault, layout = vault_dir(values), values["layout"]
@@ -4738,6 +4826,7 @@ class LintVault:
             if rel.startswith(inbox) and visible_in_inbox(path.name):
                 inbox_items.append((path, rel))
         self.index, self.attachments = LinkIndex(n.path for n in self.notes), LinkIndex(attachments)
+        self.inbox_items = inbox_items
         self.inbox = inbox_entries(vault, layout, values["inbox_stale_days"], items=inbox_items)
         self.patterns, problems = compile_conflict_patterns(values.get("conflict_patterns"))
         self.config += [("conflict-copy", Finding("config", "brain-config.yml", problem,
@@ -4768,7 +4857,7 @@ LINT_CHECKS = {  # rule -> check over the LintVault; "config" findings come from
     "orphan": lambda v: check_orphan(v.notes, v.index, v.values["layout"]),
     "stale-inbox": lambda v: check_stale_inbox(v.inbox, v.values["inbox_stale_days"]),
     "frontmatter": lambda v: check_frontmatter(v.notes),
-    "secret-in-note": lambda v: check_secret_in_note(v.notes),
+    "secret-in-note": lambda v: check_secret_in_note(v.notes, read_inbox_texts(v.inbox_items)),
     "personal-data": lambda v: check_personal_data(v.notes, v.detectors, v.personal_patterns),
     "config": lambda v: [],
 }

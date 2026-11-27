@@ -19,7 +19,7 @@ brain.py inbox done inbox/2026-10-30-140509-ideia-sobre-grafos.md --note "projec
 
 ## `capture TEXTO [--context C] [--json]`
 
-- Cria `inbox/AAAA-MM-DD-HHMMSS-<slug>.md`, com o slug das seis primeiras palavras (minúsculas, sem acentos). Duas capturas com o mesmo nome no mesmo segundo: a segunda ganha `-1`, a terceira `-2`.
+- Cria `inbox/AAAA-MM-DD-HHMMSS-<slug>.md`, com o slug das seis primeiras palavras (minúsculas, sem acentos), sem os valores com cara de segredo (o rótulo fica: `Senha do wifi: …` vira `…-senha-do-wifi.md`; texto só com segredo vira `…-captura.md`); o nome, a saída e o `log.md` nunca levam o valor. Duas capturas com o mesmo nome no mesmo segundo: a segunda ganha `-1`, a terceira `-2`.
 - Frontmatter `type: capture`, `created` (data e hora no fuso do vault, com o deslocamento: `created: 2026-11-26T09:15:02-03:00`; a chave `timezone` do `brain-config.yml`, ou o fuso da máquina sem ela) e `context` (quando dado; precisa existir no `brain-config.yml`), e o texto como corpo.
 - Imprime o caminho relativo ao vault (`--json`: `{"path": ...}`); o log ganha `- … capture inbox/<nome>`.
 - Texto vazio (ou só espaços) sai com 2 e nada é escrito; `timezone` inválido ou não encontrado também (`references/config.md`).
@@ -35,7 +35,10 @@ brain.py inbox done inbox/2026-10-30-140509-ideia-sobre-grafos.md --note "projec
   - `syncing`: placeholder `*.icloud`, ou arquivo de 0 bytes modificado há menos de 10 minutos (o app do provedor ainda está baixando);
   - `file`: todo o resto (PDF, foto, vídeo...).
 - `size` em bytes, `age_days` desde a última modificação, `stale` quando `age_days` passa de `inbox_stale_days`, `preview` com até 120 caracteres do texto (`text` e `link`; vazio para `file` e `syncing`).
+- `secret`: item `text` ou `link` com senha, token, PIN ou chave (o detector do `secret-in-note`, `references/confidential.md`); a linha do item termina com `(possível segredo)` e a `preview` troca cada valor por `•••`. Sem segredo, `"secret": false` e a prévia como sempre.
 - Inbox vazia: "Inbox vazia" (exit 0); com `--json`, `{"items": []}`. Só lê: nada é escrito.
+- Item da inbox com segredo: a pessoa guarda o valor no cofre (gerenciador de senhas) e o vault ganha só a referência (`new-note --type secret-ref`, ou `ingest ITEM --confidential --move` para um documento, `references/confidential.md`); depois `inbox done`.
+- Nunca copie o valor de um segredo para uma nota nem para uma resposta, nem abra o item para lê-lo em voz alta: o `•••` da prévia fica como está.
 
 ## `ingest ITEM --move [...]`
 
