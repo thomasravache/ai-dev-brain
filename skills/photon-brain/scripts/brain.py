@@ -1297,14 +1297,38 @@ def without_secrets(text: str, replacement: str = " ") -> str:
     return "".join(parts) + text[last:]
 
 
+CAPTURE_STAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{6}-")  # "AAAA-MM-DD-HHMMSS-" of a capture name, never masked
+
+
 def mask_secret_name(name: str, text: str, replacement: str = SECRET_MASK) -> str:
-    """name with each slug (slugify) of a secret_spans value of text, of SECRET_NAME_MIN characters or more, replaced
-    by `replacement` (an old capture named after its value, SPEC-0112); no such slug = name as is."""
+    """name with the slug (slugify) of each secret_spans value of text replaced by `replacement` (an old capture
+    named after its value, SPEC-0112): the whole slug, or its longest prefix that ends the name (before an optional
+    "-N" and the extension; the old name was cut at SLUG_MAX), of SECRET_NAME_MIN characters or more and between
+    slug limits (start of the name or "-" before; "-", "-N", the extension or the end after). The
+    "AAAA-MM-DD-HHMMSS-" of a capture name is never touched; no such slug = name as is."""
     slugs = {slugify(text[start:end], fallback="") for start, end in secret_spans(text)}
     slugs = sorted((slug for slug in slugs if len(slug) >= SECRET_NAME_MIN), key=len, reverse=True)
     if not slugs:
         return name
-    return re.sub("|".join(map(re.escape, slugs)), lambda _: replacement, name, flags=re.IGNORECASE)
+    stamp = CAPTURE_STAMP_RE.match(name)
+    head, rest = (name[:stamp.end()], name[stamp.end():]) if stamp else ("", name)
+    dot = rest.rfind(".")
+    body, tail = (rest[:dot], rest[dot:]) if dot > 0 else (rest, "")
+    whole = re.compile(r"(?<![^-])(?:" + "|".join(map(re.escape, slugs)) + r")(?=-|$)", re.IGNORECASE)
+    body = whole.sub(lambda _: replacement, body)
+    best = None  # the longest cut prefix that ends the name, before an optional "-N"
+    for slug in slugs:
+        for k in range(len(slug), SECRET_NAME_MIN - 1, -1):
+            prefix = slug[:k].strip("-")
+            if len(prefix) < SECRET_NAME_MIN or (best and len(prefix) <= len(best.group(1))):
+                continue
+            m = re.search(r"(?:^|-)(" + re.escape(prefix) + r")(-\d+)?$", body, re.IGNORECASE)
+            if m:
+                best = m
+                break
+    if best:
+        body = body[:best.start(1)] + replacement + body[best.end(1):]
+    return head + body + tail
 
 
 def _secret_kind(line: str):
