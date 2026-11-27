@@ -55,11 +55,33 @@ from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import urlsplit
 
-BRAIN_VERSION = "2026.11.12"
+BRAIN_VERSION = "2026.11.13"
 SKILL_DIR = Path(__file__).resolve().parent.parent
 ASSETS_DIR = SKILL_DIR / "assets"
 DEFAULT_SHARED_CONFIG = ASSETS_DIR / "brain-config.yml"
 TEMPLATES_DIR = ASSETS_DIR / "templates"
+# assets/brain-config.yml without the comments, for a brain.py copied without assets/ (SPEC-0111); the architecture
+# test keeps both equal
+EMBEDDED_SHARED_DEFAULTS = """\
+version: 1
+language: auto
+layout:
+  inbox: inbox
+  raw: raw
+  mocs: mocs
+  templates: templates
+  index: index.md
+  log: log.md
+para:
+  projects: projects
+  areas: areas
+  resources: resources
+  archive: archive
+contexts: {}
+processors: {}
+inbox_stale_days: 7
+"""
+INIT_NEEDS_SKILL = "init precisa da pasta da skill inteira (assets/ não encontrada)"
 
 PROVIDERS = ("google-drive", "onedrive", "icloud", "local")
 LOCAL_KEYS = ("vault", "files", "provider", "backup_targets")  # backup_targets: list of folders of this machine
@@ -524,7 +546,21 @@ def absolute(path: str) -> str:
 # ---------------------------------------------------------------- configuration
 
 def default_shared() -> dict:
-    return parse_yaml(DEFAULT_SHARED_CONFIG.read_text(encoding="utf-8"))
+    """assets/brain-config.yml, or the embedded copy when brain.py runs without assets/ (SPEC-0111)."""
+    if DEFAULT_SHARED_CONFIG.is_file():
+        return parse_yaml(DEFAULT_SHARED_CONFIG.read_text(encoding="utf-8"))
+    return parse_yaml(EMBEDDED_SHARED_DEFAULTS)
+
+
+def note_template(vault: Path, layout: dict, kind: str) -> Path:
+    """templates/<kind>.md of the vault, falling back to the skill's; neither = BrainError (exit 2)."""
+    template = vault / layout["templates"] / f"{kind}.md"
+    if not template.is_file():
+        template = TEMPLATES_DIR / f"{kind}.md"
+    if not template.is_file():
+        raise BrainError(f"modelo {kind} não encontrado: copie a pasta da skill inteira ou crie "
+                         f"{layout['templates']}/{kind}.md no vault")
+    return template
 
 
 def read_yaml(path: Path) -> dict:
@@ -848,9 +884,7 @@ def fill_template(text: str, **fields) -> str:
 
 def moc_text(vault: Path, layout: dict, name: str, title: str) -> str:
     """MOC of a context from the vault's templates/moc.md (falls back to the skill's)."""
-    template = vault / layout["templates"] / "moc.md"
-    if not template.is_file():
-        template = TEMPLATES_DIR / "moc.md"
+    template = note_template(vault, layout, "moc")
     return render_note(template.read_text(encoding="utf-8"), title=title, context=name,
                        date=today(), source="")
 
@@ -2445,6 +2479,8 @@ def cmd_init(args, config_home=None) -> int:
         print("Próximo passo: brain.py doctor")
         return 0
 
+    if not DEFAULT_SHARED_CONFIG.is_file() or not TEMPLATES_DIR.is_dir():
+        raise BrainError(INIT_NEEDS_SKILL)
     if args.adopt and not vault.is_dir():
         raise BrainError(f"vault não encontrado: {vault_s}")
     layout = dict(parse_pairs(args.map, "--map"))
@@ -3908,9 +3944,7 @@ def cmd_new_note(args, config_home=None) -> int:
     title = " ".join(args.title.split())
     rel = note_path(title, args.context, values)
     tags = unique(frontmatter_tags(args.tags or ""))
-    template = vault / layout["templates"] / f"{args.type}.md"
-    if not template.is_file():
-        template = TEMPLATES_DIR / f"{args.type}.md"
+    template = note_template(vault, layout, args.type)
     text = render_note(template.read_text(encoding="utf-8"), tags=tags, title=title, date=today(),
                        context=args.context or "", source=source_value(args.source, vault), vault_ref=vault_ref)
     confidential = args.confidential or args.type == SECRET_REF_TYPE

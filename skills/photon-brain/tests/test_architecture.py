@@ -11,16 +11,24 @@ Cada regra é testada contra um exemplo que a viola e contra o código real de s
 - nenhum caminho pessoal absoluto em arquivos de skills/photon-brain/ fora de tests/ (placeholders como
   /Users/<nome> são permitidos);
 - remoção de arquivo (os.remove, os.unlink, Path.unlink, os.rmdir, Path.rmdir, shutil.rmtree) só em
-  rotate_backups e na lista fechada de limpezas do que a própria chamada criou (ADR-0015, SPEC-0051:UT-07).
+  rotate_backups e na lista fechada de limpezas do que a própria chamada criou (ADR-0015, SPEC-0051:UT-07);
+- EMBEDDED_SHARED_DEFAULTS (os padrões da configuração embutidos no brain.py, para a cópia sem assets/) é igual ao
+  assets/brain-config.yml lido pelo parse_yaml do script; uma chave mudada só num dos dois lados reprova, conferido
+  numa cópia temporária da skill (SPEC-0111:UT-02).
 """
 import ast
+import re
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
 
 from brain_architecture_rules import (
     cross_skill_path_findings,
     import_findings,
     personal_path_findings,
     removal_findings,
+    shared_defaults_findings,
     subprocess_findings,
 )
 from brain_support import SCRIPT, SKILL
@@ -276,6 +284,92 @@ class PersonalPathRulesTest(unittest.TestCase):
                 continue
             findings += personal_path_findings(text, rel.as_posix())
         self.assertEqual(findings, [], report(findings))
+
+
+# SPEC-0111:UT-02 — mudança só do lado da constante, acrescentada ao fim da cópia do script: vale para a constante
+# em texto YAML ou já em dicionário (a última atribuição é a que o módulo carregado tem)
+EMBEDDED_CHANGE = """
+
+def _spec0111_change(value):
+    import copy as _copy
+    import re as _re
+    if isinstance(value, str):
+        return _re.sub(r"(?m)^(\\s+inbox\\s*:\\s*)inbox\\b", r"\\1entrada", value, count=1)
+    value = _copy.deepcopy(value)
+    value["layout"]["inbox"] = "entrada"
+    return value
+
+
+EMBEDDED_SHARED_DEFAULTS = _spec0111_change(EMBEDDED_SHARED_DEFAULTS)
+"""
+
+
+class SharedDefaultsRulesTest(unittest.TestCase):
+    """SPEC-0111:UT-02 — padrões embutidos iguais a assets/brain-config.yml."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.copy = self.root / "photon-brain"
+        shutil.copytree(SKILL, self.copy, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+        self.script = self.copy / "scripts" / "brain.py"
+        self.config = self.copy / "assets" / "brain-config.yml"
+
+    def findings(self):
+        return shared_defaults_findings(self.script, self.config)
+
+    def test_brain_embedded_defaults_match_assets_brain_config(self):
+        """SPEC-0111:UT-02"""
+        # SPEC-0111:UT-02
+        script_source()  # a skill precisa existir para a regra valer
+        findings = shared_defaults_findings(SCRIPT, SKILL / "assets" / "brain-config.yml")
+        self.assertEqual(findings, [], report(findings))
+
+    def test_rule_passes_on_an_unchanged_copy_of_the_skill(self):
+        """SPEC-0111:UT-02"""
+        # SPEC-0111:UT-02
+        self.assertEqual(self.findings(), [], report(self.findings()))
+
+    def test_key_changed_only_in_assets_brain_config_is_reported(self):
+        """SPEC-0111:UT-02"""
+        # SPEC-0111:UT-02
+        text = self.config.read_text(encoding="utf-8")
+        changed = re.sub(r"(?m)^inbox_stale_days:\s*7\b", "inbox_stale_days: 9", text, count=1)
+        self.assertNotEqual(changed, text, "assets/brain-config.yml precisa ter inbox_stale_days: 7")
+        self.config.write_text(changed, encoding="utf-8")
+        findings = self.findings()
+        self.assertEqual(len(findings), 1, report(findings))
+        self.assertIn("inbox_stale_days", findings[0])
+        self.assertIn("scripts/brain.py:", findings[0])
+        self.assertIn("EMBEDDED_SHARED_DEFAULTS", findings[0])
+
+    def test_key_changed_only_in_the_embedded_constant_is_reported(self):
+        """SPEC-0111:UT-02"""
+        # SPEC-0111:UT-02
+        with self.script.open("a", encoding="utf-8") as script:
+            script.write(EMBEDDED_CHANGE)
+        findings = self.findings()
+        self.assertEqual(len(findings), 1, report(findings))
+        self.assertIn("layout.inbox", findings[0])
+        self.assertIn("EMBEDDED_SHARED_DEFAULTS", findings[0])
+
+    def test_key_only_in_one_side_is_reported(self):
+        """SPEC-0111:UT-02"""
+        # SPEC-0111:UT-02
+        text = self.config.read_text(encoding="utf-8")
+        self.config.write_text(text + "spec0111_extra: 1\n", encoding="utf-8")
+        findings = self.findings()
+        self.assertEqual(len(findings), 1, report(findings))
+        self.assertIn("spec0111_extra", findings[0])
+
+    def test_rule_reports_a_script_without_the_constant(self):
+        """SPEC-0111:UT-02 — sem a constante a regra reprova, nunca passa por não ter o que comparar."""
+        # SPEC-0111:UT-02
+        script = self.root / "sem-constante.py"
+        script.write_text("def parse_yaml(text):\n    return {}\n", encoding="utf-8")
+        findings = shared_defaults_findings(script, self.config)
+        self.assertEqual(len(findings), 1, report(findings))
+        self.assertIn("EMBEDDED_SHARED_DEFAULTS não existe", findings[0])
 
 
 if __name__ == "__main__":
