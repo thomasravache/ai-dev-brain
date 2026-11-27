@@ -13,6 +13,10 @@ de lista, ou um parágrafo):
         - se nada ler a configuração: seguir com inbox e sem contexto, avisando a pessoa;
         - gravar os IDs com connector set numa máquina com a pasta montada.
 
+    SKILL.md, "## Modo só conector", item **Localizar o vault** (v2)
+        - usar primeiro os IDs de connectors.<provedor> quando o agente já os tiver;
+        - só com o conector, o ganho principal dos IDs é escolher a inbox certa.
+
     SKILL.md, uma seção ("## " ou "### ") cujo título fala da sessão na nuvem (nuvem | cloud)
         - pedir só a pasta do vault ("Add folder"), nunca a pasta inteira da nuvem nem a configuração local;
         - o init --join ali roda na máquina virtual da sessão, sem a configuração local do computador da pessoa;
@@ -21,7 +25,7 @@ de lista, ou um parágrafo):
 import unittest
 
 from brain_support import SKILL
-from test_connector_session_instructions import item_with, read
+from test_connector_session_instructions import item_with, read, section
 from test_inbox_instructions import SKILL_MD, sections
 
 CONNECTORS_MD = SKILL / "references" / "connectors.md"
@@ -40,6 +44,12 @@ CONNECTORS_RULES = {
         r"(nenhum|nada|os dois|ambos|nem )", r"\binbox\b", r"sem contexto", r"avis"],
     "gravar os IDs com connector set na máquina com a pasta montada": [
         r"connector set", r"pasta montada|montada"],
+}
+
+LOCATE_IDS_RULES = {
+    "IDs de connectors.<provedor> primeiro": rf"connectors\.{S}{{0,80}}primeiro|primeiro{S}{{0,80}}connectors\.",
+    "só com o conector, o ganho principal é a inbox certa": rf"ganho principal{S}{{0,80}}inbox certa",
+    "só com o conector": r"so (com o |pelo )?conector",
 }
 
 CLOUD_RULES = {
@@ -63,6 +73,15 @@ class CloudSessionInstructionsTest(unittest.TestCase):
         """SPEC-0110:UT-06"""
         # SPEC-0110:UT-06
         self.assertItems(read(CONNECTORS_MD), CONNECTORS_RULES, "references/connectors.md")
+
+    def test_skill_md_locate_the_vault_uses_the_ids_first(self):
+        """SPEC-0110:UT-06 (v2)"""
+        # SPEC-0110:UT-06
+        item = item_with(section(read(SKILL_MD), r"^Modo s[óo] conector"), [r"^- localizar o vault"])
+        self.assertIsNotNone(item, "SKILL.md, Modo só conector: falta o item 'Localizar o vault'")
+        for rule, pattern in LOCATE_IDS_RULES.items():
+            with self.subTest(rule=rule):
+                self.assertRegex(item, pattern, f"SKILL.md, Localizar o vault: {rule}")
 
     def test_skill_md_cloud_session_connects_only_the_vault_folder(self):
         """SPEC-0110:UT-07"""

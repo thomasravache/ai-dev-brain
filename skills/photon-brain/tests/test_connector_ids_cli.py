@@ -13,6 +13,10 @@ Contrato (seção 6 da SPEC-0110):
     brain.py connector show [--json]
       "google-drive: vault <ID>, inbox <ID>" por provedor | {"google-drive": {"vault_folder_id", "inbox_folder_id"}}
       sem a chave: "nenhum id de conector gravado" (exit 0)
+      (v2) ID escrito à mão fora da regra ou com cara de segredo aparece como "(inválido)", nunca o valor
+
+    (v2) com vários provedores em connectors (e comentários entre eles), connector set muda só o provedor pedido;
+    os outros ficam byte a byte iguais. timezone inválido no brain-config.yml: exit 2, nada gravado.
 
     brain.py config --json
       values["connectors"] com os IDs gravados ({} sem a chave)
@@ -28,6 +32,15 @@ from brain_support import SCRIPT, Sandbox, doctor_lines, fn, output, snapshot
 VAULT_ID = "1AbCdEfGhIj"
 INBOX_ID = "2KlMnOpQrSt"
 OTHER_VAULT_ID = "1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765"
+NEW_INBOX_ID = "3QwErTyUiOpAsDfGhJkL"
+ONEDRIVE_BLOCK = ("  # pasta do OneDrive (conferida à mão)\n"
+                  "  onedrive:\n"
+                  "    vault_folder_id: 4ZxCvBnMaSdFgHjK\n"
+                  "    inbox_folder_id: 5PoIuYtReWqLkJhG\n")
+ICLOUD_BLOCK = ("  # iCloud por último\n"
+                "  icloud:\n"
+                "    vault_folder_id: 6MnBvCxZlKjHgFdS\n")
+TOKEN = "ghp" + "_" + "Ab1" * 12  # formato de token, fictício (detector da SPEC-0050)
 SET_LOG = re.compile(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} connector set google-drive\s*$")
 
 
@@ -50,6 +63,9 @@ class ConnectorCliTestCase(unittest.TestCase):
 
     def text(self):
         return self.shared.read_text(encoding="utf-8")
+
+    def append(self, block: str):
+        self.shared.write_text(self.text().rstrip("\n") + "\n" + block, encoding="utf-8")
 
 
 class ConnectorSetTest(ConnectorCliTestCase):
@@ -88,7 +104,7 @@ class ConnectorSetTest(ConnectorCliTestCase):
     def test_invalid_provider_or_id_exits_2_and_changes_nothing(self):
         """SPEC-0110:UT-02"""
         # SPEC-0110:UT-02
-        token = "ghp" + "_" + "Ab1" * 12  # formato de token, fictício (detector da SPEC-0050)
+        token = TOKEN
         cases = {
             "provedor fora de PROVIDERS": ("dropbox", "--vault-folder-id", VAULT_ID),
             "ID com menos de 8": ("google-drive", "--vault-folder-id", "1AbCdEf"),
@@ -122,6 +138,55 @@ class ConnectorSetTest(ConnectorCliTestCase):
         out = self.box.run("connector", "set", "google-drive", "--vault-folder-id", VAULT_ID,
                            config_home=self.box.root / "sem-config")
         self.assertExit(out, 3)
+
+    def test_set_changes_only_the_requested_provider_among_many(self):
+        """SPEC-0110:UT-01 (v2)"""
+        # SPEC-0110:UT-01
+        parse_yaml = fn("parse_yaml", "SPEC-0110")
+        self.append("connectors:\n"
+                    "  # pasta do Drive\n"
+                    "  google-drive:\n"
+                    f"    vault_folder_id: {VAULT_ID}\n" + ONEDRIVE_BLOCK)
+        before = self.text()
+        out = self.set_ids("google-drive", "--vault-folder-id", VAULT_ID, "--inbox-folder-id", NEW_INBOX_ID)
+        self.assertExit(out, 0)
+        after = self.text()
+        data = parse_yaml(after)["connectors"]
+        self.assertEqual(data["google-drive"], {"vault_folder_id": VAULT_ID, "inbox_folder_id": NEW_INBOX_ID})
+        self.assertEqual(data["onedrive"], {"vault_folder_id": "4ZxCvBnMaSdFgHjK", "inbox_folder_id": "5PoIuYtReWqLkJhG"})
+        self.assertTrue(after.endswith(ONEDRIVE_BLOCK), "o bloco do onedrive (com o comentário) fica byte a byte igual")
+        self.assertEqual(after.replace(f"    inbox_folder_id: {NEW_INBOX_ID}\n", "", 1), before,
+                         "só a linha nova do google-drive entra no arquivo")
+
+    def test_set_changes_the_middle_provider_and_keeps_its_neighbours(self):
+        """SPEC-0110:UT-01 (v2)"""
+        # SPEC-0110:UT-01
+        parse_yaml = fn("parse_yaml", "SPEC-0110")
+        self.append("connectors:\n"
+                    "  google-drive:\n"
+                    f"    vault_folder_id: {VAULT_ID}\n" + ONEDRIVE_BLOCK + ICLOUD_BLOCK)
+        before = self.text()
+        out = self.set_ids("onedrive", "--vault-folder-id", OTHER_VAULT_ID, "--inbox-folder-id", "5PoIuYtReWqLkJhG")
+        self.assertExit(out, 0)
+        after = self.text()
+        self.assertEqual(after, before.replace("4ZxCvBnMaSdFgHjK", OTHER_VAULT_ID),
+                         "trocar o ID do provedor do meio só troca o valor; os vizinhos ficam byte a byte iguais")
+        out = self.set_ids("onedrive", "--vault-folder-id", OTHER_VAULT_ID)
+        self.assertExit(out, 0)
+        data = parse_yaml(self.text())["connectors"]
+        self.assertEqual(data["google-drive"], {"vault_folder_id": VAULT_ID})
+        self.assertEqual(data["icloud"], {"vault_folder_id": "6MnBvCxZlKjHgFdS"})
+        self.assertTrue(self.text().endswith(ICLOUD_BLOCK), "o icloud (com o comentário) fica byte a byte igual")
+
+    def test_set_with_an_invalid_timezone_exits_2_and_writes_nothing(self):
+        """SPEC-0110:UT-02 (v2)"""
+        # SPEC-0110:UT-02
+        self.append("timezone: ../etc/passwd\n")
+        before = snapshot(self.box.root)
+        out = self.set_ids("google-drive", "--vault-folder-id", VAULT_ID)
+        self.assertExit(out, 2)
+        self.assertIn("timezone inválido", output(out))
+        self.assertEqual(snapshot(self.box.root), before, "nada gravado: nem o brain-config.yml nem o log.md")
 
     def test_log_line_names_the_provider_and_never_the_ids(self):
         """SPEC-0110:UT-03"""
@@ -168,6 +233,31 @@ class ConnectorShowTest(ConnectorCliTestCase):
         connectors = self.box.config_json()["values"].get("connectors")
         self.assertEqual(connectors["google-drive"], {"vault_folder_id": VAULT_ID, "inbox_folder_id": INBOX_ID})
 
+
+    def test_show_masks_an_invalid_id_written_by_hand(self):
+        """SPEC-0110:UT-04 (v2)"""
+        # SPEC-0110:UT-04
+        self.append("connectors:\n"
+                    "  google-drive:\n"
+                    "    vault_folder_id: curto\n"
+                    f"    inbox_folder_id: {TOKEN}\n"
+                    "  onedrive:\n"
+                    f"    vault_folder_id: {OTHER_VAULT_ID}\n")
+        out = self.box.run("connector", "show")
+        self.assertExit(out, 0)
+        self.assertIn("google-drive: vault (inválido), inbox (inválido)", out.stdout)
+        self.assertRegex(out.stdout, rf"(?m)^onedrive: vault {OTHER_VAULT_ID}")
+        out_json = self.box.run("connector", "show", "--json")
+        self.assertExit(out_json, 0)
+        self.assertEqual(json.loads(out_json.stdout)["google-drive"],
+                         {"vault_folder_id": "(inválido)", "inbox_folder_id": "(inválido)"})
+        config = self.box.run("config", "--json")
+        self.assertExit(config, 0)
+        self.assertEqual(json.loads(config.stdout)["values"]["connectors"]["google-drive"],
+                         {"vault_folder_id": "(inválido)", "inbox_folder_id": "(inválido)"})
+        for result in (out, out_json, config):
+            for value in ("curto", TOKEN):
+                self.assertNotIn(value, output(result), "o valor inválido nunca aparece")
 
 class ConnectorWithContextIntegrationTest(ConnectorCliTestCase):
     def test_connector_set_context_add_and_show_live_together(self):
