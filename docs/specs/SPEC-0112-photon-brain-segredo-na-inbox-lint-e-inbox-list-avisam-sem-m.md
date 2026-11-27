@@ -9,7 +9,7 @@ created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 2
+contract_version: 3
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/references/confidential.md, skills/photon-brain/references/maintenance.md, skills/photon-brain/references/inbox.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_inbox_secrets.py, skills/photon-brain/tests/test_inbox_secrets_cli.py, .claude-plugin/plugin.json]
 adrs: [ADR-0007, ADR-0014]
@@ -91,6 +91,13 @@ inbox list [--json]
 - O achado do `secret-in-note` nos itens da inbox tem a severidade de hoje da regra (AVISO, exit 0), igual ao das notas; esta spec não muda a severidade.
 - O nome da captura (`capture_name`, e por ele o `log.md` e as saídas do `capture`) nunca leva um valor detectado: o slug é montado das primeiras palavras do texto depois de tirar cada trecho de `secret_spans` (o rótulo fica: "Senha do wifi: abc12345" → `...-senha-do-wifi.md`). Texto só com segredo cai no nome padrão `captura` (UT-07).
 
+**Esclarecimentos (Emenda v3):**
+- **Nome antigo com o valor:** um item da inbox cujo nome contém o slug (`slugify`) de um valor detectado no conteúdo — capturas feitas antes desta versão — aparece no `lint` e no `inbox list` (texto e JSON) com esse trecho trocado por `•••` (ex.: `inbox/2026-01-01-120000-senha-do-wifi-•••.md`). Só trechos de 4 caracteres ou mais são trocados.
+- O caminho mascarado é aceito como ITEM por `ingest` e `inbox done` quando identifica um único item da inbox; se não identificar, exit 2 com "item não encontrado" (sem o valor).
+- Ao sair da inbox (`ingest --move`, `inbox done`), um item assim vai para o destino com o trecho trocado por `segredo`; o `log.md`, o título da nota de fonte e as saídas usam esse nome limpo, nunca o valor.
+- **Palavras do rótulo:** as até 3 palavras entre o rótulo e o `:`/`=` são palavras de letras (`[^\W\d_][\w'-]*`): não cruzam `|`, `—`, parênteses, crase nem números.
+- Diferenças aceitas e documentadas em `references/inbox.md`: o `inbox list` lê só os primeiros 8 KiB do item para a prévia e a marca, e o `lint` lê até 1 MiB; um valor com espaço entre aspas é mascarado só até o primeiro espaço.
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:** `scripts/brain.py` (regex de rótulo, `secret_spans`, `secret-in-note` na inbox, máscara e marca no `inbox list`); referências e `SKILL.md`.
@@ -107,6 +114,7 @@ inbox list [--json]
 | Instrução | `confidential.md`, `maintenance.md`, `inbox.md`, `SKILL.md` | item com segredo vai para o cofre com referência, nunca para a nota | UT-06 |
 | Detector de hoje | casos do `SecretDetectorTest` | iguais | CH-01 |
 | Nome da captura | `capture` de "Senha do wifi: abc12345" | nome, log e saídas sem o valor | UT-07, IT-01 |
+| Nome antigo com o valor | `inbox/...-senha-do-wifi-<valor>.md` | `•••` no caminho do `lint` e do `inbox list`; o caminho mascarado é aceito por `ingest`/`inbox done`; destino, log e título com `segredo` | UT-08 |
 
 ## 7. Artefato B — Plano de Testes (TDD)
 
@@ -115,12 +123,13 @@ inbox list [--json]
 
 ### 7.2 Testes Unitários
 - **UT-01** — `secret_spans` acha o valor em "Senha do wifi: abc12345", "- **Senha do banco:** x9y8z7w6", "token da api = sk-abcdefghijklmnopqrstu", "PIN 1234" e "pin: 482910", e as posições cobrem só o valor.
-- **UT-02** — `secret_spans` não acha nada em "senha: ***", "senha: <a sua>", "a senha é forte", "PIN 12", "o token do evento foi bom" e num rótulo com quatro palavras antes do `:`.
+- **UT-02** — `secret_spans` não acha nada em "senha: ***", "senha: <a sua>", "a senha é forte", "PIN 12", "o token do evento foi bom" e num rótulo com quatro palavras antes do `:`; e, com palavras que cruzam pontuação, em "| token | prefixo conhecido: x", "(token sem permissão): sinal" e "token do evento: amanhã" com 2026 no meio (ex.: "token 2026 do: abcdefgh").
 - **UT-03** — Num vault com `inbox/2026-01-01-wifi.txt` ("Senha do wifi: abc12345"), `inbox/link.url` com `?token=abcdef123456` e uma nota `.md` da inbox com "PIN 4821", o `lint --only secret-in-note` acusa os três com arquivo e linha.
 - **UT-04** — Nas saídas de `lint`, `lint --json`, `inbox list` e `inbox list --json` e no `log.md` depois deles, nenhum dos valores do UT-03 aparece.
 - **UT-05** — O `inbox list` marca os três itens com `(possível segredo)`, a prévia mostra `•••` no lugar de cada valor, e o `--json` traz `"secret": true` com a prévia mascarada; um item sem segredo sai como hoje.
 - **UT-06** — `references/confidential.md`, `references/maintenance.md`, `references/inbox.md` e `SKILL.md` dizem que um item da inbox com segredo vai para o cofre com a referência `--confidential` e que o valor nunca entra numa nota nem numa resposta.
 - **UT-07** — `capture_name` de "Senha do wifi: abc12345" não contém `abc12345` e contém `senha-do-wifi`; de "PIN 4821" não contém `4821`; de um texto que é só um token cai em `captura`; e o `capture` pela CLI desse texto não mostra o valor no nome do arquivo, na saída nem no `log.md`.
+- **UT-08** — Com `inbox/2026-01-01-120000-senha-do-wifi-qz9vold1.md` contendo "Senha do wifi: qz9vold1": `lint`, `lint --json`, `inbox list` e `inbox list --json` mostram `...-senha-do-wifi-•••.md` e nunca `qz9vold1`; `inbox done` e `ingest --move` aceitam o caminho mascarado; depois do `ingest --move`, o item fica em `raw/processed/AAAA-MM/...-senha-do-wifi-segredo.md` e nem o `log.md`, nem a nota de fonte, nem as saídas contêm `qz9vold1`; um caminho mascarado que não identifica item sai com 2.
 
 ### 7.3 Testes de Integração
 - **IT-01** — Num vault do `init`, quando uma captura com "Senha do wifi: abc12345" (no começo do texto) entra pela `capture` e outra por arquivo `.txt`, então `inbox list` marca as duas, o `lint` acusa as duas com AVISO (a severidade de hoje do `secret-in-note`) e sai com o exit de hoje, e nenhum valor aparece nas saídas.
@@ -174,11 +183,14 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 | G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=51)) — c2e4c0b | 2026-11-27 |
 | G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 812ee1a | 2026-11-27 |
 | G3 Arquitetura | PASS | arch_test exit 0 (OK) — debca08 | 2026-11-27 |
-| G4 Review | PENDING | | |
+| G4 Review | FAIL | CHANGES_REQUESTED: captura antiga com o valor no nome (slug de 6 palavras de antes) vaza o valor pelo caminho no lint, no inbox list e, pelo ingest --move, no log.md e no título da nota | 2026-11-27 |
 | G5 Integração & CI | PENDING | | |
 | H2 Integração aprovada | PENDING | | |
 | G6 Deploy | PENDING | | |
 | G7 Pronto & Docs | PENDING | | |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-27 — CHANGES_REQUESTED: captura antiga com o valor no nome (slug de 6 palavras de antes) vaza o valor pelo caminho no lint, no inbox list e, pelo ingest --move, no log.md e no título da nota — b7d6174
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -225,4 +237,5 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0112`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 3 | 2026-11-27 | Nome antigo com o valor mascarado no `lint`/`inbox list`, aceito mascarado e limpo ao sair da inbox (UT-08); palavras do rótulo só de letras (UT-02); diferenças de leitura documentadas | G4 da SPEC-0112: captura antiga vazava o valor pelo nome | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |
 | 2 | 2026-11-27 | Achado com a severidade de hoje (AVISO); nome da captura sem os valores detectados (UT-07) | SPEC_DEFECT do G1: contrato dizia ERRO, contra a regra de hoje; o slug da captura expunha o segredo | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |
