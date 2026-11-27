@@ -35,7 +35,9 @@ LABELED = (
     ("pin: " + "482910", "482910"),
 )
 NOT_SECRETS = ("senha: ***", "senha: <a sua>", "a senha é forte", "PIN 12", "o token do evento foi bom",
-               "senha do wifi da casa: " + "abc12345")  # o último: quatro palavras antes do ":"
+               "senha do wifi da casa: " + "abc12345",  # quatro palavras antes do ":"
+               # Emenda v3: as palavras do rótulo são só de letras e não cruzam pontuação nem número
+               "| token | prefixo conhecido: x", "(token sem permissão): sinal", "token 2026 do: " + "abcdefgh")
 DOCS = (SKILL / "references" / "confidential.md", SKILL / "references" / "maintenance.md",
         SKILL / "references" / "inbox.md", SKILL / "SKILL.md")
 NEVER = r"nunca|never|jamais|do not|don't"

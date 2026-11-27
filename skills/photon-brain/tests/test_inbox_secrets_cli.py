@@ -17,12 +17,16 @@ Saídas que os testes conferem (contrato da seção 6):
         prévia troca cada valor por "•••"; --json: "secret": true e "preview" já mascarada. Sem segredo: como hoje
         (sem a marca e sem "secret" verdadeiro).
     log.md não ganha nenhum dos valores.
+    nome antigo com o valor (Emenda v3, UT-08): o trecho do nome que é o slug de um valor detectado no conteúdo
+        aparece como "•••" no lint e no inbox list (texto e JSON); o caminho mascarado é aceito como ITEM por
+        `inbox done` e `ingest --move` quando identifica um único item, senão exit 2 "item não encontrado"; ao sair
+        da inbox o trecho vira "segredo" (destino, log.md, nota de fonte e saídas, nunca o valor).
 """
 import json
 import re
 
-from brain_support import output
-from test_inbox_cli import InboxCliTestCase
+from brain_support import output, snapshot
+from test_inbox_cli import InboxCliTestCase, year
 
 MASK = "•••"
 FLAG = "(possível segredo)"
@@ -231,3 +235,107 @@ class InboxSecretFlowCliTest(InboxSecretsCliTestCase):
                 hits = [t for t in text_lines if re.match(rf"^AVISO secret-in-note {re.escape(rel)}:\d+ — ", t)]
                 self.assertEqual(len(hits), 1, out.stdout)
         self.assertNoValue(self.log(), (WIFI,))
+
+
+OLD_VALUE = "qz9" + "vold1"
+OLD_STAMP = "2026-01-01-120000"
+OLD_NAME = f"{OLD_STAMP}-senha-do-wifi-{OLD_VALUE}.md"
+OLD_MASKED = f"inbox/{OLD_STAMP}-senha-do-wifi-{MASK}.md"
+OLD_CLEAN = f"{OLD_STAMP}-senha-do-wifi-segredo.md"
+OLD_TEXT = "---\ntype: capture\ncreated: 2026-01-01\n---\n\nSenha do wifi: " + OLD_VALUE + "\n"
+
+
+class OldCaptureNameCliTest(InboxSecretsCliTestCase):
+    """Captura antiga (slug de seis palavras) com o valor no nome do arquivo."""
+
+    def setUp(self):
+        super().setUp()
+        self.old = self.put(f"inbox/{OLD_NAME}", OLD_TEXT, age_days=1)
+
+    def assertNoOld(self, text):
+        self.assertNoValue(text, (OLD_VALUE,))
+
+    def test_lint_and_inbox_list_show_the_masked_name(self):
+        """SPEC-0112:UT-08"""
+        # SPEC-0112:UT-08
+        out = self.lint()
+        self.assertLintExit(out, out.stdout.splitlines())
+        self.assertNoOld(output(out))
+        self.assertEqual(len(self.text_hits(out, OLD_MASKED, 6)), 1, out.stdout)
+
+        out = self.lint("--json")
+        self.assertLintExit(out)
+        self.assertNoOld(output(out))
+        self.assertEqual(len(self.json_hits(json.loads(out.stdout)["findings"], OLD_MASKED, 6)), 1, out.stdout)
+
+        out = self.run_in_vault("lint")
+        self.assertNotIn("Traceback", output(out))
+        self.assertNoOld(output(out))
+
+        out, lines = self.list_lines()
+        self.assertNoOld(out.stdout)
+        self.assertTrue(any(OLD_MASKED in t and t.rstrip().endswith(FLAG) for t in lines), out.stdout)
+
+        out = self.run_in_vault("inbox", "list", "--json")
+        self.assertExit(out, 0)
+        self.assertNoOld(out.stdout)
+        items = json.loads(out.stdout)["items"]
+        self.assertEqual([self.rel(i["path"]) for i in items], [OLD_MASKED], items)
+        self.assertIs(items[0].get("secret"), True, items[0])
+
+    def test_inbox_done_takes_the_masked_path_and_cleans_the_name(self):
+        """SPEC-0112:UT-08"""
+        # SPEC-0112:UT-08
+        log_before = self.log()
+        out = self.run_in_vault("inbox", "done", OLD_MASKED)
+        self.assertExit(out, 0)
+        self.assertNoOld(output(out))
+        self.assertFalse(self.old.exists(), "o item saiu da inbox")
+        dest = self.processed(OLD_CLEAN)
+        self.assertTrue((self.box.vault / dest).is_file())
+        self.assertNoOld(self.log())
+        lines = self.new_log_lines(log_before)
+        self.assertTrue(any(OLD_CLEAN in line for line in lines), lines)
+
+    def test_ingest_move_takes_the_masked_path_and_cleans_name_log_and_source_note(self):
+        """SPEC-0112:UT-08"""
+        # SPEC-0112:UT-08
+        log_before = self.log()
+        out = self.run_in_vault("ingest", OLD_MASKED, "--move", "--context", "college", "--json")
+        self.assertExit(out, 0)
+        self.assertNoOld(output(out))
+        self.assertFalse(self.old.exists(), "o item saiu da inbox")
+        data = json.loads(out.stdout)
+        # destino de hoje do ingest --move (SPEC-0021): <files>/<contexto>/<AAAA>/<nome>, com o nome limpo
+        self.assertEqual(data["file"], f"college/{year()}/{OLD_CLEAN}")
+        self.assertTrue((self.box.files / data["file"]).is_file())
+        raw = self.rel(data["raw"])
+        self.assertNoOld(raw)
+        self.assertNoOld(self.read(raw))
+        title = str(self.note(raw).frontmatter.get("title") or "")
+        self.assertNoOld(title)
+        self.assertIn("segredo", title.lower())
+        self.assertNoOld(self.log())
+        self.assertTrue(self.log().startswith(log_before))
+        moved = [p.name for p in (self.box.files).rglob("*")] + [p.name for p in self.box.vault.rglob("*")]
+        self.assertNoOld(" ".join(moved))
+
+    def test_a_masked_path_that_names_no_single_item_exits_2(self):
+        """SPEC-0112:UT-08"""
+        # SPEC-0112:UT-08
+        other = "mm7" + "kp2xa"
+        self.put(f"inbox/{OLD_STAMP}-senha-do-wifi-{other}.md", OLD_TEXT.replace(OLD_VALUE, other), age_days=1)
+        cases = {"ambíguo": OLD_MASKED, "inexistente": f"inbox/{OLD_STAMP}-senha-da-casa-{MASK}.md"}
+        for case, item in cases.items():
+            for command in (("inbox", "done", item), ("ingest", item, "--move", "--context", "college")):
+                with self.subTest(case=case, command=command[0]):
+                    before = self.state()
+                    out = self.run_in_vault(*command)
+                    self.assertExit(out, 2)
+                    self.assertIn("item não encontrado", output(out))
+                    self.assertNoValue(output(out), (OLD_VALUE, other))
+                    self.assertEqual(self.state(), before, "nada se move e o log não muda")
+
+    def state(self):
+        files = {k: v[0] for k, v in snapshot(self.box.files).items()} if self.box.files.exists() else {}
+        return {k: v[0] for k, v in snapshot(self.box.vault).items()}, files
