@@ -77,6 +77,12 @@ Todo valor de `layout`, `para` e `contexts.<nome>.folder` precisa ser relativo e
 
 Chave ausente usa o padrão (origem `padrão` no `config`). Valores são texto; o arquivo pode ser editado à mão, e o `init` nunca o sobrescreve sem `--force` (o anterior fica em `brain-config.yml.bak`).
 
+## Cópia mínima e cópia completa
+
+A cópia mínima é só `scripts/brain.py`, com um vault já iniciado (com `brain-config.yml` e os modelos em `templates/`): sem `assets/` ao lado, os padrões da camada compartilhada vêm de `EMBEDDED_SHARED_DEFAULTS`, embutido no script e igual a `assets/brain-config.yml` (um teste de arquitetura reprova se os dois divergirem). `config`, `doctor`, `search`, `capture`, `new-note`, `relate`, `index`, `lint`, `inbox list`/`done` e `ingest` funcionam como com a skill inteira, e o `init --join` grava a configuração local. Um `new-note` de tipo sem `templates/<tipo>.md` no vault sai com 2: "modelo <tipo> não encontrado: copie a pasta da skill inteira ou crie templates/<tipo>.md no vault".
+
+A cópia completa é a pasta da skill inteira (`scripts/` e `assets/`). O `init` de um vault (novo, `--adopt` ou `--force`) precisa da pasta da skill inteira, porque copia `assets/brain-config.yml` e os modelos de `assets/templates/`; sem eles sai com 2: "init precisa da pasta da skill inteira (assets/ não encontrada)" (SPEC-0111).
+
 ## YAML aceito
 
 O `brain.py` lê um subconjunto de YAML sem dependências: `chave: valor`, mapas aninhados por indentação, `{a: b}` e `[a, b]` numa linha, listas com `- item`, comentários com `#` e textos entre aspas (use aspas quando o valor tiver `: ` ou ` #`).

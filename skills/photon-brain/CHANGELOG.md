@@ -12,6 +12,16 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Fixed
 - Regra de arquitetura de processo (`tests/brain_architecture_rules.py`, `subprocess_findings`): fora de `run_processor` passa a reportar também `from subprocess import ...`, `import subprocess as x`, `from os import system`/`popen`/`exec*`/`spawn*` e as chamadas feitas pelo apelido ou pelo nome importado, como a regra da `boson-atlas`. A regra é por nome e não pega acesso dinâmico (`__import__`, `importlib`, `getattr`). Só teste: o `brain.py` e a `BRAIN_VERSION` não mudam (ADR-0007) (SPEC-0062).
 
+## [2026.11.13] - 2026-11-27
+
+### Added
+- `EMBEDDED_SHARED_DEFAULTS`: os padrões de `assets/brain-config.yml` embutidos no `brain.py`, usados por `default_shared()` quando `assets/` não existe; uma regra nova de arquitetura (`shared_defaults_findings`) reprova se divergirem do arquivo (SPEC-0111).
+
+### Changed
+- O `brain.py` copiado sozinho (sem `assets/`) funciona num vault já iniciado: `config`, `doctor`, `search`, `capture`, `new-note`, `relate`, `index`, `lint`, `inbox` e `ingest` como com a skill inteira (SPEC-0111).
+- Sem o modelo no vault nem em `assets/`, `new-note` (e o MOC do `context add`) sai com 2: "modelo <tipo> não encontrado: copie a pasta da skill inteira ou crie templates/<tipo>.md no vault"; o `init` sem `assets/` sai com 2: "init precisa da pasta da skill inteira (assets/ não encontrada)", sem traceback (o `init --join` continua funcionando) (SPEC-0111).
+- `references/config.md` e `SKILL.md`: a cópia mínima é `scripts/brain.py` com o vault já iniciado; a completa é a pasta da skill (SPEC-0111).
+
 ## [2026.11.12] - 2026-11-27
 
 ### Added

@@ -16,6 +16,8 @@ A skill é **agnóstica de provedor e de agente**: o vault é só uma pasta sinc
 
 Rode `python3 <skill-dir>/scripts/brain.py <comando>`, onde `<skill-dir>` é a pasta deste `SKILL.md`.
 
+A cópia mínima é só `scripts/brain.py` com um vault já iniciado (com `brain-config.yml` e os modelos em `templates/`), por exemplo uma cópia guardada no vault para a sessão na nuvem: os padrões da configuração estão embutidos no script. A cópia completa é a pasta da skill inteira, que o `init` de um vault novo exige (sem `assets/` ele sai com 2); um `new-note` de tipo sem `templates/<tipo>.md` no vault também sai com 2 e diz qual modelo falta (SPEC-0111).
+
 | Comando | Uso |
 |---|---|
 | `config [--json]` | Configuração efetiva, com a origem de cada valor (`local`, `vault` ou `padrão`). Exit 3 = não configurado nesta máquina |
