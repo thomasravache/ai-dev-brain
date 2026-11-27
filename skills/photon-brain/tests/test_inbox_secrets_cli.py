@@ -22,10 +22,11 @@ Saídas que os testes conferem (contrato da seção 6):
         `inbox done` e `ingest --move` quando identifica um único item, senão exit 2 "item não encontrado"; ao sair
         da inbox o trecho vira "segredo" (destino, log.md, nota de fonte e saídas, nunca o valor).
 """
+import datetime as dt
 import json
 import re
 
-from brain_support import output, snapshot
+from brain_support import fn, output, snapshot
 from test_inbox_cli import InboxCliTestCase, year
 
 MASK = "•••"
@@ -339,3 +340,81 @@ class OldCaptureNameCliTest(InboxSecretsCliTestCase):
     def state(self):
         files = {k: v[0] for k, v in snapshot(self.box.files).items()} if self.box.files.exists() else {}
         return {k: v[0] for k, v in snapshot(self.box.vault).items()}, files
+
+
+# Emenda v4: valor longo cortado no nome antigo (slugify cortava em SLUG_MAX = 60) e limites do slug
+LONG_VALUE = "".join(chr(97 + (i * 7) % 26) + str(i % 10) for i in range(35))  # 70 caracteres falsos
+LONG_SLUG = ("token-" + LONG_VALUE)[:60]
+LONG_NAME = f"{OLD_STAMP}-{LONG_SLUG}.md"
+LONG_MASKED = f"inbox/{OLD_STAMP}-token-{MASK}.md"
+LONG_CLEAN = f"{OLD_STAMP}-token-segredo.md"
+PIN_DATE_NAME = f"{OLD_STAMP}-pin-2026.md"
+PIN_DATE_MASKED = f"inbox/{OLD_STAMP}-pin-{MASK}.md"
+PIN_DATE_CLEAN = f"{OLD_STAMP}-pin-segredo.md"
+HOUR_STAMP = "2026-01-02-120000"
+HOUR_NAME = f"{HOUR_STAMP}-pin.md"  # o nome que capture_name dá a "PIN 120000" às 12:00:00
+
+
+def capture_text(body, created="2026-01-01"):
+    return f"---\ntype: capture\ncreated: {created}\n---\n\n{body}\n"
+
+
+class OldNameLimitsCliTest(InboxSecretsCliTestCase):
+    def pieces(self):
+        return {LONG_VALUE[i:i + 4] for i in range(len(LONG_VALUE) - 3)}
+
+    def test_a_long_value_cut_in_the_old_name_never_shows_a_piece(self):
+        """SPEC-0112:UT-08 — nome antigo cortado em 60 caracteres do slug"""
+        # SPEC-0112:UT-08
+        self.assertEqual(len(LONG_SLUG), 60)
+        self.put(f"inbox/{LONG_NAME}", capture_text("token: " + LONG_VALUE), age_days=1)
+        runs = {"lint": self.lint(), "lint --json": self.lint("--json"),
+                "inbox list": self.run_in_vault("inbox", "list"),
+                "inbox list --json": self.run_in_vault("inbox", "list", "--json")}
+        for name, out in runs.items():
+            with self.subTest(command=name):
+                self.assertNotIn("Traceback", output(out))
+                text = output(out)
+                shown = sorted(p for p in self.pieces() if p in text)
+                self.assertEqual(shown, [], f"pedaços do valor na saída: {text}")
+        self.assertIn(LONG_MASKED, runs["inbox list"].stdout)
+        items = json.loads(runs["inbox list --json"].stdout)["items"]
+        self.assertEqual([self.rel(i["path"]) for i in items], [LONG_MASKED], items)
+
+        out = self.run_in_vault("inbox", "done", LONG_MASKED)
+        self.assertExit(out, 0)
+        self.assertEqual(sorted(p for p in self.pieces() if p in output(out) + self.log()), [])
+        self.processed(LONG_CLEAN)
+
+    def test_pin_equal_to_the_year_keeps_the_date(self):
+        """SPEC-0112:UT-08 — dígitos da data nunca são trocados"""
+        # SPEC-0112:UT-08
+        self.put(f"inbox/{PIN_DATE_NAME}", capture_text("PIN 2026"), age_days=1)
+        out, lines = self.list_lines()
+        self.assertTrue(any(PIN_DATE_MASKED in t and t.rstrip().endswith(FLAG) for t in lines), out.stdout)
+        items = self.inbox_items()
+        self.assertEqual([self.rel(i["path"]) for i in items], [PIN_DATE_MASKED], items)
+        out = self.lint()
+        self.assertLintExit(out, out.stdout.splitlines())
+        self.assertEqual(len(self.text_hits(out, PIN_DATE_MASKED, 6)), 1, out.stdout)
+
+        out = self.run_in_vault("inbox", "done", PIN_DATE_MASKED)
+        self.assertExit(out, 0)
+        self.processed(PIN_DATE_CLEAN)
+
+    def test_pin_equal_to_the_hour_keeps_the_hour(self):
+        """SPEC-0112:UT-08 — dígitos da hora nunca são trocados"""
+        # SPEC-0112:UT-08
+        name = fn("capture_name", "SPEC-0021")("PIN 120000", (), lambda: dt.datetime(2026, 1, 2, 12, 0, 0))
+        self.assertEqual(name, HOUR_NAME)
+        self.put(f"inbox/{name}", capture_text("PIN 120000", "2026-01-02"), age_days=1)
+        rel = f"inbox/{name}"
+        out, lines = self.list_lines()
+        self.assertTrue(any(rel in t and t.rstrip().endswith(FLAG) for t in lines), out.stdout)
+        self.assertEqual([self.rel(i["path"]) for i in self.inbox_items()], [rel])
+        out = self.lint()
+        self.assertLintExit(out, out.stdout.splitlines())
+        self.assertEqual(len(self.text_hits(out, rel, 6)), 1, out.stdout)
+        out = self.run_in_vault("inbox", "done", rel)
+        self.assertExit(out, 0)
+        self.processed(name)
