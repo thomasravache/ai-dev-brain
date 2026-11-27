@@ -1,5 +1,5 @@
 """Checadores das regras do ADR-0007 (e das regras de rede do ADR-0008 e de remoção do ADR-0015), usados por
-test_architecture.py.
+test_architecture.py; e a dos padrões embutidos iguais aos de assets/brain-config.yml (SPEC-0111).
 
 Escritos aqui, sem importar da gluon-spec (ADR-0007 proíbe import entre skills).
 Cada checador recebe o código-fonte (ou o texto do arquivo) e devolve uma linha por violação:
@@ -19,6 +19,8 @@ RULE_NETWORK = "sem chamada de rede"
 RULE_PROCESS = "processos externos só em run_processor"
 RULE_PERSONAL_PATH = "nenhum caminho pessoal absoluto"
 RULE_REMOVAL = "remoção de arquivo só em rotate_backups e nas limpezas da lista fechada (ADR-0015)"
+RULE_SHARED_DEFAULTS = "EMBEDDED_SHARED_DEFAULTS igual a assets/brain-config.yml (SPEC-0111)"
+EMBEDDED_DEFAULTS_NAME = "EMBEDDED_SHARED_DEFAULTS"
 
 FORBIDDEN_MODULES = ("spec_graph", "sdd_management", "gluon_spec", "tools", "architecture_rules")
 # a outra skill que a brain não pode citar, pelo nome novo e pelo antigo (SPEC-0055)
@@ -250,3 +252,73 @@ def personal_path_findings(text, filename):
         for match in PERSONAL_PATH.finditer(line):
             findings.append(f"{filename}:{number} — {RULE_PERSONAL_PATH} — '{match.group(0)}'")
     return findings
+
+
+def _assignment_line(source, name):
+    """Linha da última atribuição de nível de módulo a `name` (0 quando não há)."""
+    line = 0
+    for node in ast.parse(source).body:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(
+            node, (ast.AnnAssign, ast.AugAssign)) else []
+        if any(isinstance(target, ast.Name) and target.id == name for target in targets):
+            line = node.lineno
+    return line
+
+
+def _differences(embedded, expected, prefix=""):
+    """Chaves (com o caminho, "layout.inbox") que faltam num dos lados ou têm valor diferente."""
+    if isinstance(embedded, dict) and isinstance(expected, dict):
+        keys = sorted(set(embedded) | set(expected), key=str)
+        found = []
+        for key in keys:
+            path = f"{prefix}{key}"
+            if key not in embedded:
+                found.append(f"{path} só em assets/brain-config.yml")
+            elif key not in expected:
+                found.append(f"{path} só em {EMBEDDED_DEFAULTS_NAME}")
+            else:
+                found += _differences(embedded[key], expected[key], f"{path}.")
+        return found
+    if embedded != expected:
+        where = prefix[:-1] or "(raiz)"
+        return [f"{where}: {EMBEDDED_DEFAULTS_NAME} tem {embedded!r}, assets/brain-config.yml tem {expected!r}"]
+    return []
+
+
+def shared_defaults_findings(script, config, filename="scripts/brain.py"):
+    """SPEC-0111: o valor final de EMBEDDED_SHARED_DEFAULTS no módulo `script` (carregado como o Python carrega, então
+    a última atribuição vale) é igual ao `config` (assets/brain-config.yml) lido pelo parse_yaml do próprio script.
+    A constante pode ser o texto YAML (lido com parse_yaml) ou o dicionário já lido. Sem a constante, sem parse_yaml
+    ou com o script sem carregar, a regra reprova (nunca passa por não ter o que comparar)."""
+    script, config = Path(script), Path(config)
+    source = script.read_text(encoding="utf-8")
+    line = _assignment_line(source, EMBEDDED_DEFAULTS_NAME)
+
+    def finding(what):
+        return f"{filename}:{line} — {RULE_SHARED_DEFAULTS} — {what}"
+
+    name = f"brain_shared_defaults_{abs(hash(str(script.resolve())))}"
+    spec = importlib.util.spec_from_file_location(name, script)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # noqa: BLE001 — vira achado da regra
+        return [finding(f"o script não carregou ({type(exc).__name__}: {exc})")]
+    parse_yaml = getattr(module, "parse_yaml", None)
+    if not hasattr(module, EMBEDDED_DEFAULTS_NAME):
+        return [finding(f"{EMBEDDED_DEFAULTS_NAME} não existe")]
+    if parse_yaml is None:
+        return [finding("parse_yaml não existe para ler os padrões")]
+    embedded = getattr(module, EMBEDDED_DEFAULTS_NAME)
+    if isinstance(embedded, str):
+        try:
+            embedded = parse_yaml(embedded)
+        except Exception as exc:  # noqa: BLE001
+            return [finding(f"{EMBEDDED_DEFAULTS_NAME} não é YAML que o parse_yaml lê ({exc})")]
+    if not isinstance(embedded, dict):
+        return [finding(f"{EMBEDDED_DEFAULTS_NAME} precisa ser o texto YAML ou um dicionário, não "
+                        f"{type(embedded).__name__}")]
+    if not config.is_file():
+        return [finding(f"{config.name} não existe para comparar")]
+    expected = parse_yaml(config.read_text(encoding="utf-8"))
+    return [finding(what) for what in _differences(embedded, expected)]
