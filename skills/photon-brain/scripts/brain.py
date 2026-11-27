@@ -73,6 +73,7 @@ SHARED_VERSION = "1"
 # (SPEC-0110, ADR-0027): opaque text, never a credential; brain.py only stores them and never calls the provider.
 CONNECTOR_FIELDS = ("vault_folder_id", "inbox_folder_id")
 CONNECTOR_ID_RE = re.compile(r"[A-Za-z0-9_-]{8,128}")
+INVALID_ID = "(inválido)"  # shown in place of an id that fails the rule (connector show, config)
 ADOPT_DIRS = ("inbox", "raw", "templates")  # --adopt never creates PARA folders the user does not have
 
 ORIGIN_LOCAL, ORIGIN_VAULT, ORIGIN_DEFAULT = "local", "vault", "padrão"
@@ -966,9 +967,22 @@ def connector_id_problem(value):
     return None
 
 
+def _subtree(lines: list, start: int) -> range:
+    """Lines below lines[start] that belong to it: up to the last line indented deeper than it, stopping at the
+    first non-blank line (a comment included) with the same or a smaller indentation, so siblings never count."""
+    base, end, last = _indent(lines[start]), start + 1, start + 1
+    while end < len(lines):
+        if lines[end].strip():
+            if lines[end][0] not in " \t" or _indent(lines[end]) <= base:
+                break
+            last = end + 1
+        end += 1
+    return range(start + 1, last)
+
+
 def _entry(lines: list, start: int, indent: int, key: str):
-    """Index of the `key:` line among the children of lines[start] at that indentation, or None."""
-    for i in _children(lines, start):
+    """Index of the `key:` line among the lines under lines[start] at that indentation, or None."""
+    for i in _subtree(lines, start):
         pair = re.match(r"^(\s+)([^\s:#][^:]*?)\s*:", strip_comment(lines[i]))
         if pair and pair.group(2) == key and len(pair.group(1)) == indent:
             return i
@@ -1000,16 +1014,16 @@ def set_connector_text(text: str, provider: str, ids: dict) -> str:
         _block_map(lines, start, "connectors")
     entry = _entry(lines, start, step, provider)
     if entry is None:
-        entry = _children(lines, start).stop
+        entry = _subtree(lines, start).stop
         lines.insert(entry, f"{' ' * step}{fmt_scalar(provider)}:")
     else:
         _block_map(lines, entry, f"connectors.{provider}")
-    indent = next((_indent(lines[i]) for i in _children(lines, entry)
+    indent = next((_indent(lines[i]) for i in _subtree(lines, entry)
                    if strip_comment(lines[i]).strip() and _indent(lines[i]) > step), step * 2)
     for field, value in ids.items():
         i = _entry(lines, entry, indent, field)
         if i is None:
-            lines.insert(_children(lines, entry).stop, f"{' ' * indent}{field}: {fmt_scalar(value)}")
+            lines.insert(_subtree(lines, entry).stop, f"{' ' * indent}{field}: {fmt_scalar(value)}")
             continue
         content = strip_comment(lines[i])
         pair = re.match(r"^(\s+[^:]*?\s*:\s*)(.*)$", content)
@@ -2384,6 +2398,7 @@ def cmd_init(args, config_home=None) -> int:
 
 def cmd_config(as_json: bool, config_home=None) -> int:
     config = load_config(config_home)
+    config["values"]["connectors"] = masked_connectors(config["values"]["connectors"])
     if as_json:
         print(json.dumps(config, ensure_ascii=False, indent=2))
         return 0
@@ -2464,8 +2479,13 @@ def cmd_connector_set(args, config_home=None) -> int:
     before = shared_path.read_text(encoding="utf-8")
     text = set_connector_text(before, args.provider, ids)
     data, old = parse_yaml(text), parse_yaml(before)
-    stored = data.get("connectors", {}).get(args.provider) if isinstance(data.get("connectors"), dict) else None
-    if (not isinstance(stored, dict) or any(stored.get(k) != v for k, v in ids.items())
+    new_connectors = data.get("connectors") if isinstance(data.get("connectors"), dict) else {}
+    old_connectors = old.get("connectors") if isinstance(old.get("connectors"), dict) else {}
+    stored = new_connectors.get(args.provider)
+    previous = old_connectors.get(args.provider) if isinstance(old_connectors.get(args.provider), dict) else {}
+    if (not isinstance(stored, dict) or dict(previous, **ids) != stored
+            or {k: v for k, v in new_connectors.items() if k != args.provider}
+            != {k: v for k, v in old_connectors.items() if k != args.provider}
             or {k: v for k, v in data.items() if k != "connectors"} != {k: v for k, v in old.items()
                                                                        if k != "connectors"}):
         raise BrainError(f"não consegui gravar os ids do conector em {shared_path}", 1)
@@ -2475,9 +2495,17 @@ def cmd_connector_set(args, config_home=None) -> int:
     return 0
 
 
+def masked_connectors(connectors) -> dict:
+    """connectors for display: each id refused by connector_id_problem becomes "(inválido)" (the value never
+    shows); a provider that is not a map shows as {}."""
+    if not isinstance(connectors, dict):
+        return {}
+    return {provider: {field: INVALID_ID if connector_id_problem(value) else value for field, value in ids.items()}
+            if isinstance(ids, dict) else {} for provider, ids in connectors.items()}
+
+
 def cmd_connector_show(as_json: bool, config_home=None) -> int:
-    connectors = load_config(config_home)["values"]["connectors"]
-    connectors = connectors if isinstance(connectors, dict) else {}
+    connectors = masked_connectors(load_config(config_home)["values"]["connectors"])
     if as_json:
         print(json.dumps(connectors, ensure_ascii=False, indent=2))
         return 0
@@ -2503,7 +2531,7 @@ def connector_items(connectors) -> list:
     rows = []
     for provider, ids in connectors.items():
         if provider not in PROVIDERS:
-            rows.append(("AVISO", f"connectors.{provider}",
+            rows.append(("AVISO", f"connectors.{one_line(provider)}",
                          f"provedor desconhecido — use um de: {', '.join(PROVIDERS)}"))
             continue
         ids = ids if isinstance(ids, dict) else {}
