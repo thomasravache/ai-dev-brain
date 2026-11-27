@@ -7,9 +7,11 @@ XDG_CONFIG_HOME e BRAIN_CONFIG_HOME isolados (brain_support.Sandbox). Valores fa
 Saídas que os testes conferem (contrato da seção 6):
     lint --only secret-in-note [--json]
         percorre as notas e inbox/*.md, inbox/*.txt, inbox/*.url, inbox/*.webloc; um achado por linha com segredo:
-        "<ERRO|AVISO> secret-in-note <arquivo>:<linha> — ..." (no JSON, a linha no path ou no detail); nunca o valor.
-        O rótulo (ERRO/AVISO) e o exit seguem a regra de hoje: exit 1 se houver ERRO, 0 se não (os testes aceitam
-        os dois, coerentes entre si — ver o relatório do G1).
+        "AVISO secret-in-note <arquivo>:<linha> — ..." (no JSON, severity "warn" e a linha no path ou no detail);
+        nunca o valor. Severidade de hoje: AVISO e exit 0 (Emenda v2).
+    capture TEXTO
+        o nome do arquivo (e por ele a saída e o log.md) nunca leva um valor de secret_spans; o rótulo fica
+        ("Senha do wifi: abc12345" -> ...-senha-do-wifi.md); texto só com segredo -> ...-captura.md (UT-07).
     inbox list [--json]
         item com segredo: a linha do item termina com "(possível segredo)" (depois de " (parado)", se houver) e a
         prévia troca cada valor por "•••"; --json: "secret": true e "preview" já mascarada. Sem segredo: como hoje
@@ -61,17 +63,17 @@ class InboxSecretsCliTestCase(InboxCliTestCase):
         return self.run_in_vault("lint", "--only", "secret-in-note", *extra)
 
     def assertLintExit(self, out, text_lines=None):
-        """Exit coerente com os rótulos: 1 com algum ERRO, 0 só com AVISO (regra de hoje do lint)."""
-        self.assertNotIn("Traceback", output(out))
+        """Severidade de hoje (Emenda v2): secret-in-note é AVISO (warn) e o lint sai com 0."""
+        self.assertExit(out, 0)
         if text_lines is None:
-            findings = json.loads(out.stdout)["findings"]
-            has_error = any(f["severity"] == "error" for f in findings)
+            findings = [f for f in json.loads(out.stdout)["findings"] if f["rule"] == "secret-in-note"]
+            self.assertEqual({f["severity"] for f in findings} - {"warn"}, set(), findings)
         else:
-            has_error = any(line.startswith("ERRO ") for line in text_lines)
-        self.assertEqual(out.returncode, 1 if has_error else 0, output(out))
+            hits = [t for t in text_lines if " secret-in-note " in t]
+            self.assertFalse([t for t in hits if not t.startswith("AVISO ")], hits)
 
     def text_hits(self, out, rel, line):
-        pattern = re.compile(rf"^(ERRO|AVISO) secret-in-note {re.escape(rel)}:{line} — ")
+        pattern = re.compile(rf"^AVISO secret-in-note {re.escape(rel)}:{line} — ")
         return [t for t in out.stdout.splitlines() if pattern.match(t)]
 
     def json_hits(self, findings, rel, line):
@@ -181,12 +183,29 @@ class InboxSecretListCliTest(InboxSecretsCliTestCase):
         self.assertTrue({"path", "kind", "size", "age_days", "stale", "preview"} <= set(plain), plain)
 
 
+class CaptureNameCliTest(InboxSecretsCliTestCase):
+    def test_capture_of_a_secret_keeps_the_value_out_of_name_output_and_log(self):
+        """SPEC-0112:UT-07"""
+        # SPEC-0112:UT-07
+        log_before = self.log()
+        out = self.box.run("capture", "Senha do wifi: " + WIFI)
+        self.assertExit(out, 0)
+        self.assertNoValue(output(out), (WIFI,))
+        rel = self.rel([t for t in out.stdout.splitlines() if t.strip()][-1])
+        self.assertRegex(rel, r"^inbox/\d{4}-\d{2}-\d{2}-\d{6}-senha-do-wifi\.md$")
+        names = [p.name for p in (self.box.vault / "inbox").iterdir()]
+        self.assertNoValue(" ".join(names), (WIFI,))
+        self.assertNoValue(self.log(), (WIFI,))
+        self.assertTrue(self.log().startswith(log_before))
+        self.assertIn(WIFI, self.read(rel), "o texto da captura continua o que a pessoa escreveu")
+
+
 class InboxSecretFlowCliTest(InboxSecretsCliTestCase):
     def test_capture_and_txt_item_are_flagged_by_list_and_lint(self):
         """SPEC-0112:IT-01"""
         # SPEC-0112:IT-01
-        # o valor fica depois das seis primeiras palavras: o nome da captura usa só elas (ver o relatório do G1)
-        out = self.box.run("capture", "Lembrete para as visitas de casa: Senha do wifi: " + WIFI)
+        # o caso real: o segredo no começo da captura (o nome não leva o valor, Emenda v2)
+        out = self.box.run("capture", "Senha do wifi: " + WIFI + " para as visitas")
         self.assertExit(out, 0)
         self.assertNoValue(output(out), (WIFI,))
         captured = self.rel([t for t in out.stdout.splitlines() if t.strip()][-1])
@@ -209,6 +228,6 @@ class InboxSecretFlowCliTest(InboxSecretsCliTestCase):
         self.assertNoValue(output(out), (WIFI,))
         for rel in (captured, TXT):
             with self.subTest(item=rel, command="lint"):
-                hits = [t for t in text_lines if re.match(rf"^(ERRO|AVISO) secret-in-note {re.escape(rel)}:\d+ — ", t)]
+                hits = [t for t in text_lines if re.match(rf"^AVISO secret-in-note {re.escape(rel)}:\d+ — ", t)]
                 self.assertEqual(len(hits), 1, out.stdout)
         self.assertNoValue(self.log(), (WIFI,))

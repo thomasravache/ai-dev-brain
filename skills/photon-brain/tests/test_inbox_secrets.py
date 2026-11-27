@@ -1,5 +1,5 @@
 """Segredo na inbox sem a CLI: o detector `secret_spans`, o detector de hoje e as instruções do agente
-(SPEC-0112: CH-01, UT-01, UT-02, UT-06).
+(SPEC-0112: CH-01, UT-01, UT-02, UT-06, UT-07).
 
 Contrato esperado das funções de scripts/brain.py (o Implementer segue estes testes; seção 6 da spec e ADR-0014):
 
@@ -11,9 +11,13 @@ Contrato esperado das funções de scripts/brain.py (o Implementer segue estes t
         "token da api =" casa pelas duas regras). Marcadores (SECRET_PLACEHOLDER_RE) e valor com menos de
         SECRET_MIN caracteres não contam.
     find_secrets(text) e check_secret_in_note(notes): como hoje (CH-01).
+    capture_name(text, existing=(), clock=None): o slug sai das primeiras palavras do texto depois de tirar cada
+        trecho de secret_spans; o rótulo fica ("Senha do wifi: abc12345" -> "...-senha-do-wifi.md"); texto só com
+        segredo -> "...-captura.md" (Emenda v2, UT-07).
 
 Valores falsos, montados por concatenação: nada aqui é um segredo real.
 """
+import datetime as dt
 import re
 import unittest
 
@@ -125,6 +129,33 @@ class SecretSpansTest(unittest.TestCase):
         for text in (*NOT_SECRETS, *PLACEHOLDERS):
             with self.subTest(text=text):
                 self.assertEqual(spans(text), [])
+
+
+class CaptureNameTest(unittest.TestCase):
+    def name(self, text):
+        clock = lambda: dt.datetime(2026, 1, 2, 3, 4, 5)  # relógio fixo
+        return fn("capture_name", "SPEC-0021")(text, (), clock)
+
+    def test_capture_name_keeps_the_label_and_drops_the_value(self):
+        """SPEC-0112:UT-07"""
+        # SPEC-0112:UT-07
+        name = self.name("Senha do wifi: " + "abc12345")
+        self.assertNotIn("abc12345", name)
+        self.assertIn("senha-do-wifi", name)
+        self.assertEqual(name, "2026-01-02-030405-senha-do-wifi.md")
+        name = self.name("PIN " + "4821")
+        self.assertNotIn("4821", name)
+        self.assertTrue(name.startswith("2026-01-02-030405-") and name.endswith(".md"), name)
+
+    def test_a_text_that_is_only_a_secret_falls_back_to_captura(self):
+        """SPEC-0112:UT-07"""
+        # SPEC-0112:UT-07
+        self.assertEqual(self.name(SK), "2026-01-02-030405-captura.md")
+
+    def test_a_name_without_secret_is_as_today(self):
+        """SPEC-0112:UT-07 — caracterização do nome comum"""
+        # SPEC-0112:UT-07
+        self.assertEqual(self.name("Ideia sobre grafos"), "2026-01-02-030405-ideia-sobre-grafos.md")
 
 
 class InboxSecretInstructionsTest(unittest.TestCase):
