@@ -168,16 +168,16 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01 com a tag `SPEC-0112:<ID>`, falhando pelo motivo certo (CH passando)
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, IT-01 com a tag `SPEC-0112:<ID>`, falhando pelo motivo certo (CH passando)
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
@@ -208,36 +208,54 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+Segredo na inbox da photon-brain: um detector só (`secret_spans`) para o `lint`, a prévia do `inbox list` e o nome das capturas. O `secret-in-note` passa a ver os itens `.txt`, `.url` e `.webloc` da inbox e rótulos como "Senha do wifi:" e "PIN 1234"; o `inbox list` marca `(possível segredo)` e mascara o valor com `•••`; o nome de uma captura nova nunca leva o valor; e capturas antigas com o valor no nome aparecem mascaradas, são aceitas pelo caminho mascarado e saem da inbox com `segredo` no nome. As instruções mandam guardar o item no cofre com `--confidential`. Versões: photon-brain 2026.11.12 e plugin 2026.11.48.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/brain.py`:** `secret_spans` (rótulo com até 3 palavras de letras, `SECRET_PIN_RE`, tokens, chave privada em uma passada); `read_inbox_texts` até 1 MiB; máscara da prévia antes do corte; `capture_name` sem os valores; `mask_secret_name` com o carimbo `CAPTURE_STAMP_RE` intacto, limites do slug e o prefixo do valor cortado; `masked_inbox_item` resolve o caminho mascarado a um único item da inbox.
+- **Documentação:** `references/confidential.md`, `maintenance.md`, `inbox.md` e `SKILL.md`.
+- **Emendas:** v2 (severidade de hoje, nome da captura), v3 (nome antigo com o valor, palavras do rótulo) e v4 (nome cortado e limites do slug), a v3 e a v4 depois de G4 reprovados.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 261cc0c, c2e4c0b, c2290c4 e 79a133d (G1) e green em 812ee1a, cea89a6 e e1f05d7 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | detector e secret-in-note das notas de hoje iguais | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-01 | secret_spans acha rótulo com até 3 palavras e PIN, só o valor | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-02 | falsos positivos, inclusive palavras que cruzam pontuação ou números | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-03 | lint acusa .txt, .url, .webloc e .md da inbox com arquivo e linha | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-04 | nenhum valor em lint, inbox list e log.md | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-05 | inbox list marca (possível segredo) e mascara a prévia com ••• | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-06 | instruções do cofre nas referências e no SKILL.md | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-07 | nome da captura sem os valores detectados | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| UT-08 | nome antigo com o valor (inteiro ou cortado) mascarado, aceito mascarado e limpo ao sair da inbox | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
+| IT-01 | captura e .txt com segredo de ponta a ponta | PASS | `test_inbox_secrets.py` e `test_inbox_secrets_cli.py`; G2 PASS em e1f05d7; G4 `verify` 10/10 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.48 depois do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Para o radar** (spec futura): valor na linha seguinte ao rótulo, ou separado por NBSP ou `\v`, não é detectado.
+- **Minors do G4:** a troca do prefixo pode mascarar uma palavra do fim do nome que por acaso é prefixo do valor (só em item com segredo; cosmético); no `ingest` sem `--move` de arquivo fora da inbox, a cópia e o `log.md` mantêm o nome original.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0112`. -->
