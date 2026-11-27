@@ -5,7 +5,7 @@
 ## Saúde
 
 - Validação (G0): **5 erro(s), 25 aviso(s)** — rode `spec_graph.py validate`
-- Specs: proposed 3, approved 4, implemented 92
+- Specs: proposed 3, approved 3, in-progress 1, implemented 92
 - Impedimentos: **1 aberto(s)**, 30 resolvido(s)
 
 ## Impedimentos Abertos
@@ -29,17 +29,17 @@ Perfil: **minimo**
 
 ## Plano de Execução
 
-**Em andamento:** —  
+**Em andamento:** SPEC-0111  
 **Paradas por impedimento:** —  
-**Próximo lote:** SPEC-0108
+**Próximo lote:** —
 
 | Onda | Spec | Título | Tier/Tam. | Status | Prontidão | Observação |
 |---|---|---|---|---|---|---|
-| 1 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 10d) |  |
-| 2 | SPEC-0108 | photon-brain: tipo list para listas de consulta e list add | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073 |
-| 3 | SPEC-0111 | photon-brain: brain.py sem assets/ quando o vault já tem a configuração | full/S | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0108 |
-| 4 | SPEC-0113 | photon-brain: inbox que separa ação de conhecimento e listas de tarefas por contexto | full/M | approved | ⛔ aguarda implementação de SPEC-0108 | saiu da onda 3: arquivos em comum com SPEC-0111 |
-| 5 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0073; saiu da onda 2: arquivos em comum com SPEC-0108; saiu da onda 3: arquivos em comum com SPEC-0111; saiu da onda 4: arquivos em comum com SPEC-0113 |
+| 1 | SPEC-0111 | photon-brain: brain.py sem assets/ quando o vault já tem a configuração | full/S | in-progress | 🔄 em andamento |  |
+| 2 | SPEC-0073 | Remoção dos nomes técnicos antigos na versão anunciada | lite/S | approved | ⛔ impedimento IMP-01 (externo → thomas (data), 10d) | saiu da onda 1: arquivos em comum com SPEC-0111 |
+| 3 | SPEC-0108 | photon-brain: tipo list para listas de consulta e list add | full/M | approved | ✅ pronta | saiu da onda 1: arquivos em comum com SPEC-0111; saiu da onda 2: arquivos em comum com SPEC-0073 |
+| 4 | SPEC-0113 | photon-brain: inbox que separa ação de conhecimento e listas de tarefas por contexto | full/M | approved | ⛔ aguarda implementação de SPEC-0108 |  |
+| 5 | SPEC-0028 | second-brain: padrões de cópia de conflito reais por provedor | lite/S | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: arquivos em comum com SPEC-0111; saiu da onda 2: arquivos em comum com SPEC-0073; saiu da onda 3: arquivos em comum com SPEC-0108; saiu da onda 4: arquivos em comum com SPEC-0113 |
 | 6 | SPEC-0083 | boson-atlas: coletor de infraestrutura como código (stacks, providers e recursos) | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo |
 | 7 | SPEC-0085 | boson-atlas: guardar o que o agente descobre (notas propostas e confirmadas) e cobertura do atlas | full/M | proposed | ⏳ aguardando aprovação (H1) | saiu da onda 1: touches vazio, não roda em paralelo; saiu da onda 2: touches vazio, não roda em paralelo; saiu da onda 3: touches vazio, não roda em paralelo; saiu da onda 4: touches vazio, não roda em paralelo; saiu da onda 5: touches vazio, não roda em paralelo; saiu da onda 6: touches vazio, não roda em paralelo |
 
@@ -83,7 +83,7 @@ flowchart LR
   subgraph E0093["SPEC-0093 · photon-brain: uso pelo conector e em sessão na nuvem (listas, achar o vault, fuso e sessão sem a pasta)"]
     S0107["SPEC-0107<br/>photon-brain: acrescentar a notas exist…"]:::implemented
     S0108["SPEC-0108<br/>photon-brain: tipo list para listas de …"]:::approved
-    S0111["SPEC-0111<br/>photon-brain: brain.py sem assets/ quan…"]:::approved
+    S0111["SPEC-0111<br/>photon-brain: brain.py sem assets/ quan…"]:::inprogress
     S0113["SPEC-0113<br/>photon-brain: inbox que separa ação de …"]:::approved
   end
   S0023 --> S0028
@@ -217,7 +217,7 @@ flowchart LR
 | [SPEC-0108](SPEC-0108-photon-brain-tipo-list-para-listas-de-consulta-e-list-add.md) | photon-brain: tipo list para listas de consulta e list add | full | feature | approved | 2026-11-26 | SPEC-0093 | SPEC-0107 | — |
 | [SPEC-0109](SPEC-0109-photon-brain-fuso-horario-nas-datas-das-capturas-e-do-log.md) | photon-brain: fuso horário nas datas das capturas e do log | full | feature | implemented | 2026-11-26 | SPEC-0093 | — | — |
 | [SPEC-0110](SPEC-0110-photon-brain-conector-e-sessao-na-nuvem-achar-o-vault-ler-a.md) | photon-brain: conector e sessão na nuvem — achar o vault, ler a config e conectar só a pasta | full | feature | implemented | 2026-11-26 | SPEC-0093 | — | — |
-| [SPEC-0111](SPEC-0111-photon-brain-brain-py-sem-assets-quando-o-vault-ja-tem-a-con.md) | photon-brain: brain.py sem assets/ quando o vault já tem a configuração | full | feature | approved | 2026-11-26 | SPEC-0093 | — | — |
+| [SPEC-0111](SPEC-0111-photon-brain-brain-py-sem-assets-quando-o-vault-ja-tem-a-con.md) | photon-brain: brain.py sem assets/ quando o vault já tem a configuração | full | feature | in-progress | 2026-11-26 | SPEC-0093 | — | — |
 | [SPEC-0112](SPEC-0112-photon-brain-segredo-na-inbox-lint-e-inbox-list-avisam-sem-m.md) | photon-brain: segredo na inbox — lint e inbox list avisam sem mostrar o valor | full | feature | implemented | 2026-11-26 | SPEC-0093 | — | — |
 | [SPEC-0113](SPEC-0113-photon-brain-inbox-que-separa-acao-de-conhecimento-e-listas.md) | photon-brain: inbox que separa ação de conhecimento e listas de tarefas por contexto | full | feature | approved | 2026-11-26 | SPEC-0093 | SPEC-0108 | — |
 
