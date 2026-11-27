@@ -22,6 +22,8 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 - `secret-in-note` lê também os itens `.txt`, `.url` e `.webloc` da inbox (até 1 MiB cada), com a severidade de hoje (AVISO, exit 0); item que não é UTF-8 é pulado com um aviso no stderr, sem derrubar o `lint` (SPEC-0112).
 - O rótulo de senha aceita até três palavras antes do `:`/`=` (`Senha do wifi:`, `token da api =`), e `PIN` seguido de 4 a 8 dígitos conta sem `:` (SPEC-0112).
 - O nome da captura sai sem os valores detectados, mantendo o rótulo (`Senha do wifi: …` vira `…-senha-do-wifi.md`; texto só com segredo vira `…-captura.md`), e por ele o `log.md` e a saída do `capture` (SPEC-0112).
+- Captura antiga com o valor no nome: o `lint` e o `inbox list` mostram o caminho com o slug do valor como `•••`; `ingest --move` e `inbox done` aceitam esse caminho mascarado quando ele aponta para um único item (senão exit 2, "item não encontrado"), e ao sair da inbox o trecho vira `segredo` no destino, no `log.md`, no título da nota de fonte e nas saídas (Emenda v3) (SPEC-0112).
+- As até três palavras do rótulo são só de letras: não cruzam `|`, `—`, parênteses, crase nem números (Emenda v3) (SPEC-0112).
 - `references/confidential.md`, `references/maintenance.md`, `references/inbox.md` e `SKILL.md`: item da inbox com segredo vai para o cofre com a referência (`secret-ref`, `--confidential`), e o valor nunca entra numa nota nem numa resposta (SPEC-0112).
 
 ## [2026.11.11] - 2026-11-26
