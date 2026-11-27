@@ -123,7 +123,7 @@ inbox list [--json]
 
 ### 7.2 Testes Unitários
 - **UT-01** — `secret_spans` acha o valor em "Senha do wifi: abc12345", "- **Senha do banco:** x9y8z7w6", "token da api = sk-abcdefghijklmnopqrstu", "PIN 1234" e "pin: 482910", e as posições cobrem só o valor.
-- **UT-02** — `secret_spans` não acha nada em "senha: ***", "senha: <a sua>", "a senha é forte", "PIN 12", "o token do evento foi bom" e num rótulo com quatro palavras antes do `:`; e, com palavras que cruzam pontuação, em "| token | prefixo conhecido: x", "(token sem permissão): sinal" e "token do evento: amanhã" com 2026 no meio (ex.: "token 2026 do: abcdefgh").
+- **UT-02** — `secret_spans` não acha nada em "senha: ***", "senha: <a sua>", "a senha é forte", "PIN 12", "o token do evento foi bom" e num rótulo com quatro palavras antes do `:`; e, com palavras que cruzam pontuação, em "| token | prefixo conhecido: x", "(token sem permissão): sinal" e "token 2026 do: abcdefgh" (número entre as palavras).
 - **UT-03** — Num vault com `inbox/2026-01-01-wifi.txt` ("Senha do wifi: abc12345"), `inbox/link.url` com `?token=abcdef123456` e uma nota `.md` da inbox com "PIN 4821", o `lint --only secret-in-note` acusa os três com arquivo e linha.
 - **UT-04** — Nas saídas de `lint`, `lint --json`, `inbox list` e `inbox list --json` e no `log.md` depois deles, nenhum dos valores do UT-03 aparece.
 - **UT-05** — O `inbox list` marca os três itens com `(possível segredo)`, a prévia mostra `•••` no lugar de cada valor, e o `--json` traz `"secret": true` com a prévia mascarada; um item sem segredo sai como hoje.
