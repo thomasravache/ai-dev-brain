@@ -4,12 +4,12 @@ title: "photon-brain: conector e sessão na nuvem — achar o vault, ler a confi
 tier: full
 type: feature
 user_facing: false
-status: approved
+status: implemented
 created: 2026-11-26
 parent: SPEC-0093
 depends_on: []
 consumes_contract: []
-contract_version: 1
+contract_version: 2
 # breaking: "o que quebra para consumidores e como migrar"   # só se houver quebra; vai para o PR e pede `!` no título
 touches: [skills/photon-brain/scripts/brain.py, skills/photon-brain/assets/brain-config.yml, skills/photon-brain/references/connectors.md, skills/photon-brain/references/config.md, skills/photon-brain/SKILL.md, skills/photon-brain/CHANGELOG.md, skills/photon-brain/tests/test_connector_ids.py, skills/photon-brain/tests/test_connector_ids_cli.py, skills/photon-brain/tests/test_cloud_session_instructions.py, .claude-plugin/plugin.json]
 adrs: [ADR-0013, ADR-0027]
@@ -102,6 +102,12 @@ doctor
   AVISO "connectors.<x>: provedor desconhecido" | ERRO "connectors.<p>.<campo>: id inválido"
 ```
 
+**Esclarecimentos (Emenda v2):**
+- `connector set` num `brain-config.yml` que já tem `connectors` com vários provedores (e comentários) muda só os campos do provedor pedido; os outros provedores ficam byte a byte iguais. Acrescentar `--inbox-folder-id` depois de gravar só o vault, num provedor que não é o último, funciona (UT-01).
+- `connector show` e `config --json` mostram `(inválido)` no lugar de um ID escrito à mão que não passe na regra ou pareça segredo; o valor nunca aparece (UT-04).
+- `connector set` com `timezone` inválido sai com 2 sem gravar, como os outros comandos que gravam (UT-02).
+- `SKILL.md`, na parte de localizar o vault, também diz para usar primeiro os IDs de `connectors.<provedor>` quando o agente já os tiver (lidos do `brain-config.yml` numa sessão anterior ou dados pela pessoa) e que, só com o conector, o ganho principal dos IDs é escolher a inbox certa (UT-06).
+
 **Design:** N/A — sem interface gráfica.
 
 **Arquivos/módulos afetados:** `scripts/brain.py` (`SHARED_KEYS`, `check_shared`, `cmd_connector_set`, `cmd_connector_show`, `config --json`, `doctor`); `assets/brain-config.yml` (chave comentada); `references/connectors.md`, `references/config.md` e `SKILL.md`.
@@ -165,30 +171,34 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 ## 11. Checklist de Implementação
 <!-- Preenchido na fase PLAN, após a aprovação. Cada fase começa pelos testes. -->
 **Fase 1: Contrato e implementação**
-- [ ] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, IT-01 com a tag `SPEC-0110:<ID>`, falhando pelo motivo certo (CH passando)
-- [ ] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
-- [ ] Refactor mantendo tudo verde
-- [ ] Validar: suíte completa + lint + arquitetura (G2/G3)
+- [x] Red: CH-01, UT-01, UT-02, UT-03, UT-04, UT-05, UT-06, UT-07, IT-01 com a tag `SPEC-0110:<ID>`, falhando pelo motivo certo (CH passando)
+- [x] Green: implementar o mínimo para passar, seguindo o padrão de referência da seção 4
+- [x] Refactor mantendo tudo verde
+- [x] Validar: suíte completa + lint + arquitetura (G2/G3)
 
 **Fase final: Integração, entrega e documentação**
-- [ ] Review independente (G4)
-- [ ] Integração + CI verde (G5) e H2
-- [ ] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
-- [ ] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
+- [x] Review independente (G4)
+- [x] Integração + CI verde (G5) e H2
+- [x] Deploy (G6): N/A — skills distribuídas por cópia e pelo plugin
+- [x] Relatório de Entrega, CHANGELOG e versão do plugin (G7)
 
 ## 12. Registro de Gates
 <!-- Status: PENDING | PASS | FAIL | N/A. PASS e N/A exigem evidência (comando + resultado, SHA, execução de CI, veredito). -->
 | Gate | Status | Evidência | Data |
 |---|---|---|---|
-| G0 Spec | PASS | validate: 0 erro(s) — 266f556 (árvore suja) | 2026-11-26 |
-| G1 Red | PENDING | | |
-| G2 Green | PENDING | | |
-| G3 Arquitetura | PENDING | | |
-| G4 Review | PENDING | | |
-| G5 Integração & CI | PENDING | | |
-| H2 Integração aprovada | PENDING | | |
-| G6 Deploy | PENDING | | |
-| G7 Pronto & Docs | PENDING | | |
+| G0 Spec | PASS | validate: 0 erro(s) — 7c6da0c (árvore suja) | 2026-11-26 |
+| G1 Red | PASS | verify G1: PASS; `python3 -m unittest discover -s skills/gluon-spec/tests && python3 -m unittest discover -s skills/photon-brain/tests && python3 -m unittest discover -s skills/boson-atlas/tests && python3 -m unittest discover -s tests/plugin && python3 -m unittest discover -s mcp/tests` exit 1 (red: FAILED (failures=20)) — 38e9568 | 2026-11-26 |
+| G2 Green | PASS | test exit 0 (OK); lint exit 0 (All checks passed!) — 8043e43 | 2026-11-27 |
+| G3 Arquitetura | PASS | arch_test exit 0 (OK) — 54a5fdb | 2026-11-27 |
+| G4 Review | PASS | verify G1+G4: PASS; revisão: reviewer independente: APPROVED na segunda rodada (vários provedores e ID mascarado resolvidos; minor de comentário na coluna 0 no radar) — 4cd425a | 2026-11-27 |
+| G5 Integração & CI | PASS | test exit 0 (OK); arch_test exit 0 (OK) — 24d1292 | 2026-11-27 |
+| H2 Integração aprovada | PASS | política auto-on-green (aprovada por thomas em 2026-10-26); G5 PASS | 2026-11-27 |
+| G6 Deploy | N/A | skills distribuídas por cópia e pelo plugin, sem deploy — mesmo critério da SPEC-0017 | 2026-11-27 |
+| G7 Pronto & Docs | PASS | Relatório de Entrega e Definição de Pronto: ok — 1964ae9 | 2026-11-27 |
+
+### Histórico de reprovações
+- G4 FAIL 2026-11-27 — CHANGES_REQUESTED: connector set acrescenta campo no provedor seguinte quando há mais de um em connectors (_children não para no irmão); sai com 1, fora do contrato — ea40dfd
+- G4 PASS 2026-11-27 — depois de 1 reprovação(ões)
 
 ## 13. Registro de Impedimentos
 <!-- Toda parada é registrada pelo Architect com `spec_graph.py impede` e fechada com `resolve` — não edite à mão. Tipos: spec (spec errada/incompleta → resolve com Emenda) | decisão (só o humano decide → resposta ou ADR) | trabalho (falta algo que exige código → SPEC-NNNN nova) | externo (acesso, ambiente, terceiro → ação tomada) | falha (3 FAILs seguidos no mesmo gate → diagnóstico e decisão). Com impedimento aberto a spec aparece como parada no INDEX e não pode ser fechada. -->
@@ -200,38 +210,55 @@ Registrada no frontmatter (`approved_by`, `approved_at`) somente depois que o hu
 
 ### O que foi entregue
 <!-- comportamento entregue do ponto de vista do usuário/sistema -->
+IDs do conector no vault da photon-brain: chave opcional `connectors.<provedor>` com `vault_folder_id` e `inbox_folder_id` no `brain-config.yml`, gravada por `brain.py connector set` e lida por `connector show` e `config --json`, com validação dos IDs e o `doctor` acusando ID inválido sem mostrar o valor. As instruções do conector e da sessão na nuvem ensinam a achar o vault e a inbox certa pelos IDs (ou pela busca do `brain-config.yml`), a ler o `.yml` pelo `download_file_content` e a conectar só a pasta do vault na nuvem. Versões: photon-brain 2026.11.11 e plugin 2026.11.47.
 
 ### Como foi feito
 <!-- decisões de implementação, módulos/arquivos principais, desvios e emendas (com versão), dívidas assumidas -->
+- **`scripts/brain.py`:** `connectors` em `SHARED_KEYS`; `set_connector_text` com `_subtree` edita só o bloco do provedor, com checagem final de todos os provedores; IDs por `^[A-Za-z0-9_-]{8,128}$` e o detector de segredo; `masked_connectors` mostra `(inválido)`; `connector set` usa o relógio do vault e loga só o provedor.
+- **Documentação:** `assets/brain-config.yml`, `references/connectors.md`, `references/config.md` e `SKILL.md` (seção de sessão na nuvem).
+- **Emenda v2:** vários provedores, ID inválido mascarado, fuso inválido e IDs primeiro no `SKILL.md`, depois do G4 reprovado.
 
 ### Prova de Correção
 <!-- type fix: o teste de regressão falhou antes da correção (commit red + saída) e passa depois (commit green + execução). Outros tipos: "N/A". -->
+N/A — `type: feature`. Red em 38e9568 e 6bdb3ee (G1) e green em aecba24 e 8043e43 (G2).
 
 ### Verificação
 <!-- Uma linha por teste do plano (todos os IDs da seção 7). Resultado: PASS. Evidência: execução de CI, commit ou relatório. -->
 | Teste | Comportamento | Resultado | Evidência |
 |---|---|---|---|
+| CH-01 | vault sem connectors: config, doctor e capture --print como hoje | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| UT-01 | connector set grava só o provedor pedido, comentários e vizinhos iguais | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| UT-02 | provedor desconhecido, ID inválido ou com cara de segredo e fuso inválido: exit 2 | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| UT-03 | log.md cita o provedor, nunca os IDs | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| UT-04 | connector show e config --json, com (inválido) no lugar de ID inválido | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| UT-05 | connectors conhecida no doctor; ID inválido vira ERRO sem o valor | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| UT-06 | connectors.md e SKILL.md: IDs primeiro, busca pelo nome, inbox com pai no vault, download_file_content | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| UT-07 | SKILL.md: sessão na nuvem só com a pasta do vault, init --join na VM, second-brain antigo | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
+| IT-01 | connector set, context add e connector show no mesmo vault | PASS | `test_connector_ids.py`, `test_connector_ids_cli.py` e `test_cloud_session_instructions.py`; G2 PASS em 8043e43; G4 `verify` 9/9 |
 
 ### Definição de Pronto
-- [ ] Todos os testes do plano passando e listados na Verificação
-- [ ] Todo comportamento do Mapa de Comportamentos coberto e verificado
-- [ ] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
-- [ ] Review independente sem achados blocker/major (G4)
-- [ ] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
-- [ ] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
-- [ ] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
-- [ ] Observabilidade e rollback prontos conforme o Plano de Rollout
-- [ ] Documentação raiz e CHANGELOG atualizados (G7)
-- [ ] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
-- [ ] Pendências registradas como novas specs (ou nenhuma)
+- [x] Todos os testes do plano passando e listados na Verificação
+- [x] Todo comportamento do Mapa de Comportamentos coberto e verificado
+- [x] Suíte completa, arquitetura e CI verdes no resultado integrado (G5)
+- [x] Review independente sem achados blocker/major (G4)
+- [x] Padrão arquitetural existente mantido, ou desvio coberto por ADR aprovado
+- [x] Requisitos não-funcionais medidos com evidência (ou N/A justificado)
+- [x] Disponível no ambiente-alvo via pipeline, com smoke/E2E passando no ambiente (G6)
+- [x] Observabilidade e rollback prontos conforme o Plano de Rollout
+- [x] Documentação raiz e CHANGELOG atualizados (G7)
+- [x] Guia de jornadas e mapa do sistema atualizados quando a entrega muda uma jornada ou um componente (G7)
+- [x] Pendências registradas como novas specs (ou nenhuma)
 
 ### Deploy
 <!-- ambiente(s), versão/tag, data, estratégia, estado da feature flag, execução do pipeline -->
+Sem deploy: a skill chega pelo plugin `fermion` 2026.11.47 depois do merge.
 
 ### Pendências
 <!-- specs criadas para o que ficou de fora, ou "Nenhuma" -->
+- **Minor do G4:** um comentário na coluna 0 no meio do bloco `connectors` encerra o bloco no `_subtree`; o `connector set` do provedor seguinte sai com 1 sem gravar (sem corrupção). Já era assim no `_children`. Correção: pular comentários de linha inteira no `_subtree`.
 
 ## 15. Emendas
 <!-- Mudança em spec aprovada: uma linha por emenda. Mudou o contrato? Incremente `contract_version` e rode `spec_graph.py impacted SPEC-0110`. -->
 | Versão do contrato | Data | Mudança | Motivo | Specs impactadas | Aprovado por |
 |---|---|---|---|---|---|
+| 2 | 2026-11-27 | `connector set` com vários provedores muda só o pedido; `(inválido)` no lugar de ID inválido em `show` e `config --json`; fuso inválido sai com 2; IDs primeiro também no `SKILL.md` | G4 da SPEC-0110: campo gravado no provedor seguinte e ID inválido exibido | nenhuma | thomas, 2026-11-27 (piloto automático com o recomendado) |

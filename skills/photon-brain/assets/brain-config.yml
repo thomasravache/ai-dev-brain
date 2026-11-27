@@ -44,6 +44,12 @@ inbox_stale_days: 7       # dias até um item da inbox aparecer como parado (inb
 #   personal_data: [cpf, cnpj, card, labeled-document]
 #   personal_data_patterns:
 #     nif: '\bNIF:\s*\d{9}\b'
+# connectors: IDs das pastas do vault e da inbox no provedor, para o agente que só tem o conector (references/connectors.md).
+# Texto opaco, nunca credencial; grave com brain.py connector set. Ausente = o agente busca pelo nome. Por exemplo:
+# connectors:
+#   google-drive:
+#     vault_folder_id: <id-da-pasta-do-vault>
+#     inbox_folder_id: <id-da-pasta-inbox>
 # backup: opções do brain.py backup (references/backup.md). Ausente = keep 10, warn_days 7, with_files false. Os
 # destinos ficam na configuração local de cada máquina (backup_targets), nunca aqui. Para mudar, por exemplo:
 # backup:

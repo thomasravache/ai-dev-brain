@@ -12,6 +12,13 @@ Cada entrada cita a spec de origem (`SPEC-NNNN`).
 ### Fixed
 - Regra de arquitetura de processo (`tests/brain_architecture_rules.py`, `subprocess_findings`): fora de `run_processor` passa a reportar também `from subprocess import ...`, `import subprocess as x`, `from os import system`/`popen`/`exec*`/`spawn*` e as chamadas feitas pelo apelido ou pelo nome importado, como a regra da `boson-atlas`. A regra é por nome e não pega acesso dinâmico (`__import__`, `importlib`, `getattr`). Só teste: o `brain.py` e a `BRAIN_VERSION` não mudam (ADR-0007) (SPEC-0062).
 
+## [2026.11.11] - 2026-11-26
+
+### Added
+- Chave opcional `connectors.<provedor>` no `brain-config.yml`, com `vault_folder_id` e `inbox_folder_id` (opcional): os IDs das pastas do vault e da inbox no provedor, para o agente que só tem o conector (celular, navegador, sessão na nuvem). Texto opaco, conferido por `^[A-Za-z0-9_-]{8,128}$` e recusado se tiver cara de segredo (detector da SPEC-0050). O `config --json` traz `values.connectors` (`{}` sem a chave) e o `doctor` mostra `OK connectors.<provedor>`, AVISO para provedor desconhecido e ERRO `connectors.<provedor>.<campo> — id inválido` (ADR-0013, ADR-0027) (SPEC-0110).
+- `connector set PROVEDOR --vault-folder-id ID [--inbox-folder-id ID]`: grava os IDs mudando só essas linhas do `brain-config.yml` (comentários e o resto do arquivo ficam), com o relógio do vault, e registra `connector set <provedor>` no `log.md`, nunca os IDs; provedor desconhecido, ID inválido ou fuso inválido sai com 2 sem gravar nada. `connector show [--json]` lista os IDs por provedor, ou "nenhum id de conector gravado" (SPEC-0110).
+- `references/connectors.md`: achar o vault pelos IDs e, sem eles, pelo `brain-config.yml` com `index.md` e `log.md` na mesma pasta; a inbox é a `layout.inbox` com pai na pasta do vault; ler o `.yml` com `download_file_content` quando o `read_file_content` recusa o tipo; o que fazer se nada ler a configuração. `SKILL.md`, seção **Sessão na nuvem**: conectar só a pasta do vault ("Add folder"), o `init --join` roda na máquina virtual da sessão, e o nome antigo `second-brain` indica a skill avulsa a remover em favor do plugin `fermion` (SPEC-0110).
+
 ## [2026.11.10] - 2026-11-26
 
 ### Added

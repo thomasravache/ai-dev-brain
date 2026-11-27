@@ -13,6 +13,8 @@ Isso vem antes do onboarding (exit 3) e do `doctor` (exit 1), a menos que a pess
 
 - **Localizar o vault:** busque pelo conector o arquivo de nome exatamente `brain-config.yml` (pelo nome, não pelo conteúdo); a pasta dele é a raiz do vault. Com mais de um `brain-config.yml`, use o que tem `index.md` e `log.md` na mesma pasta; só se ainda sobrar mais de um, faça uma pergunta curta sobre qual vault usar.
 
+O passo a passo para achar o vault e a inbox certos, e para ler o `brain-config.yml`, está em **Achar o vault, a inbox e a configuração** abaixo.
+
 Sem conector, nada muda: valem os canais de `references/mobile-capture.md` e o fluxo normal no computador.
 
 ## Regras
@@ -24,6 +26,17 @@ Sem conector, nada muda: valem os canais de `references/mobile-capture.md` e o f
 5. **Credenciais:** a autorização do conector fica com a ferramenta do agente. A skill nunca pede nem guarda credencial.
 
 Depois, no computador com a pasta, "processa minha inbox" segue o fluxo de `references/inbox.md`: a captura feita pelo conector aparece no `inbox list` como `text` e sai da inbox com `inbox done`, como qualquer captura.
+
+## Achar o vault, a inbox e a configuração
+
+O `brain-config.yml` do vault pode guardar os IDs das pastas no provedor, na chave `connectors.<provedor>` (`references/config.md`), gravados pelo `brain.py connector set` (SPEC-0110). São texto opaco, nunca credencial.
+
+- **IDs primeiro:** se você já tem os IDs de `connectors.<provedor>` (lidos do `brain-config.yml` numa sessão anterior, do `brain.py connector show` ou do `brain.py config --json`), use primeiro o `vault_folder_id` como a pasta do vault e o `inbox_folder_id` como a inbox, sem buscar nada. ID que não abre mais (pasta movida ou apagada) leva à busca pelo nome abaixo.
+- **Sem os IDs:** busque pelo conector o arquivo de nome exatamente `brain-config.yml` e confira se `index.md` e `log.md` estão na mesma pasta (o mesmo pai, o `parentId` no Google Drive); essa pasta é a raiz do vault. Um `brain-config.yml` sem `index.md` e `log.md` ao lado não é o vault.
+- **A inbox certa:** use como inbox só a pasta `layout.inbox` (por padrão `inbox`) cujo pai é a pasta do vault, ou a do `inbox_folder_id`; nunca use outra pasta `inbox` solta na conta, mesmo que ela apareça primeiro na busca (pastas antigas ou de outro app).
+- **Ler o `.yml` no Google Drive:** o `read_file_content` pode recusar o tipo do arquivo (`application/octet-stream`); quando recusar, leia o `brain-config.yml` com o `download_file_content` do mesmo conector.
+- **Se nada ler a configuração:** se nenhum dos dois ler o `brain-config.yml`, siga com a inbox `inbox` dentro da pasta do vault e sem contexto (sem `context` na captura), avisando a pessoa de que a configuração não pôde ser lida.
+- **Gravar os IDs:** depois de achar as pastas, numa máquina com a pasta montada rode `brain.py connector set <provedor> --vault-folder-id <ID> --inbox-folder-id <ID>`, para que as próximas sessões só com o conector achem o vault e a inbox direto. Pelo conector, nunca edite o `brain-config.yml`.
 
 ## Montar a captura
 
@@ -68,7 +81,7 @@ Procure no diretório de conectores (ou de integrações) da ferramenta do agent
 
 | Provedor | Conector | Conferido |
 |---|---|---|
-| Google Drive (`google-drive`) | conector "Google Drive" do diretório de conectores do Claude (`drivemcp.googleapis.com`): `create_file` para criar o arquivo novo na inbox, `search_files` para achar notas, `read_file_content` para ler | conferido no diretório de conectores do Claude em 2026-11-02 |
+| Google Drive (`google-drive`) | conector "Google Drive" do diretório de conectores do Claude (`drivemcp.googleapis.com`): `create_file` para criar o arquivo novo na inbox, `search_files` para achar notas, `read_file_content` para ler; `download_file_content` para ler o `brain-config.yml` quando o `read_file_content` recusa o tipo (observado em 2026-11-23) | conferido no diretório de conectores do Claude em 2026-11-02 |
 | OneDrive (`onedrive`) | procure um conector do OneDrive / Microsoft 365 na ferramenta | não conferido |
 | iCloud (`icloud`) | procure um conector do iCloud Drive na ferramenta | não conferido |
 | Outros (pasta local, Dropbox...) | um conector que crie e leia arquivos na pasta do vault | não conferido |
